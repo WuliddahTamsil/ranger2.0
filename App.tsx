@@ -199,7 +199,7 @@ export default function App() {
 
       // 5. Pemilik Laundry
       case "pemilik_laundry_home":
-        return <PemilikLaundryHomeScreen navigate={navigate} />;
+              return <PemilikLaundryHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_order":
         return <LaundryOrderScreen navigate={navigate} />;
       case "pemilik_laundry_user":
@@ -213,7 +213,7 @@ export default function App() {
 
       // 6. Pemilik Kos
       case "pemilik_kos_home":
-        return <PemilikKosHomeScreen navigate={navigate} />;
+              return <PemilikKosHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_kos_manajemen_kamar":
         return <ManajemenKamarScreen navigate={navigate} />;
       case "pemilik_kos_manajemen_penghuni":

@@ -31,6 +31,7 @@ import {
 import { rp } from "../../utils/formatters";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
+import { RoleHeader } from "../../components/RoleHeader";
 
 // Import other screens
 import { Order, DriverOrder } from "./Order";
@@ -262,8 +263,16 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Upper Greeting Header */}
-        <View style={styles.topHeader}>
+        <RoleHeader
+          name={driverInfo.name || "Nama Driver"}
+          role="Driver"
+          icon={Truck}
+          notificationCount={2}
+          onNotificationPress={() => setNotifModalVisible(true)}
+          onRolePress={() => navigate("role")}
+        />
+
+        <View style={[styles.topHeader, styles.hiddenHeader]}>
           <View style={styles.greetingCol}>
             <Text style={styles.greetingText}>Halo, {driverInfo.name}</Text>
             <Text style={styles.subGreetingText}>
@@ -581,7 +590,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 0,
     paddingBottom: 28,
   },
   topHeader: {
@@ -589,6 +598,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 18,
+  },
+  hiddenHeader: {
+    display: "none",
   },
   greetingCol: {
     flex: 1,

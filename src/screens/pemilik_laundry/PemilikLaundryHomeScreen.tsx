@@ -6,11 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  StatusBar,
 } from "react-native";
 import { Nav } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
 import {
-  Bell,
   Shirt,
   ShoppingBag,
   Wallet,
@@ -22,39 +21,28 @@ import {
   Users,
   User,
 } from "lucide-react-native";
+import { RoleHeader } from "../../components/RoleHeader";
 
-export const PemilikLaundryHomeScreen: React.FC<Nav> = ({ navigate }) => {
+interface PemilikLaundryHomeProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ navigate, authAccount }) => {
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "order" | "user" | "keuangan" | "profil">("beranda");
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0E6641" />
-
       {/* Main Scroll Content */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Top Header Card (Dark Green) */}
-        <View style={styles.topHeaderCard}>
-          <View style={styles.headerTopRow}>
-            <View>
-              <Text style={styles.greetingText}>Halo, selamat pagi 🌿</Text>
-              <Text style={styles.ownerNameText}>Pak Rahman</Text>
-            </View>
+        <RoleHeader
+          name={authAccount?.name || "Nama Pemilik"}
+          role="Pemilik Laundry"
+          icon={Shirt}
+          fullBleed={false}
+          notificationCount={1}
+          onRolePress={() => navigate("role")}
+        />
 
-            {/* Notification Bell with Red Badge */}
-            <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8}>
-              <Bell size={20} color="#FFFFFF" />
-              <View style={styles.bellBadge} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Role Pill Button */}
-        <View style={styles.rolePillContainer}>
-          <TouchableOpacity style={styles.rolePillBtn} onPress={() => navigate("role")} activeOpacity={0.85}>
-            <Shirt size={16} color="#FFFFFF" />
-            <Text style={styles.rolePillText}>Pemilik Laundry</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Ringkasan Hari Ini Card */}
         <View style={styles.summaryCard}>

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Nav } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
 import {
   Bell,
   Building2,
@@ -31,7 +32,11 @@ import {
   LogOut,
 } from "lucide-react-native";
 
-export const PemilikKosHomeScreen: React.FC<Nav> = ({ navigate }) => {
+interface PemilikKosHomeProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, authAccount }) => {
   const [activeTab, setActiveTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("beranda");
 
   return (
@@ -45,7 +50,7 @@ export const PemilikKosHomeScreen: React.FC<Nav> = ({ navigate }) => {
           <View style={styles.headerTopRow}>
             <View style={styles.headerLeft}>
               <Text style={styles.greetingText}>Halo, selamat pagi 🍃</Text>
-              <Text style={styles.nameText}>Pak Rahman</Text>
+              <Text style={styles.nameText}>{authAccount?.name ? authAccount.name : "Nama Pemilik"}</Text>
             </View>
             <View style={styles.headerRight}>
               <TouchableOpacity style={styles.notifBtn} activeOpacity={0.7}>

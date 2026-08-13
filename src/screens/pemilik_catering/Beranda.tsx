@@ -18,7 +18,6 @@ import {
   History as HistoryIcon,
   Wallet,
   User as UserIcon,
-  Bell,
   Store as StoreIcon,
   Plus,
   ArrowRight,
@@ -33,6 +32,7 @@ import {
 import { rp } from "../../utils/formatters";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
+import { RoleHeader } from "../../components/RoleHeader";
 
 // Import other screens
 import { Order, OrderData } from "./Order";
@@ -402,23 +402,14 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount }) 
   const renderBerandaContent = () => {
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.topHeader}>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.greetingText}>Halo, {storeInfo.ownerName}</Text>
-            <Text style={styles.subGreetingText}>Selamat datang kembali di dapur catering Anda.</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.notifBtn} 
-            onPress={() => setNotifModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <Bell size={20} color="#1B7A4E" />
-            <View style={styles.notifBadge}>
-              <Text style={styles.notifBadgeText}>3</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+        <RoleHeader
+          name={storeInfo.ownerName || "Nama Pemilik"}
+          role="Pemilik Catering"
+          icon={StoreIcon}
+          notificationCount={3}
+          onNotificationPress={() => setNotifModalVisible(true)}
+          onRolePress={() => navigate("role")}
+        />
 
         {/* Kitchen Status Card */}
         <View style={styles.outletCard}>
@@ -976,7 +967,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 0,
     paddingBottom: 28,
   },
   topHeader: {
