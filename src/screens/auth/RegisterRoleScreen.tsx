@@ -22,7 +22,7 @@ export const RegisterRoleScreen: React.FC<Props> = ({ navigate, onSelect }) => (
   <SafeAreaView style={authStyles.container}>
     <ScrollView contentContainerStyle={authStyles.scroll} showsVerticalScrollIndicator={false}>
       <TouchableOpacity onPress={() => navigate("login")} style={styles.back}><Text style={styles.backText}>‹ Kembali ke login</Text></TouchableOpacity>
-      <Text style={authStyles.brand}>The Ranger · Registrasi</Text>
+      <Text style={authStyles.brand}>Rangers App 2.0 · Registrasi</Text>
       <Text style={authStyles.title}>Mulai dari peranmu</Text>
       <Text style={authStyles.subtitle}>Pilih jenis akun yang sesuai. Data dan dokumen yang diminta akan menyesuaikan peran ini.</Text>
 

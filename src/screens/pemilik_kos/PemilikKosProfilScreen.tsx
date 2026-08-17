@@ -226,7 +226,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
         </View>
 
         {/* Version Footer */}
-        <Text style={styles.versionText}>Rangers App v2.0 • Pemilik Kos</Text>
+        <Text style={styles.versionText}>Rangers App 2.0 • Pemilik Kos</Text>
 
         <View style={{ height: 40 }} />
       </ScrollView>

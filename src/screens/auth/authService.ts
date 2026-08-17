@@ -61,7 +61,7 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
 export const resetPassword = async (email: string, password: string) => {
   const accounts = await loadAccounts();
   const index = accounts.findIndex((item) => item.email === normalizeEmail(email));
-  if (index < 0) return { ok: false, error: "Email belum terdaftar di The Ranger." };
+  if (index < 0) return { ok: false, error: "Email belum terdaftar di Rangers App 2.0." };
   const updated = { ...accounts[index], passwordHash: await hashSecret(password), updatedAt: new Date().toISOString() };
   await saveAccounts(accounts.map((item, itemIndex) => itemIndex === index ? updated : item));
   return { ok: true, error: undefined };

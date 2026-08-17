@@ -136,7 +136,7 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.versionText}>Rangers App v2.0 - Pemilik Laundry</Text>
+        <Text style={styles.versionText}>Rangers App 2.0 - Pemilik Laundry</Text>
       </ScrollView>
 
       {/* Bottom Nav */}

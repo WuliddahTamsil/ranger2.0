@@ -122,7 +122,7 @@ export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEma
           <TouchableOpacity onPress={() => void next()} disabled={loading} style={[authStyles.primaryButton, styles.next]} activeOpacity={0.8}>
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <><Text style={authStyles.primaryButtonText}>{step === 3 ? "Kirim pendaftaran" : "Lanjutkan"}</Text>{step === 3 ? <ShieldCheck size={18} color="#FFFFFF" /> : <ArrowRight size={18} color="#FFFFFF" />}</>}
           </TouchableOpacity>
-          {step === 3 && <Text style={styles.submitHint}>Dengan mengirim, kamu menyetujui verifikasi data dan dokumen oleh admin The Ranger.</Text>}
+          {step === 3 && <Text style={styles.submitHint}>Dengan mengirim, kamu menyetujui verifikasi data dan dokumen oleh admin Rangers App 2.0.</Text>}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -135,7 +135,7 @@ const BaseStep: React.FC<{ form: RegistrationForm; update: (key: keyof Registrat
     <TextField label="Nama lengkap *" value={form.name} onChangeText={(value) => update("name", value)} placeholder="Nama sesuai identitas" />
     <TextField label="Email *" value={form.email} onChangeText={(value) => update("email", value)} placeholder="nama@email.com" keyboardType="email-address" autoCapitalize="none" />
     <TextField label="Nomor WhatsApp *" value={form.phone} onChangeText={(value) => update("phone", value)} placeholder="08xx-xxxx-xxxx" keyboardType="phone-pad" />
-    {googleRegistration ? <View style={styles.googleNotice}><ShieldCheck size={17} color={authColors.primary} /><Text style={styles.googleNoticeText}>Akun ini menggunakan keamanan Google. Password The Ranger tidak perlu dibuat lagi.</Text></View> : <><TextField label="Password *" value={form.password} onChangeText={(value) => update("password", value)} placeholder="Minimal 8 karakter, huruf + angka" secureTextEntry /><TextField label="Konfirmasi password *" value={form.passwordConfirmation} onChangeText={(value) => update("passwordConfirmation", value)} placeholder="Ulangi password" secureTextEntry /></>}
+    {googleRegistration ? <View style={styles.googleNotice}><ShieldCheck size={17} color={authColors.primary} /><Text style={styles.googleNoticeText}>Akun ini menggunakan keamanan Google. Password Rangers App 2.0 tidak perlu dibuat lagi.</Text></View> : <><TextField label="Password *" value={form.password} onChangeText={(value) => update("password", value)} placeholder="Minimal 8 karakter, huruf + angka" secureTextEntry /><TextField label="Konfirmasi password *" value={form.passwordConfirmation} onChangeText={(value) => update("passwordConfirmation", value)} placeholder="Ulangi password" secureTextEntry /></>}
     <TextField label="Alamat lengkap *" value={form.address} onChangeText={(value) => update("address", value)} placeholder="Alamat rumah / domisili" multiline icon={<MapPin size={17} color="#6B7280" />} />
     <Text style={styles.photoLabel}>Foto profil <Text style={styles.optional}>Opsional</Text></Text>
     <DocumentUploadCard documentKey="profile_photo" label="Foto profil" description="Tambahkan foto agar mitra/customer lebih mudah dikenali." document={form.profilePhoto} onChange={setProfilePhoto} compact />

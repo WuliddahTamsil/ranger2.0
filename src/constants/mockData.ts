@@ -47,8 +47,8 @@ export const ORDERS: OrderItem[] = [
 export const NOTIFS: NotifItem[] = [
   { id: 1, type: "order", title: "Pesanan Dikirim 🚴", msg: "Pesanan #RNG001 sedang dalam perjalanan ke lokasi Anda", time: "5 mnt lalu", read: false },
   { id: 2, type: "promo", title: "🎉 Promo Spesial Hari Ini!", msg: "Diskon 20% untuk semua laundry. Gunakan kode BERSIH20", time: "1 jam lalu", read: false },
-  { id: 3, type: "info", title: "Fitur Baru: Kos Online", msg: "Temukan kos-kosan di sekitar Kamojang dengan mudah di Rangers App", time: "2 jam lalu", read: true },
-  { id: 4, type: "system", title: "Selamat Datang di Rangers 2.0!", msg: "Terima kasih telah bergabung. Nikmati layanan komunitas Kamojang", time: "Kemarin", read: true },
+  { id: 3, type: "info", title: "Fitur Baru: Kos Online", msg: "Temukan kos-kosan di sekitar Kamojang dengan mudah di Rangers App 2.0", time: "2 jam lalu", read: true },
+  { id: 4, type: "system", title: "Selamat Datang di Rangers App 2.0!", msg: "Terima kasih telah bergabung. Nikmati layanan komunitas Kamojang", time: "Kemarin", read: true },
 ];
 
 export const NEWS: NewsItem[] = [

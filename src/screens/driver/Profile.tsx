@@ -284,7 +284,7 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => Alert.alert("Tentang Aplikasi", "The Ranger Mobile v1.0.0 - Driver Edition")}
+            onPress={() => Alert.alert("Tentang Aplikasi", "Rangers App 2.0 - Driver Edition")}
           >
             {renderMenuIcon(<Info size={16} color="#607D8B" />, "#E9EEF0")}
             <View style={styles.menuItemBody}>
@@ -302,7 +302,7 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
           </View>
           <Text style={styles.logoutBtnText}>Keluar</Text>
         </TouchableOpacity>
-        <Text style={styles.footerVersion}>Rangers App v2.0 - Driver</Text>
+        <Text style={styles.footerVersion}>Rangers App 2.0 - Driver</Text>
       </ScrollView>
 
       {/* Modals Section */}

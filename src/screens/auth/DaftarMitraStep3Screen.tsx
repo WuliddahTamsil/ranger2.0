@@ -31,7 +31,7 @@ export const DaftarMitraStep3Screen: React.FC<Nav> = ({ navigate }) => {
 
         {/* Subtitle */}
         <Text style={styles.subtitle}>
-          Selamat! Akun Mitra Anda sudah aktif. Anda sekarang dapat mengelola bisnis Anda melalui Dashboard Rangers App.
+          Selamat! Akun Mitra Anda sudah aktif. Anda sekarang dapat mengelola bisnis Anda melalui Dashboard Rangers App 2.0.
         </Text>
 
         {/* Button Buka Dashboard Pemilik Kos */}

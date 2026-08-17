@@ -79,6 +79,18 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
     },
   ];
 
+  const filteredKosList = kosList.filter((item) => {
+    const matchesCategory =
+      activeCategory === "semua" || item.type.toLowerCase() === activeCategory.toLowerCase();
+    const matchesSearch =
+      searchQuery.trim() === "" ||
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.facilities.some((f) => f.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    return matchesCategory && matchesSearch;
+  });
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -114,7 +126,7 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
           <Search size={18} color="#9CA3AF" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Cari lokasi, nama kos, atau fa..."
+            placeholder="Cari lokasi, nama kos, atau fasilitas..."
             placeholderTextColor="#9CA3AF"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -211,7 +223,15 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
 
         {/* Kos Cards List */}
         <View style={styles.cardsList}>
-          {kosList.map((item) => (
+          {filteredKosList.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateTitle}>Tidak ada kos ditemukan</Text>
+              <Text style={styles.emptyStateSub}>
+                Coba ubah filter atau kata kunci pencarian Anda.
+              </Text>
+            </View>
+          ) : (
+            filteredKosList.map((item) => (
             <TouchableOpacity
               key={item.id}
               style={styles.kosCard}
@@ -350,7 +370,7 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
                 </View>
               </View>
             </TouchableOpacity>
-          ))}
+          )))}
         </View>
 
         {/* Footer Guarantee Info Row */}
@@ -778,5 +798,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#6B7280",
     lineHeight: 16,
+  },
+  emptyState: {
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderStyle: "dashed",
+  },
+  emptyStateTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#374151",
+    marginBottom: 4,
+  },
+  emptyStateSub: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    textAlign: "center",
   },
 });

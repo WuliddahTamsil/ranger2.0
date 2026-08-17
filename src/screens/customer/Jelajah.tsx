@@ -106,7 +106,7 @@ export const Jelajah: React.FC<JelajahProps> = ({
             <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5EE" }]}>
               <Store size={22} color="#1B7A4E" />
             </View>
-            <Text style={styles.serviceLabel}>Marketplace</Text>
+            <Text style={styles.serviceLabel}>Kanyaah Mart</Text>
           </TouchableOpacity>
 
           {/* Catering */}
@@ -114,7 +114,7 @@ export const Jelajah: React.FC<JelajahProps> = ({
             <View style={[styles.serviceIconBg, { backgroundColor: "#FFEDD5" }]}>
               <Coffee size={22} color="#EA580C" />
             </View>
-            <Text style={styles.serviceLabel}>Catering</Text>
+            <Text style={styles.serviceLabel}>Kanyaah Catering</Text>
           </TouchableOpacity>
 
           {/* Laundry */}
@@ -122,7 +122,7 @@ export const Jelajah: React.FC<JelajahProps> = ({
             <View style={[styles.serviceIconBg, { backgroundColor: "#E0F2FE" }]}>
               <Wind size={22} color="#0284C7" />
             </View>
-            <Text style={styles.serviceLabel}>Laundry</Text>
+            <Text style={styles.serviceLabel}>Kanyaah Laundry</Text>
           </TouchableOpacity>
 
           {/* Kos */}
@@ -130,7 +130,7 @@ export const Jelajah: React.FC<JelajahProps> = ({
             <View style={[styles.serviceIconBg, { backgroundColor: "#F3E8FF" }]}>
               <Building size={22} color="#9333EA" />
             </View>
-            <Text style={styles.serviceLabel}>Kos</Text>
+            <Text style={styles.serviceLabel}>Kanyaah Homestay</Text>
           </TouchableOpacity>
 
           {/* Delivery */}

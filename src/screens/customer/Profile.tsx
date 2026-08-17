@@ -210,7 +210,7 @@ export const Profile: React.FC<ProfileProps> = ({
 
           <TouchableOpacity 
             style={styles.menuRow}
-            onPress={() => triggerInfoSheet("Privasi & Keamanan", "Data profil dan riwayat transaksi customer disimpan aman pada storage akun aplikasi Rangers.")}
+            onPress={() => triggerInfoSheet("Privasi & Keamanan", "Data profil dan riwayat transaksi customer disimpan aman pada storage akun aplikasi Rangers App 2.0.")}
           >
             <View style={[styles.menuIconBg, { backgroundColor: "#E9EEF0" }]}>
               <Shield size={16} color="#607D8B" />
@@ -242,7 +242,7 @@ export const Profile: React.FC<ProfileProps> = ({
         </TouchableOpacity>
 
         {/* Footnote version */}
-        <Text style={styles.footerVersion}>Rangers App v2.0 · PGE Kamojang</Text>
+        <Text style={styles.footerVersion}>Rangers App 2.0 · PGE Kamojang</Text>
       </ScrollView>
 
       {/* 1. Modal Edit Profil / Alamat */}

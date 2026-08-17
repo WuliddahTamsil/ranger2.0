@@ -381,7 +381,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navig
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => Alert.alert("Kebijakan & Ketentuan", "Halaman kebijakan dan syarat penggunaan saat ini menggunakan standard platform The Ranger.")}
+            onPress={() => Alert.alert("Kebijakan & Ketentuan", "Halaman kebijakan dan syarat penggunaan saat ini menggunakan standar platform Rangers App 2.0.")}
           >
             {renderMenuIcon(<FileText size={16} color="#1B7A4E" />, "#E8F5EE")}
             <View style={styles.menuItemBody}>
@@ -399,7 +399,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navig
           </View>
           <Text style={styles.logoutBtnText}>Keluar</Text>
         </TouchableOpacity>
-        <Text style={styles.footerVersion}>Rangers App v2.0 - Pemilik Marketplace</Text>
+        <Text style={styles.footerVersion}>Rangers App 2.0 - Pemilik Marketplace</Text>
       </ScrollView>
 
       {/* 1. Modal Avatar Preview */}
@@ -707,7 +707,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navig
                   {isProfileComplete ? "Profil Anda Siap" : "Profil Belum Lengkap"}
                 </Text>
                 <Text style={styles.verifySummaryDesc}>
-                  Platform The Ranger mendeteksi kelengkapan data di atas sebagai verifikasi dasar. Silakan lengkapi profil untuk memastikan kelancaran operasional.
+                  Platform Rangers App 2.0 mendeteksi kelengkapan data di atas sebagai verifikasi dasar. Silakan lengkapi profil untuk memastikan kelancaran operasional.
                 </Text>
               </View>
 

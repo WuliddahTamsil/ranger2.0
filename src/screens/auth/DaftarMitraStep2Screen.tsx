@@ -41,7 +41,7 @@ export const DaftarMitraStep2Screen: React.FC<Nav> = ({ navigate }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Daftar Mitra Rangers App</Text>
+        <Text style={styles.title}>Daftar Mitra Rangers App 2.0</Text>
         <Text style={styles.subtitle}>
           Lengkapi data untuk membuat akun mitra usaha Anda.
         </Text>

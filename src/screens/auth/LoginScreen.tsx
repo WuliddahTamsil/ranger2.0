@@ -39,7 +39,7 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
         <ScrollView contentContainerStyle={authStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.hero}>
             <View style={styles.logo}><Text style={styles.logoText}>R</Text></View>
-            <View><Text style={authStyles.brand}>The Ranger</Text><Text style={styles.heroTitle}>Selamat datang kembali</Text></View>
+            <View><Text style={authStyles.brand}>Rangers App 2.0</Text><Text style={styles.heroTitle}>Selamat datang kembali</Text></View>
           </View>
           <Text style={authStyles.subtitle}>Masuk dengan akunmu untuk melanjutkan layanan komunitas PGE Kamojang.</Text>
 
@@ -58,7 +58,7 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
           <GoogleLoginButton disabled={loading} loading={googleLoading} onBusyChange={setGoogleLoading} onLogin={onGoogleLogin} onError={setError} />
 
           <TouchableOpacity onPress={() => navigate("auth_register_role")} style={styles.registerButton}><UserPlus size={17} color={authColors.primary} /><Text style={styles.registerText}>Belum punya akun? Daftar sekarang</Text></TouchableOpacity>
-          <Text style={styles.legal}>Dengan masuk, kamu menyetujui Ketentuan Layanan dan Kebijakan Privasi The Ranger.</Text>
+          <Text style={styles.legal}>Dengan masuk, kamu menyetujui Ketentuan Layanan dan Kebijakan Privasi Rangers App 2.0.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaViewWrapper>

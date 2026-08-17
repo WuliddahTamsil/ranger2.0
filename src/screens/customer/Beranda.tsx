@@ -382,36 +382,36 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
         {/* Service grid row */}
         <Text style={styles.sectionTitle}>Layanan Utama</Text>
         <View style={styles.servicesGrid}>
-          {/* Marketplace */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_marketplace")}>
+          {/* Marketplace -> Kanyaah Mart */}
+          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_marketplace")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5EE" }]}>
               <Store size={22} color="#1B7A4E" />
             </View>
-            <Text style={styles.serviceText}>Marketplace</Text>
+            <Text style={styles.serviceText}>Kanyaah{"\n"}Mart</Text>
           </TouchableOpacity>
 
-          {/* Catering */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_catering")}>
+          {/* Catering -> Kanyaah Catering */}
+          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_catering")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#FFEDD5" }]}>
               <Coffee size={22} color="#EA580C" />
             </View>
-            <Text style={styles.serviceText}>Catering</Text>
+            <Text style={styles.serviceText}>Kanyaah{"\n"}Catering</Text>
           </TouchableOpacity>
 
-          {/* Laundry */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_laundry")}>
+          {/* Laundry -> Kanyaah Laundry */}
+          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_laundry")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#E0F2FE" }]}>
               <Wind size={22} color="#0284C7" />
             </View>
-            <Text style={styles.serviceText}>Laundry</Text>
+            <Text style={styles.serviceText}>Kanyaah{"\n"}Laundry</Text>
           </TouchableOpacity>
 
-          {/* Kos */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_kos")}>
+          {/* Kos -> Kanyaah Homestay */}
+          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_kos")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#F3E8FF" }]}>
               <Building size={22} color="#9333EA" />
             </View>
-            <Text style={styles.serviceText}>Kos</Text>
+            <Text style={styles.serviceText}>Kanyaah{"\n"}Homestay</Text>
           </TouchableOpacity>
         </View>
 
@@ -963,13 +963,15 @@ const styles = StyleSheet.create({
   serviceItem: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     paddingVertical: 14,
+    paddingHorizontal: 4,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    minHeight: 112,
+    gap: 8,
     elevation: 3,
     shadowColor: "#0F172A",
     shadowOpacity: 0.04,
@@ -979,14 +981,16 @@ const styles = StyleSheet.create({
   serviceIconBg: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   serviceText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "800",
-    color: "#334155",
+    color: "#1E293B",
+    textAlign: "center",
+    lineHeight: 14,
   },
   horizontalScrollList: {
     paddingHorizontal: 20,

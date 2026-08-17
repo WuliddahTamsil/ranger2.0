@@ -32,10 +32,10 @@ interface CustomerHomeProps extends Nav {
 
 export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) => {
   const categories = [
-    { id: "c_marketplace", name: "Marketplace", icon: Store, color: "#1B7A4E", bg: "#E8F5EE" },
-    { id: "c_catering", name: "Kanyaah Catering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5" },
-    { id: "c_laundry", name: "Kanyaah Laundry", icon: Wind, color: "#0284C7", bg: "#E0F2FE" },
-    { id: "c_kos", name: "Kanyaah Homestay", icon: Building2, color: "#9333EA", bg: "#F3E8FF" },
+    { id: "c_marketplace", name: "Kanyaah\nMart", icon: Store, color: "#1B7A4E", bg: "#E8F5EE" },
+    { id: "c_catering", name: "Kanyaah\nCatering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5" },
+    { id: "c_laundry", name: "Kanyaah\nLaundry", icon: Wind, color: "#0284C7", bg: "#E0F2FE" },
+    { id: "c_kos", name: "Kanyaah\nHomestay", icon: Building2, color: "#9333EA", bg: "#F3E8FF" },
   ] as const;
 
   return (
@@ -310,25 +310,29 @@ const styles = StyleSheet.create({
   categoryCard: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#FFFFFF",
     paddingVertical: 14,
-    borderRadius: 16,
+    paddingHorizontal: 4,
+    minHeight: 112,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
+    borderColor: "#E5E7EB",
   },
   categoryIconBg: {
-    width: 48,
-    height: 48,
+    width: 46,
+    height: 46,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
   },
   categoryName: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#374151",
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#1E293B",
     textAlign: "center",
+    lineHeight: 14,
   },
   horizontalList: {
     paddingHorizontal: 16,

@@ -15,7 +15,7 @@ const SLIDES = [
   },
   {
     title: "Bergabung &\nBerpenghasilan",
-    desc: "Daftar sebagai driver atau mitra Rangers dan mulai berpenghasilan dari komunitas Anda sendiri.",
+    desc: "Daftar sebagai driver atau mitra Rangers App 2.0 dan mulai berpenghasilan dari komunitas Anda sendiri.",
     icon: "🚴",
   },
 ];
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
   },
   iconCircle: {
     width: 140,
@@ -101,18 +101,20 @@ const styles = StyleSheet.create({
     fontSize: 64,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "800",
+    fontSize: 20,
+    fontWeight: "900",
     color: "#111827",
     textAlign: "center",
     marginBottom: 12,
-    lineHeight: 32,
+    lineHeight: 28,
+    paddingHorizontal: 4,
   },
   desc: {
-    fontSize: 14,
+    fontSize: 13.5,
     color: "#6B7280",
     textAlign: "center",
     lineHeight: 22,
+    paddingHorizontal: 10,
   },
   footer: {
     paddingHorizontal: 24,

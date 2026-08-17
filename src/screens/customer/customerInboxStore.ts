@@ -7,6 +7,12 @@ export interface CustomerChatMessage {
   sender: "customer" | "other";
   text: string;
   time: string;
+  attachment?: {
+    type: "image" | "file";
+    uri: string;
+    name: string;
+    size?: string;
+  };
 }
 
 export interface CustomerChatThread {

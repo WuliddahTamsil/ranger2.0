@@ -30,6 +30,11 @@ import {
   MessageCircle,
   X,
   Sparkles,
+  Navigation,
+  Crosshair,
+  Search,
+  Compass,
+  Layers,
 } from "lucide-react-native";
 import { addCustomerOrder } from "./customerOrderStore";
 import { CustomerChatModal } from "./CustomerChatModal";
@@ -41,6 +46,49 @@ export const CustomerLaundryDetailScreen: React.FC<Nav> = ({ navigate }) => {
   const [addressError, setAddressError] = useState("");
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
+  
+  // Google Maps Pin Picker state
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [selectedMapPin, setSelectedMapPin] = useState<{
+    title: string;
+    address: string;
+    coords: string;
+    tag: string;
+  } | null>(null);
+  const [tempMapLocation, setTempMapLocation] = useState({
+    title: "Jl. Mawar No. 12, Kamojang",
+    address: "Jl. Mawar No. 12, RT 01/RW 02, Desa Laksana, Ibun, Garut",
+    coords: "-7.1432, 107.7845",
+    tag: "Dekat Kantor PGE",
+  });
+  const [mapSearchQuery, setMapSearchQuery] = useState("");
+
+  const mapPresets = [
+    {
+      title: "Jl. Mawar No. 12, Kamojang",
+      address: "Jl. Mawar No. 12, RT 01/RW 02, Desa Laksana, Ibun, Garut",
+      coords: "-7.1432, 107.7845",
+      tag: "Dekat Kantor PGE",
+    },
+    {
+      title: "Komplek Perumahan PGE Kamojang",
+      address: "Blok B3 No. 8, Kamojang, Kec. Ibun, Garut",
+      coords: "-7.1480, 107.7910",
+      tag: "Perumahan",
+    },
+    {
+      title: "Jl. Raya Kamojang No. 20",
+      address: "Jl. Raya Kamojang No. 20, Depan Masjid Al-Ikhlas",
+      coords: "-7.1415, 107.7820",
+      tag: "Jalan Utama",
+    },
+    {
+      title: "Area Wisata Kawah Kamojang",
+      address: "Jl. Lapang Panas Bumi, Kawah Kamojang, Garut",
+      coords: "-7.1520, 107.8012",
+      tag: "Kawasan Wisata",
+    },
+  ];
 
   const services = [
     {
@@ -358,10 +406,67 @@ export const CustomerLaundryDetailScreen: React.FC<Nav> = ({ navigate }) => {
                 <Text style={styles.sheetSectionTitle}>
                   Alamat Penjemputan <Text style={{ color: "#EF4444" }}>*</Text>
                 </Text>
-                {addressError ? (
-                  <Text style={styles.addressErrorText}>{addressError}</Text>
-                ) : null}
+                <TouchableOpacity
+                  style={styles.btnOpenMapPin}
+                  onPress={() => setIsMapModalOpen(true)}
+                  activeOpacity={0.8}
+                >
+                  <MapPin size={13} color="#0D7A53" />
+                  <Text style={styles.btnOpenMapPinText}>Tandai di Maps</Text>
+                </TouchableOpacity>
               </View>
+
+              {/* Map Pin Badge Indicator */}
+              {selectedMapPin ? (
+                <View style={styles.selectedMapBadge}>
+                  <View style={styles.selectedMapLeft}>
+                    <View style={styles.mapPinCircleGreen}>
+                      <MapPin size={16} color="#0D7A53" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.pinTagRow}>
+                        <Text style={styles.selectedMapTitle}>{selectedMapPin.title}</Text>
+                        <View style={styles.coordsPill}>
+                          <Text style={styles.coordsPillText}>📍 {selectedMapPin.coords}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.selectedMapAddress} numberOfLines={2}>
+                        {selectedMapPin.address}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setIsMapModalOpen(true)}
+                    style={styles.btnChangeMapPin}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.btnChangeMapPinText}>Ubah</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.mapPromptBanner}
+                  onPress={() => setIsMapModalOpen(true)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.mapPromptLeft}>
+                    <View style={styles.mapPromptIconBg}>
+                      <Navigation size={16} color="#0D7A53" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.mapPromptTitle}>Tandai Titik di Google Maps</Text>
+                      <Text style={styles.mapPromptSub}>
+                        Bantu kurir jemput tepat di depan rumah atau lokasi Anda
+                      </Text>
+                    </View>
+                  </View>
+                  <ChevronRight size={16} color="#0D7A53" />
+                </TouchableOpacity>
+              )}
+
+              {addressError ? (
+                <Text style={styles.addressErrorText}>{addressError}</Text>
+              ) : null}
 
               <View
                 style={[
@@ -371,7 +476,7 @@ export const CustomerLaundryDetailScreen: React.FC<Nav> = ({ navigate }) => {
               >
                 <TextInput
                   style={styles.addressInput}
-                  placeholder="Contoh: Jl. Mawar No. 12, RT 01/02 (Rumah cat hijau)"
+                  placeholder="Detail patokan (Contoh: Rumah pagar hitam, sebelah warung Bu Siti, RT 01/02)"
                   placeholderTextColor="#9CA3AF"
                   multiline
                   numberOfLines={3}
@@ -431,6 +536,236 @@ export const CustomerLaundryDetailScreen: React.FC<Nav> = ({ navigate }) => {
               </TouchableOpacity>
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      {/* Interactive Google Maps Location Picker Modal */}
+      <Modal visible={isMapModalOpen} animationType="slide" transparent>
+        <View style={styles.mapModalOverlay}>
+          <SafeAreaView style={styles.mapModalSafeArea}>
+            {/* Map Modal Header */}
+            <View style={styles.mapModalHeader}>
+              <TouchableOpacity
+                onPress={() => setIsMapModalOpen(false)}
+                style={styles.mapBackBtn}
+                activeOpacity={0.7}
+              >
+                <ArrowLeft size={22} color="#111827" />
+              </TouchableOpacity>
+
+              <View style={styles.mapHeaderTitleCol}>
+                <Text style={styles.mapHeaderTitle}>Tentukan Titik di Maps</Text>
+                <Text style={styles.mapHeaderSub}>Geser peta atau pilih lokasi penjemputan</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.gpsQuickBtn}
+                onPress={() => {
+                  setTempMapLocation({
+                    title: "Lokasi GPS Anda Saat Ini",
+                    address: "Jl. Lapangan Panas Bumi No. 5, Kamojang, Garut",
+                    coords: "-7.1448, 107.7862",
+                    tag: "GPS Akurat",
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <Crosshair size={16} color="#0D7A53" />
+                <Text style={styles.gpsQuickBtnText}>GPS</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Map Search Input */}
+            <View style={styles.mapSearchBarBox}>
+              <Search size={16} color="#6B7280" />
+              <TextInput
+                style={styles.mapSearchInput}
+                placeholder="Cari lokasi, jalan, atau patokan..."
+                placeholderTextColor="#9CA3AF"
+                value={mapSearchQuery}
+                onChangeText={setMapSearchQuery}
+              />
+              {mapSearchQuery ? (
+                <TouchableOpacity onPress={() => setMapSearchQuery("")}>
+                  <X size={16} color="#6B7280" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Map Canvas Simulation */}
+            <View style={styles.mapCanvas}>
+              {/* Stylized Google Maps Background Patterns */}
+              <View style={styles.mapBackground}>
+                {/* Park / Greenery Areas */}
+                <View style={styles.mapParkArea1} />
+                <View style={styles.mapParkArea2} />
+                {/* Water / Lake */}
+                <View style={styles.mapLakeArea} />
+
+                {/* Major Highways & Roads */}
+                <View style={styles.mapRoadMajorH} />
+                <View style={styles.mapRoadMajorV} />
+                <View style={styles.mapRoadSecondary1} />
+                <View style={styles.mapRoadSecondary2} />
+                <View style={styles.mapRoadDiagonal} />
+
+                {/* Road Labels */}
+                <Text style={styles.mapRoadLabel1}>Jl. Raya Kamojang</Text>
+                <Text style={styles.mapRoadLabel2}>Jl. Mawar</Text>
+                <Text style={styles.mapRoadLabel3}>Kawasan PGE Kamojang</Text>
+
+                {/* Interactive Points / POIs */}
+                {mapPresets.map((preset, idx) => {
+                  const isSelected = tempMapLocation.title === preset.title;
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[
+                        styles.mapPoiPin,
+                        idx === 0
+                          ? { top: "35%", left: "45%" }
+                          : idx === 1
+                          ? { top: "58%", left: "68%" }
+                          : idx === 2
+                          ? { top: "25%", left: "22%" }
+                          : { top: "65%", left: "25%" },
+                        isSelected && styles.mapPoiPinActive,
+                      ]}
+                      onPress={() => setTempMapLocation(preset)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.poiDot} />
+                      <Text style={styles.poiLabelText} numberOfLines={1}>
+                        {preset.title.split(",")[0]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Center Map Pin (Google Maps Dropped Pin) */}
+              <View style={styles.centerPinContainer} pointerEvents="none">
+                {/* Floating Tooltip */}
+                <View style={styles.pinTooltip}>
+                  <Text style={styles.pinTooltipTitle}>{tempMapLocation.title.split(",")[0]}</Text>
+                  <Text style={styles.pinTooltipSub}>📍 Titik Penjemputan</Text>
+                </View>
+                {/* Red Pin Marker */}
+                <View style={styles.pinMarkerIcon}>
+                  <MapPin size={38} color="#EA4335" fill="#EA4335" />
+                </View>
+                {/* Shadow / Pulse */}
+                <View style={styles.pinShadowPulse} />
+              </View>
+
+              {/* Floating Controls (Top Right) */}
+              <View style={styles.mapFloatingControls}>
+                <TouchableOpacity style={styles.mapControlBtn} activeOpacity={0.7}>
+                  <Layers size={18} color="#374151" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.mapControlBtn} activeOpacity={0.7}>
+                  <Compass size={18} color="#374151" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.mapControlBtn, { backgroundColor: "#0D7A53" }]}
+                  onPress={() => {
+                    setTempMapLocation({
+                      title: "Lokasi GPS Anda Saat Ini",
+                      address: "Jl. Lapangan Panas Bumi No. 5, Kamojang, Garut",
+                      coords: "-7.1448, 107.7862",
+                      tag: "GPS Akurat",
+                    });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Navigation size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Bottom Sheet Details & Presets */}
+            <View style={styles.mapBottomSheet}>
+              {/* Presets Horizontal Chips */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.mapPresetChipsRow}
+              >
+                {mapPresets
+                  .filter(
+                    (p) =>
+                      !mapSearchQuery ||
+                      p.title.toLowerCase().includes(mapSearchQuery.toLowerCase()) ||
+                      p.address.toLowerCase().includes(mapSearchQuery.toLowerCase())
+                  )
+                  .map((preset, idx) => {
+                    const isSelected = tempMapLocation.title === preset.title;
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[
+                          styles.presetLocationChip,
+                          isSelected && styles.presetLocationChipSelected,
+                        ]}
+                        onPress={() => setTempMapLocation(preset)}
+                        activeOpacity={0.8}
+                      >
+                        <MapPin
+                          size={12}
+                          color={isSelected ? "#FFFFFF" : "#0D7A53"}
+                        />
+                        <Text
+                          style={[
+                            styles.presetLocationChipText,
+                            isSelected && styles.presetLocationChipTextSelected,
+                          ]}
+                        >
+                          {preset.title.split(",")[0]}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </ScrollView>
+
+              {/* Selected Location Card */}
+              <View style={styles.mapSelectedCard}>
+                <View style={styles.mapSelectedCardHeader}>
+                  <View style={styles.mapSelectedIconCircle}>
+                    <MapPin size={18} color="#0D7A53" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.mapSelectedCardTitle}>{tempMapLocation.title}</Text>
+                    <Text style={styles.mapSelectedCardAddress}>
+                      {tempMapLocation.address}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Coords & Accuracy Row */}
+                <View style={styles.coordsInfoRow}>
+                  <View style={styles.coordBadge}>
+                    <Text style={styles.coordBadgeText}>Lat/Long: {tempMapLocation.coords}</Text>
+                  </View>
+                  <Text style={styles.accuracyText}>✓ Akurat (Google Maps)</Text>
+                </View>
+              </View>
+
+              {/* Confirm Button */}
+              <TouchableOpacity
+                style={styles.btnConfirmMapLocation}
+                onPress={() => {
+                  setSelectedMapPin(tempMapLocation);
+                  setAddress(tempMapLocation.address);
+                  setAddressError("");
+                  setIsMapModalOpen(false);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.btnConfirmMapLocationText}>Pasang Titik Lokasi Ini</Text>
+                <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
         </View>
       </Modal>
 
@@ -1063,6 +1398,513 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   btnDialogGreenText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+
+  // Map Picker Trigger & Address Badges
+  btnOpenMapPin: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  btnOpenMapPinText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  mapPromptBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+  },
+  mapPromptLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  mapPromptIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mapPromptTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  mapPromptSub: {
+    fontSize: 10,
+    color: "#4B5563",
+    marginTop: 2,
+  },
+  selectedMapBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#0D7A53",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+  },
+  selectedMapLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  mapPinCircleGreen: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pinTagRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  selectedMapTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  coordsPill: {
+    backgroundColor: "#E5E7EB",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  coordsPillText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  selectedMapAddress: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  btnChangeMapPin: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: "#0D7A53",
+    marginLeft: 8,
+  },
+  btnChangeMapPinText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+
+  // Google Maps Fullscreen Modal
+  mapModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+  },
+  mapModalSafeArea: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  mapModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  mapBackBtn: {
+    padding: 6,
+    marginRight: 10,
+  },
+  mapHeaderTitleCol: {
+    flex: 1,
+  },
+  mapHeaderTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  mapHeaderSub: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  gpsQuickBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  gpsQuickBtnText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  mapSearchBarBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    marginHorizontal: 16,
+    marginVertical: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    gap: 8,
+  },
+  mapSearchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: "#111827",
+  },
+
+  // Interactive Map Canvas Simulation
+  mapCanvas: {
+    flex: 1,
+    position: "relative",
+    overflow: "hidden",
+    backgroundColor: "#E5E3DF", // Google Maps background tone
+  },
+  mapBackground: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#E5E3DF",
+  },
+  mapParkArea1: {
+    position: "absolute",
+    top: 20,
+    left: 20,
+    width: 140,
+    height: 120,
+    backgroundColor: "#CCEADA",
+    borderRadius: 24,
+    opacity: 0.8,
+  },
+  mapParkArea2: {
+    position: "absolute",
+    bottom: 30,
+    right: 20,
+    width: 160,
+    height: 140,
+    backgroundColor: "#CCEADA",
+    borderRadius: 30,
+    opacity: 0.8,
+  },
+  mapLakeArea: {
+    position: "absolute",
+    top: "30%",
+    right: "10%",
+    width: 90,
+    height: 70,
+    backgroundColor: "#AADAFF",
+    borderRadius: 35,
+    opacity: 0.8,
+  },
+  mapRoadMajorH: {
+    position: "absolute",
+    top: "45%",
+    left: 0,
+    right: 0,
+    height: 14,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "#F7D57F",
+  },
+  mapRoadMajorV: {
+    position: "absolute",
+    left: "50%",
+    top: 0,
+    bottom: 0,
+    width: 14,
+    backgroundColor: "#FFFFFF",
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: "#F7D57F",
+  },
+  mapRoadSecondary1: {
+    position: "absolute",
+    top: "22%",
+    left: 0,
+    right: 0,
+    height: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  mapRoadSecondary2: {
+    position: "absolute",
+    top: "70%",
+    left: 0,
+    right: 0,
+    height: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  mapRoadDiagonal: {
+    position: "absolute",
+    top: "10%",
+    left: "15%",
+    width: 200,
+    height: 6,
+    backgroundColor: "#FFFFFF",
+    transform: [{ rotate: "35deg" }],
+  },
+  mapRoadLabel1: {
+    position: "absolute",
+    top: "46%",
+    left: 16,
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+  mapRoadLabel2: {
+    position: "absolute",
+    left: "53%",
+    top: 30,
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+  mapRoadLabel3: {
+    position: "absolute",
+    bottom: 50,
+    right: 30,
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#059669",
+  },
+  mapPoiPin: {
+    position: "absolute",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+  },
+  mapPoiPinActive: {
+    borderColor: "#0D7A53",
+    backgroundColor: "#F0FDF4",
+  },
+  poiDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EA4335",
+  },
+  poiLabelText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#1F2937",
+    maxWidth: 120,
+  },
+
+  // Center Dropped Pin
+  centerPinContainer: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -60 }, { translateY: -70 }],
+    width: 120,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pinTooltip: {
+    backgroundColor: "#111827",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  pinTooltipTitle: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  pinTooltipSub: {
+    fontSize: 9,
+    fontWeight: "600",
+    color: "#9CA3AF",
+  },
+  pinMarkerIcon: {
+    zIndex: 10,
+  },
+  pinShadowPulse: {
+    width: 16,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    marginTop: -4,
+  },
+
+  // Floating map buttons
+  mapFloatingControls: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    gap: 8,
+  },
+  mapControlBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+
+  // Map Bottom Sheet
+  mapBottomSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 24,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  mapPresetChipsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  presetLocationChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  presetLocationChipSelected: {
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
+  },
+  presetLocationChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  presetLocationChipTextSelected: {
+    color: "#FFFFFF",
+  },
+  mapSelectedCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 14,
+  },
+  mapSelectedCardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  mapSelectedIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  mapSelectedCardTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  mapSelectedCardAddress: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  coordsInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  coordBadge: {
+    backgroundColor: "#E5E7EB",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  coordBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  accuracyText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#059669",
+  },
+  btnConfirmMapLocation: {
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "#0D7A53",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnConfirmMapLocationText: {
     fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",

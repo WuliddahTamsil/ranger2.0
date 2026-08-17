@@ -11,6 +11,7 @@ import {
   TextInput,
   Switch,
   Alert,
+  Platform,
 } from "react-native";
 import {
   Home,
@@ -28,7 +29,10 @@ import {
   MoreVertical,
   ChevronRight,
   X,
+  Camera,
+  Trash2,
 } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import { rp } from "../../utils/formatters";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -242,6 +246,54 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount }) 
       setProdImg("");
     }
     setProductFormVisible(true);
+  };
+
+  const handlePickProductImage = async () => {
+    try {
+      if (Platform.OS !== "web") {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Ditolak", "Mohon izinkan akses galeri untuk memilih foto menu catering.");
+          return;
+        }
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [4, 3],
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setProdImg(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.log("Pick product image err:", err);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      if (Platform.OS !== "web") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Ditolak", "Mohon izinkan akses kamera untuk mengambil foto menu catering.");
+          return;
+        }
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [4, 3],
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setProdImg(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.log("Camera product image err:", err);
+    }
   };
 
   const handleSaveProduct = () => {
@@ -814,13 +866,78 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount }) 
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.formContainer}>
-              <Text style={styles.inputLabel}>Foto Menu URL (Opsional)</Text>
+            <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Foto Menu Catering</Text>
+              
+              {prodImg ? (
+                <View style={styles.imagePreviewWrapper}>
+                  <Image source={{ uri: prodImg }} style={styles.imagePreview} resizeMode="cover" />
+                  <View style={styles.imagePreviewActions}>
+                    <TouchableOpacity 
+                      style={styles.changeImageBtn}
+                      onPress={handlePickProductImage}
+                      activeOpacity={0.8}
+                    >
+                      <ImageIcon size={14} color="#EA580C" />
+                      <Text style={styles.changeImageText}>Pilih dari Galeri</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={styles.changeImageBtn}
+                      onPress={handleTakePhoto}
+                      activeOpacity={0.8}
+                    >
+                      <Camera size={14} color="#EA580C" />
+                      <Text style={styles.changeImageText}>Kamera</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={styles.removeImageBtn}
+                      onPress={() => setProdImg("")}
+                      activeOpacity={0.8}
+                    >
+                      <Trash2 size={15} color="#DC2626" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.uploadOptionsCard}>
+                  <View style={styles.uploadPrompt}>
+                    <View style={[styles.uploadIconCircle, { backgroundColor: "#FFEDD5" }]}>
+                      <ImageIcon size={22} color="#EA580C" />
+                    </View>
+                    <Text style={styles.uploadPromptTitle}>Tambahkan Foto Menu Catering</Text>
+                    <Text style={styles.uploadPromptSub}>Bisa langsung ambil dari galeri HP atau kamera</Text>
+                  </View>
+                  
+                  <View style={styles.uploadButtonsRow}>
+                    <TouchableOpacity 
+                      style={[styles.pickGalleryBtn, { backgroundColor: "#EA580C" }]}
+                      onPress={handlePickProductImage}
+                      activeOpacity={0.8}
+                    >
+                      <ImageIcon size={16} color="#FFFFFF" />
+                      <Text style={styles.pickGalleryBtnText}>Buka Galeri Foto</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={[styles.pickCameraBtn, { borderColor: "#EA580C" }]}
+                      onPress={handleTakePhoto}
+                      activeOpacity={0.8}
+                    >
+                      <Camera size={16} color="#EA580C" />
+                      <Text style={[styles.pickCameraBtnText, { color: "#EA580C" }]}>Kamera</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              <Text style={styles.urlInputHint}>Atau masukkan link gambar (URL):</Text>
               <TextInput
-                style={styles.textInput}
+                style={[styles.textInput, styles.urlInput]}
                 value={prodImg}
                 onChangeText={setProdImg}
-                placeholder="https://unsplash.com/..."
+                placeholder="https://images.unsplash.com/..."
               />
 
               <Text style={styles.inputLabel}>Nama Menu</Text>
@@ -1544,5 +1661,132 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "700",
+  },
+  imagePreviewWrapper: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 10,
+    marginBottom: 12,
+    alignItems: "center",
+  },
+  imagePreview: {
+    width: "100%",
+    height: 150,
+    borderRadius: 12,
+    backgroundColor: "#E2E8F0",
+  },
+  imagePreviewActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+    alignItems: "center",
+    width: "100%",
+    justifyContent: "space-between",
+  },
+  changeImageBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFF7ED",
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+  },
+  changeImageText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#EA580C",
+  },
+  removeImageBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  uploadOptionsCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    borderStyle: "dashed",
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  uploadPrompt: {
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  uploadIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  uploadPromptTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1E293B",
+  },
+  uploadPromptSub: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+    textAlign: "center",
+  },
+  uploadButtonsRow: {
+    flexDirection: "row",
+    gap: 8,
+    width: "100%",
+  },
+  pickGalleryBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  pickGalleryBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  pickCameraBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  pickCameraBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  urlInputHint: {
+    fontSize: 11,
+    color: "#64748B",
+    marginBottom: 4,
+  },
+  urlInput: {
+    fontSize: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
   },
 });
