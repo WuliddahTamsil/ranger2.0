@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,8 +10,15 @@ import {
   TextInput,
   Image,
   Modal,
+  ActivityIndicator,
 } from "react-native";
 import { Nav } from "../../types";
+import {
+  fetchRoomsByOwner,
+  addRoomToKost,
+  updateRoomInKost,
+  deleteRoomFromKost,
+} from "../../services/kostService";
 import {
   Search,
   Plus,
@@ -115,47 +122,97 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
     setIsAddModalOpen(true);
   };
 
-  // Sample Room List matching Image 1
+  const [loading, setLoading] = useState(false);
   const [rooms, setRooms] = useState<RoomData[]>([
     {
       id: "1",
-      name: "1A",
-      type: "Tipe AC",
+      name: "101",
+      type: "Tipe AC Exclusive",
       status: "terisi",
       facilities: ["AC", "WiFi", "KM Dalam"],
-      inclusions: ["Kasur", "Lemari", "Meja"],
+      inclusions: ["Kasur", "Lemari", "Water Heater"],
       tenant: {
         name: "Budi Santoso",
         avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
       },
-      price: "Rp 1.200.000",
-      image: "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=500&auto=format&fit=crop&q=80",
+      price: "Rp 1.500.000",
+      image: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=500&auto=format&fit=crop&q=80",
     },
     {
       id: "2",
-      name: "2B",
-      type: "Tipe Standar",
-      status: "kosong",
-      facilities: ["Kipas", "WiFi", "KM Luar"],
-      inclusions: ["Kasur", "Lemari"],
-      price: "Rp 950.000",
-      image: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=500&auto=format&fit=crop&q=80",
+      name: "102",
+      type: "Tipe AC Exclusive",
+      status: "terisi",
+      facilities: ["AC", "WiFi", "KM Dalam"],
+      inclusions: ["Kasur", "Lemari", "Water Heater"],
+      tenant: {
+        name: "Dimas Pratama",
+        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+      },
+      price: "Rp 1.500.000",
+      image: "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=500&auto=format&fit=crop&q=80",
     },
     {
       id: "3",
-      name: "2C",
-      type: "Tipe AC",
+      name: "103",
+      type: "Tipe AC Standar",
       status: "terisi",
       facilities: ["AC", "WiFi", "KM Dalam"],
-      inclusions: ["Kasur", "Lemari", "Meja", "Meja Belajar"],
+      inclusions: ["Kasur", "Meja Belajar"],
       tenant: {
-        name: "Ahmad Yani",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+        name: "Rizky Fauzi",
+        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
       },
       price: "Rp 1.200.000",
-      image: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=500&auto=format&fit=crop&q=80",
+      image: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=500&auto=format&fit=crop&q=80",
+    },
+    {
+      id: "4",
+      name: "104",
+      type: "Tipe AC Standar",
+      status: "terisi",
+      facilities: ["AC", "WiFi", "KM Dalam"],
+      inclusions: ["Kasur", "Lemari Kayu"],
+      tenant: {
+        name: "Ahmad Fauzan",
+        avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80",
+      },
+      price: "Rp 1.200.000",
+      image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=500&auto=format&fit=crop&q=80",
+    },
+    {
+      id: "5",
+      name: "105",
+      type: "Tipe Non-AC Ekonomis",
+      status: "terisi",
+      facilities: ["Kipas", "WiFi", "KM Luar"],
+      inclusions: ["Kasur", "Lemari"],
+      tenant: {
+        name: "Fajar Nugroho",
+        avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80",
+      },
+      price: "Rp 850.000",
+      image: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=500&auto=format&fit=crop&q=80",
     },
   ]);
+
+  const loadRoomsFromBackend = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchRoomsByOwner("aisl@gmail.com");
+      if (data && data.length > 0) {
+        setRooms(data);
+      }
+    } catch (err) {
+      console.warn("Using offline rooms:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRoomsFromBackend();
+  }, []);
 
   // Action Handlers
   const handleDuplicateRoom = (room: RoomData) => {
@@ -170,24 +227,35 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
     setSelectedRoomForOptions(null);
   };
 
-  const handleToggleNonaktifRoom = (room: RoomData) => {
+  const handleToggleNonaktifRoom = async (room: RoomData) => {
+    const newStatus = !room.isNonaktif ? "nonaktif" : "kosong";
     setRooms(
       rooms.map((r) =>
         r.id === room.id
           ? {
               ...r,
               isNonaktif: !r.isNonaktif,
-              status: !r.isNonaktif ? "nonaktif" : "kosong",
+              status: newStatus,
             }
           : r
       )
     );
     setSelectedRoomForOptions(null);
+    try {
+      await updateRoomInKost("aisl@gmail.com", room.id, { isAvailable: newStatus === "kosong" });
+    } catch (e) {
+      console.log("Offline update:", e);
+    }
   };
 
-  const handleDeleteRoom = (room: RoomData) => {
+  const handleDeleteRoom = async (room: RoomData) => {
     setRooms(rooms.filter((r) => r.id !== room.id));
     setSelectedRoomForOptions(null);
+    try {
+      await deleteRoomFromKost("aisl@gmail.com", room.id);
+    } catch (e) {
+      console.log("Offline delete:", e);
+    }
   };
 
   // Dynamic Counters
@@ -212,7 +280,8 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
     }
   };
 
-  const handleSaveRoom = () => {
+  const handleSaveRoom = async () => {
+    const numPrice = parseInt(hargaSewa.replace(/[^0-9]/g, "")) || 1200000;
     if (modalMode === "edit" && editingRoomId) {
       setRooms(
         rooms.map((r) =>
@@ -230,10 +299,21 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
             : r
         )
       );
+      try {
+        await updateRoomInKost("aisl@gmail.com", editingRoomId, {
+          roomNumber: nomorKamar,
+          roomType: tipeKamar,
+          priceMonthly: numPrice,
+          isAvailable: kamarStatus === "tersedia",
+          facilities: selectedFacilities,
+        });
+      } catch (e) {
+        console.log("Offline edit:", e);
+      }
     } else {
       const newRoom: RoomData = {
         id: Date.now().toString(),
-        name: nomorKamar || "1B",
+        name: nomorKamar || `10${rooms.length + 1}`,
         type: tipeKamar,
         status: kamarStatus === "tersedia" ? "kosong" : "terisi",
         facilities: selectedFacilities.slice(0, 3),
@@ -243,6 +323,17 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
         description: deskripsi,
       };
       setRooms([newRoom, ...rooms]);
+      try {
+        await addRoomToKost("aisl@gmail.com", {
+          roomNumber: nomorKamar || `10${rooms.length + 1}`,
+          roomType: tipeKamar,
+          priceMonthly: numPrice,
+          isAvailable: kamarStatus === "tersedia",
+          facilities: selectedFacilities,
+        });
+      } catch (e) {
+        console.log("Offline add:", e);
+      }
     }
     setIsAddModalOpen(false);
     setAddStep(1);

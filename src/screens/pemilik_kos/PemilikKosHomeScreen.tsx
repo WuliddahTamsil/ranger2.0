@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
+import { fetchRoomsByOwner } from "../../services/kostService";
 import {
   Bell,
   Building2,
@@ -38,6 +39,29 @@ interface PemilikKosHomeProps extends Nav {
 
 export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, authAccount }) => {
   const [activeTab, setActiveTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("beranda");
+  const [rooms, setRooms] = useState<any[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await fetchRoomsByOwner(authAccount?.email || "aisl@gmail.com");
+        if (data && data.length > 0) {
+          setRooms(data);
+        }
+      } catch (err) {
+        console.log("Using default overview stats");
+      }
+    };
+    load();
+  }, [authAccount]);
+
+  const totalKamar = rooms.length > 0 ? rooms.length : 5;
+  const kamarTerisi = rooms.length > 0 ? rooms.filter(r => r.status === "terisi").length : 5;
+  const kamarKosong = totalKamar - kamarTerisi;
+  const percentFilled = totalKamar > 0 ? Math.round((kamarTerisi / totalKamar) * 100) : 100;
+  const estPendapatan = rooms.length > 0
+    ? rooms.reduce((acc, r) => acc + (r.status === "terisi" ? parseInt(r.price.replace(/[^0-9]/g, "")) || 0 : 0), 0)
+    : 6250000;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -50,7 +74,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           <View style={styles.headerTopRow}>
             <View style={styles.headerLeft}>
               <Text style={styles.greetingText}>Halo, selamat pagi 🍃</Text>
-              <Text style={styles.nameText}>{authAccount?.name ? authAccount.name : "Nama Pemilik"}</Text>
+              <Text style={styles.nameText}>{authAccount?.name ? authAccount.name : "ais kost"}</Text>
             </View>
             <View style={styles.headerRight}>
               <TouchableOpacity style={styles.notifBtn} activeOpacity={0.7}>
@@ -75,7 +99,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Ringkasan Bisnis Bulan Ini</Text>
             <TouchableOpacity style={styles.filterBtn} activeOpacity={0.7}>
-              <Text style={styles.filterText}>Juli 2026</Text>
+              <Text style={styles.filterText}>Agustus 2026</Text>
               <ChevronDown size={14} color="#374151" />
             </TouchableOpacity>
           </View>
@@ -83,14 +107,14 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           {/* Income Card */}
           <View style={styles.incomeCard}>
             <Text style={styles.incomeLabel}>Estimasi Pendapatan</Text>
-            <Text style={styles.incomeAmount}>Rp 12.500.000</Text>
+            <Text style={styles.incomeAmount}>Rp {estPendapatan.toLocaleString("id-ID")}</Text>
 
             <View style={styles.incomeBadgeRow}>
               <View style={styles.trendBadge}>
                 <TrendingUp size={13} color="#0D7A53" />
-                <Text style={styles.trendText}>+5.2%</Text>
+                <Text style={styles.trendText}>+100%</Text>
               </View>
-              <Text style={styles.trendSubtext}>vs bulan lalu</Text>
+              <Text style={styles.trendSubtext}>semua kamar aktif</Text>
             </View>
 
             {/* Wallet Watermark Outline */}
@@ -105,7 +129,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           </Text>
 
           <View style={styles.occupancyRow}>
-            {/* Left Donut Chart (83% Terisi) */}
+            {/* Left Donut Chart */}
             <View style={styles.donutContainer}>
               <Svg width={100} height={100} viewBox="0 0 100 100">
                 {/* Background Ring */}
@@ -117,7 +141,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                   strokeWidth="9"
                   fill="transparent"
                 />
-                {/* 83% Progress Ring */}
+                {/* Progress Ring */}
                 <Circle
                   cx="50"
                   cy="50"
@@ -125,13 +149,13 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                   stroke="#0D7A53"
                   strokeWidth="9"
                   fill="transparent"
-                  strokeDasharray={`${2 * Math.PI * 38 * 0.83} ${2 * Math.PI * 38 * 0.17}`}
+                  strokeDasharray={`${2 * Math.PI * 38 * (percentFilled / 100)} ${2 * Math.PI * 38 * (1 - percentFilled / 100)}`}
                   strokeLinecap="round"
                   transform="rotate(-90 50 50)"
                 />
               </Svg>
               <View style={styles.donutTextOverlay}>
-                <Text style={styles.donutPercentage}>83%</Text>
+                <Text style={styles.donutPercentage}>{percentFilled}%</Text>
                 <Text style={styles.donutLabel}>Terisi</Text>
               </View>
             </View>
@@ -146,7 +170,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                   </View>
                   <Text style={styles.statItemTitle}>Total Kamar</Text>
                 </View>
-                <Text style={styles.statItemVal}>12</Text>
+                <Text style={styles.statItemVal}>{totalKamar}</Text>
               </View>
 
               {/* Kamar Terisi */}
@@ -157,7 +181,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                   </View>
                   <Text style={styles.statItemTitle}>Kamar Terisi</Text>
                 </View>
-                <Text style={styles.statItemVal}>10</Text>
+                <Text style={styles.statItemVal}>{kamarTerisi}</Text>
               </View>
 
               {/* Kamar Kosong */}
@@ -168,7 +192,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                   </View>
                   <Text style={styles.statItemTitle}>Kamar Kosong</Text>
                 </View>
-                <Text style={[styles.statItemVal, { color: "#EA580C" }]}>2</Text>
+                <Text style={[styles.statItemVal, { color: "#EA580C" }]}>{kamarKosong}</Text>
               </View>
             </View>
           </View>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   StatusBar,
   Modal,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { Nav } from "../../types";
+import { fetchOwnerBookings, verifyDpBooking } from "../../services/kostService";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -24,6 +26,52 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isProofModalOpen, setIsProofModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [liveBooking, setLiveBooking] = useState<any>(null);
+
+  useEffect(() => {
+    const loadBooking = async () => {
+      try {
+        const bookings = await fetchOwnerBookings("all");
+        if (bookings && bookings.length > 0) {
+          setLiveBooking(bookings[0]);
+        }
+      } catch (err) {
+        console.log("Using default preview booking");
+      }
+    };
+    loadBooking();
+  }, []);
+
+  const handleConfirmDp = async () => {
+    setIsSubmitting(true);
+    try {
+      if (liveBooking?._id) {
+        await verifyDpBooking(liveBooking._id, "dp_verified");
+      }
+    } catch (err) {
+      console.warn("Verify DP API error:", err);
+    } finally {
+      setIsSubmitting(false);
+      setIsSuccessModalOpen(true);
+    }
+  };
+
+  const handleRejectDp = async () => {
+    setIsSubmitting(true);
+    try {
+      if (liveBooking?._id) {
+        await verifyDpBooking(liveBooking._id, "rejected", "Bukti transfer tidak valid.");
+      }
+    } catch (err) {
+      console.warn("Reject DP API error:", err);
+    } finally {
+      setIsSubmitting(false);
+      setIsRejectModalOpen(false);
+      navigate("pemilik_kos_home");
+    }
+  };
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -168,16 +216,22 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
           style={styles.btnTolakDp}
           onPress={() => setIsRejectModalOpen(true)}
           activeOpacity={0.8}
+          disabled={isSubmitting}
         >
           <Text style={styles.btnTolakDpText}>Tolak DP</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.btnVerifikasiDp}
-          onPress={() => setIsSuccessModalOpen(true)}
+          onPress={handleConfirmDp}
           activeOpacity={0.85}
+          disabled={isSubmitting}
         >
-          <Text style={styles.btnVerifikasiDpText}>Verifikasi & Terima DP</Text>
+          {isSubmitting ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <Text style={styles.btnVerifikasiDpText}>Verifikasi & Terima DP</Text>
+          )}
         </TouchableOpacity>
       </View>
 

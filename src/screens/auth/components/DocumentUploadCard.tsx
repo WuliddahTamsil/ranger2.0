@@ -7,6 +7,8 @@ import { AuthDocument } from "../authTypes";
 import { authColors } from "../authStyles";
 import { fileIsAllowed } from "../authValidation";
 
+import { uploadFileToBackend } from "../../../services/api";
+
 interface Props {
   documentKey: string;
   label: string;
@@ -44,7 +46,17 @@ export const DocumentUploadCard: React.FC<Props> = ({ documentKey, label, descri
         });
         if (result.canceled || !result.assets?.[0]) return;
         const asset = result.assets[0];
-        const selected = buildDocument(documentKey, label, asset.uri, asset.name, asset.mimeType, asset.size);
+        let remoteUri = asset.uri;
+        try {
+          const uploadRes = await uploadFileToBackend(asset.uri, asset.name || `${documentKey}.jpg`, asset.mimeType || "image/jpeg");
+          if (uploadRes?.success && uploadRes?.data?.url) {
+            remoteUri = uploadRes.data.url;
+          }
+        } catch (uploadErr) {
+          console.warn("Upload to backend failed, keeping local uri:", uploadErr);
+        }
+
+        const selected = buildDocument(documentKey, label, remoteUri, asset.name, asset.mimeType, asset.size);
         if (!fileIsAllowed(selected)) {
           Alert.alert("Format tidak didukung", "Gunakan JPG, JPEG, PNG, atau PDF maksimal 10 MB.");
           return;
@@ -65,7 +77,18 @@ export const DocumentUploadCard: React.FC<Props> = ({ documentKey, label, descri
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
-      const selected = buildDocument(documentKey, label, asset.uri, asset.fileName || undefined, asset.mimeType, asset.fileSize);
+
+      let remoteUri = asset.uri;
+      try {
+        const uploadRes = await uploadFileToBackend(asset.uri, asset.fileName || `${documentKey}.jpg`, asset.mimeType || "image/jpeg");
+        if (uploadRes?.success && uploadRes?.data?.url) {
+          remoteUri = uploadRes.data.url;
+        }
+      } catch (uploadErr) {
+        console.warn("Upload to backend failed, keeping local uri:", uploadErr);
+      }
+
+      const selected = buildDocument(documentKey, label, remoteUri, asset.fileName || undefined, asset.mimeType, asset.fileSize);
       if (!fileIsAllowed(selected)) {
         Alert.alert("File terlalu besar", "Gunakan gambar JPG, JPEG, atau PNG maksimal 10 MB.");
         return;

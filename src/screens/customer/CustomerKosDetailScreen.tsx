@@ -31,6 +31,7 @@ import {
 } from "lucide-react-native";
 import { addCustomerOrder } from "./customerOrderStore";
 import { CustomerChatModal } from "./CustomerChatModal";
+import { createKostBooking } from "../../services/kostService";
 
 export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -51,7 +52,7 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
   const totalPrice = pricePerMonth * durationNum;
   const dpAmount = totalPrice * 0.2;
 
-  const saveKosOrder = () => {
+  const saveKosOrder = async () => {
     if (orderCreated) return;
     const paymentName = selectedPayment === "gopay" ? "GoPay" : selectedPayment === "bca_va" ? "BCA Virtual Account" : selectedPayment === "ovo" ? "OVO" : "ShopeePay";
     const order: OrderItem = {
@@ -77,7 +78,26 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
     };
     addCustomerOrder(order);
     setOrderCreated(true);
+
+    // Sync to MongoDB Atlas backend
+    try {
+      await createKostBooking({
+        customerId: "66b1a0000000000000000001",
+        kostId: "66b1a0000000000000000002",
+        customerName: tenantName,
+        customerPhone: phone,
+        entryDate: new Date().toISOString(),
+        durationMonths: durationNum,
+        monthlyPrice: pricePerMonth,
+        totalAmount: totalPrice,
+        dpAmount: dpAmount,
+        dpProofImage: "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=DP_PAID",
+      });
+    } catch (apiErr) {
+      console.log("Offline or mocked booking synced locally:", apiErr);
+    }
   };
+
 
   const facilities = [
     { id: "1", name: "WiFi", icon: Wifi },

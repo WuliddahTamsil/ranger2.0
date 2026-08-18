@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,8 +9,11 @@ import {
   SafeAreaView,
   StatusBar,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { Nav } from "../../types";
+import { fetchAllKosts } from "../../services/kostService";
+
 import {
   ArrowLeft,
   Search,
@@ -39,8 +42,10 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
   const [activeCategory, setActiveCategory] = useState<"semua" | "putra" | "putri" | "campur">("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [isBannerVisible, setIsBannerVisible] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [dbKosts, setDbKosts] = useState<any[]>([]);
 
-  const kosList = [
+  const defaultMockKosts = [
     {
       id: "1",
       name: "Kos Putri Melati",
@@ -79,6 +84,37 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
     },
   ];
 
+  useEffect(() => {
+    const loadKosts = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchAllKosts();
+        if (data && data.length > 0) {
+          const mapped = data.map((k: any) => ({
+            id: k._id || k.id,
+            name: k.name,
+            type: k.type,
+            status: k.availableRoomsCount > 0 ? "Tersedia" : "Penuh",
+            location: k.address,
+            rating: k.rating || 4.8,
+            reviews: k.reviewCount || 120,
+            price: Number(k.price).toLocaleString("id-ID"),
+            facilities: k.facilities || ["WiFi", "AC"],
+            img: (k.images && k.images.length > 0) ? k.images[0] : defaultMockKosts[0].img,
+          }));
+          setDbKosts(mapped);
+        }
+      } catch (err) {
+        console.warn("Using offline mock kos:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadKosts();
+  }, []);
+
+  const kosList = dbKosts.length > 0 ? [...dbKosts, ...defaultMockKosts.filter(m => !dbKosts.some(d => d.name === m.name))] : defaultMockKosts;
+
   const filteredKosList = kosList.filter((item) => {
     const matchesCategory =
       activeCategory === "semua" || item.type.toLowerCase() === activeCategory.toLowerCase();
@@ -86,10 +122,11 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
       searchQuery.trim() === "" ||
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.facilities.some((f) => f.toLowerCase().includes(searchQuery.toLowerCase()));
+      item.facilities.some((f: string) => f.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return matchesCategory && matchesSearch;
   });
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -335,7 +372,7 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
 
                 {/* Facility Chips Row */}
                 <View style={styles.facilitiesRow}>
-                  {item.facilities.map((f, idx) => (
+                  {item.facilities.map((f: string, idx: number) => (
                     <View key={idx} style={styles.facilityChip}>
                       {f === "WiFi" ? (
                         <Wifi size={11} color="#6B7280" />
