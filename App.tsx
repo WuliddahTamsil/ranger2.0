@@ -118,6 +118,11 @@ export default function App() {
 
   const handleResetPassword = async (email: string, password: string) => resetPassword(email, password);
 
+  const handleUpdateAccount = async (account: AuthAccount) => {
+    setCurrentAuthAccount(account);
+    await createAuthSession(account);
+  };
+
   const startSession = async (account: AuthAccount) => {
     setCurrentAuthAccount(account);
     await createAuthSession(account);
@@ -191,7 +196,7 @@ export default function App() {
 
       // 3. Pemilik Catering
       case "pemilik_catering_home":
-        return <PemilikCateringHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
+        return <PemilikCateringHomeScreen navigate={navigate} authAccount={currentAuthAccount} onUpdateAccount={handleUpdateAccount} />;
 
       // 4. Pemilik Marketplace (UMKM)
       case "pemilik_marketplace_home":

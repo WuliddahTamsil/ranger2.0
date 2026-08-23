@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  ActivityIndicator,
   Image,
   Modal,
   SafeAreaView,
@@ -9,7 +11,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Platform,
+  Alert,
 } from "react-native";
+import { getSelectedCateringShop } from "./customerCateringStore";
+import { getCateringProducts, createCateringOrder } from "../../services/api";
+import { restoreStoredAccount } from "../auth/authService";
 import {
   CalendarDays,
   Check,
@@ -33,7 +40,8 @@ import { CustomerChatModal } from "./CustomerChatModal";
 type FormStep = "form" | "checkout";
 type PaymentMethod = "qris" | "gopay" | "bca_va" | "ovo";
 
-const menus = [
+// Initial mock default (fallback)
+const defaultMenus = [
   { id: "nasi_box", name: "Paket Nasi Box Komplit", description: "Nasi, ayam, sayur, sambal, kerupuk, dan buah", price: 25000 },
   { id: "prasmanan", name: "Paket Prasmanan Acara", description: "Menu rumahan lengkap untuk acara keluarga dan kantor", price: 45000 },
   { id: "snack_box", name: "Snack Box Tradisional", description: "Aneka jajanan pasar dan minuman segar", price: 18000 },
@@ -63,8 +71,10 @@ const createDateOptions = () => {
 };
 
 export const CustomerCateringDetailScreen: React.FC<Nav> = ({ navigate }) => {
+  const selectedCateringShop = getSelectedCateringShop();
   const [step, setStep] = useState<FormStep>("form");
-  const [selectedMenu, setSelectedMenu] = useState(menus[0]);
+  const [menus, setMenus] = useState<any[]>([]);
+  const [selectedMenu, setSelectedMenu] = useState<any>(null);
   const [portions, setPortions] = useState(20);
   const [poDate, setPoDate] = useState(() => createDateOptions()[2]);
   const [deliveryTime, setDeliveryTime] = useState("11:00");
@@ -74,11 +84,35 @@ export const CustomerCateringDetailScreen: React.FC<Nav> = ({ navigate }) => {
   const [dateModalVisible, setDateModalVisible] = useState(false);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!selectedCateringShop) return;
+    const fetchMenus = async () => {
+      setLoading(true);
+      const res = await getCateringProducts(selectedCateringShop.ownerId);
+      if (res.success && res.data && res.data.length > 0) {
+        const mapped = res.data.map((m: any) => ({
+          id: m._id,
+          name: m.name,
+          description: m.description || "",
+          price: m.price,
+        }));
+        setMenus(mapped);
+        setSelectedMenu(mapped[0]);
+      } else {
+        setMenus(defaultMenus);
+        setSelectedMenu(defaultMenus[0]);
+      }
+      setLoading(false);
+    };
+    void fetchMenus();
+  }, [selectedCateringShop]);
 
   const dateOptions = useMemo(createDateOptions, []);
   const deliveryFee = 15000;
   const serviceFee = 5000;
-  const subtotal = selectedMenu.price * portions;
+  const subtotal = selectedMenu ? selectedMenu.price * portions : 0;
   const total = subtotal + deliveryFee + serviceFee;
   const dpPercent = paymentOption === "dp30" ? 30 : paymentOption === "dp50" ? 50 : 100;
   const paidAmount = Math.round((total * dpPercent) / 100);
@@ -87,17 +121,93 @@ export const CustomerCateringDetailScreen: React.FC<Nav> = ({ navigate }) => {
 
   const updatePortions = (delta: number) => setPortions((current) => Math.max(10, current + delta));
 
-  const confirmPayment = () => {
+  const confirmPayment = async () => {
+    // Close payment modal first so UI doesn't look frozen
+    setPaymentModalVisible(false);
+
+    // Retrieve current session or search fallback
+    let customerId = "6a85892d8d27c7d42a0d8ba8";
+    let customerName = "Customer Barokah";
+    let customerPhone = "08123456789";
+
+    try {
+      const { account } = await restoreStoredAccount();
+      if (account) {
+        customerId = account.id;
+        customerName = account.name || "Customer Barokah";
+        customerPhone = account.phone || "08123456789";
+      } else {
+        const storedAccountsRaw = await AsyncStorage.getItem("rangers.auth.accounts.v1");
+        if (storedAccountsRaw) {
+          const parsed = JSON.parse(storedAccountsRaw);
+          const anyCustomer = parsed.find((a: any) => a.role === "customer");
+          if (anyCustomer) {
+            customerId = anyCustomer.id;
+            customerName = anyCustomer.name || "Customer Barokah";
+            customerPhone = anyCustomer.phone || "08123456789";
+          }
+        }
+      }
+    } catch (err) {
+      console.log("Error restoring account, using fallback:", err);
+    }
+
     const orderId = `RNG-CAT-${Date.now().toString().slice(-6)}`;
     const paymentLabel = paymentOption === "lunas" ? "Lunas" : `DP ${dpPercent}%`;
+
+    const apiOrderData = {
+      customerId,
+      ownerId: selectedCateringShop?.ownerId || "6a858afa8d27c7d42a0d8bb2",
+      customerName,
+      customerPhone,
+      address: address || "Jl. Raya Kamojang",
+      menuName: selectedMenu?.name || "Paket Nasi Box",
+      portions: portions || 20,
+      price: selectedMenu?.price || 25000,
+      totalAmount: total,
+      deliveryFee,
+      serviceFee,
+      paymentOption,
+      paymentMethod: selectedPaymentName,
+      paymentStatus: paymentOption === "lunas" ? "Lunas" : `${paymentLabel} dibayar`,
+      paidAmount,
+      remainingAmount,
+      cateringDate: poDate,
+      cateringTime: deliveryTime,
+      notes: "Pesanan catering terjadwal",
+    };
+
+    console.log("Sending catering order to backend...", apiOrderData);
+
+    // Save in database
+    const res = await createCateringOrder(apiOrderData);
+    if (!res.success) {
+      const errMsg = res.message || "Gagal mengirim pesanan ke server catering.";
+      if (Platform.OS === "web") {
+        alert(`Gagal Membuat Pesanan: ${errMsg}`);
+      } else {
+        Alert.alert("Gagal Membuat Pesanan", errMsg);
+      }
+      return;
+    }
+
+    console.log("Catering order successfully created in MongoDB:", res.data);
+
+    // Show success popup before navigating
+    if (Platform.OS === "web") {
+      alert("Pembayaran Berhasil! Pesanan Anda telah diterima oleh mitra catering.");
+    } else {
+      Alert.alert("Sukses", "Pembayaran Berhasil! Pesanan Anda telah diterima oleh mitra catering.");
+    }
+
     const order: OrderItem = {
-      id: orderId,
+      id: res.data._id || orderId,
       type: "Catering",
       iconName: "Coffee",
       color: "#1B7A4E",
-      item: selectedMenu.name,
-      detail: `Catering Bu Haji Nani • ${portions} pax`,
-      status: "Diproses",
+      item: selectedMenu?.name || "Paket Nasi Box",
+      detail: `${selectedCateringShop?.name || "Barokah Catering"} • ${portions} pax`,
+      status: "Menunggu",
       statusColor: "orange",
       date: "Hari ini",
       total,
@@ -110,7 +220,7 @@ export const CustomerCateringDetailScreen: React.FC<Nav> = ({ navigate }) => {
       remainingAmount,
       paymentDueDate: remainingAmount > 0 ? `${poDate} (sebelum pengiriman)` : undefined,
       paymentReminder: remainingAmount > 0 ? `Sisa ${formatRupiah(remainingAmount)} wajib dilunasi sebelum pesanan dikirim.` : "Pembayaran sudah lunas.",
-      paymentReference: `PAY-${Date.now().toString().slice(-8)}`,
+      paymentReference: res.data.orderCode || `PAY-${Date.now().toString().slice(-8)}`,
       paymentHistory: [{ type: paymentLabel, amount: paidAmount, method: selectedPaymentName, date: "Hari ini" }],
       cateringDate: poDate,
       cateringPortions: portions,
@@ -120,7 +230,6 @@ export const CustomerCateringDetailScreen: React.FC<Nav> = ({ navigate }) => {
     };
 
     addCustomerOrder(order);
-    setPaymentModalVisible(false);
     navigate("c_catering_tracking");
   };
 
@@ -133,8 +242,8 @@ export const CustomerCateringDetailScreen: React.FC<Nav> = ({ navigate }) => {
 
           <Text style={styles.sectionTitle}>Detail Pesanan</Text>
           <View style={styles.card}>
-            <Text style={styles.menuTitle}>{selectedMenu.name}</Text>
-            <Text style={styles.mutedText}>{portions} pax • Catering Bu Haji Nani</Text>
+            <Text style={styles.menuTitle}>{selectedMenu?.name}</Text>
+            <Text style={styles.mutedText}>{portions} pax • {selectedCateringShop?.name || "Catering Lokal"}</Text>
             <View style={styles.detailRow}><CalendarDays size={17} color="#1B7A4E" /><Text style={styles.detailText}>PO: {poDate}</Text></View>
             <View style={styles.detailRow}><Clock3 size={17} color="#1B7A4E" /><Text style={styles.detailText}>Estimasi kirim: {deliveryTime}</Text></View>
             <View style={styles.detailRow}><MapPin size={17} color="#1B7A4E" /><Text style={styles.detailText}>{address}</Text></View>
@@ -158,18 +267,30 @@ export const CustomerCateringDetailScreen: React.FC<Nav> = ({ navigate }) => {
     );
   }
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <BackHeader title="Pesan Catering" onBack={() => navigate("c_catering")} />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#1B7A4E" />
+          <Text style={styles.loadingText}>Memuat menu...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <BackHeader title="Pesan Catering" onBack={() => navigate("c_catering")} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Image source={{ uri: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&h=500&fit=crop&q=85" }} style={styles.cover} />
-        <Text style={styles.title}>Catering Bu Haji Nani</Text>
-        <Text style={styles.subtitle}>Nasi box, prasmanan, dan paket acara untuk kebutuhan komunitas.</Text>
+        <Image source={{ uri: selectedCateringShop?.profilePhoto || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&h=500&fit=crop&q=85" }} style={styles.cover} />
+        <Text style={styles.title}>{selectedCateringShop?.name || "Catering Lokal"}</Text>
+        <Text style={styles.subtitle}>{selectedCateringShop?.description || "Nasi box, prasmanan, dan paket acara untuk kebutuhan komunitas."}</Text>
         <TouchableOpacity style={styles.chatOwnerButton} onPress={() => setChatVisible(true)}><MessageCircle size={17} color="#1B7A4E" /><Text style={styles.chatOwnerText}>Chat Pemilik Catering</Text></TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Pilih Menu</Text>
         {menus.map((menu) => {
-          const selected = selectedMenu.id === menu.id;
+          const selected = selectedMenu?.id === menu.id;
           return <TouchableOpacity key={menu.id} style={[styles.menuCard, selected && styles.menuCardSelected]} onPress={() => setSelectedMenu(menu)}><View style={{ flex: 1 }}><Text style={styles.menuTitle}>{menu.name}</Text><Text style={styles.menuDescription}>{menu.description}</Text><Text style={styles.menuPrice}>{formatRupiah(menu.price)} / pax</Text></View><View style={[styles.radio, selected && styles.radioSelected]}>{selected && <Check size={13} color="#FFFFFF" strokeWidth={3} />}</View></TouchableOpacity>;
         })}
 
@@ -191,7 +312,7 @@ export const CustomerCateringDetailScreen: React.FC<Nav> = ({ navigate }) => {
       </ScrollView>
 
       <Modal visible={dateModalVisible} transparent animationType="slide" onRequestClose={() => setDateModalVisible(false)}><View style={styles.modalOverlay}><View style={styles.sheet}><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Pilih Tanggal PO</Text><TouchableOpacity onPress={() => setDateModalVisible(false)}><X size={20} color="#111827" /></TouchableOpacity></View><Text style={styles.mutedText}>Pilih tanggal acara minimal H+2 agar mitra dapat menyiapkan pesanan.</Text><ScrollView style={styles.dateList}>{dateOptions.map((date) => <TouchableOpacity key={date} style={[styles.dateOption, date === poDate && styles.dateOptionSelected]} onPress={() => { setPoDate(date); setDateModalVisible(false); }}><CalendarDays size={18} color={date === poDate ? "#FFFFFF" : "#1B7A4E"} /><Text style={[styles.dateOptionText, date === poDate && styles.dateOptionTextSelected]}>{date}</Text>{date === poDate && <Check size={17} color="#FFFFFF" />}</TouchableOpacity>)}</ScrollView></View></View></Modal>
-      <CustomerChatModal visible={chatVisible} onClose={() => setChatVisible(false)} orderId="CATERING-BU-HAJI-NANI" participantName="Catering Bu Haji Nani" participantType="merchant" initialMessage="Halo Kak, silakan tanyakan menu atau jadwal catering di sini." />
+      <CustomerChatModal visible={chatVisible} onClose={() => setChatVisible(false)} orderId={selectedCateringShop?.ownerId || "CATERING-SHOP"} participantName={selectedCateringShop?.name || "Catering Lokal"} participantType="merchant" initialMessage="Halo Kak, silakan tanyakan menu atau jadwal catering di sini." />
     </SafeAreaView>
   );
 };
@@ -280,4 +401,6 @@ const styles = StyleSheet.create({
   dateOptionTextSelected: { color: "#FFFFFF" },
   paymentOption: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 14, padding: 12, marginBottom: 9 },
   paymentOptionSelected: { backgroundColor: "#E8F5EE", borderColor: "#1B7A4E" },
+  centerContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40 },
+  loadingText: { color: "#6B7280", fontSize: 13, marginTop: 10 },
 });

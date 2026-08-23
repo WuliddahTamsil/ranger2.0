@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -29,6 +30,11 @@ const registerUser = async (req, res) => {
       passwordHash = await bcrypt.hash(password, salt);
     }
 
+    const finalRoleData = { ...roleData };
+    if (role === "pemilik_catering" && finalRoleData.isDapurOpen === undefined) {
+      finalRoleData.isDapurOpen = "true";
+    }
+
     const user = await User.create({
       role,
       name: name.trim(),
@@ -39,7 +45,7 @@ const registerUser = async (req, res) => {
       passwordHash,
       googleLinked: Boolean(googleProfile),
       status: role === "customer" || role === "admin" ? "verified" : "pending",
-      roleData: roleData || {},
+      roleData: finalRoleData,
       documents: documents || {},
     });
 
@@ -189,6 +195,9 @@ const updateMitraStatus = async (req, res) => {
 // Get User Profile
 const getUserProfile = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ success: false, message: "User tidak ditemukan (Format ID tidak valid / Akun lokal)" });
+    }
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ success: false, message: "User tidak ditemukan" });
@@ -199,10 +208,52 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+// Update User Profile / roleData
+const updateUserProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Gagal: Akun ini disimpan secara lokal di browser Anda. Silakan Log Out dan Masuk menggunakan akun database (catering@test.com) untuk menguji Buka/Tutup Toko." 
+      });
+    }
+    const { name, phone, address, profilePhoto, roleData } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User tidak ditemukan" });
+    }
+
+    if (name !== undefined) user.name = name.trim();
+    if (phone !== undefined) user.phone = phone.trim();
+    if (address !== undefined) user.address = address.trim();
+    if (profilePhoto !== undefined) user.profilePhoto = profilePhoto;
+
+    if (roleData) {
+      Object.keys(roleData).forEach((key) => {
+        user.roleData.set(key, roleData[key]);
+      });
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Profil berhasil diperbarui",
+      data: user,
+    });
+  } catch (error) {
+    console.error("❌ Update profile error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memperbarui profil", error: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getMitraAccounts,
   updateMitraStatus,
   getUserProfile,
+  updateUserProfile,
 };

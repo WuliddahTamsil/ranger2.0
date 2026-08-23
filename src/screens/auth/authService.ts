@@ -16,6 +16,17 @@ export const createAuthSession = async (account: AuthAccount) => {
   await saveSession({ accountId: account.id, role: account.role, name: account.name, email: account.email, startedAt: new Date().toISOString() });
 };
 
+export const updateCachedAccount = async (account: AuthAccount) => {
+  const accounts = await loadAccounts();
+  const index = accounts.findIndex((a) => a.id === account.id);
+  if (index >= 0) {
+    accounts[index] = account;
+  } else {
+    accounts.push(account);
+  }
+  await saveAccounts(accounts);
+};
+
 export const loginWithPassword = async (email: string, password: string) => {
   const normalized = normalizeEmail(email);
 

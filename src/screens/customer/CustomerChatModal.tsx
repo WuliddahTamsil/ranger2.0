@@ -33,7 +33,9 @@ import {
   CustomerChatMessage,
   CustomerChatParticipantType,
   CustomerChatThread,
+  upsertCustomerChatThread,
 } from "./customerInboxStore";
+import { getChatMessages, sendChatMessage } from "../../services/api";
 
 interface CustomerChatModalProps {
   visible: boolean;
@@ -68,6 +70,8 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
 
   useEffect(() => {
     if (!visible) return;
+
+    // Ensure local thread exists first
     const existing = ensureCustomerChatThread({
       id: threadId,
       orderId,
@@ -76,14 +80,45 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       lastMessage: initialMessage || "Percakapan baru",
       updatedAt: "Baru saja",
       unreadCount: 0,
-      messages: initialMessage
-        ? [{ id: `${threadId}_welcome`, sender: "other", text: initialMessage, time: "Baru saja" }]
-        : [],
+      messages: [],
     });
     setThread(existing);
-    return subscribeCustomerChatThreads((nextThreads) => {
+
+    const loadMessages = async () => {
+      const res = await getChatMessages(orderId);
+      if (res.success && Array.isArray(res.data)) {
+        const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
+          id: m._id,
+          sender: m.sender === "customer" ? "customer" : "other",
+          text: m.text,
+          time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          attachment: m.attachment,
+        }));
+
+        upsertCustomerChatThread({
+          id: threadId,
+          orderId,
+          participantType,
+          participantName,
+          lastMessage: mapped.length > 0 ? mapped[mapped.length - 1].text : "Percakapan baru",
+          updatedAt: mapped.length > 0 ? mapped[mapped.length - 1].time : "Baru saja",
+          unreadCount: 0,
+          messages: mapped,
+        });
+      }
+    };
+
+    void loadMessages();
+    const interval = setInterval(loadMessages, 3000);
+
+    const unsubscribe = subscribeCustomerChatThreads((nextThreads) => {
       setThread(nextThreads.find((item) => item.id === threadId));
     });
+
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [initialMessage, orderId, participantName, participantType, threadId, visible]);
 
   const handlePickImage = async () => {
@@ -171,7 +206,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     }
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = typedMessage.trim();
     if (!text && !selectedAttachment) return;
 
@@ -183,23 +218,13 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       attachment: selectedAttachment ? { ...selectedAttachment } : undefined,
     };
 
+    // Save in database
+    await sendChatMessage(orderId, "customer", text, selectedAttachment);
+
+    // Save locally for instant UI update
     appendCustomerChatMessage(threadId, message);
     setTypedMessage("");
-    const hadAttachment = !!selectedAttachment;
     setSelectedAttachment(null);
-
-    setTimeout(() => {
-      let replyText = participantType === "driver" ? "Siap Kak, saya segera menuju lokasi." : "Siap Kak, pesanannya kami bantu cek dulu ya.";
-      if (hadAttachment) {
-        replyText = "Terima kasih Kak, file/foto lampiran Anda sudah kami terima dan sedang kami periksa.";
-      }
-      appendCustomerChatMessage(threadId, {
-        id: `${threadId}_${Date.now()}_reply`,
-        sender: "other",
-        text: replyText,
-        time: "Baru saja",
-      });
-    }, 1200);
   };
 
   const isDriver = participantType === "driver";

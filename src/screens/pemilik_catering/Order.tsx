@@ -27,6 +27,7 @@ import {
   User,
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
+import { updateCateringOrderStatus, getChatMessages, sendChatMessage } from "../../services/api";
 
 // Data types matching the approved design
 export interface DriverProfile {
@@ -107,8 +108,36 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
     return () => clearInterval(interval);
   }, [trackingModalVisible]);
 
+  useEffect(() => {
+    if (!chatModalVisible || !selectedOrder) return;
+
+    const loadMessages = async () => {
+      const res = await getChatMessages(selectedOrder.id);
+      if (res.success && Array.isArray(res.data)) {
+        const mapped = res.data.map((m: any) => ({
+          sender: m.sender === "owner" ? ("owner" as const) : ("other" as const),
+          text: m.text,
+          time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        }));
+
+        const chatKey = `${selectedOrder.id}-${chatTarget}`;
+        setChatMessages((prev) => ({
+          ...prev,
+          [chatKey]: mapped,
+        }));
+      }
+    };
+
+    void loadMessages();
+    const interval = setInterval(loadMessages, 3000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [chatModalVisible, selectedOrder, chatTarget]);
+
   // Handler update status pesanan
-  const handleUpdateStatus = (
+  const handleUpdateStatus = async (
     orderId: string,
     nextStatus: "Menunggu" | "Diproses" | "Siap" | "Diambil" | "Selesai" | "Dibatalkan"
   ) => {
@@ -152,6 +181,15 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
       };
     } else if (nextStatus === "Dibatalkan") {
       messageText = "Pesanan catering dibatalkan.";
+    }
+
+    // Update status in MongoDB if valid ObjectId
+    if (orderId && orderId.length === 24) {
+      let backendStatus = nextStatus;
+      if (nextStatus === "Siap" || nextStatus === "Diambil") {
+        backendStatus = "Dikirim" as any;
+      }
+      await updateCateringOrderStatus(orderId, backendStatus);
     }
 
     const updated = orders.map((o) => {
@@ -200,40 +238,27 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
   };
 
   // Send Chat message
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (typedMessage.trim() === "" || !selectedOrder) return;
 
+    const text = typedMessage.trim();
     const chatKey = `${selectedOrder.id}-${chatTarget}`;
     const newMsg: ChatMessage = {
       sender: "owner",
-      text: typedMessage.trim(),
-      time: "Hari ini",
+      text,
+      time: "Baru saja",
     };
 
+    // Save locally for instant feedback
     const currentHistory = chatMessages[chatKey] || [];
-    const updatedHistory = [...currentHistory, newMsg];
-
     setChatMessages({
       ...chatMessages,
-      [chatKey]: updatedHistory,
+      [chatKey]: [...currentHistory, newMsg],
     });
     setTypedMessage("");
 
-    // Simulator Auto Reply
-    setTimeout(() => {
-      const replyMsg: ChatMessage = {
-        sender: "other",
-        text: 
-          chatTarget === "customer" 
-            ? "Baik, terima kasih atas infonya. Saya tunggu kiriman cateringnya ya." 
-            : "Siap, Bu. Saya segera meluncur ke lokasi.",
-        time: "Baru saja",
-      };
-      setChatMessages((prev) => ({
-        ...prev,
-        [chatKey]: [...updatedHistory, replyMsg],
-      }));
-    }, 2500);
+    // Save in database
+    await sendChatMessage(selectedOrder.id, "owner", text);
   };
 
   // Open Tracking map

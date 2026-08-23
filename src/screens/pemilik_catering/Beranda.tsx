@@ -37,6 +37,15 @@ import { rp } from "../../utils/formatters";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { RoleHeader } from "../../components/RoleHeader";
+import {
+  getCateringProductsForOwner,
+  createCateringProduct,
+  updateCateringProduct,
+  deleteCateringProduct,
+  updateCateringStatus,
+  getCateringOrdersForOwner,
+} from "../../services/api";
+import { updateCachedAccount } from "../auth/authService";
 
 // Import other screens
 import { Order, OrderData } from "./Order";
@@ -45,7 +54,7 @@ import { Pendapatan } from "./Pendapatan";
 import { Profile } from "./Profile";
 
 interface ProductItem {
-  id: number;
+  id: number | string;
   name: string;
   store: string;
   price: number;
@@ -60,10 +69,31 @@ interface ProductItem {
 
 interface CateringHomeProps extends Nav {
   authAccount?: AuthAccount | null;
+  onUpdateAccount?: (account: AuthAccount) => void;
 }
 
-export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount }) => {
+export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, onUpdateAccount }) => {
   const [currentTab, setCurrentTab] = useState<number>(0);
+
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === "web") {
+      alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm(`${title}\n\n${message}`);
+      if (confirmed) onConfirm();
+    } else {
+      Alert.alert(title, message, [
+        { text: "Batal", style: "cancel" },
+        { text: "Ya", onPress: onConfirm },
+      ]);
+    }
+  };
 
   // 1. Global Store Info State
   const [storeInfo, setStoreInfo] = useState(() => ({
@@ -73,7 +103,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount }) 
     email: authAccount?.email || "",
     address: authAccount?.roleData.businessAddress || authAccount?.address || "",
     description: "Menyediakan layanan catering prasmanan dan nasi box tumpeng berkualitas di Kamojang.",
-    isOpen: true,
+    isOpen: authAccount?.roleData.isDapurOpen === "true",
     isVerified: true,
     profileImage: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&h=300&fit=crop&q=80",
   }));
@@ -88,116 +118,86 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount }) 
       storeName: authAccount.roleData.businessName || current.storeName,
       address: authAccount.roleData.businessAddress || authAccount.address,
       description: authAccount.roleData.menuSpecialty || current.description,
+      isOpen: authAccount.roleData.isDapurOpen === "true",
     }));
   }, [authAccount]);
 
   // 2. Global Products State
-  const [products, setProducts] = useState<ProductItem[]>([
-    {
-      id: 1,
-      name: "Box Nasi Timbel Komplit",
-      store: "Catering Bu Haji Nani",
-      price: 25000,
-      rating: 4.8,
-      sold: 48,
-      img: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop&q=80",
-      cat: "Nasi Box",
-      description: "Nasi timbel khas Sunda lengkap dengan ayam bakar/goreng, tahu, tempe, lalapan segar dan sambal.",
-      stock: 15,
-      isActive: true,
-    },
-    {
-      id: 2,
-      name: "Nasi Tumpeng Mini",
-      store: "Catering Bu Haji Nani",
-      price: 150000,
-      rating: 4.9,
-      sold: 12,
-      img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=300&h=300&fit=crop&q=80",
-      cat: "Catering Acara",
-      description: "Tumpeng mini lengkap untuk syukuran acara keluarga maupun rapat kantor PGE.",
-      stock: 5,
-      isActive: true,
-    },
-    {
-      id: 3,
-      name: "Kue & Snack Tampah",
-      store: "Catering Bu Haji Nani",
-      price: 120000,
-      rating: 4.7,
-      sold: 34,
-      img: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=300&h=300&fit=crop&q=80",
-      cat: "Kue & Snack",
-      description: "Jajanan pasar tampah komplit isi 50 biji manis dan asin.",
-      stock: 0,
-      isActive: true,
-    },
-  ]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
+
+  useEffect(() => {
+    if (!authAccount) return;
+    const fetchProducts = async () => {
+      const result = await getCateringProductsForOwner(authAccount.id);
+      if (result.success && result.data) {
+        const mapped = result.data.map((p: any) => ({
+          id: p._id,
+          name: p.name,
+          store: storeInfo.storeName,
+          price: p.price,
+          rating: p.rating || 4.8,
+          sold: p.sold || 0,
+          img: p.img,
+          cat: p.cat,
+          description: p.description,
+          stock: p.stock,
+          isActive: p.isActive,
+        }));
+        setProducts(mapped);
+      }
+    };
+    void fetchProducts();
+  }, [authAccount, storeInfo.storeName]);
 
   // 3. Global Orders State
-  const [orders, setOrders] = useState<OrderData[]>([
-    {
-      id: "CAT-2408",
-      customer: "Bambang Wijaya",
-      customerPhone: "0812 3456 7890",
-      items: [{ name: "Box Nasi Timbel Komplit", quantity: 10, price: 25000 }],
-      total: 250000,
-      subtotal: 250000,
-      deliveryFee: 0,
-      time: "10:24",
-      status: "Menunggu",
-      driver: null,
-      unreadCustomerMessages: 1,
-      unreadDriverMessages: 0,
-    },
-    {
-      id: "CAT-2407",
-      customer: "Siti Aminah",
-      customerPhone: "0821 9876 5432",
-      items: [
-        { name: "Nasi Tumpeng Mini", quantity: 2, price: 150000 },
-        { name: "Es Jeruk", quantity: 20, price: 8000 },
-      ],
-      total: 460000,
-      subtotal: 460000,
-      deliveryFee: 0,
-      time: "09:48",
-      status: "Diproses",
-      driver: {
-        name: "Driver Rangers",
-        vehicle: "Motor",
-        plateNumber: "B 1234 XYZ",
-        rating: 4.9,
-        stage: "Driver menuju catering",
-        distance: "1,2 km",
-        eta: "5 menit",
-      },
-      unreadCustomerMessages: 0,
-      unreadDriverMessages: 1,
-    },
-    {
-      id: "CAT-2406",
-      customer: "Rani Setiawati",
-      customerPhone: "0857 1122 3344",
-      items: [{ name: "Box Ayam Bakar Madu", quantity: 30, price: 28000 }],
-      total: 840000,
-      subtotal: 840000,
-      deliveryFee: 0,
-      time: "09:15",
-      status: "Selesai",
-      driver: {
-        name: "Andi Kurniawan",
-        vehicle: "Motor",
-        plateNumber: "D 4455 AB",
-        rating: 4.8,
-        stage: "Pesanan selesai",
-        distance: "0 km",
-        eta: "-",
-      },
-      unreadCustomerMessages: 0,
-      unreadDriverMessages: 0,
-    },
-  ]);
+  const [orders, setOrders] = useState<OrderData[]>([]);
+
+  useEffect(() => {
+    if (!authAccount) return;
+    const fetchOrders = async () => {
+      const result = await getCateringOrdersForOwner(authAccount.id);
+      if (result.success && result.data) {
+        const mapped = result.data.map((o: any) => {
+          let frontendStatus = o.status;
+          if (o.status === "Dikirim") {
+            frontendStatus = "Diambil";
+          }
+          return {
+            id: o._id,
+            customer: o.customerName,
+            customerPhone: o.customerPhone,
+            items: [{ name: o.menuName, quantity: o.portions, price: o.price }],
+            total: o.totalAmount,
+            subtotal: o.totalAmount - o.deliveryFee - o.serviceFee,
+            deliveryFee: o.deliveryFee,
+            time: new Date(o.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+            status: frontendStatus,
+            driver: o.status === "Dikirim" ? {
+              name: "Driver Rangers",
+              vehicle: "Motor",
+              plateNumber: "B 1234 XYZ",
+              rating: 4.9,
+              stage: "Pesanan sedang dikirim",
+              distance: "0.8 km",
+              eta: "10 mnt",
+            } : o.status === "Selesai" ? {
+              name: "Driver Rangers",
+              vehicle: "Motor",
+              plateNumber: "B 1234 XYZ",
+              rating: 4.9,
+              stage: "Pesanan selesai",
+              distance: "0 km",
+              eta: "-",
+            } : null,
+            unreadCustomerMessages: 0,
+            unreadDriverMessages: 0,
+          };
+        });
+        setOrders(mapped);
+      }
+    };
+    void fetchOrders();
+  }, [authAccount]);
 
   // 4. Global Withdrawals State
   const [withdrawals, setWithdrawals] = useState<any[]>([
@@ -296,9 +296,9 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount }) 
     }
   };
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     if (prodName.trim() === "" || prodPrice.trim() === "" || prodStock.trim() === "") {
-      Alert.alert("Error", "Mohon isi semua field wajib");
+      showAlert("Error", "Mohon isi semua field wajib");
       return;
     }
 
@@ -306,100 +306,151 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount }) 
     const stockNum = parseInt(prodStock);
 
     if (isNaN(priceNum) || priceNum <= 0) {
-      Alert.alert("Error", "Harga produk harus lebih dari 0.");
+      showAlert("Error", "Harga produk harus lebih dari 0.");
       return;
     }
     if (isNaN(stockNum) || stockNum < 0) {
-      Alert.alert("Error", "Stok produk tidak boleh negatif.");
+      showAlert("Error", "Stok produk tidak boleh negatif.");
       return;
     }
 
+    if (!authAccount) return;
+
     if (editingProduct) {
       // Edit mode
-      const updated = products.map((p) => {
-        if (p.id === editingProduct.id) {
-          return {
-            ...p,
-            name: prodName.trim(),
-            description: prodDesc.trim(),
-            cat: prodCat,
-            price: priceNum,
-            stock: stockNum,
-            isActive: prodActive,
-            img: prodImg || p.img,
-          };
-        }
-        return p;
-      });
-      setProducts(updated);
-      Alert.alert("Sukses", "Menu berhasil diperbarui");
+      const updatedData = {
+        name: prodName.trim(),
+        description: prodDesc.trim(),
+        cat: prodCat,
+        price: priceNum,
+        stock: stockNum,
+        isActive: prodActive,
+        img: prodImg || editingProduct.img,
+      };
+
+      const res = await updateCateringProduct(editingProduct.id, updatedData);
+      if (res.success && res.data) {
+        const updated = products.map((p) => {
+          if (p.id === editingProduct.id) {
+            return {
+              ...p,
+              name: res.data.name,
+              description: res.data.description,
+              cat: res.data.cat,
+              price: res.data.price,
+              stock: res.data.stock,
+              isActive: res.data.isActive,
+              img: res.data.img,
+            };
+          }
+          return p;
+        });
+        setProducts(updated);
+        showAlert("Sukses", "Menu berhasil diperbarui");
+      } else {
+        showAlert("Gagal", res.message || "Gagal memperbarui menu");
+      }
     } else {
       // Add mode
-      const newProduct: ProductItem = {
-        id: Date.now(),
+      const newProductData = {
+        ownerId: authAccount.id,
         name: prodName.trim(),
-        store: storeInfo.storeName,
         price: priceNum,
-        rating: 0,
-        sold: 0,
         img: prodImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop&q=80",
         cat: prodCat,
         description: prodDesc.trim(),
         stock: stockNum,
         isActive: prodActive,
       };
-      setProducts([newProduct, ...products]);
-      Alert.alert("Sukses", "Menu baru berhasil ditambahkan");
+
+      const res = await createCateringProduct(newProductData);
+      if (res.success && res.data) {
+        const newProduct: ProductItem = {
+          id: res.data._id,
+          name: res.data.name,
+          store: storeInfo.storeName,
+          price: res.data.price,
+          rating: 0,
+          sold: 0,
+          img: res.data.img,
+          cat: res.data.cat,
+          description: res.data.description,
+          stock: res.data.stock,
+          isActive: res.data.isActive,
+        };
+        setProducts([newProduct, ...products]);
+        showAlert("Sukses", "Menu baru berhasil ditambahkan");
+      } else {
+        showAlert("Gagal", res.message || "Gagal menambahkan menu");
+      }
     }
 
     setProductFormVisible(false);
   };
 
-  const handleDeleteProduct = (productId: number) => {
-    Alert.alert("Hapus Menu?", "Apakah Anda yakin ingin menghapus menu ini dari daftar?", [
-      { text: "Batal", style: "cancel" },
-      {
-        text: "Hapus",
-        style: "destructive",
-        onPress: () => {
+  const handleDeleteProduct = (productId: string | number) => {
+    showConfirm(
+      "Hapus Menu?",
+      "Apakah Anda yakin ingin menghapus menu ini dari daftar?",
+      async () => {
+        const res = await deleteCateringProduct(productId);
+        if (res.success) {
           setProducts(products.filter((p) => p.id !== productId));
-          Alert.alert("Sukses", "Menu telah dihapus");
-        },
-      },
-    ]);
-  };
-
-  const handleToggleProductActive = (product: ProductItem) => {
-    const updated = products.map((p) => {
-      if (p.id === product.id) {
-        return { ...p, isActive: !p.isActive };
+          showAlert("Sukses", "Menu telah dihapus");
+        } else {
+          showAlert("Gagal", res.message || "Gagal menghapus menu");
+        }
       }
-      return p;
-    });
-    setProducts(updated);
-    Alert.alert(
-      "Sukses",
-      product.isActive ? "Menu dinonaktifkan sementara" : "Menu diaktifkan kembali"
     );
   };
 
+  const handleToggleProductActive = async (product: ProductItem) => {
+    const nextActive = !product.isActive;
+    const res = await updateCateringProduct(product.id, { isActive: nextActive });
+    if (res.success && res.data) {
+      const updated = products.map((p) => {
+        if (p.id === product.id) {
+          return { ...p, isActive: res.data.isActive };
+        }
+        return p;
+      });
+      setProducts(updated);
+      showAlert(
+        "Sukses",
+        res.data.isActive ? "Menu diaktifkan kembali" : "Menu dinonaktifkan sementara"
+      );
+    } else {
+      showAlert("Gagal", res.message || "Gagal mengubah status menu");
+    }
+  };
+
   const handleToggleStoreStatus = () => {
+    if (!authAccount) return;
     const nextStatus = !storeInfo.isOpen;
-    Alert.alert(
+
+    showConfirm(
       nextStatus ? "Buka Dapur?" : "Tutup Dapur?",
       nextStatus
         ? "Dapur akan kembali menerima pesanan customer."
         : "Customer tidak dapat membuat pesanan selama dapur ditutup.",
-      [
-        { text: "Batal", style: "cancel" },
-        {
-          text: nextStatus ? "Buka Dapur" : "Tutup Dapur",
-          onPress: () => {
-            setStoreInfo({ ...storeInfo, isOpen: nextStatus });
-            Alert.alert("Sukses", nextStatus ? "Dapur sekarang dibuka." : "Dapur sekarang ditutup.");
-          },
-        },
-      ]
+      async () => {
+        const res = await updateCateringStatus(authAccount.id, nextStatus);
+        if (res.success && res.data) {
+          const updatedRoleData = { ...authAccount.roleData };
+          updatedRoleData.isDapurOpen = nextStatus ? "true" : "false";
+
+          const updatedAccount: AuthAccount = {
+            ...authAccount,
+            roleData: updatedRoleData,
+          };
+          setStoreInfo({ ...storeInfo, isOpen: nextStatus });
+          await updateCachedAccount(updatedAccount);
+          onUpdateAccount?.(updatedAccount);
+          showAlert("Sukses", nextStatus ? "Dapur sekarang dibuka." : "Dapur sekarang ditutup.");
+        } else {
+          showAlert("Gagal", res.message || "Gagal mengubah status dapur");
+        }
+      }
     );
   };
 
