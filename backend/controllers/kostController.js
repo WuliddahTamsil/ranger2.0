@@ -152,23 +152,22 @@ const findKostByOwnerOrEmail = async (ownerIdentifier) => {
   if (ownerIdentifier && ownerIdentifier.match(/^[0-9a-fA-F]{24}$/)) {
     kost = await Kost.findOne({ ownerId: ownerIdentifier });
   }
-  // If not found or identifier is email or 'ais'
+  // If not found or identifier is email
   if (!kost) {
     const user = await User.findOne({
       $or: [
         { email: ownerIdentifier },
-        { email: "aisl@gmail.com" },
         { email: "aisk@gmail.com" },
-        { name: new RegExp(ownerIdentifier, "i") },
+        { name: new RegExp(ownerIdentifier || "ais", "i") },
       ],
     });
     if (user) {
       kost = await Kost.findOne({ ownerId: user._id });
     }
   }
-  // Fallback to first kost if any
+  // Fallback to Ais Kost Exclusive
   if (!kost) {
-    kost = await Kost.findOne({});
+    kost = await Kost.findOne({ name: /Ais Kost/i });
   }
   return kost;
 };

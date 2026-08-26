@@ -144,73 +144,12 @@ export const ManajemenPenghuniScreen: React.FC<Nav> = ({ navigate }) => {
   };
 
   const [loading, setLoading] = useState(false);
-  const [tenants, setTenants] = useState<TenantData[]>([
-    {
-      id: "1",
-      name: "Budi Santoso",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80",
-      status: "aktif",
-      roomNumber: "101",
-      roomType: "Tipe AC Exclusive",
-      phone: "081234567801",
-      entryDate: "01 Ags 2026",
-      daysLeft: 25,
-      priceMonth: "Rp 1.500.000",
-    },
-    {
-      id: "2",
-      name: "Dimas Pratama",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80",
-      status: "akan_keluar",
-      roomNumber: "102",
-      roomType: "Tipe AC Exclusive",
-      phone: "081234567802",
-      entryDate: "15 Jul 2026",
-      daysLeft: 8,
-      priceMonth: "Rp 1.500.000",
-    },
-    {
-      id: "3",
-      name: "Rizky Fauzi",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80",
-      status: "aktif",
-      roomNumber: "103",
-      roomType: "Tipe AC Standar",
-      phone: "081234567803",
-      entryDate: "05 Ags 2026",
-      daysLeft: 20,
-      priceMonth: "Rp 1.200.000",
-    },
-    {
-      id: "4",
-      name: "Ahmad Fauzan",
-      avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=120&auto=format&fit=crop&q=80",
-      status: "aktif",
-      roomNumber: "104",
-      roomType: "Tipe AC Standar",
-      phone: "081234567804",
-      entryDate: "20 Jul 2026",
-      daysLeft: 12,
-      priceMonth: "Rp 1.200.000",
-    },
-    {
-      id: "5",
-      name: "Fajar Nugroho",
-      avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=120&auto=format&fit=crop&q=80",
-      status: "aktif",
-      roomNumber: "105",
-      roomType: "Tipe Non-AC Ekonomis",
-      phone: "081234567805",
-      entryDate: "10 Ags 2026",
-      daysLeft: 28,
-      priceMonth: "Rp 850.000",
-    },
-  ]);
+  const [tenants, setTenants] = useState<TenantData[]>([]);
 
   const loadTenantsFromBackend = async () => {
     setLoading(true);
     try {
-      const data = await fetchTenantsByOwner("aisl@gmail.com");
+      const data = await fetchTenantsByOwner("aisk@gmail.com");
       if (data && data.length > 0) {
         setTenants(data);
       }
@@ -287,7 +226,7 @@ export const ManajemenPenghuniScreen: React.FC<Nav> = ({ navigate }) => {
       };
       setTenants([newTenant, ...tenants]);
       try {
-        await addTenantToKost("aisl@gmail.com", {
+        await addTenantToKost("aisk@gmail.com", {
           name: namaLengkap,
           phone: noHp,
           roomNumber: nomorKamar || "101",
@@ -306,7 +245,7 @@ export const ManajemenPenghuniScreen: React.FC<Nav> = ({ navigate }) => {
     setTenants(tenants.filter((t) => t.id !== id));
     setSelectedTenantForOptions(null);
     try {
-      await deleteTenantFromKost("aisl@gmail.com", id);
+      await deleteTenantFromKost("aisk@gmail.com", id);
     } catch (e) {
       console.log("Offline delete tenant:", e);
     }

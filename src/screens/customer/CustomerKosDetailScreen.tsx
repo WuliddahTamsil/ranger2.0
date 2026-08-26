@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,10 @@ import {
   StatusBar,
   Image,
   Modal,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { Nav, OrderItem } from "../../types";
 import {
   ArrowLeft,
@@ -28,81 +31,190 @@ import {
   Check,
   Download,
   User,
+  Building2,
+  Tv,
+  Wind,
+  Bed,
+  CheckCircle2,
+  Upload,
+  Copy,
 } from "lucide-react-native";
 import { addCustomerOrder } from "./customerOrderStore";
 import { CustomerChatModal } from "./CustomerChatModal";
-import { createKostBooking } from "../../services/kostService";
+import { createKostBooking, fetchAllKosts } from "../../services/kostService";
+import { getSelectedKost, SelectedKost } from "./customerKosStore";
 
 export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
+  const [kostData, setKostData] = useState<SelectedKost | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<string>("gopay");
+  const [selectedPayment, setSelectedPayment] = useState<string>("bca_va");
   const [chatVisible, setChatVisible] = useState(false);
   const [orderCreated, setOrderCreated] = useState(false);
+  const [proofImage, setProofImage] = useState<string>("https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=400&q=80");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookingResponse, setBookingResponse] = useState<any>(null);
 
   // Form Booking State
-  const [tenantName, setTenantName] = useState("Rahman Hakim");
-  const [phone, setPhone] = useState("081356789012");
-  const [startDate, setStartDate] = useState("07/26/2026");
+  const [tenantName, setTenantName] = useState("Aisyah Putri");
+  const [phone, setPhone] = useState("081298765432");
+  const [email, setEmail] = useState("aisyahphr@gmail.com");
+  const [startDate, setStartDate] = useState("2026-09-01");
   const [durationMonths, setDurationMonths] = useState("1");
 
-  const pricePerMonth = 600000;
+  useEffect(() => {
+    const initKost = async () => {
+      const stored = getSelectedKost();
+      if (stored) {
+        setKostData(stored);
+        if (stored.rooms && stored.rooms.length > 0) {
+          const avail = stored.rooms.find((r) => r.isAvailable) || stored.rooms[0];
+          setSelectedRoom(avail);
+        }
+      } else {
+        try {
+          const list = await fetchAllKosts();
+          if (list && list.length > 0) {
+            setKostData(list[0]);
+            if (list[0].rooms && list[0].rooms.length > 0) {
+              const avail = list[0].rooms.find((r: any) => r.isAvailable) || list[0].rooms[0];
+              setSelectedRoom(avail);
+            }
+          }
+        } catch (err) {
+          console.warn("Error fetching kost detail:", err);
+        }
+      }
+    };
+    initKost();
+  }, []);
+
+  const pricePerMonth = selectedRoom ? selectedRoom.priceMonthly : (kostData?.price || 950000);
   const durationNum = parseInt(durationMonths) || 1;
   const totalPrice = pricePerMonth * durationNum;
-  const dpAmount = totalPrice * 0.2;
+  const dpAmount = Math.round(totalPrice * 0.2); // 20% DP
+
+  const handlePickProofImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setProofImage(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.log("Using default sample proof:", err);
+    }
+  };
 
   const saveKosOrder = async () => {
     if (orderCreated) return;
-    const paymentName = selectedPayment === "gopay" ? "GoPay" : selectedPayment === "bca_va" ? "BCA Virtual Account" : selectedPayment === "ovo" ? "OVO" : "ShopeePay";
+    setIsSubmitting(true);
+
+    const paymentName = selectedPayment === "bca_va" ? "BCA Transfer (Ais Kost Management)" : selectedPayment === "qris" ? "QRIS AIS KOST" : selectedPayment === "gopay" ? "GoPay" : "ShopeePay";
+
+    const orderId = `RNG-KOS-${Date.now().toString().slice(-6)}`;
     const order: OrderItem = {
-      id: `RNG-KOS-${Date.now().toString().slice(-6)}`,
+      id: orderId,
       type: "Kos",
       iconName: "Building2",
-      color: "#9333EA",
-      item: "Kos Putra Garuda",
-      detail: `${durationNum} bulan • ${tenantName}`,
-      status: "Aktif",
-      statusColor: "green",
+      color: "#0D7A53",
+      item: kostData?.name || "Ais Kost Exclusive",
+      detail: `${selectedRoom?.roomNumber ? `Kamar ${selectedRoom.roomNumber} (${selectedRoom.roomType})` : "Kamar Pilihan"} • ${durationNum} Bulan`,
+      status: "Menunggu Verifikasi DP",
+      statusColor: "orange",
       date: "Hari ini",
       total: totalPrice,
       paymentMethod: paymentName,
-      paymentStatus: "DP 20% dibayar",
+      paymentStatus: "DP 20% Terkirim",
       paidAmount: dpAmount,
       remainingAmount: totalPrice - dpAmount,
       paymentDueDate: `${startDate} (sebelum masuk kos)`,
       paymentReminder: `Sisa ${formatRupiah(totalPrice - dpAmount)} perlu dilunasi sebelum tanggal masuk kos.`,
       paymentReference: `PAY-${Date.now().toString().slice(-8)}`,
       paymentHistory: [{ type: "DP 20%", amount: dpAmount, method: paymentName, date: "Hari ini" }],
-      address: "Jl. Raya Kamojang No. 20",
+      address: kostData?.address || "Jl. Kaliurang KM 7 No. 15, Sleman",
     };
     addCustomerOrder(order);
-    setOrderCreated(true);
 
     // Sync to MongoDB Atlas backend
     try {
-      await createKostBooking({
-        customerId: "66b1a0000000000000000001",
-        kostId: "66b1a0000000000000000002",
+      const result = await createKostBooking({
+        customerId: "aisyahphr@gmail.com",
+        kostId: kostData?._id || "66b1a0000000000000000002",
+        roomId: selectedRoom?._id,
+        roomNumber: selectedRoom?.roomNumber || "101",
         customerName: tenantName,
         customerPhone: phone,
-        entryDate: new Date().toISOString(),
+        customerEmail: email,
+        entryDate: startDate,
         durationMonths: durationNum,
         monthlyPrice: pricePerMonth,
         totalAmount: totalPrice,
         dpAmount: dpAmount,
-        dpProofImage: "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=DP_PAID",
+        dpProofImage: proofImage,
       });
+      setBookingResponse(result?.data);
     } catch (apiErr) {
       console.log("Offline or mocked booking synced locally:", apiErr);
+    } finally {
+      setIsSubmitting(false);
+      setOrderCreated(true);
+      setIsReceiptModalOpen(true);
     }
   };
 
-
-  const facilities = [
-    { id: "1", name: "WiFi", icon: Wifi },
-    { id: "2", name: "KM Dalam", icon: ShowerHead },
-    { id: "3", name: "Dapur", icon: Utensils },
+  const roomsList = kostData?.rooms || [
+    {
+      _id: "r1",
+      roomNumber: "101",
+      roomType: "Tipe AC Exclusive Single",
+      floor: 1,
+      priceMonthly: 1500000,
+      isAvailable: true,
+      facilities: ["AC", "WiFi Cepat", "KM Dalam", "Water Heater", "Meja Kerja"],
+    },
+    {
+      _id: "r2",
+      roomNumber: "102",
+      roomType: "Tipe Deluxe Balcony",
+      floor: 1,
+      priceMonthly: 1800000,
+      isAvailable: true,
+      facilities: ["AC", "WiFi", "Balkon", "KM Dalam", "Smart TV"],
+    },
+    {
+      _id: "r3",
+      roomNumber: "103",
+      roomType: "Tipe AC Standar Plus",
+      floor: 2,
+      priceMonthly: 1200000,
+      isAvailable: true,
+      facilities: ["AC", "WiFi", "KM Dalam", "Meja Belajar"],
+    },
+    {
+      _id: "r4",
+      roomNumber: "104",
+      roomType: "Tipe VIP King Suite",
+      floor: 2,
+      priceMonthly: 2200000,
+      isAvailable: false,
+      facilities: ["AC Inverter", "King Size Bed", "Bathtub"],
+    },
+    {
+      _id: "r5",
+      roomNumber: "105",
+      roomType: "Tipe Cozy Minimalist",
+      floor: 2,
+      priceMonthly: 950000,
+      isAvailable: true,
+      facilities: ["Kipas Angin", "WiFi", "KM Luar"],
+    },
   ];
 
   return (
@@ -114,7 +226,7 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
         <View style={styles.heroContainer}>
           <Image
             source={{
-              uri: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80",
+              uri: (kostData?.images && kostData.images.length > 0) ? kostData.images[0] : "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=800&q=80",
             }}
             style={styles.heroImg}
           />
@@ -141,16 +253,18 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
           <View style={styles.heroOverlayContent}>
             <View style={styles.heroBadgesRow}>
               <View style={styles.badgePutra}>
-                <User size={11} color="#FFFFFF" />
-                <Text style={styles.badgePutraText}>Putra</Text>
+                <Building2 size={11} color="#FFFFFF" />
+                <Text style={styles.badgePutraText}>{kostData?.type || "Campur"}</Text>
               </View>
 
               <View style={styles.badgeSisaKamar}>
-                <Text style={styles.badgeSisaKamarText}>Sisa 2 Kamar</Text>
+                <Text style={styles.badgeSisaKamarText}>
+                  {roomsList.filter(r => r.isAvailable).length} Kamar Tersedia
+                </Text>
               </View>
             </View>
 
-            <Text style={styles.heroTitle}>Kos Putra Garuda</Text>
+            <Text style={styles.heroTitle}>{kostData?.name || "Ais Kost Exclusive"}</Text>
           </View>
         </View>
 
@@ -159,30 +273,109 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
           {/* Location & Rating */}
           <View style={styles.locationRow}>
             <MapPin size={15} color="#6B7280" />
-            <Text style={styles.locationText}>Jl. Raya Kamojang No. 20</Text>
+            <Text style={styles.locationText}>{kostData?.address || "Jl. Kaliurang KM 7 No. 15, Sleman, Yogyakarta"}</Text>
           </View>
 
           <View style={styles.ratingRow}>
             <Star size={15} color="#EAB308" fill="#EAB308" />
-            <Text style={styles.ratingVal}>4.8</Text>
-            <Text style={styles.reviewsText}>(120 ulasan)</Text>
+            <Text style={styles.ratingVal}>4.9</Text>
+            <Text style={styles.reviewsText}>(128 ulasan)</Text>
             <Text style={styles.dotSeparator}>•</Text>
             <TouchableOpacity activeOpacity={0.7}>
-              <Text style={styles.responsiveOwnerText}>Pemilik Responsif</Text>
+              <Text style={styles.responsiveOwnerText}>Pemilik Terverifikasi (aisk@gmail.com)</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* PILIHAN TIPE KAMAR SECTION */}
+          <View style={styles.sectionBlock}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <Text style={styles.sectionTitle}>Pilihan Tipe Kamar</Text>
+              <Text style={{ fontSize: 12, color: "#0D7A53", fontWeight: "700" }}>{roomsList.length} Tipe Kamar</Text>
+            </View>
+
+            <View style={{ gap: 10 }}>
+              {roomsList.map((room: any) => {
+                const isSelected = selectedRoom?.roomNumber === room.roomNumber;
+                return (
+                  <TouchableOpacity
+                    key={room.roomNumber}
+                    style={[
+                      styles.roomCard,
+                      isSelected && styles.roomCardSelected,
+                      !room.isAvailable && styles.roomCardDisabled,
+                    ]}
+                    onPress={() => {
+                      if (room.isAvailable) {
+                        setSelectedRoom(room);
+                      }
+                    }}
+                    activeOpacity={room.isAvailable ? 0.85 : 1}
+                  >
+                    <View style={styles.roomCardTop}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <Text style={styles.roomNumberTag}>Kamar {room.roomNumber}</Text>
+                          <Text style={[styles.roomTypeTitle, isSelected && { color: "#0D7A53" }]}>
+                            {room.roomType}
+                          </Text>
+                        </View>
+                        <Text style={styles.roomFloorText}>Lantai {room.floor} • Termasuk Listrik & Air</Text>
+                      </View>
+
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text style={styles.roomPriceVal}>
+                          Rp {Number(room.priceMonthly).toLocaleString("id-ID")}
+                        </Text>
+                        <Text style={styles.roomPriceUnit}>/ bulan</Text>
+                      </View>
+                    </View>
+
+                    {/* Facilities Preview */}
+                    {room.facilities && (
+                      <View style={styles.roomFacsRow}>
+                        {room.facilities.slice(0, 4).map((fac: string, idx: number) => (
+                          <View key={idx} style={styles.roomFacChip}>
+                            <Text style={styles.roomFacChipText}>{fac}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Availability Tag */}
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#F3F4F6" }}>
+                      <View style={[styles.availBadge, room.isAvailable ? styles.availGreen : styles.availRed]}>
+                        <Text style={[styles.availText, { color: room.isAvailable ? "#0D7A53" : "#DC2626" }]}>
+                          {room.isAvailable ? "● Kamar Tersedia" : "● Penuh / Terisi"}
+                        </Text>
+                      </View>
+
+                      {room.isAvailable && (
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: isSelected ? "#0D7A53" : "#6B7280" }}>
+                          {isSelected ? "✓ Kamar Dipilih" : "Pilih Kamar Ini"}
+                        </Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           {/* Fasilitas Kos Section */}
           <View style={styles.sectionBlock}>
-            <Text style={styles.sectionTitle}>Fasilitas Kos</Text>
-
+            <Text style={styles.sectionTitle}>Fasilitas Kos Utama</Text>
             <View style={styles.facilitiesGrid}>
-              {facilities.map((fac) => {
+              {[
+                { id: "1", name: "WiFi Cepat", icon: Wifi },
+                { id: "2", name: "AC & Kamar Mandi", icon: ShowerHead },
+                { id: "3", name: "Dapur Bersama", icon: Utensils },
+                { id: "4", name: "Parkir Luas", icon: Building2 },
+              ].map((fac) => {
                 const IconComp = fac.icon;
                 return (
                   <View key={fac.id} style={styles.facilityCard}>
                     <View style={styles.facilityIconCircle}>
-                      <IconComp size={22} color="#0D7A53" />
+                      <IconComp size={20} color="#0D7A53" />
                     </View>
                     <Text style={styles.facilityCardName}>{fac.name}</Text>
                   </View>
@@ -195,7 +388,7 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionTitle}>Deskripsi</Text>
             <Text style={styles.descText}>
-              Kos Putra eksklusif dengan fasilitas lengkap, bersih, dan aman. Lokasi strategis dekat dengan area perkantoran PGE dan pusat makanan. Harga sudah termasuk air, sampah, dan WiFi.
+              {kostData?.description || "Kost exclusive bersih dan nyaman di kawasan strategis dekat kampus. Fasilitas lengkap dengan akses keamanan 24 jam dan manajemen profesional."}
             </Text>
           </View>
         </View>
@@ -206,9 +399,12 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
       {/* Fixed Bottom Action Bar */}
       <View style={styles.bottomBar}>
         <View>
-          <Text style={styles.bottomPriceLabel}>Harga sewa</Text>
+          <Text style={styles.bottomPriceLabel}>
+            Kamar {selectedRoom?.roomNumber || "Pilihan"}
+          </Text>
           <Text style={styles.bottomPriceVal}>
-            Rp 600.000 <Text style={styles.bottomPriceUnit}>/ bln</Text>
+            Rp {Number(pricePerMonth).toLocaleString("id-ID")}{" "}
+            <Text style={styles.bottomPriceUnit}>/ bln</Text>
           </Text>
         </View>
 
@@ -227,15 +423,15 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
         </View>
       </View>
 
-      {/* Form Booking Kos Modal (Bottom Sheet - Image 5) */}
+      {/* Form Booking Kos Modal (Bottom Sheet) */}
       <Modal visible={isBookingModalOpen} transparent animationType="slide">
         <View style={styles.modalOverlayBottom}>
           <View style={styles.sheetCard}>
             {/* Sheet Header */}
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.sheetTitle}>Form Booking Kos</Text>
-                <Text style={styles.sheetSub}>Amankan kamar dengan DP 20%</Text>
+                <Text style={styles.sheetTitle}>Form Booking Kamar Kos</Text>
+                <Text style={styles.sheetSub}>Amankan kamar pilihan dengan DP 20%</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setIsBookingModalOpen(false)}
@@ -247,29 +443,31 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
-              {/* Merchant Summary Box */}
+              {/* Selected Room Summary Box */}
               <View style={styles.merchantSummaryBox}>
-                <Image
-                  source={{
-                    uri: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=200&q=80",
-                  }}
-                  style={styles.merchantThumb}
-                />
+                <View style={styles.merchantThumbBox}>
+                  <Building2 size={24} color="#0D7A53" />
+                </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.merchantSummaryTitle}>Kos Putra Garuda</Text>
-                  <Text style={styles.merchantSummaryPrice}>Rp 600.000 / bln</Text>
+                  <Text style={styles.merchantSummaryTitle}>{kostData?.name || "Ais Kost Exclusive"}</Text>
+                  <Text style={styles.merchantSummaryRoomText}>
+                    Kamar {selectedRoom?.roomNumber || "101"} ({selectedRoom?.roomType || "AC Exclusive"})
+                  </Text>
+                  <Text style={styles.merchantSummaryPrice}>
+                    Rp {Number(pricePerMonth).toLocaleString("id-ID")} / bulan
+                  </Text>
                 </View>
               </View>
 
               {/* Field 1: Nama Penyewa */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Nama Penyewa</Text>
+                <Text style={styles.fieldLabel}>Nama Lengkap Penyewa</Text>
                 <View style={styles.inputContainer}>
                   <TextInput
                     style={styles.textInput}
                     value={tenantName}
                     onChangeText={setTenantName}
-                    placeholder="Masukkan nama Anda"
+                    placeholder="Nama lengkap"
                     placeholderTextColor="#9CA3AF"
                   />
                 </View>
@@ -290,7 +488,22 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
                 </View>
               </View>
 
-              {/* Field 3 & 4 Grid (Tanggal Masuk & Durasi) */}
+              {/* Field 3: Email Customer */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Email Akun Customer</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    placeholder="aisyahphr@gmail.com"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+              </View>
+
+              {/* Field 4 & 5 Grid (Tanggal Masuk & Durasi) */}
               <View style={styles.gridTwoCols}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fieldLabel}>Tgl. Masuk Kos</Text>
@@ -299,15 +512,15 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
                       style={[styles.textInput, { flex: 1 }]}
                       value={startDate}
                       onChangeText={setStartDate}
-                      placeholder="MM/DD/YYYY"
+                      placeholder="YYYY-MM-DD"
                       placeholderTextColor="#9CA3AF"
                     />
                     <Calendar size={16} color="#374151" />
                   </View>
                 </View>
 
-                <View style={{ width: 100 }}>
-                  <Text style={styles.fieldLabel}>Durasi (Bln)</Text>
+                <View style={{ width: 110 }}>
+                  <Text style={styles.fieldLabel}>Durasi Sewa</Text>
                   <View style={styles.inputContainerRow}>
                     <TextInput
                       style={[styles.textInput, { flex: 1 }]}
@@ -315,7 +528,7 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
                       onChangeText={setDurationMonths}
                       keyboardType="number-pad"
                     />
-                    <Text style={{ fontSize: 11, color: "#6B7280", fontWeight: "700" }}>bln</Text>
+                    <Text style={{ fontSize: 11, color: "#6B7280", fontWeight: "700" }}>Bulan</Text>
                   </View>
                 </View>
               </View>
@@ -323,7 +536,7 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
               {/* Price Calculation Box */}
               <View style={styles.priceCalcBlock}>
                 <View style={styles.priceCalcRow}>
-                  <Text style={styles.calcLabel}>Total Harga Sewa</Text>
+                  <Text style={styles.calcLabel}>Total Biaya Sewa ({durationNum} bln)</Text>
                   <Text style={styles.calcVal}>Rp {totalPrice.toLocaleString("id-ID")}</Text>
                 </View>
 
@@ -331,7 +544,7 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
                 <View style={styles.dpBoxGreen}>
                   <View style={styles.dpBoxLeft}>
                     <Wallet size={18} color="#0D7A53" />
-                    <Text style={styles.dpBoxLabel}>DP (20%)</Text>
+                    <Text style={styles.dpBoxLabel}>DP Wajib (20%)</Text>
                   </View>
                   <Text style={styles.dpBoxVal}>Rp {dpAmount.toLocaleString("id-ID")}</Text>
                 </View>
@@ -347,7 +560,7 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
                 activeOpacity={0.85}
               >
                 <Text style={styles.btnPayDpText}>
-                  Bayar DP Rp {dpAmount.toLocaleString("id-ID")}
+                  Lanjut Transfer DP: Rp {dpAmount.toLocaleString("id-ID")}
                 </Text>
                 <ArrowLeft size={16} color="#FFFFFF" style={{ transform: [{ rotate: "180deg" }] }} />
               </TouchableOpacity>
@@ -356,7 +569,7 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
         </View>
       </Modal>
 
-      {/* Pilih Pembayaran Bottom Sheet Modal (Image 2) */}
+      {/* Pilih Pembayaran & Upload Bukti DP Modal */}
       <Modal visible={isPaymentModalOpen} transparent animationType="slide">
         <View style={styles.modalOverlayBottom}>
           <View style={styles.sheetCard}>
@@ -372,64 +585,96 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
               >
                 <ArrowLeft size={20} color="#111827" />
               </TouchableOpacity>
-              <Text style={styles.sheetTitle}>Pilih Pembayaran</Text>
+              <Text style={styles.sheetTitle}>Pembayaran DP Pemilik Kos</Text>
             </View>
 
-            {/* Payment Options List */}
-            <View style={styles.paymentList}>
-              {[
-                { id: "gopay", name: "GoPay", sub: "Bayar instan dengan GoPay", color: "#00AED6" },
-                { id: "bca_va", name: "BCA Virtual Account", sub: "Transfer otomatis", color: "#003C93" },
-                { id: "ovo", name: "OVO", sub: "Cashback hingga 10k", color: "#4C3494" },
-                { id: "shopeepay", name: "ShopeePay", sub: "Gratis biaya admin", color: "#EE4D2D" },
-              ].map((method) => {
-                const isSelected = selectedPayment === method.id;
-                return (
-                  <TouchableOpacity
-                    key={method.id}
-                    style={[
-                      styles.paymentOptionRow,
-                      isSelected && styles.paymentOptionRowSelected,
-                    ]}
-                    onPress={() => setSelectedPayment(method.id)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={[styles.paymentIconBox, { backgroundColor: method.color + "15" }]}>
-                      <Wallet size={20} color={method.color} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.paymentOptionName}>{method.name}</Text>
-                      <Text style={styles.paymentOptionSub}>{method.sub}</Text>
-                    </View>
-                    <View style={[
-                      styles.radioCircle,
-                      isSelected && styles.radioCircleSelected,
-                    ]}>
-                      {isSelected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}>
+              {/* Info Rekening Pemilik */}
+              <View style={styles.bankAccountCard}>
+                <Text style={styles.bankAccountHeader}>Transfer Rekening Pemilik (aisk@gmail.com):</Text>
+                <View style={styles.bankDetailRow}>
+                  <Text style={styles.bankLabel}>Bank</Text>
+                  <Text style={styles.bankValue}>BCA (Bank Central Asia)</Text>
+                </View>
+                <View style={styles.bankDetailRow}>
+                  <Text style={styles.bankLabel}>No. Rekening</Text>
+                  <Text style={[styles.bankValue, { color: "#0D7A53", fontSize: 16, fontWeight: "900" }]}>
+                    7720192841
+                  </Text>
+                </View>
+                <View style={styles.bankDetailRow}>
+                  <Text style={styles.bankLabel}>Atas Nama</Text>
+                  <Text style={styles.bankValue}>Ais Kost Management</Text>
+                </View>
+                <View style={[styles.bankDetailRow, { borderBottomWidth: 0, marginTop: 4 }]}>
+                  <Text style={styles.bankLabel}>Jumlah DP</Text>
+                  <Text style={[styles.bankValue, { color: "#0D7A53", fontWeight: "900" }]}>
+                    Rp {dpAmount.toLocaleString("id-ID")}
+                  </Text>
+                </View>
+              </View>
 
-            {/* Lanjutkan Pembayaran Button */}
-            <TouchableOpacity
-              style={styles.btnLanjutkan}
-              onPress={() => {
-                setIsPaymentModalOpen(false);
-                saveKosOrder();
-                setIsReceiptModalOpen(true);
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.btnLanjutkanText}>Lanjutkan Pembayaran</Text>
-              <ArrowLeft size={16} color="#FFFFFF" style={{ transform: [{ rotate: "180deg" }] }} />
-            </TouchableOpacity>
+              {/* Upload Struk Bukti DP Section */}
+              <View style={styles.uploadProofSection}>
+                <Text style={styles.uploadProofTitle}>Unggah Bukti Transfer / Resi DP</Text>
+                <Text style={styles.uploadProofSub}>
+                  Bukti ini akan langsung diverifikasi secara real-time oleh akun pemilik kos.
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.uploadImageBox}
+                  onPress={handlePickProofImage}
+                  activeOpacity={0.8}
+                >
+                  {proofImage ? (
+                    <Image source={{ uri: proofImage }} style={styles.uploadedPreviewImg} />
+                  ) : (
+                    <View style={{ alignItems: "center", padding: 20 }}>
+                      <Upload size={32} color="#0D7A53" />
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827", marginTop: 8 }}>
+                        Pilih Foto Bukti Transfer
+                      </Text>
+                      <Text style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
+                        Format JPG, PNG (Maks 5MB)
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.changeProofBtn}
+                  onPress={handlePickProofImage}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.changeProofText}>📷 Ganti Foto Bukti Transfer</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Lanjutkan Pembayaran Button */}
+              <TouchableOpacity
+                style={styles.btnLanjutkan}
+                onPress={() => {
+                  setIsPaymentModalOpen(false);
+                  saveKosOrder();
+                }}
+                disabled={isSubmitting}
+                activeOpacity={0.85}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.btnLanjutkanText}>Kirim DP & Ajukan Verifikasi</Text>
+                    <ArrowLeft size={16} color="#FFFFFF" style={{ transform: [{ rotate: "180deg" }] }} />
+                  </>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* E-Receipt / Booking Berhasil Bottom Sheet Modal (Image 3) */}
+      {/* E-Receipt / Booking Berhasil Bottom Sheet Modal */}
       <Modal visible={isReceiptModalOpen} transparent animationType="slide">
         <View style={styles.modalOverlayBottom}>
           <View style={styles.receiptSheetCard}>
@@ -438,8 +683,10 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
               <View style={styles.receiptCheckCircle}>
                 <Check size={28} color="#0D7A53" strokeWidth={3} />
               </View>
-              <Text style={styles.receiptSuccessTitle}>Booking Berhasil!</Text>
-              <Text style={styles.receiptSuccessSub}>Kamar Anda telah diamankan.</Text>
+              <Text style={styles.receiptSuccessTitle}>Booking & DP Terkirim!</Text>
+              <Text style={styles.receiptSuccessSub}>
+                Notifikasi instan telah masuk ke akun pemilik kos (aisk@gmail.com).
+              </Text>
             </View>
 
             {/* Dashed Divider */}
@@ -447,38 +694,42 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
 
             {/* E-Receipt Details */}
             <View style={styles.eReceiptBlock}>
-              <Text style={styles.eReceiptLabel}>E-RECEIPT</Text>
-              <Text style={styles.eReceiptInvNumber}>INV/KOS/3098</Text>
+              <Text style={styles.eReceiptLabel}>E-RECEIPT PEMESANAN KOST</Text>
+              <Text style={styles.eReceiptInvNumber}>
+                {bookingResponse?.bookingCode || `KST-${Date.now().toString().slice(-6)}`}
+              </Text>
 
               <View style={styles.receiptRow}>
-                <Text style={styles.receiptKey}>Kos</Text>
-                <Text style={styles.receiptVal}>Kos Putra Garuda</Text>
+                <Text style={styles.receiptKey}>Nama Kos</Text>
+                <Text style={styles.receiptVal}>{kostData?.name || "Ais Kost Exclusive"}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptKey}>Kamar</Text>
+                <Text style={styles.receiptVal}>
+                  Kamar {selectedRoom?.roomNumber || "101"} ({selectedRoom?.roomType || "AC Exclusive"})
+                </Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptKey}>Penyewa</Text>
+                <Text style={styles.receiptVal}>{tenantName}</Text>
               </View>
               <View style={styles.receiptRow}>
                 <Text style={styles.receiptKey}>Tanggal Masuk</Text>
-                <Text style={styles.receiptVal}>2026-07-26</Text>
+                <Text style={styles.receiptVal}>{startDate}</Text>
               </View>
               <View style={styles.receiptRow}>
-                <Text style={styles.receiptKey}>Metode</Text>
-                <Text style={styles.receiptVal}>
-                  {selectedPayment === "gopay" ? "GoPay" :
-                   selectedPayment === "bca_va" ? "BCA Virtual Account" :
-                   selectedPayment === "ovo" ? "OVO" : "ShopeePay"}
+                <Text style={styles.receiptKey}>Status DP</Text>
+                <Text style={[styles.receiptVal, { color: "#EA580C", fontWeight: "800" }]}>
+                  Menunggu Verifikasi Pemilik
                 </Text>
               </View>
 
               {/* DP Highlight Row */}
               <View style={styles.receiptDpRow}>
-                <Text style={styles.receiptDpKey}>Total DP (20%)</Text>
+                <Text style={styles.receiptDpKey}>Total DP 20% Dibayar</Text>
                 <Text style={styles.receiptDpVal}>Rp {dpAmount.toLocaleString("id-ID")}</Text>
               </View>
             </View>
-
-            {/* Unduh Invoice Button */}
-            <TouchableOpacity style={styles.btnUnduhInvoice} activeOpacity={0.8}>
-              <Download size={16} color="#0D7A53" />
-              <Text style={styles.btnUnduhInvoiceText}>Unduh Invoice</Text>
-            </TouchableOpacity>
 
             {/* Bottom Action Row */}
             <View style={styles.receiptBottomRow}>
@@ -495,15 +746,21 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
                 }}
                 activeOpacity={0.85}
               >
-                <Text style={styles.btnSelesaiKembaliText}>Selesai & Kembali</Text>
+                <Text style={styles.btnSelesaiKembaliText}>Selesai & Ke Beranda</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      <CustomerChatModal visible={chatVisible} onClose={() => setChatVisible(false)} orderId="KOS-PUTRA-GARUDA" participantName="Pemilik Kos Putra Garuda" participantType="merchant" initialMessage="Halo Kak, ada yang ingin ditanyakan tentang kamar atau booking kos?" />
-
+      <CustomerChatModal
+        visible={chatVisible}
+        onClose={() => setChatVisible(false)}
+        orderId={bookingResponse?.bookingCode || "KOS-AIS-EXCLUSIVE"}
+        participantName="Ais Kost (aisk@gmail.com)"
+        participantType="merchant"
+        initialMessage="Halo Kak Aisyah, bukti DP sudah diterima dan sedang diverifikasi ya."
+      />
     </SafeAreaView>
   );
 };
@@ -522,7 +779,7 @@ const styles = StyleSheet.create({
   // Hero Container
   heroContainer: {
     width: "100%",
-    height: 300,
+    height: 280,
     position: "relative",
   },
   heroImg: {
@@ -593,7 +850,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   heroTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: "900",
     color: "#FFFFFF",
     textShadowColor: "rgba(0, 0, 0, 0.6)",
@@ -601,9 +858,10 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
 
-  // Body Content
+  // Body Container
   bodyContainer: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
   locationRow: {
     flexDirection: "row",
@@ -612,101 +870,192 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   locationText: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#6B7280",
+    fontWeight: "500",
   },
-
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   ratingVal: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     color: "#111827",
   },
   reviewsText: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#6B7280",
   },
   dotSeparator: {
+    fontSize: 12,
     color: "#9CA3AF",
-    marginHorizontal: 4,
   },
   responsiveOwnerText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#0284C7",
+    fontSize: 12,
+    color: "#0D7A53",
+    fontWeight: "700",
   },
 
   sectionBlock: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "800",
     color: "#111827",
-    marginBottom: 14,
+  },
+  descText: {
+    fontSize: 13,
+    color: "#4B5563",
+    lineHeight: 20,
+    marginTop: 8,
+  },
+
+  // Room Cards
+  roomCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    padding: 14,
+  },
+  roomCardSelected: {
+    borderColor: "#0D7A53",
+    backgroundColor: "#F0FDF4",
+  },
+  roomCardDisabled: {
+    opacity: 0.5,
+    backgroundColor: "#F9FAFB",
+  },
+  roomCardTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  roomNumberTag: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0D7A53",
+    backgroundColor: "#E8F5E9",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  roomTypeTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  roomFloorText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  roomPriceVal: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#0D7A53",
+  },
+  roomPriceUnit: {
+    fontSize: 10,
+    color: "#6B7280",
+    textAlign: "right",
+  },
+  roomFacsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+  },
+  roomFacChip: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  roomFacChipText: {
+    fontSize: 10,
+    color: "#374151",
+    fontWeight: "600",
+  },
+  availBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  availGreen: {
+    backgroundColor: "#DCFCE7",
+  },
+  availRed: {
+    backgroundColor: "#FEE2E2",
+  },
+  availText: {
+    fontSize: 11,
+    fontWeight: "700",
   },
 
   // Facilities Grid
   facilitiesGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
+    marginTop: 12,
   },
   facilityCard: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 20,
-    paddingVertical: 18,
+    width: "47%",
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 10,
+    backgroundColor: "#F9FAFB",
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
+    borderColor: "#E5E7EB",
   },
   facilityIconCircle: {
-    marginBottom: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#E8F5E9",
+    alignItems: "center",
+    justifyContent: "center",
   },
   facilityCardName: {
     fontSize: 12,
-    fontWeight: "800",
-    color: "#374151",
+    fontWeight: "700",
+    color: "#111827",
+    flex: 1,
   },
 
-  descText: {
-    fontSize: 13,
-    color: "#6B7280",
-    lineHeight: 22,
-  },
-
-  // Fixed Bottom Bar
+  // Bottom Bar
   bottomBar: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
+    height: 80,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    elevation: 8,
+    paddingHorizontal: 20,
+    elevation: 10,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
   },
   bottomPriceLabel: {
     fontSize: 11,
-    color: "#9CA3AF",
+    color: "#6B7280",
+    fontWeight: "600",
   },
   bottomPriceVal: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "900",
     color: "#0D7A53",
   },
@@ -717,34 +1066,34 @@ const styles = StyleSheet.create({
   },
   bottomActionsRight: {
     flexDirection: "row",
-    alignItems: "center",
     gap: 10,
+    alignItems: "center",
   },
   btnChatSquare: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: "#0D7A53",
-    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#F0FDF4",
   },
   btnBookingDp: {
-    height: 48,
-    paddingHorizontal: 24,
-    borderRadius: 16,
     backgroundColor: "#0D7A53",
+    paddingHorizontal: 20,
+    height: 44,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   btnBookingDpText: {
-    fontSize: 15,
-    fontWeight: "900",
     color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
 
-  // Bottom Sheet Modal
+  // Modal Sheet Base
   modalOverlayBottom: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -752,19 +1101,23 @@ const styles = StyleSheet.create({
   },
   sheetCard: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 22,
-    maxHeight: "85%",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "90%",
+    paddingTop: 16,
   },
   sheetHeader: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
   },
   sheetTitle: {
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 17,
+    fontWeight: "800",
     color: "#111827",
   },
   sheetSub: {
@@ -780,34 +1133,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   sheetContent: {
-    paddingBottom: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 30,
   },
 
   merchantSummaryBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E8F5EE",
-    borderRadius: 16,
-    padding: 12,
     gap: 12,
-    marginBottom: 18,
+    backgroundColor: "#F9FAFB",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 16,
   },
-  merchantThumb: {
+  merchantThumbBox: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 10,
+    backgroundColor: "#E8F5E9",
+    alignItems: "center",
+    justifyContent: "center",
   },
   merchantSummaryTitle: {
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "800",
     color: "#111827",
+  },
+  merchantSummaryRoomText: {
+    fontSize: 12,
+    color: "#0D7A53",
+    fontWeight: "700",
+    marginTop: 2,
   },
   merchantSummaryPrice: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0D7A53",
+    color: "#6B7280",
     marginTop: 2,
   },
 
@@ -822,69 +1187,70 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     backgroundColor: "#F9FAFB",
-    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    paddingHorizontal: 14,
-    height: 46,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
     justifyContent: "center",
   },
   inputContainerRow: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: "#F9FAFB",
-    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+    borderRadius: 10,
     paddingHorizontal: 12,
-    height: 46,
+    height: 44,
+    flexDirection: "row",
+    alignItems: "center",
   },
   textInput: {
     fontSize: 13,
-    fontWeight: "600",
     color: "#111827",
+    fontWeight: "600",
   },
-
   gridTwoCols: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 18,
+    marginBottom: 14,
   },
 
   priceCalcBlock: {
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-    paddingTop: 14,
+    backgroundColor: "#F9FAFB",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
     marginBottom: 18,
   },
   priceCalcRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   calcLabel: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#4B5563",
+    fontWeight: "600",
   },
   calcVal: {
     fontSize: 14,
     fontWeight: "800",
     color: "#111827",
   },
-
   dpBoxGreen: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#E8F5EE",
-    borderRadius: 14,
-    padding: 14,
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    padding: 12,
+    borderRadius: 10,
   },
   dpBoxLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   dpBoxLabel: {
     fontSize: 13,
@@ -896,151 +1262,117 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: "#0D7A53",
   },
-
   btnPayDp: {
-    height: 50,
-    borderRadius: 16,
     backgroundColor: "#0D7A53",
+    height: 48,
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
   btnPayDpText: {
-    fontSize: 15,
-    fontWeight: "800",
     color: "#FFFFFF",
-  },
-
-  // Modal Center Success
-  modalOverlayCenter: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  dialogCard: {
-    width: "100%",
-    maxWidth: 320,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 24,
-    alignItems: "center",
-  },
-  circleIconGreen: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#E8F5EE",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  dialogTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#111827",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  dialogDesc: {
-    fontSize: 13,
-    color: "#6B7280",
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  btnDialogGreen: {
-    width: "100%",
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "#0D7A53",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  btnDialogGreenText: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#FFFFFF",
   },
 
-  // Payment Method Modal Styles
-  paymentList: {
-    gap: 10,
-    marginBottom: 20,
-  },
-  paymentOptionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-  },
-  paymentOptionRowSelected: {
-    borderColor: "#0D7A53",
+  // Bank Account & Upload
+  bankAccountCard: {
     backgroundColor: "#F0FDF4",
-  },
-  paymentIconBox: {
-    width: 42,
-    height: 42,
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
     borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
+    padding: 14,
+    marginVertical: 14,
   },
-  paymentOptionName: {
+  bankAccountHeader: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0D7A53",
+    marginBottom: 8,
+  },
+  bankDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: "#DCFCE7",
+  },
+  bankLabel: {
+    fontSize: 12,
+    color: "#4B5563",
+    fontWeight: "600",
+  },
+  bankValue: {
+    fontSize: 13,
+    color: "#111827",
+    fontWeight: "700",
+  },
+  uploadProofSection: {
+    marginBottom: 20,
+  },
+  uploadProofTitle: {
     fontSize: 14,
     fontWeight: "800",
     color: "#111827",
   },
-  paymentOptionSub: {
+  uploadProofSub: {
     fontSize: 11,
     color: "#6B7280",
-    marginTop: 1,
+    marginTop: 2,
+    marginBottom: 10,
   },
-  radioCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
+  uploadImageBox: {
+    width: "100%",
+    height: 140,
+    borderRadius: 12,
+    borderWidth: 1.5,
     borderColor: "#D1D5DB",
+    borderStyle: "dashed",
+    backgroundColor: "#F9FAFB",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
-  radioCircleSelected: {
-    backgroundColor: "#0D7A53",
-    borderColor: "#0D7A53",
+  uploadedPreviewImg: {
+    width: "100%",
+    height: "100%",
+  },
+  changeProofBtn: {
+    marginTop: 8,
+    alignSelf: "center",
+  },
+  changeProofText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0D7A53",
   },
   btnLanjutkan: {
-    height: 52,
-    borderRadius: 16,
     backgroundColor: "#0D7A53",
+    height: 48,
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    marginTop: 10,
   },
   btnLanjutkanText: {
-    fontSize: 15,
-    fontWeight: "900",
     color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
 
-  // E-Receipt Modal Styles
+  // E-Receipt Card
   receiptSheetCard: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 22,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
     maxHeight: "90%",
   },
   receiptSuccessBanner: {
-    backgroundColor: "#E8F5EE",
-    borderRadius: 20,
-    padding: 20,
     alignItems: "center",
     marginBottom: 16,
   },
@@ -1048,62 +1380,60 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#DCFCE7",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: "#0D7A53",
+    marginBottom: 10,
   },
   receiptSuccessTitle: {
     fontSize: 20,
     fontWeight: "900",
     color: "#111827",
-    marginBottom: 4,
   },
   receiptSuccessSub: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#6B7280",
+    marginTop: 4,
+    textAlign: "center",
   },
   dashedDivider: {
     height: 1,
-    borderStyle: "dashed",
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: "#E5E7EB",
+    borderStyle: "dashed",
     marginVertical: 14,
   },
   eReceiptBlock: {
+    backgroundColor: "#F9FAFB",
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
     marginBottom: 16,
   },
   eReceiptLabel: {
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#9CA3AF",
     letterSpacing: 1,
-    marginBottom: 4,
-    textAlign: "center",
   },
   eReceiptInvNumber: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "900",
     color: "#111827",
-    textAlign: "center",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   receiptRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    paddingVertical: 5,
   },
   receiptKey: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#6B7280",
   },
   receiptVal: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#111827",
   },
@@ -1111,51 +1441,36 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
-    marginTop: 4,
+    backgroundColor: "#DCFCE7",
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 8,
   },
   receiptDpKey: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "800",
-    color: "#111827",
-  },
-  receiptDpVal: {
-    fontSize: 18,
-    fontWeight: "900",
     color: "#0D7A53",
   },
-  btnUnduhInvoice: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#0D7A53",
-    backgroundColor: "#E8F5EE",
-    marginBottom: 14,
-  },
-  btnUnduhInvoiceText: {
-    fontSize: 13,
-    fontWeight: "800",
+  receiptDpVal: {
+    fontSize: 15,
+    fontWeight: "900",
     color: "#0D7A53",
   },
   receiptBottomRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 12,
+    marginTop: 8,
   },
   btnChatPemilik: {
     flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#D1D5DB",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
   },
   btnChatPemilikText: {
     fontSize: 13,
@@ -1163,16 +1478,17 @@ const styles = StyleSheet.create({
     color: "#374151",
   },
   btnSelesaiKembali: {
-    flex: 2,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#111827",
+    flex: 1.5,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#0D7A53",
     alignItems: "center",
     justifyContent: "center",
   },
   btnSelesaiKembaliText: {
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "800",
     color: "#FFFFFF",
   },
 });
+

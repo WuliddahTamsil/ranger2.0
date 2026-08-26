@@ -11,7 +11,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
-import { fetchRoomsByOwner } from "../../services/kostService";
+import { fetchRoomsByOwner, fetchOwnerBookings } from "../../services/kostService";
 import {
   Bell,
   Building2,
@@ -40,28 +40,39 @@ interface PemilikKosHomeProps extends Nav {
 export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, authAccount }) => {
   const [activeTab, setActiveTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("beranda");
   const [rooms, setRooms] = useState<any[]>([]);
+  const [pendingBookings, setPendingBookings] = useState<any[]>([]);
+
+  const load = async () => {
+    try {
+      const ownerEmail = authAccount?.email || "aisk@gmail.com";
+      const [roomsData, bookingsData] = await Promise.all([
+        fetchRoomsByOwner(ownerEmail),
+        fetchOwnerBookings(ownerEmail, "dp_submitted"),
+      ]);
+      if (roomsData && roomsData.length > 0) {
+        setRooms(roomsData);
+      }
+      if (bookingsData && bookingsData.length > 0) {
+        setPendingBookings(bookingsData);
+      } else {
+        setPendingBookings([]);
+      }
+    } catch (err) {
+      console.log("Using default overview stats:", err);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await fetchRoomsByOwner(authAccount?.email || "aisl@gmail.com");
-        if (data && data.length > 0) {
-          setRooms(data);
-        }
-      } catch (err) {
-        console.log("Using default overview stats");
-      }
-    };
     load();
   }, [authAccount]);
 
   const totalKamar = rooms.length > 0 ? rooms.length : 5;
-  const kamarTerisi = rooms.length > 0 ? rooms.filter(r => r.status === "terisi").length : 5;
+  const kamarTerisi = rooms.length > 0 ? rooms.filter(r => r.status === "terisi" || !r.isAvailable).length : 1;
   const kamarKosong = totalKamar - kamarTerisi;
-  const percentFilled = totalKamar > 0 ? Math.round((kamarTerisi / totalKamar) * 100) : 100;
+  const percentFilled = totalKamar > 0 ? Math.round((kamarTerisi / totalKamar) * 100) : 20;
   const estPendapatan = rooms.length > 0
-    ? rooms.reduce((acc, r) => acc + (r.status === "terisi" ? parseInt(r.price.replace(/[^0-9]/g, "")) || 0 : 0), 0)
-    : 6250000;
+    ? rooms.reduce((acc, r) => acc + ((r.status === "terisi" || !r.isAvailable) ? (Number(r.priceMonthly) || parseInt((r.price || "").toString().replace(/[^0-9]/g, "")) || 1500000) : 0), 0)
+    : 2200000;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -213,7 +224,9 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                 <View style={[styles.actionIconCircle, { backgroundColor: "#FFF7ED" }]}>
                   <Bell size={16} color="#FF6500" />
                 </View>
-                <Text style={styles.actionCardTitle}>Booking Kamar Baru</Text>
+                <Text style={styles.actionCardTitle}>
+                  {pendingBookings.length > 0 ? `Booking Kamar Baru (${pendingBookings.length})` : "Booking Kamar Masuk"}
+                </Text>
               </View>
               <View style={styles.badgeGreen}>
                 <Text style={styles.badgeGreenText}>Baru saja</Text>
@@ -221,7 +234,15 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
             </View>
 
             <Text style={styles.actionDesc}>
-              Budi Santoso telah membayar DP untuk tipe <Text style={styles.boldDescText}>Kos Putra</Text>.
+              {pendingBookings.length > 0 ? (
+                <>
+                  <Text style={styles.boldDescText}>{pendingBookings[0].customerName || "Aisyah Putri"}</Text> telah membayar DP Rp {Number(pendingBookings[0].dpAmount || 300000).toLocaleString("id-ID")} untuk Kamar {pendingBookings[0].roomNumber || "101"}.
+                </>
+              ) : (
+                <>
+                  <Text style={styles.boldDescText}>Aisyah Putri</Text> telah mengajukan booking untuk kamar kos Anda.
+                </>
+              )}
             </Text>
 
             <TouchableOpacity

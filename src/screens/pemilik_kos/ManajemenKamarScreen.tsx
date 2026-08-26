@@ -123,83 +123,12 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
   };
 
   const [loading, setLoading] = useState(false);
-  const [rooms, setRooms] = useState<RoomData[]>([
-    {
-      id: "1",
-      name: "101",
-      type: "Tipe AC Exclusive",
-      status: "terisi",
-      facilities: ["AC", "WiFi", "KM Dalam"],
-      inclusions: ["Kasur", "Lemari", "Water Heater"],
-      tenant: {
-        name: "Budi Santoso",
-        avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-      },
-      price: "Rp 1.500.000",
-      image: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=500&auto=format&fit=crop&q=80",
-    },
-    {
-      id: "2",
-      name: "102",
-      type: "Tipe AC Exclusive",
-      status: "terisi",
-      facilities: ["AC", "WiFi", "KM Dalam"],
-      inclusions: ["Kasur", "Lemari", "Water Heater"],
-      tenant: {
-        name: "Dimas Pratama",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-      },
-      price: "Rp 1.500.000",
-      image: "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=500&auto=format&fit=crop&q=80",
-    },
-    {
-      id: "3",
-      name: "103",
-      type: "Tipe AC Standar",
-      status: "terisi",
-      facilities: ["AC", "WiFi", "KM Dalam"],
-      inclusions: ["Kasur", "Meja Belajar"],
-      tenant: {
-        name: "Rizky Fauzi",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
-      },
-      price: "Rp 1.200.000",
-      image: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=500&auto=format&fit=crop&q=80",
-    },
-    {
-      id: "4",
-      name: "104",
-      type: "Tipe AC Standar",
-      status: "terisi",
-      facilities: ["AC", "WiFi", "KM Dalam"],
-      inclusions: ["Kasur", "Lemari Kayu"],
-      tenant: {
-        name: "Ahmad Fauzan",
-        avatar: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80",
-      },
-      price: "Rp 1.200.000",
-      image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=500&auto=format&fit=crop&q=80",
-    },
-    {
-      id: "5",
-      name: "105",
-      type: "Tipe Non-AC Ekonomis",
-      status: "terisi",
-      facilities: ["Kipas", "WiFi", "KM Luar"],
-      inclusions: ["Kasur", "Lemari"],
-      tenant: {
-        name: "Fajar Nugroho",
-        avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80",
-      },
-      price: "Rp 850.000",
-      image: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=500&auto=format&fit=crop&q=80",
-    },
-  ]);
+  const [rooms, setRooms] = useState<RoomData[]>([]);
 
   const loadRoomsFromBackend = async () => {
     setLoading(true);
     try {
-      const data = await fetchRoomsByOwner("aisl@gmail.com");
+      const data = await fetchRoomsByOwner("aisk@gmail.com");
       if (data && data.length > 0) {
         setRooms(data);
       }
@@ -242,7 +171,7 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
     );
     setSelectedRoomForOptions(null);
     try {
-      await updateRoomInKost("aisl@gmail.com", room.id, { isAvailable: newStatus === "kosong" });
+      await updateRoomInKost("aisk@gmail.com", room.id, { isAvailable: newStatus === "kosong" });
     } catch (e) {
       console.log("Offline update:", e);
     }
@@ -252,7 +181,7 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
     setRooms(rooms.filter((r) => r.id !== room.id));
     setSelectedRoomForOptions(null);
     try {
-      await deleteRoomFromKost("aisl@gmail.com", room.id);
+      await deleteRoomFromKost("aisk@gmail.com", room.id);
     } catch (e) {
       console.log("Offline delete:", e);
     }
@@ -300,7 +229,7 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
         )
       );
       try {
-        await updateRoomInKost("aisl@gmail.com", editingRoomId, {
+        await updateRoomInKost("aisk@gmail.com", editingRoomId, {
           roomNumber: nomorKamar,
           roomType: tipeKamar,
           priceMonthly: numPrice,
@@ -324,7 +253,7 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
       };
       setRooms([newRoom, ...rooms]);
       try {
-        await addRoomToKost("aisl@gmail.com", {
+        await addRoomToKost("aisk@gmail.com", {
           roomNumber: nomorKamar || `10${rooms.length + 1}`,
           roomType: tipeKamar,
           priceMonthly: numPrice,

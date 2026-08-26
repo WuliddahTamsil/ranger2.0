@@ -1,5 +1,6 @@
 const Booking = require("../models/Booking");
 const Kost = require("../models/Kost");
+const User = require("../models/User");
 const Notification = require("../models/Notification");
 
 // Create new Kost Booking (Customer)
@@ -23,10 +24,10 @@ const createBooking = async (req, res) => {
       notes,
     } = req.body;
 
-    if (!customerId || !kostId || !customerName || !customerPhone || !entryDate || !dpAmount) {
+    if (!kostId || !customerName || !customerPhone || !entryDate || !dpAmount) {
       return res.status(400).json({
         success: false,
-        message: "Data pemesanan tidak lengkap (Customer, Kost, Nama, HP, Tanggal Masuk, DP wajib diisi)",
+        message: "Data pemesanan tidak lengkap (Kost, Nama, HP, Tanggal Masuk, DP wajib diisi)",
       });
     }
 
@@ -35,18 +36,36 @@ const createBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: "Kost tidak ditemukan" });
     }
 
+    // Resolve customerId if it is an email or empty
+    let resolvedCustomerId = customerId;
+    if (!resolvedCustomerId || !resolvedCustomerId.match(/^[0-9a-fA-F]{24}$/)) {
+      let custUser = await User.findOne({
+        $or: [
+          { email: customerEmail || "aisyahphr@gmail.com" },
+          { email: "aisyahphr@gmail.com" },
+          { name: customerName },
+        ],
+      });
+      if (custUser) {
+        resolvedCustomerId = custUser._id;
+      } else {
+        // Fallback to a placeholder user or create one
+        resolvedCustomerId = kost.ownerId; // fallback
+      }
+    }
+
     const bookingCode = `KST-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
 
     const booking = await Booking.create({
       bookingCode,
-      customerId,
+      customerId: resolvedCustomerId,
       ownerId: kost.ownerId,
       kostId,
       roomId: roomId || null,
       roomNumber: roomNumber || "Kamar Pilihan",
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
-      customerEmail: customerEmail?.trim(),
+      customerEmail: customerEmail?.trim() || "aisyahphr@gmail.com",
       customerKtpUrl: customerKtpUrl || "",
       entryDate: new Date(entryDate),
       durationMonths: Number(durationMonths) || 1,
@@ -63,7 +82,7 @@ const createBooking = async (req, res) => {
     const notif = await Notification.create({
       userId: kost.ownerId,
       title: "🔔 Pembayaran DP Masuk!",
-      message: `${customerName} telah membayar DP Rp ${Number(dpAmount).toLocaleString("id-ID")} untuk pemesanan kost '${kost.name}'. Segera verifikasi!`,
+      message: `${customerName} telah membayar DP Rp ${Number(dpAmount).toLocaleString("id-ID")} untuk kamar ${roomNumber || ""} di '${kost.name}'. Segera verifikasi!`,
       type: "booking_new",
       relatedId: booking._id,
     });
@@ -98,11 +117,25 @@ const getBookingsByOwner = async (req, res) => {
     const { ownerId } = req.params;
     const { status } = req.query;
 
-    const filter = { ownerId };
+    let filter = {};
+    if (ownerId && ownerId !== "all") {
+      if (ownerId.match(/^[0-9a-fA-F]{24}$/)) {
+        filter.ownerId = ownerId;
+      } else {
+        // Find owner user by email
+        const ownerUser = await User.findOne({
+          $or: [{ email: ownerId }, { email: "aisk@gmail.com" }, { email: "aisl@gmail.com" }],
+        });
+        if (ownerUser) {
+          filter.ownerId = ownerUser._id;
+        }
+      }
+    }
+
     if (status) filter.status = status;
 
     const bookings = await Booking.find(filter)
-      .populate("kostId", "name address type images bankAccount")
+      .populate("kostId", "name address type images bankAccount facilities")
       .populate("customerId", "name email phone profilePhoto")
       .sort({ createdAt: -1 });
 
@@ -136,23 +169,39 @@ const verifyDpBooking = async (req, res) => {
     } else if (status === "dp_verified") {
       booking.rejectionReason = undefined;
 
-      // Update room availability if roomId was specified
-      if (booking.roomId && booking.kostId) {
-        await Kost.updateOne(
-          { _id: booking.kostId._id, "rooms._id": booking.roomId },
+      // Update room availability in Kost
+      if (booking.kostId) {
+        const kostIdToUpdate = booking.kostId._id || booking.kostId;
+        const tenantData = {
+          userId: booking.customerId,
+          name: booking.customerName,
+          phone: booking.customerPhone,
+          entryDate: booking.entryDate,
+          dueDate: new Date(new Date(booking.entryDate).setMonth(new Date(booking.entryDate).getMonth() + (booking.durationMonths || 1))),
+        };
+
+        // Try updating by roomId first, then roomNumber
+        let updateRes = await Kost.updateOne(
+          { _id: kostIdToUpdate, "rooms._id": booking.roomId },
           {
             $set: {
               "rooms.$.isAvailable": false,
-              "rooms.$.currentTenant": {
-                userId: booking.customerId,
-                name: booking.customerName,
-                phone: booking.customerPhone,
-                entryDate: booking.entryDate,
-                dueDate: new Date(new Date(booking.entryDate).setMonth(new Date(booking.entryDate).getMonth() + booking.durationMonths)),
-              },
+              "rooms.$.currentTenant": tenantData,
             },
           }
         );
+
+        if (updateRes.matchedCount === 0 && booking.roomNumber) {
+          await Kost.updateOne(
+            { _id: kostIdToUpdate, "rooms.roomNumber": booking.roomNumber },
+            {
+              $set: {
+                "rooms.$.isAvailable": false,
+                "rooms.$.currentTenant": tenantData,
+              },
+            }
+          );
+        }
       }
     }
 

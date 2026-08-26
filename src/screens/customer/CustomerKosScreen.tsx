@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Nav } from "../../types";
 import { fetchAllKosts } from "../../services/kostService";
+import { setSelectedKost } from "./customerKosStore";
 
 import {
   ArrowLeft,
@@ -94,13 +95,14 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
             id: k._id || k.id,
             name: k.name,
             type: k.type,
-            status: k.availableRoomsCount > 0 ? "Tersedia" : "Penuh",
+            status: k.rooms && k.rooms.some((r: any) => r.isAvailable) ? "Tersedia" : "Penuh",
             location: k.address,
-            rating: k.rating || 4.8,
-            reviews: k.reviewCount || 120,
+            rating: k.rating || 4.9,
+            reviews: k.reviewCount || 128,
             price: Number(k.price).toLocaleString("id-ID"),
-            facilities: k.facilities || ["WiFi", "AC"],
+            facilities: k.facilities || ["WiFi", "AC", "KM Dalam"],
             img: (k.images && k.images.length > 0) ? k.images[0] : defaultMockKosts[0].img,
+            raw: k,
           }));
           setDbKosts(mapped);
         }
@@ -272,7 +274,23 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
             <TouchableOpacity
               key={item.id}
               style={styles.kosCard}
-              onPress={() => navigate("c_kos_detail")}
+              onPress={() => {
+                if (item.raw) {
+                  setSelectedKost(item.raw);
+                } else {
+                  setSelectedKost({
+                    id: item.id,
+                    name: item.name,
+                    type: item.type,
+                    address: item.location,
+                    price: 950000,
+                    dpAmount: 250000,
+                    facilities: item.facilities,
+                    images: [item.img],
+                  });
+                }
+                navigate("c_kos_detail");
+              }}
               activeOpacity={0.9}
             >
               {/* Image Box */}

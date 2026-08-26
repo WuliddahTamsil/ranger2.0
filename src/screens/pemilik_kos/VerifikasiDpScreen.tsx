@@ -10,6 +10,7 @@ import {
   Modal,
   Image,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { Nav } from "../../types";
 import { fetchOwnerBookings, verifyDpBooking } from "../../services/kostService";
@@ -20,6 +21,11 @@ import {
   Search,
   AlertTriangle,
   X,
+  User,
+  Phone,
+  Calendar,
+  Building2,
+  RefreshCw,
 } from "lucide-react-native";
 
 export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
@@ -27,27 +33,49 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isProofModalOpen, setIsProofModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [liveBooking, setLiveBooking] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [allBookings, setAllBookings] = useState<any[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
+
+  const loadBookings = async () => {
+    setIsLoading(true);
+    try {
+      const bookings = await fetchOwnerBookings("aisk@gmail.com");
+      if (bookings && bookings.length > 0) {
+        setAllBookings(bookings);
+        setSelectedIndex(0);
+      } else {
+        setAllBookings([]);
+      }
+    } catch (err) {
+      console.log("Using default preview booking:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadBooking = async () => {
-      try {
-        const bookings = await fetchOwnerBookings("all");
-        if (bookings && bookings.length > 0) {
-          setLiveBooking(bookings[0]);
-        }
-      } catch (err) {
-        console.log("Using default preview booking");
-      }
-    };
-    loadBooking();
+    loadBookings();
   }, []);
+
+  const currentBooking = allBookings.length > 0 ? allBookings[selectedIndex] : {
+    _id: "demo1",
+    customerName: "Aisyah Putri (aisyahphr@gmail.com)",
+    customerPhone: "081298765432",
+    roomNumber: "101",
+    kostId: { name: "Ais Kost Exclusive" },
+    totalAmount: 1500000,
+    dpAmount: 300000,
+    status: "dp_submitted",
+    createdAt: new Date().toISOString(),
+    dpProofImage: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80",
+  };
 
   const handleConfirmDp = async () => {
     setIsSubmitting(true);
     try {
-      if (liveBooking?._id) {
-        await verifyDpBooking(liveBooking._id, "dp_verified");
+      if (currentBooking?._id && currentBooking._id !== "demo1") {
+        await verifyDpBooking(currentBooking._id, "dp_verified");
       }
     } catch (err) {
       console.warn("Verify DP API error:", err);
@@ -60,18 +88,17 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
   const handleRejectDp = async () => {
     setIsSubmitting(true);
     try {
-      if (liveBooking?._id) {
-        await verifyDpBooking(liveBooking._id, "rejected", "Bukti transfer tidak valid.");
+      if (currentBooking?._id && currentBooking._id !== "demo1") {
+        await verifyDpBooking(currentBooking._id, "rejected", "Bukti transfer tidak valid atau belum masuk.");
       }
     } catch (err) {
       console.warn("Reject DP API error:", err);
     } finally {
       setIsSubmitting(false);
       setIsRejectModalOpen(false);
-      navigate("pemilik_kos_home");
+      loadBookings();
     }
   };
-
 
   return (
     <SafeAreaView style={styles.container}>
@@ -86,17 +113,46 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
         >
           <ArrowLeft size={22} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Verifikasi DP</Text>
+        <Text style={styles.headerTitle}>Verifikasi DP Masuk</Text>
+        <TouchableOpacity onPress={loadBookings} style={{ padding: 4 }}>
+          <RefreshCw size={18} color="#0D7A53" />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={loadBookings} />}
+      >
         {/* Top Notice Box */}
         <View style={styles.noticeBoxTop}>
           <CheckCircle2 size={20} color="#0D7A53" style={styles.noticeIcon} />
           <Text style={styles.noticeTextTop}>
-            Pastikan DP sesuai dengan jumlah dan bukti pembayaran yang diterima dari penghuni.
+            Notifikasi booking & DP masuk dari customer. Verifikasi bukti bayar agar kamar otomatis terisi.
           </Text>
         </View>
+
+        {/* Tab / Selector if Multiple Bookings */}
+        {allBookings.length > 1 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 4 }}>
+              {allBookings.map((b, idx) => (
+                <TouchableOpacity
+                  key={b._id || idx}
+                  onPress={() => setSelectedIndex(idx)}
+                  style={[
+                    styles.bookingTabChip,
+                    selectedIndex === idx && styles.bookingTabChipActive,
+                  ]}
+                >
+                  <Text style={[styles.bookingTabChipText, selectedIndex === idx && { color: "#FFFFFF", fontWeight: "800" }]}>
+                    {b.customerName?.split(" ")[0]} • Kamar {b.roomNumber || "101"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        )}
 
         {/* Card 1: Detail Booking */}
         <View style={styles.card}>
@@ -104,88 +160,96 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
             <View style={styles.cardHeaderIconBg}>
               <FileText size={18} color="#0D7A53" />
             </View>
-            <Text style={styles.cardTitle}>Detail Booking</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Detail Pemesanan Kost</Text>
+              <Text style={{ fontSize: 11, color: "#6B7280" }}>
+                Kode: {currentBooking.bookingCode || "KST-ONLINE"}
+              </Text>
+            </View>
+            <View style={[styles.statusTag, currentBooking.status === "dp_verified" ? styles.tagGreen : styles.tagOrange]}>
+              <Text style={[styles.statusTagText, { color: currentBooking.status === "dp_verified" ? "#0D7A53" : "#EA580C" }]}>
+                {currentBooking.status === "dp_verified" ? "Sudah Diverifikasi" : "Menunggu Verifikasi"}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.infoList}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Nama Penghuni</Text>
-              <Text style={styles.infoValueBold}>Budi Santoso</Text>
+              <Text style={styles.infoLabel}>Nama Calon Penghuni</Text>
+              <Text style={styles.infoValueBold}>{currentBooking.customerName || "Aisyah Putri"}</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Tipe Kamar</Text>
-              <Text style={styles.infoValueBold}>Kos Putra</Text>
+              <Text style={styles.infoLabel}>No. WhatsApp</Text>
+              <Text style={styles.infoValueBold}>{currentBooking.customerPhone || "081298765432"}</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Kamar</Text>
-              <Text style={styles.infoValueBold}>04 (Ahmad)</Text>
+              <Text style={styles.infoLabel}>Kamar Pilihan</Text>
+              <Text style={[styles.infoValueBold, { color: "#0D7A53" }]}>
+                Kamar {currentBooking.roomNumber || "101"}
+              </Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Tanggal Booking</Text>
-              <Text style={styles.infoValueBold}>12 Juli 2026</Text>
+              <Text style={styles.infoLabel}>Durasi Sewa</Text>
+              <Text style={styles.infoValueBold}>{currentBooking.durationMonths || 1} Bulan</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Total Harga</Text>
-              <Text style={styles.infoValueBold}>Rp1.500.000</Text>
+              <Text style={styles.infoLabel}>Total Biaya Sewa</Text>
+              <Text style={styles.infoValueBold}>
+                Rp {Number(currentBooking.totalAmount || 1500000).toLocaleString("id-ID")}
+              </Text>
             </View>
 
             <View style={styles.divider} />
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Jumlah DP</Text>
-              <Text style={[styles.infoValueBold, { color: "#0D7A53", fontSize: 15 }]}>
-                Rp750.000 <Text style={styles.percentText}>(50%)</Text>
+              <Text style={styles.infoLabel}>Nominal DP (20%)</Text>
+              <Text style={[styles.infoValueBold, { color: "#0D7A53", fontSize: 16 }]}>
+                Rp {Number(currentBooking.dpAmount || 300000).toLocaleString("id-ID")}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Card 2: Detail Pembayaran DP */}
+        {/* Card 2: Detail Pembayaran & Bukti DP */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardHeaderIconBg}>
               <FileText size={18} color="#0D7A53" />
             </View>
-            <Text style={styles.cardTitle}>Detail Pembayaran DP</Text>
+            <Text style={styles.cardTitle}>Bukti Pembayaran DP Masuk</Text>
           </View>
 
           <View style={styles.infoList}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Tanggal Transfer</Text>
-              <Text style={styles.infoValueBold}>12 Juli 2026, 10:45</Text>
+              <Text style={styles.infoLabel}>Tujuan Rekening</Text>
+              <Text style={styles.infoValueBold}>BCA - 7720192841 (Ais Kost)</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Metode Pembayaran</Text>
-              <Text style={styles.infoValueBold}>Transfer Bank (BCA)</Text>
+              <Text style={styles.infoLabel}>Pengirim</Text>
+              <Text style={styles.infoValueBold}>{currentBooking.customerName || "Aisyah Putri"}</Text>
             </View>
 
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Dari Rekening</Text>
-              <Text style={styles.infoValueBold}>Budi Santoso</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Jumlah Diterima</Text>
-              <Text style={styles.infoValueBold}>Rp750.000</Text>
-            </View>
-
-            <Text style={styles.proofSubTitle}>Bukti Pembayaran</Text>
+            <Text style={styles.proofSubTitle}>Foto Struk / Resi Transfer:</Text>
 
             {/* Proof Image Box */}
-            <View style={styles.proofImageContainer}>
+            <TouchableOpacity
+              style={styles.proofImageContainer}
+              onPress={() => setIsProofModalOpen(true)}
+              activeOpacity={0.9}
+            >
               <Image
                 source={{
-                  uri: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80",
+                  uri: currentBooking.dpProofImage || "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80",
                 }}
                 style={styles.proofImage}
                 resizeMode="cover"
               />
-            </View>
+            </TouchableOpacity>
 
             {/* Button Lihat Bukti */}
             <TouchableOpacity
@@ -194,7 +258,7 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
               activeOpacity={0.8}
             >
               <Search size={14} color="#374151" />
-              <Text style={styles.btnLihatBuktiText}>Lihat Bukti</Text>
+              <Text style={styles.btnLihatBuktiText}>Perbesar Bukti Transfer</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -203,7 +267,7 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
         <View style={styles.noticeBoxBottom}>
           <CheckCircle2 size={18} color="#0D7A53" style={{ marginTop: 2 }} />
           <Text style={styles.noticeTextBottom}>
-            Setelah verifikasi, status booking akan diperbarui dan kamar akan ditandai sebagai terbooking.
+            Setelah verifikasi, status kamar {currentBooking.roomNumber || "101"} akan otomatis ditandai sebagai terisi dan akun customer menerima notifikasi real-time.
           </Text>
         </View>
 
@@ -225,12 +289,14 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
           style={styles.btnVerifikasiDp}
           onPress={handleConfirmDp}
           activeOpacity={0.85}
-          disabled={isSubmitting}
+          disabled={isSubmitting || currentBooking.status === "dp_verified"}
         >
           {isSubmitting ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
-            <Text style={styles.btnVerifikasiDpText}>Verifikasi & Terima DP</Text>
+            <Text style={styles.btnVerifikasiDpText}>
+              {currentBooking.status === "dp_verified" ? "Sudah Terverifikasi ✓" : "Verifikasi & Terima DP"}
+            </Text>
           )}
         </TouchableOpacity>
       </View>
@@ -243,16 +309,17 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
               <CheckCircle2 size={36} color="#0D7A53" />
             </View>
 
-            <Text style={styles.dialogTitle}>Verifikasi Berhasil</Text>
+            <Text style={styles.dialogTitle}>Verifikasi Berhasil!</Text>
 
             <Text style={styles.dialogDesc}>
-              Pembayaran DP atas nama <Text style={{ fontWeight: "800", color: "#111827" }}>Budi Santoso</Text> telah dikonfirmasi. Kamar berhasil dipesan!
+              Pembayaran DP atas nama <Text style={{ fontWeight: "800", color: "#111827" }}>{currentBooking.customerName || "Aisyah Putri"}</Text> untuk Kamar {currentBooking.roomNumber || "101"} telah berhasil dikonfirmasi. Kamar sekarang resmi terbooking!
             </Text>
 
             <TouchableOpacity
               style={styles.btnDialogGreen}
               onPress={() => {
                 setIsSuccessModalOpen(false);
+                loadBookings();
                 navigate("pemilik_kos_home");
               }}
               activeOpacity={0.85}
@@ -274,15 +341,12 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
             <Text style={styles.dialogTitle}>Tolak Pembayaran DP?</Text>
 
             <Text style={styles.dialogDesc}>
-              Apakah Anda yakin ingin menolak DP ini? Status pesanan akan dikembalikan menjadi tertunda.
+              Apakah Anda yakin ingin menolak pembayaran DP dari {currentBooking.customerName}?
             </Text>
 
             <TouchableOpacity
               style={styles.btnDialogRed}
-              onPress={() => {
-                setIsRejectModalOpen(false);
-                navigate("pemilik_kos_home");
-              }}
+              onPress={handleRejectDp}
               activeOpacity={0.85}
             >
               <Text style={styles.btnDialogRedText}>Ya, Tolak DP</Text>
@@ -311,7 +375,7 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
 
           <Image
             source={{
-              uri: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1000&q=80",
+              uri: currentBooking.dpProofImage || "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1000&q=80",
             }}
             style={styles.fullProofImage}
             resizeMode="contain"
@@ -642,5 +706,37 @@ const styles = StyleSheet.create({
   fullProofImage: {
     width: "90%",
     height: "70%",
+  },
+  bookingTabChip: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  bookingTabChipActive: {
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
+  },
+  bookingTabChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#4B5563",
+  },
+  statusTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  tagGreen: {
+    backgroundColor: "#DCFCE7",
+  },
+  tagOrange: {
+    backgroundColor: "#FFEDD5",
+  },
+  statusTagText: {
+    fontSize: 11,
+    fontWeight: "800",
   },
 });
