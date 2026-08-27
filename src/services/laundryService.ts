@@ -338,6 +338,69 @@ export const fetchStoreOrders = async (ownerId: string = "all"): Promise<Laundry
   return activeCustomerOrder ? [activeCustomerOrder] : [];
 };
 
+export interface LaundryCustomerSummary {
+  id: string;
+  customerId: string;
+  name: string;
+  phone: string;
+  address: string;
+  totalOrders: number;
+  totalSpent: number;
+  lastOrderCode: string;
+  lastOrderService: string;
+  lastOrderStatus: string;
+  lastOrderDate: string;
+  orders: {
+    orderCode: string;
+    serviceName: string;
+    totalAmount: number;
+    status: string;
+    date: string;
+  }[];
+}
+
+export const fetchStoreCustomers = async (ownerId: string = "all"): Promise<LaundryCustomerSummary[]> => {
+  try {
+    const url = getApiUrl(`/laundry/customers/store/${ownerId}`);
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ fetchStoreCustomers fallback:", err);
+  }
+
+  // Fallback to active order customer if available
+  if (activeCustomerOrder) {
+    return [
+      {
+        id: activeCustomerOrder.customerId,
+        customerId: activeCustomerOrder.customerId,
+        name: activeCustomerOrder.customerName,
+        phone: activeCustomerOrder.customerPhone || "0812-3456-7890",
+        address: activeCustomerOrder.pickupAddress || "Jl. Kamojang, Garut",
+        totalOrders: 1,
+        totalSpent: activeCustomerOrder.totalAmount || 31800,
+        lastOrderCode: activeCustomerOrder.orderCode,
+        lastOrderService: activeCustomerOrder.serviceName,
+        lastOrderStatus: activeCustomerOrder.status,
+        lastOrderDate: activeCustomerOrder.createdAt || new Date().toISOString(),
+        orders: [
+          {
+            orderCode: activeCustomerOrder.orderCode,
+            serviceName: activeCustomerOrder.serviceName,
+            totalAmount: activeCustomerOrder.totalAmount || 31800,
+            status: activeCustomerOrder.status,
+            date: activeCustomerOrder.createdAt || new Date().toISOString(),
+          },
+        ],
+      },
+    ];
+  }
+  return [];
+};
+
 export const weighAndBillLaundryOrder = async (
   orderId: string,
   weightOrQty: number,

@@ -234,6 +234,60 @@ exports.getStoreOrders = async (req, res) => {
   }
 };
 
+// 7B. Ambil daftar pelanggan riil yang sudah pernah order ke Toko Laundry ini
+exports.getStoreCustomers = async (req, res) => {
+  try {
+    const { ownerId } = req.params;
+    let query = {};
+    if (ownerId && ownerId !== "all") {
+      query.ownerId = ownerId;
+    }
+
+    const orders = await LaundryOrder.find(query).sort({ createdAt: -1 });
+
+    // Grouping by customerId / customerName
+    const customerMap = {};
+    for (const ord of orders) {
+      const cId = ord.customerId || ord.customerName;
+      if (!customerMap[cId]) {
+        customerMap[cId] = {
+          id: cId,
+          customerId: ord.customerId,
+          name: ord.customerName,
+          phone: ord.customerPhone || "0812-3456-7890",
+          address: ord.pickupAddress || ord.deliveryAddress || "Jl. Kamojang, Garut",
+          totalOrders: 0,
+          totalSpent: 0,
+          lastOrderCode: ord.orderCode,
+          lastOrderService: ord.serviceName,
+          lastOrderStatus: ord.status,
+          lastOrderDate: ord.createdAt,
+          orders: [],
+        };
+      }
+      customerMap[cId].totalOrders += 1;
+      customerMap[cId].totalSpent += ord.totalAmount || 0;
+      customerMap[cId].orders.push({
+        orderCode: ord.orderCode,
+        serviceName: ord.serviceName,
+        totalAmount: ord.totalAmount,
+        status: ord.status,
+        date: ord.createdAt,
+      });
+    }
+
+    const customers = Object.values(customerMap);
+    return res.status(200).json({
+      success: true,
+      count: customers.length,
+      data: customers,
+    });
+  } catch (error) {
+    console.error("❌ getStoreCustomers Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // 8. Ambil pesanan untuk Driver (Jemput & Antar)
 exports.getDriverOrders = async (req, res) => {
   try {

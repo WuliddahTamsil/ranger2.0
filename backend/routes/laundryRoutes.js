@@ -12,6 +12,7 @@ router.post("/store/my-store", laundryController.saveMyStore);
 router.post("/orders", laundryController.createOrder);
 router.get("/orders/customer/:customerId", laundryController.getCustomerOrders);
 router.get("/orders/store/:ownerId", laundryController.getStoreOrders);
+router.get("/customers/store/:ownerId", laundryController.getStoreCustomers);
 router.get("/orders/driver", laundryController.getDriverOrders);
 router.put("/orders/:id/weigh-and-bill", laundryController.weighAndBillOrder);
 router.post("/orders/:id/pay", laundryController.payOrder);
