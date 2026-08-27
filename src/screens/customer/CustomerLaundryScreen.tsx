@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   StatusBar,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { Nav } from "../../types";
 import {
@@ -25,57 +26,59 @@ import {
   Heart,
   ChevronRight,
   X,
+  Sparkles,
 } from "lucide-react-native";
+import {
+  fetchLaundryStores,
+  LaundryStore,
+  setSelectedStore,
+  FALLBACK_LAUNDRY_STORES,
+} from "../../services/laundryService";
 
 export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
   const [activeCategory, setActiveCategory] = useState<"semua" | "biasa" | "ekspres">("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [isBannerVisible, setIsBannerVisible] = useState(true);
+  const [stores, setStores] = useState<LaundryStore[]>(FALLBACK_LAUNDRY_STORES);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const laundryList = [
-    {
-      id: "1",
-      name: "Laundry Express Pak Dedi",
-      type: "EKSPRES",
-      rating: 4.8,
-      reviews: "1.2k",
-      distance: "0.5 km",
-      hours: "Buka – Tutup 21.00",
-      badges: [
-        { label: "Antar Jemput", type: "green" },
-        { label: "Ekspres 3 Jam", type: "orange" },
-      ],
-      price: "6.000",
-      img: "https://images.unsplash.com/photo-1545173168-9f1947eebb7f?auto=format&fit=crop&w=600&q=80",
-    },
-    {
-      id: "2",
-      name: "Bersih Kilat Laundry",
-      type: "EKSPRES",
-      rating: 4.6,
-      reviews: "1.2k",
-      distance: "1.1 km",
-      hours: "Buka – Tutup 21.00",
-      badges: [
-        { label: "Antar Jemput", type: "green" },
-        { label: "Ekspres 3 Jam", type: "orange" },
-      ],
-      price: "7.000",
-      img: "https://images.unsplash.com/photo-1517677208171-0bc6725a3e60?auto=format&fit=crop&w=600&q=80",
-    },
-    {
-      id: "3",
-      name: "Laundry Ibu Rohani",
-      type: "BIASA",
-      rating: 4.9,
-      reviews: "1.2k",
-      distance: "0.2 km",
-      hours: "Buka – Tutup 20.00",
-      badges: [{ label: "Antar Jemput", type: "green" }],
-      price: "5.000",
-      img: "https://images.unsplash.com/photo-1521656693074-0ef32e80a5d5?auto=format&fit=crop&w=600&q=80",
-    },
-  ];
+  useEffect(() => {
+    let active = true;
+    const loadStores = async () => {
+      setLoading(true);
+      const data = await fetchLaundryStores(searchQuery);
+      if (active) {
+        setStores(data);
+        setLoading(false);
+      }
+    };
+    loadStores();
+    return () => {
+      active = false;
+    };
+  }, [searchQuery]);
+
+  const filteredStores = stores.filter((store) => {
+    if (activeCategory === "semua") return true;
+    if (activeCategory === "ekspres") {
+      return store.services?.some((s) => s.category === "ekspres") || store.storeName.toLowerCase().includes("express") || store.storeName.toLowerCase().includes("kilat");
+    }
+    if (activeCategory === "biasa") {
+      return store.services?.some((s) => s.category === "biasa");
+    }
+    return true;
+  });
+
+  const handleSelectStore = (store: LaundryStore) => {
+    setSelectedStore(store);
+    navigate("c_laundry_detail");
+  };
+
+  const getMinPrice = (store: LaundryStore) => {
+    if (!store.services || store.services.length === 0) return 5000;
+    const prices = store.services.map((s) => s.price);
+    return Math.min(...prices);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -92,14 +95,11 @@ export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
         </TouchableOpacity>
 
         <View style={styles.headerTitleCol}>
-          <Text style={styles.headerTitle}>Laundry</Text>
-          <Text style={styles.headerSubTitle}>Temukan laundry terbaik di sekitarmu</Text>
+          <Text style={styles.headerTitle}>Layanan Laundry</Text>
+          <Text style={styles.headerSubTitle}>Pilihan mitra laundry terpercaya di sekitarmu</Text>
         </View>
 
         <View style={styles.headerRightActions}>
-          <TouchableOpacity style={styles.iconCircleBtn} activeOpacity={0.7}>
-            <Search size={18} color="#374151" />
-          </TouchableOpacity>
           <TouchableOpacity style={styles.iconCircleBtn} activeOpacity={0.7}>
             <SlidersHorizontal size={18} color="#374151" />
           </TouchableOpacity>
@@ -112,14 +112,16 @@ export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
           <Search size={18} color="#9CA3AF" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Cari laundry terdekat..."
+            placeholder="Cari toko laundry atau jenis layanan..."
             placeholderTextColor="#9CA3AF"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
-          <TouchableOpacity activeOpacity={0.7}>
-            <Mic size={18} color="#0D7A53" />
-          </TouchableOpacity>
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")} activeOpacity={0.7}>
+              <X size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Filter Pills */}
@@ -136,11 +138,11 @@ export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
           >
             <LayoutGrid size={15} color={activeCategory === "semua" ? "#FFFFFF" : "#0D7A53"} />
             <Text style={[styles.pillText, activeCategory === "semua" && styles.pillTextActive]}>
-              Semua
+              Semua Mitra
             </Text>
           </TouchableOpacity>
 
-          {/* Biasa */}
+          {/* Reguler / Biasa */}
           <TouchableOpacity
             style={[styles.pillBtn, activeCategory === "biasa" && styles.pillBtnActive]}
             onPress={() => setActiveCategory("biasa")}
@@ -148,7 +150,7 @@ export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
           >
             <Shirt size={15} color={activeCategory === "biasa" ? "#FFFFFF" : "#0284C7"} />
             <Text style={[styles.pillText, activeCategory === "biasa" && styles.pillTextActive]}>
-              Biasa
+              Reguler Kiloan
             </Text>
           </TouchableOpacity>
 
@@ -160,7 +162,7 @@ export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
           >
             <Zap size={15} color={activeCategory === "ekspres" ? "#FFFFFF" : "#EA580C"} />
             <Text style={[styles.pillText, activeCategory === "ekspres" && styles.pillTextActive]}>
-              Ekspres
+              Ekspres Kilat
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -169,10 +171,14 @@ export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
         {isBannerVisible && (
           <View style={styles.promoBanner}>
             <View style={styles.promoLeft}>
-              <Text style={styles.promoText}>Untuk pesanan di atas Rp30.000</Text>
+              <View style={styles.promoBadge}>
+                <Sparkles size={12} color="#FFFFFF" />
+                <Text style={styles.promoBadgeText}>GRATIS ONGKIR</Text>
+              </View>
+              <Text style={styles.promoText}>Driver siap angkut pakaian Anda langsung ke mitra laundry pilihan!</Text>
             </View>
             <View style={styles.promoRight}>
-              <Bike size={20} color="#EC4899" />
+              <Bike size={24} color="#0D7A53" />
               <TouchableOpacity
                 onPress={() => setIsBannerVisible(false)}
                 activeOpacity={0.7}
@@ -184,108 +190,124 @@ export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
           </View>
         )}
 
-        {/* Laundry Cards List */}
-        <View style={styles.cardsList}>
-          {laundryList.map((item) => (
-            <View key={item.id} style={styles.laundryCard}>
-              {/* Image Column */}
-              <View style={styles.cardImageCol}>
-                <Image source={{ uri: item.img }} style={styles.cardImg} />
-                
-                {/* Type Badge */}
-                <View
-                  style={[
-                    styles.typeBadge,
-                    { backgroundColor: item.type === "EKSPRES" ? "#FF6500" : "#0284C7" },
-                  ]}
+        {/* Loading Indicator */}
+        {loading ? (
+          <View style={{ paddingVertical: 40, alignItems: "center" }}>
+            <ActivityIndicator size="large" color="#0D7A53" />
+            <Text style={{ marginTop: 10, color: "#6B7280", fontSize: 13 }}>Memuat daftar toko laundry...</Text>
+          </View>
+        ) : filteredStores.length === 0 ? (
+          <View style={{ paddingVertical: 50, alignItems: "center" }}>
+            <Shirt size={48} color="#D1D5DB" />
+            <Text style={{ marginTop: 12, fontWeight: "700", color: "#374151" }}>Toko laundry tidak ditemukan</Text>
+            <Text style={{ color: "#9CA3AF", fontSize: 13, textAlign: "center", marginTop: 4 }}>
+              Coba cari dengan kata kunci lain.
+            </Text>
+          </View>
+        ) : (
+          /* Laundry Cards List */
+          <View style={styles.cardsList}>
+            {filteredStores.map((item) => {
+              const minPrice = getMinPrice(item);
+              const isExpress = item.services?.some((s) => s.category === "ekspres");
+              return (
+                <TouchableOpacity
+                  key={item.id || item._id}
+                  style={styles.laundryCard}
+                  onPress={() => handleSelectStore(item)}
+                  activeOpacity={0.9}
                 >
-                  {item.type === "EKSPRES" ? (
-                    <Zap size={11} color="#FFFFFF" />
-                  ) : (
-                    <Shirt size={11} color="#FFFFFF" />
-                  )}
-                  <Text style={styles.typeBadgeText}>{item.type}</Text>
-                </View>
+                  {/* Image Column */}
+                  <View style={styles.cardImageCol}>
+                    <Image
+                      source={{ uri: item.imageUrl || "https://images.unsplash.com/photo-1545173168-9f1947eebb7f?auto=format&fit=crop&w=600&q=80" }}
+                      style={styles.cardImg}
+                    />
 
-                {/* Operating Hours Overlay */}
-                <View style={styles.hoursOverlay}>
-                  <Text style={styles.hoursOverlayText}>{item.hours}</Text>
-                </View>
-              </View>
-
-              {/* Info Content Column */}
-              <View style={styles.cardContentCol}>
-                {/* Title & Heart */}
-                <View style={styles.cardTitleRow}>
-                  <Text style={styles.merchantName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <TouchableOpacity activeOpacity={0.7}>
-                    <Heart size={18} color="#9CA3AF" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Rating & Distance */}
-                <View style={styles.metaRow}>
-                  <Star size={13} color="#EAB308" fill="#EAB308" />
-                  <Text style={styles.ratingVal}>{item.rating}</Text>
-                  <Text style={styles.metaSub}>({item.reviews})</Text>
-                  <Text style={styles.metaDot}>|</Text>
-                  <MapPin size={13} color="#6B7280" />
-                  <Text style={styles.metaSub}>{item.distance}</Text>
-                </View>
-
-                {/* Service Badges */}
-                <View style={styles.badgesRow}>
-                  {item.badges.map((b, idx) => (
+                    {/* Type Badge */}
                     <View
-                      key={idx}
                       style={[
-                        styles.badgeChip,
-                        {
-                          backgroundColor: b.type === "green" ? "#E8F5EE" : "#FFF7ED",
-                        },
+                        styles.typeBadge,
+                        { backgroundColor: isExpress ? "#FF6500" : "#0284C7" },
                       ]}
                     >
-                      {b.type === "green" ? (
-                        <Bike size={11} color="#0D7A53" />
-                      ) : (
-                        <Zap size={11} color="#EA580C" />
-                      )}
-                      <Text
-                        style={[
-                          styles.badgeChipText,
-                          { color: b.type === "green" ? "#0D7A53" : "#EA580C" },
-                        ]}
-                      >
-                        {b.label}
-                      </Text>
+                      {isExpress ? <Zap size={11} color="#FFFFFF" /> : <Shirt size={11} color="#FFFFFF" />}
+                      <Text style={styles.typeBadgeText}>{isExpress ? "EKSPRES" : "REGULER"}</Text>
                     </View>
-                  ))}
-                </View>
 
-                {/* Footer Price & Action */}
-                <View style={styles.cardFooterRow}>
-                  <View style={styles.priceCol}>
-                    <Text style={styles.startFromText}>Mulai dari</Text>
-                    <Text style={styles.priceValText}>
-                      Rp {item.price} <Text style={styles.unitText}>/kg</Text>
-                    </Text>
+                    {/* Operating Hours Overlay */}
+                    <View style={styles.hoursOverlay}>
+                      <Text style={styles.hoursOverlayText}>{item.openingHours || "Buka • Tutup 21.00"}</Text>
+                    </View>
                   </View>
 
-                  <TouchableOpacity
-                    style={styles.btnDetail}
-                    onPress={() => navigate("c_laundry_detail")}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.btnDetailText}>Lihat Detail</Text>
-                    <ChevronRight size={13} color="#0D7A53" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
+                  {/* Info Content Column */}
+                  <View style={styles.cardContentCol}>
+                    {/* Title & Heart */}
+                    <View style={styles.cardTitleRow}>
+                      <Text style={styles.merchantName} numberOfLines={1}>
+                        {item.storeName}
+                      </Text>
+                      <TouchableOpacity activeOpacity={0.7}>
+                        <Heart size={18} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Rating & Distance */}
+                    <View style={styles.metaRow}>
+                      <Star size={13} color="#EAB308" fill="#EAB308" />
+                      <Text style={styles.ratingVal}>{item.rating || 4.8}</Text>
+                      <Text style={styles.metaSub}>({item.totalReviews || 120})</Text>
+                      <Text style={styles.metaDot}>|</Text>
+                      <MapPin size={13} color="#6B7280" />
+                      <Text style={styles.metaSub}>{item.distanceText || "0.8 km"}</Text>
+                    </View>
+
+                    {/* Service Badges */}
+                    <View style={styles.badgesRow}>
+                      {(item.badges && item.badges.length > 0 ? item.badges : ["Antar Jemput", "Bergaransi"]).map((b, idx) => (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.badgeChip,
+                            {
+                              backgroundColor: idx % 2 === 0 ? "#E8F5EE" : "#FFF7ED",
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.badgeChipText,
+                              { color: idx % 2 === 0 ? "#0D7A53" : "#EA580C" },
+                            ]}
+                          >
+                            {b}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    {/* Footer Price & Action */}
+                    <View style={styles.cardFooterRow}>
+                      <View style={styles.priceCol}>
+                        <Text style={styles.startFromText}>Mulai dari</Text>
+                        <Text style={styles.priceValText}>
+                          Rp {minPrice.toLocaleString("id-ID")}{" "}
+                          <Text style={styles.unitText}>/kg</Text>
+                        </Text>
+                      </View>
+
+                      <View style={styles.btnDetail}>
+                        <Text style={styles.btnDetailText}>Pilih</Text>
+                        <ChevronRight size={13} color="#0D7A53" />
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -313,18 +335,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "900",
     color: "#111827",
   },
   headerSubTitle: {
     fontSize: 12,
     color: "#6B7280",
+    marginTop: 2,
   },
   headerRightActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
   },
   iconCircleBtn: {
     width: 36,
@@ -333,50 +355,48 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
     alignItems: "center",
     justifyContent: "center",
+    marginLeft: 8,
   },
-
   scrollContent: {
-    padding: 16,
     paddingBottom: 40,
   },
-
-  // Search Bar
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    marginHorizontal: 20,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    paddingHorizontal: 14,
-    height: 46,
-    marginBottom: 14,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     color: "#111827",
+    padding: 0,
   },
-
-  // Filter Pills
   filterPillsRow: {
-    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 6,
     gap: 10,
-    marginBottom: 14,
   },
   pillBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    gap: 6,
   },
   pillBtnActive: {
     backgroundColor: "#0D7A53",
@@ -384,61 +404,76 @@ const styles = StyleSheet.create({
   },
   pillText: {
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#374151",
   },
   pillTextActive: {
     color: "#FFFFFF",
+    fontWeight: "700",
   },
-
-  // Promo Banner
   promoBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "#E8F5EE",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    marginHorizontal: 20,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#DCFCE7",
-    marginBottom: 16,
+    borderColor: "#C6E7D6",
   },
   promoLeft: {
     flex: 1,
+    marginRight: 12,
+  },
+  promoBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 4,
+    gap: 4,
+  },
+  promoBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
   },
   promoText: {
     fontSize: 12,
-    fontWeight: "700",
-    color: "#0D7A53",
+    color: "#166534",
+    lineHeight: 16,
   },
   promoRight: {
     flexDirection: "row",
     alignItems: "center",
   },
-
-  // Cards List
   cardsList: {
-    gap: 16,
+    paddingHorizontal: 20,
+    marginTop: 14,
+    gap: 14,
   },
   laundryCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 14,
     flexDirection: "row",
-    gap: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 12,
     borderWidth: 1,
     borderColor: "#F3F4F6",
-    elevation: 1,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   cardImageCol: {
-    width: 110,
-    height: 140,
-    borderRadius: 16,
+    width: 105,
+    height: 120,
+    borderRadius: 12,
     overflow: "hidden",
     position: "relative",
   },
@@ -448,37 +483,37 @@ const styles = StyleSheet.create({
   },
   typeBadge: {
     position: "absolute",
-    top: 8,
-    left: 8,
+    top: 6,
+    left: 6,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
   },
   typeBadgeText: {
-    fontSize: 10,
-    fontWeight: "900",
     color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
   },
   hoursOverlay: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(17, 24, 39, 0.75)",
-    paddingVertical: 4,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingVertical: 3,
     alignItems: "center",
   },
   hoursOverlayText: {
-    fontSize: 9,
-    fontWeight: "700",
     color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "600",
   },
-
   cardContentCol: {
     flex: 1,
+    marginLeft: 12,
     justifyContent: "space-between",
   },
   cardTitleRow: {
@@ -488,7 +523,7 @@ const styles = StyleSheet.create({
   },
   merchantName: {
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "800",
     color: "#111827",
     flex: 1,
     marginRight: 6,
@@ -496,12 +531,12 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
     marginTop: 4,
+    gap: 4,
   },
   ratingVal: {
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#111827",
   },
   metaSub: {
@@ -511,32 +546,28 @@ const styles = StyleSheet.create({
   metaDot: {
     fontSize: 11,
     color: "#D1D5DB",
+    marginHorizontal: 2,
   },
-
   badgesRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-    marginTop: 8,
+    marginTop: 6,
   },
   badgeChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   badgeChipText: {
     fontSize: 10,
     fontWeight: "700",
   },
-
   cardFooterRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
     justifyContent: "space-between",
-    marginTop: 10,
+    alignItems: "flex-end",
+    marginTop: 8,
   },
   priceCol: {},
   startFromText: {
@@ -544,29 +575,27 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
   },
   priceValText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "900",
     color: "#0D7A53",
   },
   unitText: {
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "500",
     color: "#6B7280",
   },
   btnDetail: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     gap: 2,
-    borderWidth: 1,
-    borderColor: "#0D7A53",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#FFFFFF",
   },
   btnDetailText: {
-    fontSize: 11,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "700",
     color: "#0D7A53",
   },
 });

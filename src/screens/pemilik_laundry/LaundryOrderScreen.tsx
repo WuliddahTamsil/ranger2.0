@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,107 +9,214 @@ import {
   SafeAreaView,
   StatusBar,
   Modal,
+  Image,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Nav } from "../../types";
 import {
   Shirt,
   Search,
   Plus,
-  ChevronRight,
   Home,
   Package,
   Users,
-  Clock,
   Wallet,
   User,
   X,
-  CheckCircle,
+  CheckCircle2,
+  Scale,
+  CreditCard,
+  Bike,
+  Sparkles,
+  ShieldCheck,
+  Clock,
+  Eye,
+  AlertCircle,
+  Check,
 } from "lucide-react-native";
-
-interface LaundryOrder {
-  id: string;
-  customerName: string;
-  serviceType: string;
-  weightOrQty: string;
-  price: string;
-  status: "baru" | "diproses" | "selesai";
-  date: string;
-}
+import {
+  fetchStoreOrders,
+  weighAndBillLaundryOrder,
+  verifyLaundryPayment,
+  updateLaundryOrderStatus,
+  subscribeLaundry,
+  LaundryOrder,
+  getActiveLaundryOrder,
+} from "../../services/laundryService";
 
 export const LaundryOrderScreen: React.FC<Nav> = ({ navigate }) => {
-  const [activeNavTab, setActiveNavTab] = useState<"beranda" | "order" | "riwayat" | "pendapatan" | "profil">("order");
-  const [activeFilter, setActiveFilter] = useState<"semua" | "baru" | "diproses" | "selesai">("semua");
+  const [activeFilter, setActiveFilter] = useState<"semua" | "perlu_timbang" | "verifikasi_bayar" | "diproses" | "selesai">("semua");
   const [searchQuery, setSearchQuery] = useState("");
+  const [orders, setOrders] = useState<LaundryOrder[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Orders State
-  const [orders, setOrders] = useState<LaundryOrder[]>([
-    {
-      id: "LND-924",
-      customerName: "Siti Aminah",
-      serviceType: "Express 3 Jam",
-      weightOrQty: "3.5 kg",
-      price: "Rp 35.000",
-      status: "baru",
-      date: "14 Juli 2026",
-    },
-    {
-      id: "LND-923",
-      customerName: "Ahmad Faisal",
-      serviceType: "Cuci Komplit",
-      weightOrQty: "5.0 kg",
-      price: "Rp 40.000",
-      status: "diproses",
-      date: "14 Juli 2026",
-    },
-    {
-      id: "LND-922",
-      customerName: "Dewi Lestari",
-      serviceType: "Cuci Lipat",
-      weightOrQty: "4.0 kg",
-      price: "Rp 28.000",
-      status: "selesai",
-      date: "13 Juli 2026",
-    },
-  ]);
+  // Modal Weigh & Bill
+  const [isWeighModalOpen, setIsWeighModalOpen] = useState(false);
+  const [selectedOrderForWeigh, setSelectedOrderForWeigh] = useState<LaundryOrder | null>(null);
+  const [inputWeight, setInputWeight] = useState("");
+  const [isWeighing, setIsWeighing] = useState(false);
 
-  // Modal Add Order
+  // Modal Verify Payment Proof
+  const [isVerifyProofModalOpen, setIsVerifyProofModalOpen] = useState(false);
+  const [selectedOrderForProof, setSelectedOrderForProof] = useState<LaundryOrder | null>(null);
+  const [isVerifyingAction, setIsVerifyingAction] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  // Modal Add Manual Offline Order
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [custName, setCustName] = useState("");
   const [service, setService] = useState("Cuci Komplit");
-  const [weight, setWeight] = useState("");
+  const [weightManual, setWeightManual] = useState("");
   const [priceVal, setPriceVal] = useState("");
 
-  const handleCreateOrder = () => {
+  const loadOrders = async () => {
+    setLoading(true);
+    const data = await fetchStoreOrders("all");
+    const active = getActiveLaundryOrder();
+    if (active && !data.some((d) => (d._id || d.id) === (active._id || active.id))) {
+      data.unshift(active);
+    }
+    setOrders(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadOrders();
+    const unsub = subscribeLaundry(() => {
+      loadOrders();
+    });
+    return unsub;
+  }, []);
+
+  const handleOpenWeighModal = (ord: LaundryOrder) => {
+    setSelectedOrderForWeigh(ord);
+    setInputWeight(ord.actualWeightOrQty ? String(ord.actualWeightOrQty) : "3.8");
+    setIsWeighModalOpen(true);
+  };
+
+  const handleConfirmWeighAndBill = async () => {
+    if (!selectedOrderForWeigh) return;
+    const weightNum = parseFloat(inputWeight);
+    if (isNaN(weightNum) || weightNum <= 0) {
+      Alert.alert("Input Tidak Valid", "Masukkan angka berat yang valid (contoh: 3.8).");
+      return;
+    }
+
+    setIsWeighing(true);
+    try {
+      const ordId = selectedOrderForWeigh._id || selectedOrderForWeigh.id || "";
+      await weighAndBillLaundryOrder(ordId, weightNum);
+      setIsWeighModalOpen(false);
+      await loadOrders();
+      Alert.alert("Tagihan Terkirim", `Tagihan sebesar ${(weightNum * (selectedOrderForWeigh.pricePerUnit || 6000) + 9000).toLocaleString("id-ID")} telah dikirim ke Customer.`);
+    } catch (err) {
+      console.error("Weigh error:", err);
+    } finally {
+      setIsWeighing(false);
+    }
+  };
+
+  const handleOpenVerifyProofModal = (ord: LaundryOrder) => {
+    setSelectedOrderForProof(ord);
+    setRejectionReason("");
+    setIsVerifyProofModalOpen(true);
+  };
+
+  const handleVerifyPaymentAction = async (action: "approve" | "reject") => {
+    if (!selectedOrderForProof) return;
+    setIsVerifyingAction(true);
+    try {
+      const ordId = selectedOrderForProof._id || selectedOrderForProof.id || "";
+      await verifyLaundryPayment(ordId, action, rejectionReason);
+      setIsVerifyProofModalOpen(false);
+      await loadOrders();
+      if (action === "approve") {
+        Alert.alert("Pembayaran Terverifikasi", "Status pembayaran LUNAS. Cucian siap diproses cuci!");
+      } else {
+        Alert.alert("Bukti Ditolak", "Customer telah diberitahu untuk mengunggah ulang bukti transfer.");
+      }
+    } catch (err) {
+      console.error("Verify error:", err);
+    } finally {
+      setIsVerifyingAction(false);
+    }
+  };
+
+  const handleStartWashing = async (ord: LaundryOrder) => {
+    const ordId = ord._id || ord.id || "";
+    await updateLaundryOrderStatus(ordId, "SEDANG_DICUCI");
+    loadOrders();
+  };
+
+  const handleFinishWashingAndCallDriver = async (ord: LaundryOrder) => {
+    if (ord.paymentStatus !== "lunas") {
+      Alert.alert(
+        "Peringatan Pembayaran",
+        "Pakaian TIDAK DAPAT diantar ke customer sebelum customer membayar dan Anda memverifikasi bukti transfernya!"
+      );
+      return;
+    }
+
+    const ordId = ord._id || ord.id || "";
+    await updateLaundryOrderStatus(ordId, "SIAP_DIANTAR");
+    loadOrders();
+    Alert.alert("Driver Pengantaran Dipanggil", "Pakaian selesai dicuci & pembayaran sudah lunas. Driver terdekat telah ditugaskan untuk mengantar pakaian bersih ke customer!");
+  };
+
+  const handleCreateOfflineOrder = () => {
     if (!custName) return;
+    const wNum = parseFloat(weightManual) || 3;
+    const pNum = parseFloat(priceVal) || 6000;
     const newOrd: LaundryOrder = {
-      id: `LND-${Math.floor(100 + Math.random() * 900)}`,
+      _id: `manual_${Date.now()}`,
+      orderCode: `LND-${Math.floor(100 + Math.random() * 900)}`,
+      customerId: "offline_cust",
       customerName: custName,
-      serviceType: service,
-      weightOrQty: weight ? `${weight} kg` : "Kiloan",
-      price: priceVal ? `Rp ${priceVal}` : "Rp 30.000",
-      status: "baru",
-      date: "14 Juli 2026",
+      pickupAddress: "Datang ke Toko",
+      deliveryAddress: "Ambil di Toko",
+      storeId: "1",
+      storeName: "Ais Laundry",
+      ownerId: "owner_ais",
+      serviceId: "s1",
+      serviceName: service,
+      pricePerUnit: pNum,
+      unitType: "kg",
+      actualWeightOrQty: wNum,
+      laundryCost: wNum * pNum,
+      deliveryFeePickup: 0,
+      deliveryFeeDrop: 0,
+      serviceFee: 0,
+      totalAmount: wNum * pNum,
+      paymentStatus: "lunas",
+      status: "SEDANG_DICUCI",
+      createdAt: new Date().toISOString(),
     };
     setOrders([newOrd, ...orders]);
     setIsAddModalOpen(false);
     setCustName("");
-    setWeight("");
+    setWeightManual("");
     setPriceVal("");
-  };
-
-  const handleUpdateStatus = (id: string, nextStatus: "diproses" | "selesai") => {
-    setOrders(
-      orders.map((o) => (o.id === id ? { ...o, status: nextStatus } : o))
-    );
   };
 
   const filteredOrders = orders.filter((o) => {
     const matchesSearch =
-      o.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      o.customerName.toLowerCase().includes(searchQuery.toLowerCase());
-    if (activeFilter === "baru") return matchesSearch && o.status === "baru";
-    if (activeFilter === "diproses") return matchesSearch && o.status === "diproses";
-    if (activeFilter === "selesai") return matchesSearch && o.status === "selesai";
+      o.orderCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.serviceName.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (activeFilter === "perlu_timbang") {
+      return matchesSearch && (!o.actualWeightOrQty || o.status === "MENUNGGU_DRIVER_JEMPUT" || o.status === "TIBA_DI_LAUNDRY");
+    }
+    if (activeFilter === "verifikasi_bayar") {
+      return matchesSearch && (o.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN" || o.paymentStatus === "menunggu_verifikasi");
+    }
+    if (activeFilter === "diproses") {
+      return matchesSearch && (o.status === "SEDANG_DICUCI" || (o.paymentStatus === "lunas" && o.status !== "SELESAI"));
+    }
+    if (activeFilter === "selesai") {
+      return matchesSearch && (o.status === "SIAP_DIANTAR" || o.status === "DRIVER_MENGANTAR_BALIK" || o.status === "SELESAI");
+    }
     return matchesSearch;
   });
 
@@ -117,20 +224,23 @@ export const LaundryOrderScreen: React.FC<Nav> = ({ navigate }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTitleCol}>
           <Text style={styles.headerTitle}>Manajemen Order Laundry</Text>
-          <TouchableOpacity
-            style={styles.addBtnHeader}
-            onPress={() => setIsAddModalOpen(true)}
-            activeOpacity={0.8}
-          >
-            <Plus size={18} color="#FFFFFF" />
-            <Text style={styles.addBtnHeaderText}>Order Baru</Text>
-          </TouchableOpacity>
+          <Text style={styles.headerSub} numberOfLines={1}>Timbang • Verifikasi TF • Cuci • Antar</Text>
         </View>
+        <TouchableOpacity
+          style={styles.addBtnHeader}
+          onPress={() => setIsAddModalOpen(true)}
+          activeOpacity={0.8}
+        >
+          <Plus size={15} color="#FFFFFF" />
+          <Text style={styles.addBtnHeaderText}>Order Manual</Text>
+        </TouchableOpacity>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Search Bar */}
         <View style={styles.searchRow}>
           <Search size={18} color="#9CA3AF" />
@@ -138,13 +248,18 @@ export const LaundryOrderScreen: React.FC<Nav> = ({ navigate }) => {
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Cari ID pesanan atau nama pelanggan..."
+            placeholder="Cari No. Order atau nama customer..."
             placeholderTextColor="#9CA3AF"
           />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <X size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Filter Chips */}
-        <View style={styles.filterChipRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipRow}>
           <TouchableOpacity
             style={[styles.filterChip, activeFilter === "semua" && styles.filterChipActive]}
             onPress={() => setActiveFilter("semua")}
@@ -155,11 +270,20 @@ export const LaundryOrderScreen: React.FC<Nav> = ({ navigate }) => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterChip, activeFilter === "baru" && styles.filterChipActive]}
-            onPress={() => setActiveFilter("baru")}
+            style={[styles.filterChip, activeFilter === "perlu_timbang" && styles.filterChipActive]}
+            onPress={() => setActiveFilter("perlu_timbang")}
           >
-            <Text style={[styles.filterChipText, activeFilter === "baru" && styles.filterChipTextActive]}>
-              Baru ({orders.filter((o) => o.status === "baru").length})
+            <Text style={[styles.filterChipText, activeFilter === "perlu_timbang" && styles.filterChipTextActive]}>
+              ⚖️ Timbang ({orders.filter((o) => !o.actualWeightOrQty).length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterChip, activeFilter === "verifikasi_bayar" && styles.filterChipActive]}
+            onPress={() => setActiveFilter("verifikasi_bayar")}
+          >
+            <Text style={[styles.filterChipText, activeFilter === "verifikasi_bayar" && styles.filterChipTextActive]}>
+              🔍 Cek Bukti Bayar ({orders.filter((o) => o.paymentStatus === "menunggu_verifikasi" || o.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN").length})
             </Text>
           </TouchableOpacity>
 
@@ -168,7 +292,7 @@ export const LaundryOrderScreen: React.FC<Nav> = ({ navigate }) => {
             onPress={() => setActiveFilter("diproses")}
           >
             <Text style={[styles.filterChipText, activeFilter === "diproses" && styles.filterChipTextActive]}>
-              Diproses ({orders.filter((o) => o.status === "diproses").length})
+              🧺 Sedang Dicuci ({orders.filter((o) => o.status === "SEDANG_DICUCI").length})
             </Text>
           </TouchableOpacity>
 
@@ -177,80 +301,411 @@ export const LaundryOrderScreen: React.FC<Nav> = ({ navigate }) => {
             onPress={() => setActiveFilter("selesai")}
           >
             <Text style={[styles.filterChipText, activeFilter === "selesai" && styles.filterChipTextActive]}>
-              Selesai ({orders.filter((o) => o.status === "selesai").length})
+              🚚 Antar / Selesai ({orders.filter((o) => o.status === "SIAP_DIANTAR" || o.status === "SELESAI").length})
             </Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
-        {/* Order Items */}
-        <View style={styles.orderList}>
-          {filteredOrders.map((o) => (
-            <View key={o.id} style={styles.orderCard}>
-              <View style={styles.orderTopRow}>
-                <View style={styles.orderIdBadge}>
-                  <Shirt size={16} color="#0D7A53" />
-                  <Text style={styles.orderIdText}>#{o.id}</Text>
+        {/* Order Items List */}
+        {loading ? (
+          <View style={{ paddingVertical: 40, alignItems: "center" }}>
+            <ActivityIndicator size="large" color="#0D7A53" />
+          </View>
+        ) : filteredOrders.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Shirt size={44} color="#D1D5DB" />
+            <Text style={styles.emptyTitle}>Tidak ada pesanan di kategori ini</Text>
+            <Text style={styles.emptySub}>Pesanan baru dari customer akan langsung muncul di sini secara real-time.</Text>
+          </View>
+        ) : (
+          <View style={styles.orderList}>
+            {filteredOrders.map((o) => {
+              const isWeighed = Boolean(o.actualWeightOrQty);
+              const isVerifying = o.paymentStatus === "menunggu_verifikasi" || o.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN";
+              const isPaid = o.paymentStatus === "lunas";
+              const isRejected = o.paymentStatus === "ditolak";
+              const isWashing = o.status === "SEDANG_DICUCI";
+              const isReadyToDeliver = o.status === "SIAP_DIANTAR" || o.status === "DRIVER_MENGANTAR_BALIK";
+              const isCompleted = o.status === "SELESAI";
+
+              return (
+                <View key={o.orderCode || o._id} style={styles.orderCard}>
+                  {/* Card Header Row */}
+                  <View style={styles.orderTopRow}>
+                    <View style={styles.orderIdBadge}>
+                      <Shirt size={14} color="#0D7A53" />
+                      <Text style={styles.orderIdText}>{o.orderCode}</Text>
+                    </View>
+
+                    {/* Status Pill */}
+                    <View
+                      style={[
+                        styles.statusPill,
+                        !isWeighed && { backgroundColor: "#FEF3C7" },
+                        isWeighed && !isPaid && !isVerifying && { backgroundColor: "#FFF7ED" },
+                        isVerifying && { backgroundColor: "#FEF3C7" },
+                        isPaid && !isReadyToDeliver && !isCompleted && { backgroundColor: "#DCFCE7" },
+                        isReadyToDeliver && { backgroundColor: "#DBEAFE" },
+                        isCompleted && { backgroundColor: "#F3F4F6" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusPillText,
+                          !isWeighed && { color: "#D97706" },
+                          isWeighed && !isPaid && !isVerifying && { color: "#EA580C" },
+                          isVerifying && { color: "#B45309" },
+                          isPaid && !isReadyToDeliver && !isCompleted && { color: "#166534" },
+                          isReadyToDeliver && { color: "#2563EB" },
+                          isCompleted && { color: "#4B5563" },
+                        ]}
+                      >
+                        {!isWeighed
+                          ? "Perlu Ditimbang"
+                          : isVerifying
+                          ? "🔍 Cek Bukti Transfer"
+                          : !isPaid
+                          ? "Menunggu Bayar"
+                          : isWashing
+                          ? "Sedang Dicuci"
+                          : isReadyToDeliver
+                          ? "Siap Diantar"
+                          : "Selesai"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Customer Info */}
+                  <Text style={styles.custName}>{o.customerName}</Text>
+                  <Text style={styles.serviceDetail}>
+                    {o.serviceName} • {isWeighed ? `${o.actualWeightOrQty} ${o.unitType || "kg"}` : "Estimasi Kiloan"}
+                  </Text>
+                  <Text style={styles.orderAddress} numberOfLines={1}>
+                    📍 {o.pickupAddress}
+                  </Text>
+
+                  {/* Price & Billing Info */}
+                  <View style={styles.priceBreakdownRow}>
+                    <View>
+                      <Text style={styles.priceLabelText}>Total Tagihan:</Text>
+                      <Text style={styles.orderPrice}>
+                        Rp {(o.totalAmount || (o.pricePerUnit * 2 + 9000)).toLocaleString("id-ID")}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.paymentBadge,
+                        isPaid
+                          ? styles.paymentBadgePaid
+                          : isVerifying
+                          ? styles.paymentBadgeVerifying
+                          : styles.paymentBadgeUnpaid,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.paymentBadgeText,
+                          isPaid
+                            ? styles.paymentBadgeTextPaid
+                            : isVerifying
+                            ? styles.paymentBadgeTextVerifying
+                            : styles.paymentBadgeTextUnpaid,
+                        ]}
+                      >
+                        {isPaid ? "✓ Lunas" : isVerifying ? "⏳ Ada Bukti Bayar" : "Belum Lunas"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Action Buttons based on Workflow Stage */}
+                  <View style={styles.cardActionsRow}>
+                    {/* Action 1: Timbang & Buat Tagihan */}
+                    {!isWeighed || o.status === "TIBA_DI_LAUNDRY" || o.status === "MENUNGGU_DRIVER_JEMPUT" ? (
+                      <TouchableOpacity
+                        style={styles.actionBtnWeigh}
+                        onPress={() => handleOpenWeighModal(o)}
+                        activeOpacity={0.85}
+                      >
+                        <Scale size={16} color="#FFFFFF" />
+                        <Text style={styles.actionBtnWeighText}>Timbang & Kirim Tagihan</Text>
+                      </TouchableOpacity>
+                    ) : null}
+
+                    {/* Action 2: Customer sudah upload bukti bayar ➔ Pemilik verifikasi */}
+                    {isVerifying && (
+                      <TouchableOpacity
+                        style={styles.actionBtnCheckProof}
+                        onPress={() => handleOpenVerifyProofModal(o)}
+                        activeOpacity={0.85}
+                      >
+                        <Eye size={16} color="#FFFFFF" />
+                        <Text style={styles.actionBtnCheckProofText}>Lihat & Verifikasi Bukti Pembayaran</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Action 3: Menunggu Customer bayar (belum upload) */}
+                    {isWeighed && !isPaid && !isVerifying && (
+                      <View style={{ flex: 1, flexDirection: "row", gap: 8 }}>
+                        <TouchableOpacity
+                          style={styles.actionBtnReWeigh}
+                          onPress={() => handleOpenWeighModal(o)}
+                          activeOpacity={0.8}
+                        >
+                          <Scale size={14} color="#0D7A53" />
+                          <Text style={styles.actionBtnReWeighText}>Ubah Berat</Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.waitingCustPayBanner}>
+                          <Clock size={14} color="#EA580C" />
+                          <Text style={styles.waitingCustPayText}>Menunggu Customer Bayar TF/QRIS</Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Action 4: Pembayaran Lunas & Sedang Dicuci ➔ Selesai Cuci & Panggil Driver Antar */}
+                    {isPaid && (isWashing || o.status === "PEMBAYARAN_LUNAS") && (
+                      <TouchableOpacity
+                        style={styles.actionBtnFinish}
+                        onPress={() => handleFinishWashingAndCallDriver(o)}
+                        activeOpacity={0.85}
+                      >
+                        <Bike size={16} color="#FFFFFF" />
+                        <Text style={styles.actionBtnFinishText}>Selesai Cuci ➔ Panggil Driver Antar</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Action 5: Sedang diantar driver */}
+                    {isReadyToDeliver && (
+                      <View style={styles.driverDeliveringBanner}>
+                        <Bike size={16} color="#2563EB" />
+                        <Text style={styles.driverDeliveringText}>Driver sedang mengantar ke customer</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
+              );
+            })}
+          </View>
+        )}
 
-                <View
-                  style={[
-                    styles.statusPill,
-                    o.status === "baru" && { backgroundColor: "#DCFCE7" },
-                    o.status === "diproses" && { backgroundColor: "#DBEAFE" },
-                    o.status === "selesai" && { backgroundColor: "#F3F4F6" },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusPillText,
-                      o.status === "baru" && { color: "#0D7A53" },
-                      o.status === "diproses" && { color: "#2563EB" },
-                      o.status === "selesai" && { color: "#4B5563" },
-                    ]}
-                  >
-                    {o.status === "baru"
-                      ? "Order Baru"
-                      : o.status === "diproses"
-                      ? "Sedang Dicuci"
-                      : "Selesai"}
+        <View style={{ height: 90 }} />
+      </ScrollView>
+
+      {/* Modal: Timbang & Terbitkan Tagihan */}
+      <Modal visible={isWeighModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.weighModalCard}>
+            <View style={styles.dragHandle} />
+            <View style={styles.weighModalHeader}>
+              <View style={styles.weighIconCircle}>
+                <Scale size={24} color="#0D7A53" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.weighModalTitle}>Timbang & Setor Tagihan</Text>
+                <Text style={styles.weighModalSub}>Order: {selectedOrderForWeigh?.orderCode} • {selectedOrderForWeigh?.customerName}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsWeighModalOpen(false)}>
+                <X size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Masukkan Hasil Timbangan (kg / pcs) <Text style={{ color: "#EF4444" }}>*</Text></Text>
+            <View style={styles.weightInputBox}>
+              <TextInput
+                style={styles.weightInput}
+                keyboardType="numeric"
+                placeholder="Contoh: 3.8"
+                placeholderTextColor="#9CA3AF"
+                value={inputWeight}
+                onChangeText={setInputWeight}
+              />
+              <Text style={styles.weightUnitText}>{selectedOrderForWeigh?.unitType || "kg"}</Text>
+            </View>
+
+            {parseFloat(inputWeight) > 0 && selectedOrderForWeigh ? (
+              <View style={styles.calcPreviewBox}>
+                <View style={styles.calcRow}>
+                  <Text style={styles.calcLabel}>Tarif ({selectedOrderForWeigh.serviceName})</Text>
+                  <Text style={styles.calcVal}>Rp {selectedOrderForWeigh.pricePerUnit?.toLocaleString("id-ID")}/{selectedOrderForWeigh.unitType}</Text>
+                </View>
+                <View style={styles.calcRow}>
+                  <Text style={styles.calcLabel}>Biaya Cuci ({parseFloat(inputWeight)} × Rp {selectedOrderForWeigh.pricePerUnit?.toLocaleString("id-ID")})</Text>
+                  <Text style={styles.calcVal}>Rp {(parseFloat(inputWeight) * selectedOrderForWeigh.pricePerUnit).toLocaleString("id-ID")}</Text>
+                </View>
+                <View style={styles.calcRow}>
+                  <Text style={styles.calcLabel}>Ongkir Driver (Jemput & Antar)</Text>
+                  <Text style={styles.calcVal}>Rp 8.000</Text>
+                </View>
+                <View style={styles.calcRow}>
+                  <Text style={styles.calcLabel}>Biaya Layanan</Text>
+                  <Text style={styles.calcVal}>Rp 1.000</Text>
+                </View>
+                <View style={styles.calcDivider} />
+                <View style={styles.calcTotalRow}>
+                  <Text style={styles.calcTotalLabel}>Total Tagihan ke Customer:</Text>
+                  <Text style={styles.calcTotalVal}>
+                    Rp {(parseFloat(inputWeight) * selectedOrderForWeigh.pricePerUnit + 9000).toLocaleString("id-ID")}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.btnSubmitWeigh, isWeighing && { opacity: 0.7 }]}
+              onPress={handleConfirmWeighAndBill}
+              disabled={isWeighing}
+              activeOpacity={0.85}
+            >
+              {isWeighing ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <CreditCard size={18} color="#FFFFFF" />
+                  <Text style={styles.btnSubmitWeighText}>Kirim Tagihan ke Customer</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Verifikasi Bukti Pembayaran / Struk Transfer */}
+      <Modal visible={isVerifyProofModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.weighModalCard}>
+            <View style={styles.dragHandle} />
+            <View style={styles.weighModalHeader}>
+              <View style={[styles.weighIconCircle, { backgroundColor: "#DCFCE7" }]}>
+                <Eye size={24} color="#0D7A53" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.weighModalTitle}>Verifikasi Bukti Pembayaran</Text>
+                <Text style={styles.weighModalSub}>Order: {selectedOrderForProof?.orderCode} • {selectedOrderForProof?.customerName}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsVerifyProofModalOpen(false)}>
+                <X size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+              {/* Detail Tagihan */}
+              <View style={styles.verifyDetailBox}>
+                <View style={styles.calcRow}>
+                  <Text style={styles.calcLabel}>Metode Bayar:</Text>
+                  <Text style={[styles.calcVal, { fontWeight: "800", color: "#0D7A53" }]}>
+                    {selectedOrderForProof?.paymentMethod || "Transfer Bank / QRIS"}
+                  </Text>
+                </View>
+                <View style={styles.calcRow}>
+                  <Text style={styles.calcLabel}>Total Nominal Harus Diterima:</Text>
+                  <Text style={[styles.calcVal, { fontSize: 14, fontWeight: "900", color: "#111827" }]}>
+                    Rp {(selectedOrderForProof?.totalAmount || 0).toLocaleString("id-ID")}
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.custName}>{o.customerName}</Text>
-              <Text style={styles.serviceDetail}>
-                {o.serviceType} • {o.weightOrQty}
-              </Text>
-              <Text style={styles.orderDate}>{o.date}</Text>
-
-              <View style={styles.orderFooterRow}>
-                <Text style={styles.orderPrice}>{o.price}</Text>
-
-                {o.status === "baru" && (
-                  <TouchableOpacity
-                    style={styles.actionBtnProcess}
-                    onPress={() => handleUpdateStatus(o.id, "diproses")}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.actionBtnProcessText}>Proses Cuci</Text>
-                  </TouchableOpacity>
-                )}
-
-                {o.status === "diproses" && (
-                  <TouchableOpacity
-                    style={styles.actionBtnDone}
-                    onPress={() => handleUpdateStatus(o.id, "selesai")}
-                    activeOpacity={0.8}
-                  >
-                    <CheckCircle size={14} color="#FFFFFF" />
-                    <Text style={styles.actionBtnDoneText}>Tandai Selesai</Text>
-                  </TouchableOpacity>
-                )}
+              {/* Tampilan Gambar Bukti Transfer */}
+              <Text style={[styles.inputLabel, { marginTop: 10 }]}>Foto Struk / Bukti Transfer Customer:</Text>
+              <View style={styles.proofImageBox}>
+                <Image
+                  source={{
+                    uri:
+                      selectedOrderForProof?.paymentProofUrl ||
+                      "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=500&q=80",
+                  }}
+                  style={styles.proofImageFull}
+                  resizeMode="contain"
+                />
               </View>
+
+              {/* Alasan Penolakan jika ingin menolak */}
+              <TextInput
+                style={[styles.textInputRegular, { marginTop: 10 }]}
+                placeholder="Catatan penolakan (opsional jika ditolak)"
+                placeholderTextColor="#9CA3AF"
+                value={rejectionReason}
+                onChangeText={setRejectionReason}
+              />
+            </ScrollView>
+
+            {/* 2 Action Buttons: Tolak & Terima */}
+            <View style={styles.verifyActionRow}>
+              <TouchableOpacity
+                style={styles.btnRejectPayment}
+                onPress={() => handleVerifyPaymentAction("reject")}
+                disabled={isVerifyingAction}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnRejectPaymentText}>Tolak / Minta Upload Ulang</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btnApprovePayment}
+                onPress={() => handleVerifyPaymentAction("approve")}
+                disabled={isVerifyingAction}
+                activeOpacity={0.85}
+              >
+                {isVerifyingAction ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} color="#FFFFFF" />
+                    <Text style={styles.btnApprovePaymentText}>Terima & Lunas</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
-          ))}
+          </View>
         </View>
-      </ScrollView>
+      </Modal>
+
+      {/* Modal: Tambah Order Offline Baru */}
+      <Modal visible={isAddModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.weighModalCard}>
+            <View style={styles.dragHandle} />
+            <Text style={styles.weighModalTitle}>Input Order Pelanggan Datang</Text>
+
+            <Text style={styles.inputLabel}>Nama Pelanggan</Text>
+            <TextInput
+              style={styles.textInputRegular}
+              placeholder="Contoh: Bu Ratna"
+              value={custName}
+              onChangeText={setCustName}
+            />
+
+            <Text style={styles.inputLabel}>Jenis Layanan</Text>
+            <TextInput
+              style={styles.textInputRegular}
+              placeholder="Contoh: Cuci Komplit / Express"
+              value={service}
+              onChangeText={setService}
+            />
+
+            <Text style={styles.inputLabel}>Berat (kg)</Text>
+            <TextInput
+              style={styles.textInputRegular}
+              placeholder="Contoh: 4.0"
+              keyboardType="numeric"
+              value={weightManual}
+              onChangeText={setWeightManual}
+            />
+
+            <TouchableOpacity
+              style={styles.btnSubmitWeigh}
+              onPress={handleCreateOfflineOrder}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnSubmitWeighText}>Simpan Pesanan</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.btnCancel} onPress={() => setIsAddModalOpen(false)}>
+              <Text style={styles.btnCancelText}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
@@ -265,7 +720,7 @@ export const LaundryOrderScreen: React.FC<Nav> = ({ navigate }) => {
 
         <TouchableOpacity
           style={styles.navTab}
-          onPress={() => setActiveNavTab("order")}
+          onPress={() => loadOrders()}
           activeOpacity={0.7}
         >
           <Package size={22} color="#0D7A53" />
@@ -299,63 +754,6 @@ export const LaundryOrderScreen: React.FC<Nav> = ({ navigate }) => {
           <Text style={styles.navText}>Profil</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Add Order Modal */}
-      <Modal visible={isAddModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.dragHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Order Baru Laundry</Text>
-              <TouchableOpacity onPress={() => setIsAddModalOpen(false)}>
-                <X size={20} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.label}>Nama Pelanggan</Text>
-            <TextInput
-              style={styles.input}
-              value={custName}
-              onChangeText={setCustName}
-              placeholder="Nama Pelanggan"
-              placeholderTextColor="#9CA3AF"
-            />
-
-            <Text style={styles.label}>Tipe Layanan</Text>
-            <TextInput
-              style={styles.input}
-              value={service}
-              onChangeText={setService}
-              placeholder="Cuci Komplit / Express 3 Jam"
-              placeholderTextColor="#9CA3AF"
-            />
-
-            <Text style={styles.label}>Berat (Kg)</Text>
-            <TextInput
-              style={styles.input}
-              value={weight}
-              onChangeText={setWeight}
-              placeholder="3.5"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="numeric"
-            />
-
-            <Text style={styles.label}>Total Harga (Rp)</Text>
-            <TextInput
-              style={styles.input}
-              value={priceVal}
-              onChangeText={setPriceVal}
-              placeholder="35.000"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="numeric"
-            />
-
-            <TouchableOpacity style={styles.btnPrimary} onPress={handleCreateOrder} activeOpacity={0.85}>
-              <Text style={styles.btnPrimaryText}>Buat Pesanan Laundry</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -365,64 +763,73 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F9FAFB",
   },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 20,
-  },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  headerTitleCol: {
+    flex: 1,
+    marginRight: 10,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "900",
     color: "#111827",
+  },
+  headerSub: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
   },
   addBtnHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
     backgroundColor: "#0D7A53",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 4,
   },
   addBtnHeaderText: {
-    fontSize: 12,
-    fontWeight: "800",
     color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
-
+  scrollContent: {
+    padding: 20,
+    gap: 14,
+  },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    marginBottom: 14,
-    height: 44,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 8,
     fontSize: 13,
     color: "#111827",
+    padding: 0,
   },
-
   filterChipRow: {
-    flexDirection: "row",
     gap: 8,
-    marginBottom: 16,
+    paddingBottom: 4,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -432,185 +839,456 @@ const styles = StyleSheet.create({
     borderColor: "#0D7A53",
   },
   filterChipText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#6B7280",
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4B5563",
   },
   filterChipTextActive: {
     color: "#FFFFFF",
+    fontWeight: "700",
   },
-
+  emptyContainer: {
+    paddingVertical: 50,
+    alignItems: "center",
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#374151",
+    marginTop: 10,
+  },
+  emptySub: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginTop: 4,
+    maxWidth: 260,
+  },
   orderList: {
     gap: 12,
   },
   orderCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
+    borderColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   orderTopRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    alignItems: "center",
+    marginBottom: 8,
   },
   orderIdBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
   },
   orderIdText: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#111827",
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0D7A53",
   },
   statusPill: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   statusPillText: {
     fontSize: 11,
     fontWeight: "800",
   },
   custName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
     color: "#111827",
-    marginBottom: 2,
   },
   serviceDetail: {
-    fontSize: 12,
-    color: "#6B7280",
+    fontSize: 13,
+    color: "#4B5563",
+    marginTop: 2,
   },
-  orderDate: {
+  orderAddress: {
     fontSize: 11,
-    color: "#9CA3AF",
+    color: "#6B7280",
     marginTop: 4,
   },
-  orderFooterRow: {
+  priceBreakdownRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 12,
-    paddingTop: 12,
+    alignItems: "center",
+    marginTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
+  },
+  priceLabelText: {
+    fontSize: 10,
+    color: "#9CA3AF",
   },
   orderPrice: {
     fontSize: 15,
     fontWeight: "900",
     color: "#0D7A53",
   },
-  actionBtnProcess: {
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 12,
+  paymentBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  actionBtnProcessText: {
-    fontSize: 12,
+  paymentBadgePaid: {
+    backgroundColor: "#DCFCE7",
+  },
+  paymentBadgeVerifying: {
+    backgroundColor: "#FEF3C7",
+  },
+  paymentBadgeUnpaid: {
+    backgroundColor: "#FEE2E2",
+  },
+  paymentBadgeText: {
+    fontSize: 10,
     fontWeight: "800",
-    color: "#FFFFFF",
   },
-  actionBtnDone: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  paymentBadgeTextPaid: {
+    color: "#166534",
+  },
+  paymentBadgeTextVerifying: {
+    color: "#92400E",
+  },
+  paymentBadgeTextUnpaid: {
+    color: "#991B1B",
+  },
+  cardActionsRow: {
+    marginTop: 12,
+  },
+  actionBtnWeigh: {
     backgroundColor: "#0D7A53",
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    height: 42,
     borderRadius: 12,
-  },
-  actionBtnDoneText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-
-  bottomNav: {
     flexDirection: "row",
-    height: 64,
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "space-around",
-  },
-  navTab: {
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
   },
-  navText: {
-    fontSize: 10,
-    color: "#9CA3AF",
-    marginTop: 3,
+  actionBtnWeighText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
   },
-  navTextActive: {
+  actionBtnCheckProof: {
+    backgroundColor: "#D97706",
+    height: 42,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  actionBtnCheckProofText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  actionBtnReWeigh: {
+    borderWidth: 1,
+    borderColor: "#0D7A53",
+    paddingHorizontal: 12,
+    height: 42,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  actionBtnReWeighText: {
     color: "#0D7A53",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  waitingCustPayBanner: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF7ED",
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  waitingCustPayText: {
+    fontSize: 11,
+    color: "#C2410C",
+    fontWeight: "700",
+  },
+  actionBtnFinish: {
+    backgroundColor: "#0D7A53",
+    height: 44,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  actionBtnFinishText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  driverDeliveringBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    padding: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  driverDeliveringText: {
+    fontSize: 12,
+    color: "#1E40AF",
     fontWeight: "700",
   },
 
+  // Weigh Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
-  modalCard: {
+  weighModalCard: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 20,
+    padding: 24,
+    maxHeight: "90%",
   },
   dragHandle: {
-    width: 36,
+    width: 40,
     height: 4,
     backgroundColor: "#D1D5DB",
     borderRadius: 2,
     alignSelf: "center",
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  modalHeader: {
+  weighModalHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 12,
     marginBottom: 16,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "800",
+  weighIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  weighModalTitle: {
+    fontSize: 16,
+    fontWeight: "900",
     color: "#111827",
   },
-  label: {
+  weighModalSub: {
     fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  inputLabel: {
+    fontSize: 13,
     fontWeight: "700",
     color: "#374151",
     marginBottom: 6,
-    marginTop: 10,
   },
-  input: {
+  weightInputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderWidth: 2,
+    borderColor: "#0D7A53",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 52,
+    marginBottom: 14,
+  },
+  weightInput: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  weightUnitText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  textInputRegular: {
     backgroundColor: "#F9FAFB",
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
     height: 46,
-    fontSize: 13,
+    fontSize: 14,
     color: "#111827",
+    marginBottom: 12,
   },
-  btnPrimary: {
-    height: 48,
-    backgroundColor: "#0D7A53",
-    borderRadius: 16,
+  calcPreviewBox: {
+    backgroundColor: "#E8F5EE",
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#C6E7D6",
+  },
+  verifyDetailBox: {
+    backgroundColor: "#F9FAFB",
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 10,
+  },
+  calcRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  calcLabel: {
+    fontSize: 11,
+    color: "#166534",
+  },
+  calcVal: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  calcDivider: {
+    height: 1,
+    backgroundColor: "#C6E7D6",
+    marginVertical: 6,
+  },
+  calcTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  calcTotalLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  calcTotalVal: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#0D7A53",
+  },
+  proofImageBox: {
+    height: 200,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 20,
   },
-  btnPrimaryText: {
-    fontSize: 14,
-    fontWeight: "800",
+  proofImageFull: {
+    width: "100%",
+    height: "100%",
+  },
+  verifyActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+  btnRejectPayment: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnRejectPaymentText: {
+    color: "#DC2626",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  btnApprovePayment: {
+    flex: 1.2,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: "#0D7A53",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  btnApprovePaymentText: {
     color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  btnSubmitWeigh: {
+    backgroundColor: "#0D7A53",
+    height: 48,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  btnSubmitWeighText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  btnCancel: {
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
+  btnCancelText: {
+    color: "#6B7280",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  bottomNav: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 10,
+  },
+  navTab: {
+    alignItems: "center",
+    flex: 1,
+  },
+  navText: {
+    fontSize: 10,
+    color: "#9CA3AF",
+    marginTop: 4,
+    fontWeight: "600",
+  },
+  navTextActive: {
+    color: "#0D7A53",
+    fontWeight: "800",
   },
 });

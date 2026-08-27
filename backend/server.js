@@ -40,6 +40,7 @@ const kostRoutes = require("./routes/kostRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const cateringRoutes = require("./routes/cateringRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const laundryRoutes = require("./routes/laundryRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -47,6 +48,7 @@ app.use("/api/kosts", kostRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/catering", cateringRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/laundry", laundryRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {

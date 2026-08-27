@@ -49,6 +49,32 @@ const registerUser = async (req, res) => {
       documents: documents || {},
     });
 
+    if (role === "pemilik_laundry") {
+      const LaundryStore = require("../models/LaundryStore");
+      const storeName = finalRoleData?.businessName || user.name || "Toko Laundry Mitra";
+      await LaundryStore.create({
+        ownerId: user._id,
+        storeName: storeName.charAt(0).toUpperCase() + storeName.slice(1),
+        description: finalRoleData?.description || "Layanan laundry profesional, cepat, bersih higienis, dan terpercaya.",
+        address: user.address || finalRoleData?.businessAddress || "Jl. Kamojang, Garut",
+        phone: user.phone || "",
+        openingHours: "Buka • Tutup 21.00",
+        isOpen: true,
+        rating: 4.9,
+        totalReviews: 10,
+        distanceText: "0.5 km",
+        imageUrl: user.profilePhoto || "https://images.unsplash.com/photo-1545173168-9f1947eebb7f?auto=format&fit=crop&w=600&q=80",
+        badges: ["Antar Jemput", "Ekspres 3 Jam", "Garansi Bersih"],
+        services: [
+          { name: "Cuci Komplit (Cuci + Setrika)", price: 6000, unit: "kg", desc: "Cuci, kering, setrika uap, pewangi & packing rapi", category: "biasa", durationHours: 24, isActive: true },
+          { name: "Express 3 Jam (Siap Pakai)", price: 10000, unit: "kg", desc: "Prioritas khusus selesai dalam 3 jam", category: "ekspres", durationHours: 3, isActive: true },
+          { name: "Cuci Kering Lipat", price: 4500, unit: "kg", desc: "Cuci higienis & lipat rapi tanpa setrika", category: "biasa", durationHours: 24, isActive: true },
+          { name: "Setrika Uap Saja", price: 3500, unit: "kg", desc: "Setrika uap licin dan wangi tahan lama", category: "biasa", durationHours: 12, isActive: true },
+          { name: "Cuci Bedcover Besar", price: 25000, unit: "pcs", desc: "Pembersihan menyeluruh bedcover/selimut besar", category: "satuan", durationHours: 48, isActive: true },
+        ],
+      }).catch(err => console.warn("Auto LaundryStore creation note:", err.message));
+    }
+
     return res.status(201).json({
       success: true,
       message: "Pendaftaran berhasil",

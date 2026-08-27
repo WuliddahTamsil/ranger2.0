@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -20,113 +20,178 @@ import {
   Package,
   Users,
   User,
+  Scale,
+  CreditCard,
 } from "lucide-react-native";
 import { RoleHeader } from "../../components/RoleHeader";
+import {
+  fetchStoreOrders,
+  subscribeLaundry,
+  getActiveLaundryOrder,
+  LaundryOrder,
+} from "../../services/laundryService";
 
 interface PemilikLaundryHomeProps extends Nav {
   authAccount?: AuthAccount | null;
 }
 
 export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ navigate, authAccount }) => {
-  const [activeNavTab, setActiveNavTab] = useState<"beranda" | "order" | "user" | "keuangan" | "profil">("beranda");
+  const [orders, setOrders] = useState<LaundryOrder[]>([]);
+
+  const loadData = async () => {
+    const data = await fetchStoreOrders("all");
+    const active = getActiveLaundryOrder();
+    if (active && !data.some((d) => (d._id || d.id) === (active._id || active.id))) {
+      data.unshift(active);
+    }
+    setOrders(data);
+  };
+
+  useEffect(() => {
+    loadData();
+    const unsub = subscribeLaundry(() => {
+      loadData();
+    });
+    return unsub;
+  }, []);
+
+  const newOrdersCount = orders.filter((o) => !o.actualWeightOrQty || o.status === "MENUNGGU_DRIVER_JEMPUT" || o.status === "TIBA_DI_LAUNDRY").length;
+  const inProgressCount = orders.filter((o) => o.status === "SEDANG_DICUCI" || o.status === "MENUNGGU_PEMBAYARAN").length;
+  const completedCount = orders.filter((o) => o.status === "SELESAI" || o.status === "SIAP_DIANTAR").length;
+  const totalRevenue = orders
+    .filter((o) => o.paymentStatus === "lunas")
+    .reduce((acc, curr) => acc + (curr.laundryCost || curr.totalAmount || 0), 0);
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Main Scroll Content */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <RoleHeader
-          name={authAccount?.name || "Nama Pemilik"}
+          name={authAccount?.name || "Pak Dedi Kurniawan"}
           role="Pemilik Laundry"
           icon={Shirt}
           fullBleed={false}
-          notificationCount={1}
+          notificationCount={newOrdersCount}
           onRolePress={() => navigate("role")}
         />
-
 
         {/* Ringkasan Hari Ini Card */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeaderRow}>
             <View>
               <Text style={styles.summaryTitle}>Ringkasan Hari Ini</Text>
-              <Text style={styles.summarySubtitle}>Selasa, 14 Juli 2026</Text>
+              <Text style={styles.summarySubtitle}>Mitra Laundry Rangers App</Text>
             </View>
 
-            <TouchableOpacity style={styles.seeDetailBtn} activeOpacity={0.7}>
-              <Text style={styles.seeDetailText}>Lihat Detail</Text>
+            <TouchableOpacity
+              style={styles.seeDetailBtn}
+              onPress={() => navigate("pemilik_laundry_order")}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.seeDetailText}>Kelola Order</Text>
               <ChevronRight size={14} color="#0E6641" />
             </TouchableOpacity>
           </View>
 
-          {/* Divider line under header */}
           <View style={styles.cardHeaderDivider} />
 
-          {/* 2x2 Grid Stats with vertical & horizontal dividers */}
+          {/* 2x2 Grid Stats */}
           <View style={styles.statsGridContainer}>
             {/* Top Row */}
             <View style={styles.statRow}>
-              {/* Stat 1: Pesanan Baru */}
-              <View style={styles.statCol}>
-                <View style={styles.statIconBg}>
-                  <ShoppingBag size={18} color="#0E6641" />
+              {/* Stat 1: Pesanan Baru / Perlu Timbang */}
+              <TouchableOpacity
+                style={styles.statCol}
+                onPress={() => navigate("pemilik_laundry_order")}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.statIconBg, { backgroundColor: newOrdersCount > 0 ? "#FEF3C7" : "#E8F5EE" }]}>
+                  <Scale size={18} color={newOrdersCount > 0 ? "#D97706" : "#0E6641"} />
                 </View>
                 <View style={styles.statTextGroup}>
-                  <Text style={styles.statValNum}>12</Text>
-                  <Text style={styles.statValSub}>Pesanan Baru</Text>
+                  <Text style={styles.statValNum}>{newOrdersCount}</Text>
+                  <Text style={styles.statValSub}>Perlu Timbang</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
 
-              {/* Vertical Divider */}
               <View style={styles.verticalDivider} />
 
               {/* Stat 2: Sedang Dikerjakan */}
-              <View style={styles.statCol}>
+              <TouchableOpacity
+                style={styles.statCol}
+                onPress={() => navigate("pemilik_laundry_order")}
+                activeOpacity={0.7}
+              >
                 <View style={styles.statIconBg}>
-                  <Wallet size={18} color="#0E6641" />
+                  <Shirt size={18} color="#0E6641" />
                 </View>
                 <View style={styles.statTextGroup}>
-                  <Text style={styles.statValNum}>18</Text>
-                  <Text style={styles.statValSub}>Sedang Dikerjakan</Text>
+                  <Text style={styles.statValNum}>{inProgressCount}</Text>
+                  <Text style={styles.statValSub}>Sedang Proses</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
 
-            {/* Horizontal Divider */}
             <View style={styles.horizontalDivider} />
 
             {/* Bottom Row */}
             <View style={styles.statRow}>
               {/* Stat 3: Selesai Hari Ini */}
-              <View style={styles.statCol}>
+              <TouchableOpacity
+                style={styles.statCol}
+                onPress={() => navigate("pemilik_laundry_order")}
+                activeOpacity={0.7}
+              >
                 <View style={styles.statIconBg}>
                   <CheckSquare size={18} color="#0E6641" />
                 </View>
                 <View style={styles.statTextGroup}>
-                  <Text style={styles.statValNum}>8</Text>
-                  <Text style={styles.statValSub}>Selesai Hari Ini</Text>
+                  <Text style={styles.statValNum}>{completedCount}</Text>
+                  <Text style={styles.statValSub}>Selesai / Antar</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
 
-              {/* Vertical Divider */}
               <View style={styles.verticalDivider} />
 
               {/* Stat 4: Pendapatan */}
-              <View style={styles.statCol}>
+              <TouchableOpacity
+                style={styles.statCol}
+                onPress={() => navigate("pemilik_laundry_pendapatan")}
+                activeOpacity={0.7}
+              >
                 <View style={styles.statIconBg}>
                   <TrendingUp size={18} color="#0E6641" />
                 </View>
                 <View style={styles.statTextGroup}>
-                  <Text style={styles.statValNum}>Rp 1.245.000</Text>
+                  <Text style={styles.statValNum}>Rp {totalRevenue.toLocaleString("id-ID")}</Text>
                   <Text style={styles.statValSub}>Pendapatan</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
 
+        {/* Action Banner: Alur Timbangan & Pembayaran */}
+        <TouchableOpacity
+          style={styles.actionBanner}
+          onPress={() => navigate("pemilik_laundry_order")}
+          activeOpacity={0.85}
+        >
+          <View style={styles.actionBannerLeft}>
+            <View style={styles.actionBannerIconBg}>
+              <Scale size={20} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.actionBannerTitle}>Timbang & Setor Tagihan</Text>
+              <Text style={styles.actionBannerSub}>Customer bayar setelah ditimbang sebelum baju diantar</Text>
+            </View>
+          </View>
+          <ChevronRight size={18} color="#0E6641" />
+        </TouchableOpacity>
+
         {/* Pesanan Terbaru Section Header */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Pesanan Terbaru</Text>
+          <Text style={styles.sectionTitle}>Pesanan Masuk Terbaru</Text>
           <TouchableOpacity
             style={styles.seeDetailBtn}
             onPress={() => navigate("pemilik_laundry_order")}
@@ -139,64 +204,58 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
 
         {/* Orders Card Group */}
         <View style={styles.orderCardGroup}>
-          {/* Order 1: #LND-924 */}
-          <TouchableOpacity style={styles.orderItemRow} activeOpacity={0.7}>
-            <View style={[styles.orderIconBg, { backgroundColor: "#E6F7F0" }]}>
-              <Shirt size={20} color="#0E6641" />
+          {orders.length === 0 ? (
+            <View style={{ padding: 20, alignItems: "center" }}>
+              <Text style={{ color: "#9CA3AF", fontSize: 13 }}>Belum ada pesanan masuk hari ini.</Text>
             </View>
+          ) : (
+            orders.slice(0, 4).map((o, idx) => {
+              const isLast = idx === Math.min(orders.length, 4) - 1;
+              const isWeighed = Boolean(o.actualWeightOrQty);
+              const isPaid = o.paymentStatus === "lunas";
 
-            <View style={styles.orderInfoCol}>
-              <Text style={styles.orderIdText}>#LND-924</Text>
-              <Text style={styles.orderOwnerText}>Siti Aminah • Express 3 Jam</Text>
-            </View>
+              return (
+                <TouchableOpacity
+                  key={o.orderCode || idx}
+                  style={[styles.orderItemRow, isLast && { borderBottomWidth: 0 }]}
+                  onPress={() => navigate("pemilik_laundry_order")}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.orderIconBg, { backgroundColor: isPaid ? "#E6F7F0" : "#FFF7ED" }]}>
+                    <Shirt size={20} color={isPaid ? "#0E6641" : "#EA580C"} />
+                  </View>
 
-            <View style={styles.orderRightCol}>
-              <View style={[styles.badgePill, { backgroundColor: "#E6F7F0" }]}>
-                <Text style={[styles.badgePillText, { color: "#0E6641" }]}>Baru</Text>
-              </View>
-              <Text style={styles.orderAmountText}>-</Text>
-            </View>
-          </TouchableOpacity>
+                  <View style={styles.orderInfoCol}>
+                    <Text style={styles.orderIdText}>{o.orderCode}</Text>
+                    <Text style={styles.orderOwnerText} numberOfLines={1}>
+                      {o.customerName} • {o.serviceName}
+                    </Text>
+                  </View>
 
-          {/* Order 2: #LND-923 */}
-          <TouchableOpacity style={styles.orderItemRow} activeOpacity={0.7}>
-            <View style={[styles.orderIconBg, { backgroundColor: "#EBF3FF" }]}>
-              <Shirt size={20} color="#2563EB" />
-            </View>
-
-            <View style={styles.orderInfoCol}>
-              <Text style={styles.orderIdText}>#LND-923</Text>
-              <Text style={styles.orderOwnerText}>Ahmad Faisal • Biasa</Text>
-            </View>
-
-            <View style={styles.orderRightCol}>
-              <View style={[styles.badgePill, { backgroundColor: "#EBF3FF" }]}>
-                <Text style={[styles.badgePillText, { color: "#2563EB" }]}>Diproses</Text>
-              </View>
-              <Text style={[styles.orderAmountText, { color: "#111827", fontWeight: "900" }]}>
-                Rp 40.000
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Order 3: #LND-922 */}
-          <TouchableOpacity style={[styles.orderItemRow, { borderBottomWidth: 0 }]} activeOpacity={0.7}>
-            <View style={[styles.orderIconBg, { backgroundColor: "#E6F7F0" }]}>
-              <Shirt size={20} color="#0E6641" />
-            </View>
-
-            <View style={styles.orderInfoCol}>
-              <Text style={styles.orderIdText}>#LND-922</Text>
-              <Text style={styles.orderOwnerText}>Dewi Lestari • Cuci Komplit</Text>
-            </View>
-
-            <View style={styles.orderRightCol}>
-              <View style={[styles.badgePill, { backgroundColor: "#FFF7ED" }]}>
-                <Text style={[styles.badgePillText, { color: "#D97706" }]}>Menunggu Harga</Text>
-              </View>
-              <Text style={styles.orderAmountText}>-</Text>
-            </View>
-          </TouchableOpacity>
+                  <View style={styles.orderRightCol}>
+                    <View
+                      style={[
+                        styles.badgePill,
+                        { backgroundColor: !isWeighed ? "#FEF3C7" : !isPaid ? "#FFF7ED" : "#E6F7F0" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.badgePillText,
+                          { color: !isWeighed ? "#D97706" : !isPaid ? "#EA580C" : "#0E6641" },
+                        ]}
+                      >
+                        {!isWeighed ? "Timbang" : !isPaid ? "Tunggu Bayar" : "Lunas"}
+                      </Text>
+                    </View>
+                    <Text style={styles.orderAmountText}>
+                      {isWeighed ? `Rp ${(o.totalAmount || 0).toLocaleString("id-ID")}` : "-"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
 
         <View style={{ height: 30 }} />
@@ -206,7 +265,7 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
       <View style={styles.bottomNav}>
         <TouchableOpacity
           style={styles.navTab}
-          onPress={() => setActiveNavTab("beranda")}
+          onPress={() => {}}
           activeOpacity={0.7}
         >
           <Home size={22} color="#0E6641" />
@@ -259,96 +318,27 @@ const styles = StyleSheet.create({
     backgroundColor: "#F9FAFB",
   },
   scrollContent: {
-    paddingBottom: 20,
-  },
-
-  // Top Header Card (Dark Green)
-  topHeaderCard: {
-    backgroundColor: "#0E6641",
-    paddingHorizontal: 20,
-    paddingTop: 28,
-    paddingBottom: 24,
-  },
-  headerTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  greetingText: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.85)",
-    marginBottom: 4,
-  },
-  ownerNameText: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#FFFFFF",
-  },
-  bellBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  bellBadge: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#EF4444",
-  },
-
-  // Role Pill Container
-  rolePillContainer: {
     paddingHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 16,
+    paddingTop: 12,
+    paddingBottom: 80,
   },
-  rolePillBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 24,
-    alignSelf: "flex-start",
-    elevation: 3,
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-  },
-  rolePillText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-
-  // Summary Card
   summaryCard: {
     backgroundColor: "#FFFFFF",
-    marginHorizontal: 16,
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 18,
-    marginBottom: 20,
+    marginTop: 14,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
-    elevation: 1,
+    borderColor: "#E5E7EB",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   summaryHeaderRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
   },
   summaryTitle: {
     fontSize: 16,
@@ -373,11 +363,8 @@ const styles = StyleSheet.create({
   cardHeaderDivider: {
     height: 1,
     backgroundColor: "#F3F4F6",
-    marginTop: 14,
-    marginBottom: 14,
+    marginVertical: 14,
   },
-
-  // Stats Grid 2x2
   statsGridContainer: {},
   statRow: {
     flexDirection: "row",
@@ -387,91 +374,114 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 4,
+    paddingVertical: 8,
   },
   statIconBg: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#E6F7F0",
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#E8F5EE",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 10,
   },
   statTextGroup: {
     flex: 1,
   },
   statValNum: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "900",
     color: "#111827",
   },
   statValSub: {
     fontSize: 11,
     color: "#6B7280",
-    marginTop: 2,
+    marginTop: 1,
   },
   verticalDivider: {
     width: 1,
     height: 36,
     backgroundColor: "#F3F4F6",
-    marginHorizontal: 8,
+    marginHorizontal: 12,
   },
   horizontalDivider: {
     height: 1,
     backgroundColor: "#F3F4F6",
-    marginVertical: 12,
+    marginVertical: 8,
   },
-
-  // Section Header
-  sectionHeaderRow: {
+  actionBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginHorizontal: 16,
-    marginBottom: 12,
+    backgroundColor: "#E8F5EE",
+    padding: 14,
+    borderRadius: 16,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: "#C6E7D6",
+  },
+  actionBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 10,
+  },
+  actionBannerIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#0D7A53",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionBannerTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  actionBannerSub: {
+    fontSize: 11,
+    color: "#166534",
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
     color: "#111827",
   },
-
-  // Orders Card Group
   orderCardGroup: {
     backgroundColor: "#FFFFFF",
-    marginHorizontal: 16,
-    borderRadius: 24,
+    borderRadius: 18,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
-    overflow: "hidden",
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    borderColor: "#E5E7EB",
   },
   orderItemRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
-    gap: 12,
   },
   orderIconBg: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
   },
   orderInfoCol: {
     flex: 1,
   },
   orderIdText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
     color: "#111827",
   },
@@ -485,40 +495,43 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   badgePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   badgePillText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
   },
   orderAmountText: {
-    fontSize: 12,
-    color: "#6B7280",
+    fontSize: 13,
+    color: "#111827",
+    fontWeight: "800",
   },
-
-  // Bottom Navigation Bar
   bottomNav: {
-    flexDirection: "row",
-    height: 64,
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
-    alignItems: "center",
+    flexDirection: "row",
     justifyContent: "space-around",
+    paddingVertical: 10,
   },
   navTab: {
     alignItems: "center",
-    justifyContent: "center",
+    flex: 1,
   },
   navText: {
     fontSize: 10,
     color: "#9CA3AF",
-    marginTop: 3,
+    marginTop: 4,
+    fontWeight: "600",
   },
   navTextActive: {
     color: "#0E6641",
-    fontWeight: "700",
+    fontWeight: "800",
   },
 });
