@@ -9,6 +9,7 @@ import {
   StatusBar,
 } from "react-native";
 import { Nav } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
 import {
   TrendingUp,
   Wallet,
@@ -19,7 +20,11 @@ import {
   ArrowUpRight,
 } from "lucide-react-native";
 
-export const LaundryPendapatanScreen: React.FC<Nav> = ({ navigate }) => {
+interface LaundryPendapatanProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navigate, authAccount }) => {
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "order" | "user" | "keuangan" | "profil">("keuangan");
   const [chartFilter, setChartFilter] = useState<"minggu" | "bulan">("minggu");
 

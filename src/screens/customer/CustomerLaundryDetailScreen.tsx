@@ -37,6 +37,7 @@ import {
 } from "lucide-react-native";
 import { addCustomerOrder } from "./customerOrderStore";
 import { CustomerChatModal } from "./CustomerChatModal";
+import { AuthAccount } from "../auth/authTypes";
 import {
   getSelectedStore,
   createLaundryOrder,
@@ -45,7 +46,11 @@ import {
   LaundryServiceItem,
 } from "../../services/laundryService";
 
-export const CustomerLaundryDetailScreen: React.FC<Nav> = ({ navigate }) => {
+interface CustomerLaundryDetailScreenProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenProps> = ({ navigate, authAccount }) => {
   const [store, setStore] = useState<LaundryStore>(getSelectedStore());
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
@@ -131,9 +136,9 @@ export const CustomerLaundryDetailScreen: React.FC<Nav> = ({ navigate }) => {
 
     try {
       const payload = {
-        customerId: "cust_demo",
-        customerName: "Pelanggan Rangers",
-        customerPhone: "081234567890",
+        customerId: authAccount?.id || authAccount?.email || "cust_demo",
+        customerName: authAccount?.name || "aisyahphr",
+        customerPhone: authAccount?.phone || "081234567890",
         pickupAddress: address,
         pickupCoords: selectedMapPin?.coords || "-7.1432, 107.7845",
         deliveryAddress: address,

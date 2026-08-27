@@ -182,9 +182,9 @@ export default function App() {
       case "c_laundry":
         return <CustomerLaundryScreen navigate={navigate} />;
       case "c_laundry_detail":
-        return <CustomerLaundryDetailScreen navigate={navigate} />;
+        return <CustomerLaundryDetailScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_laundry_tracking":
-        return <CustomerLaundryTrackingScreen navigate={navigate} />;
+        return <CustomerLaundryTrackingScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_kos":
         return <CustomerKosScreen navigate={navigate} />;
       case "c_kos_detail":
@@ -206,13 +206,13 @@ export default function App() {
       case "pemilik_laundry_home":
               return <PemilikLaundryHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_order":
-        return <LaundryOrderScreen navigate={navigate} />;
+        return <LaundryOrderScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_user":
-        return <LaundryUserScreen navigate={navigate} />;
+        return <LaundryUserScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_riwayat":
         return <LaundryRiwayatScreen navigate={navigate} />;
       case "pemilik_laundry_pendapatan":
-        return <LaundryPendapatanScreen navigate={navigate} />;
+        return <LaundryPendapatanScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_profil":
         return <LaundryProfilScreen navigate={navigate} authAccount={currentAuthAccount} />;
 

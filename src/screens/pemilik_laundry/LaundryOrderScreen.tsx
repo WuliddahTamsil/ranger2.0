@@ -35,6 +35,7 @@ import {
   AlertCircle,
   Check,
 } from "lucide-react-native";
+import { AuthAccount } from "../auth/authTypes";
 import {
   fetchStoreOrders,
   weighAndBillLaundryOrder,
@@ -45,7 +46,11 @@ import {
   getActiveLaundryOrder,
 } from "../../services/laundryService";
 
-export const LaundryOrderScreen: React.FC<Nav> = ({ navigate }) => {
+interface LaundryOrderScreenProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate, authAccount }) => {
   const [activeFilter, setActiveFilter] = useState<"semua" | "perlu_timbang" | "verifikasi_bayar" | "diproses" | "selesai">("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [orders, setOrders] = useState<LaundryOrder[]>([]);

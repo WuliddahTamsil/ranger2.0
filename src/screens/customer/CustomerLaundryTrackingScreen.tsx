@@ -37,6 +37,7 @@ import {
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { CustomerChatModal } from "./CustomerChatModal";
+import { AuthAccount } from "../auth/authTypes";
 import {
   getActiveLaundryOrder,
   subscribeLaundry,
@@ -48,7 +49,11 @@ import {
   LaundryOrderStatus,
 } from "../../services/laundryService";
 
-export const CustomerLaundryTrackingScreen: React.FC<Nav> = ({ navigate }) => {
+interface CustomerLaundryTrackingProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProps> = ({ navigate, authAccount }) => {
   const [order, setOrder] = useState<LaundryOrder | null>(getActiveLaundryOrder());
   const [chatVisible, setChatVisible] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);

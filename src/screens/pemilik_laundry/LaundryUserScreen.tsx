@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Calendar,
 } from "lucide-react-native";
+import { AuthAccount } from "../auth/authTypes";
 import {
   fetchStoreCustomers,
   subscribeLaundry,
@@ -43,7 +44,11 @@ interface StaffItem {
   role: string;
 }
 
-export const LaundryUserScreen: React.FC<Nav> = ({ navigate }) => {
+interface LaundryUserScreenProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, authAccount }) => {
   const [activeTab, setActiveTab] = useState<"customer" | "staff">("customer");
   const [searchQuery, setSearchQuery] = useState("");
   const [customers, setCustomers] = useState<LaundryCustomerSummary[]>([]);
@@ -68,7 +73,8 @@ export const LaundryUserScreen: React.FC<Nav> = ({ navigate }) => {
 
   const loadData = async () => {
     setLoading(true);
-    const data = await fetchStoreCustomers("all");
+    const ownerId = authAccount?.id || "all";
+    const data = await fetchStoreCustomers(ownerId);
     setCustomers(data);
     setLoading(false);
   };
