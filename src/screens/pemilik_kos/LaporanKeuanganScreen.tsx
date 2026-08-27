@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import Svg, { Path, Circle, Rect, Text as SvgText } from "react-native-svg";
 import { Nav } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
+import { fetchOwnerBookings } from "../../services/kostService";
 import {
   Calendar,
   ChevronDown,
@@ -42,7 +44,11 @@ interface Transaction {
   type: "income" | "expense";
 }
 
-export const LaporanKeuanganScreen: React.FC<Nav> = ({ navigate }) => {
+interface LaporanKeuanganProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate, authAccount }) => {
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("keuangan");
 
   // Selected Month state
@@ -71,33 +77,59 @@ export const LaporanKeuanganScreen: React.FC<Nav> = ({ navigate }) => {
   const [txCategory, setTxCategory] = useState("");
   const [txAmount, setTxAmount] = useState("");
 
-  // Sample Transactions List matching Image 2
-  const [transactions, setTransactions] = useState<Transaction[]>([
+  const defaultMockTx: Transaction[] = [
     {
       id: "1",
-      title: "Pembayaran Kamar A-03",
-      subtitle: "Budi Santoso • 2 Juli 2026",
-      date: "2 Juli 2026",
+      title: "Pembayaran Kamar 101",
+      subtitle: "Budi Santoso • 2 Ags 2026",
+      date: "2 Ags 2026",
       amount: "+ Rp 1.500.000",
       type: "income",
     },
     {
       id: "2",
-      title: "Bayar Listrik",
-      subtitle: "PLN • 5 Juli 2026",
-      date: "5 Juli 2026",
+      title: "Bayar Listrik & Token",
+      subtitle: "PLN • 5 Ags 2026",
+      date: "5 Ags 2026",
       amount: "- Rp 650.000",
       type: "expense",
     },
     {
       id: "3",
-      title: "Laundry Bulanan",
-      subtitle: "Ayu • 6 Juli 2026",
-      date: "6 Juli 2026",
-      amount: "+ Rp 250.000",
-      type: "income",
+      title: "Iuran Kebersihan & Sampah",
+      subtitle: "Pengurus RT • 6 Ags 2026",
+      date: "6 Ags 2026",
+      amount: "- Rp 150.000",
+      type: "expense",
     },
-  ]);
+  ];
+
+  const [transactions, setTransactions] = useState<Transaction[]>(defaultMockTx);
+
+  useEffect(() => {
+    const loadVerifiedBookings = async () => {
+      try {
+        const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+        const bookings = await fetchOwnerBookings(ownerEmail);
+        if (bookings && bookings.length > 0) {
+          const verifiedBookings = bookings.filter((b: any) => b.status === "dp_verified");
+          const bookingTxs: Transaction[] = verifiedBookings.map((b: any) => ({
+            id: b._id,
+            title: `DP Kamar ${b.roomNumber || "101"}`,
+            subtitle: `${b.customerName} • ${b.verifiedAt ? new Date(b.verifiedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "Hari ini"}`,
+            date: b.verifiedAt ? new Date(b.verifiedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini",
+            amount: `+ Rp ${Number(b.dpAmount || 300000).toLocaleString("id-ID")}`,
+            type: "income" as const,
+          }));
+
+          setTransactions([...bookingTxs, ...defaultMockTx]);
+        }
+      } catch (err) {
+        console.warn("loadVerifiedBookings error:", err);
+      }
+    };
+    loadVerifiedBookings();
+  }, [authAccount]);
 
   const handleSaveTransaction = () => {
     if (!txTitle || !txAmount) return;

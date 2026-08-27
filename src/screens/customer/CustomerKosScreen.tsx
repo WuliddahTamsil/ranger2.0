@@ -11,15 +11,10 @@ import {
   Image,
   ActivityIndicator,
 } from "react-native";
-import { Nav } from "../../types";
-import { fetchAllKosts } from "../../services/kostService";
-import { setSelectedKost } from "./customerKosStore";
-
 import {
   ArrowLeft,
   Search,
   SlidersHorizontal,
-  Map,
   MapPin,
   LayoutGrid,
   User,
@@ -37,14 +32,30 @@ import {
   Shirt,
   ShieldCheck,
   Headphones,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  MessageCircle,
+  Building2,
+  Calendar,
 } from "lucide-react-native";
+import { Nav } from "../../types";
+import { fetchAllKosts, fetchCustomerBookings } from "../../services/kostService";
+import { setSelectedKost, getActiveCustomerBooking, subscribeCustomerBooking, ActiveCustomerBooking } from "./customerKosStore";
+import { AuthAccount } from "../auth/authTypes";
+import { Linking } from "react-native";
 
-export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
+interface CustomerKosScreenProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, authAccount }) => {
   const [activeCategory, setActiveCategory] = useState<"semua" | "putra" | "putri" | "campur">("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [isBannerVisible, setIsBannerVisible] = useState(true);
   const [loading, setLoading] = useState(false);
   const [dbKosts, setDbKosts] = useState<any[]>([]);
+  const [activeBooking, setActiveBooking] = useState<ActiveCustomerBooking | null>(getActiveCustomerBooking());
 
   const defaultMockKosts = [
     {
@@ -98,22 +109,58 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
             status: k.rooms && k.rooms.some((r: any) => r.isAvailable) ? "Tersedia" : "Penuh",
             location: k.address,
             rating: k.rating || 4.9,
-            reviews: k.reviewCount || 128,
+            reviews: 45,
             price: Number(k.price).toLocaleString("id-ID"),
-            facilities: k.facilities || ["WiFi", "AC", "KM Dalam"],
-            img: (k.images && k.images.length > 0) ? k.images[0] : defaultMockKosts[0].img,
+            facilities: k.facilities && k.facilities.length > 0 ? k.facilities : ["WiFi", "AC", "KM Dalam"],
+            img: (k.images && k.images[0]) || "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80",
             raw: k,
           }));
           setDbKosts(mapped);
         }
+
+        // Fetch customer's real bookings
+        const emailOrId = authAccount?.email || authAccount?.id || "aisyahphr@gmail.com";
+        const myBookings = await fetchCustomerBookings(emailOrId);
+        if (myBookings && myBookings.length > 0) {
+          const latest = myBookings[0];
+          const activeObj: ActiveCustomerBooking = {
+            _id: latest._id,
+            bookingCode: latest.bookingCode,
+            customerName: latest.customerName,
+            customerPhone: latest.customerPhone,
+            customerEmail: latest.customerEmail,
+            kostId: latest.kostId?._id || latest.kostId,
+            kostName: latest.kostId?.name || "Ais Kost Exclusive",
+            kostAddress: latest.kostId?.address,
+            roomNumber: latest.roomNumber || "101",
+            entryDate: latest.entryDate ? new Date(latest.entryDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Segera",
+            durationMonths: latest.durationMonths || 1,
+            monthlyPrice: latest.monthlyPrice || 1500000,
+            totalAmount: latest.totalAmount || 1500000,
+            dpAmount: latest.dpAmount || 300000,
+            dpProofImage: latest.dpProofImage,
+            status: latest.status || "dp_submitted",
+            rejectionReason: latest.rejectionReason,
+            verifiedAt: latest.verifiedAt,
+            createdAt: latest.createdAt,
+            ownerPhone: latest.ownerId?.phone || "087805987309",
+            ownerName: latest.ownerId?.name || "Pemilik Kost",
+          };
+          setActiveBooking(activeObj);
+        }
       } catch (err) {
-        console.warn("Using offline mock kos:", err);
+        console.warn("loadKosts error:", err);
       } finally {
         setLoading(false);
       }
     };
+
     loadKosts();
-  }, []);
+    const unsub = subscribeCustomerBooking(() => {
+      setActiveBooking(getActiveCustomerBooking());
+    });
+    return unsub;
+  }, [authAccount]);
 
   const kosList = dbKosts.length > 0 ? [...dbKosts, ...defaultMockKosts.filter(m => !dbKosts.some(d => d.name === m.name))] : defaultMockKosts;
 
@@ -129,6 +176,11 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
     return matchesCategory && matchesSearch;
   });
 
+  const handleOpenWhatsAppOwner = (phone?: string, kostName?: string, roomNumber?: string) => {
+    const cleanPhone = (phone || "087805987309").replace(/[^0-9]/g, "").replace(/^0/, "62");
+    const msg = `Halo Pemilik ${kostName || "Kost"}, saya ingin konfirmasi perihal booking kamar No. ${roomNumber || ""} saya di aplikasi Rangers.`;
+    Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -145,14 +197,11 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
         </TouchableOpacity>
 
         <View style={styles.headerTitleCol}>
-          <Text style={styles.headerTitle}>Kos-kosan</Text>
-          <Text style={styles.headerSubTitle}>Temukan kos terbaik sesuai kebutuhanmu</Text>
+          <Text style={styles.headerTitle}>Kanyaah Homestay / Kos</Text>
+          <Text style={styles.headerSubTitle}>Temukan hunian nyaman & strategis</Text>
         </View>
 
         <View style={styles.headerRightActions}>
-          <TouchableOpacity style={styles.iconCircleBtn} activeOpacity={0.7}>
-            <Map size={18} color="#374151" />
-          </TouchableOpacity>
           <TouchableOpacity style={styles.iconCircleBtn} activeOpacity={0.7}>
             <SlidersHorizontal size={18} color="#374151" />
           </TouchableOpacity>
@@ -160,6 +209,100 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Active Customer Booking Status Card */}
+        {activeBooking && (
+          <View
+            style={[
+              styles.activeBookingCard,
+              activeBooking.status === "dp_verified"
+                ? styles.bookingCardVerified
+                : activeBooking.status === "rejected"
+                ? styles.bookingCardRejected
+                : styles.bookingCardPending,
+            ]}
+          >
+            <View style={styles.bookingCardHeader}>
+              <View style={styles.bookingCodePill}>
+                <Building2 size={13} color="#0D7A53" />
+                <Text style={styles.bookingCodeText}>{activeBooking.bookingCode}</Text>
+              </View>
+
+              <View
+                style={[
+                  styles.statusBadgePill,
+                  activeBooking.status === "dp_verified"
+                    ? { backgroundColor: "#DCFCE7" }
+                    : activeBooking.status === "rejected"
+                    ? { backgroundColor: "#FEE2E2" }
+                    : { backgroundColor: "#FEF3C7" },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusBadgePillText,
+                    activeBooking.status === "dp_verified"
+                      ? { color: "#166534" }
+                      : activeBooking.status === "rejected"
+                      ? { color: "#DC2626" }
+                      : { color: "#D97706" },
+                  ]}
+                >
+                  {activeBooking.status === "dp_verified"
+                    ? "✓ DP Diterima (Siap Huni)"
+                    : activeBooking.status === "rejected"
+                    ? "❌ DP Ditolak"
+                    : "⏳ Menunggu Verifikasi DP"}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.bookingKostTitle}>{activeBooking.kostName}</Text>
+            <Text style={styles.bookingRoomSub}>
+              Kamar {activeBooking.roomNumber} ({activeBooking.roomType || "AC"}) • Masuk: {activeBooking.entryDate}
+            </Text>
+
+            <View style={styles.bookingDivider} />
+
+            <View style={styles.bookingDetailRow}>
+              <Text style={styles.bookingDpLabel}>DP 20% Terkirim:</Text>
+              <Text style={styles.bookingDpValue}>Rp {activeBooking.dpAmount.toLocaleString("id-ID")}</Text>
+            </View>
+
+            {activeBooking.status === "dp_verified" ? (
+              <View style={styles.verifiedNoticeBox}>
+                <CheckCircle2 size={16} color="#166534" />
+                <Text style={styles.verifiedNoticeText}>
+                  Kamar Anda sudah terkunci dan siap ditempati. Hubungi pemilik untuk serah terima kunci kamar.
+                </Text>
+              </View>
+            ) : activeBooking.status === "rejected" ? (
+              <View style={styles.rejectedNoticeBox}>
+                <AlertCircle size={16} color="#DC2626" />
+                <Text style={styles.rejectedNoticeText}>
+                  {activeBooking.rejectionReason || "Bukti transfer tidak sesuai. Silakan hubungi pemilik kos."}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.pendingNoticeBox}>
+                <Clock size={16} color="#D97706" />
+                <Text style={styles.pendingNoticeText}>
+                  Pemilik kos sedang mencocokkan mutasi transfer DP Anda. Kamar otomatis terkunci saat disetujui.
+                </Text>
+              </View>
+            )}
+
+            {/* Quick Action */}
+            <TouchableOpacity
+              style={styles.btnChatOwnerWa}
+              onPress={() => handleOpenWhatsAppOwner(activeBooking.ownerPhone, activeBooking.kostName, activeBooking.roomNumber)}
+              activeOpacity={0.85}
+            >
+              <MessageCircle size={16} color="#FFFFFF" />
+              <Text style={styles.btnChatOwnerWaText}>Chat WhatsApp Pemilik Kos</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Search Bar */}
         <View style={styles.searchContainer}>
           <Search size={18} color="#9CA3AF" style={styles.searchIcon} />
@@ -170,6 +313,11 @@ export const CustomerKosScreen: React.FC<Nav> = ({ navigate }) => {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <X size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity style={styles.nearMePill} activeOpacity={0.8}>
             <MapPin size={13} color="#0D7A53" />
             <Text style={styles.nearMeText}>Dekat saya</Text>
@@ -506,6 +654,150 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
+  },
+
+  // Active Booking Card
+  activeBookingCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  bookingCardPending: {
+    borderColor: "#FDE68A",
+    backgroundColor: "#FFFBEB",
+  },
+  bookingCardVerified: {
+    borderColor: "#BBF7D0",
+    backgroundColor: "#F0FDF4",
+  },
+  bookingCardRejected: {
+    borderColor: "#FECACA",
+    backgroundColor: "#FEF2F2",
+  },
+  bookingCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  bookingCodePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+  },
+  bookingCodeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  statusBadgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statusBadgePillText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  bookingKostTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  bookingRoomSub: {
+    fontSize: 12,
+    color: "#4B5563",
+    marginTop: 2,
+  },
+  bookingDivider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 10,
+  },
+  bookingDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  bookingDpLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  bookingDpValue: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#0D7A53",
+  },
+  verifiedNoticeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    padding: 10,
+    borderRadius: 10,
+    gap: 8,
+    marginBottom: 10,
+  },
+  verifiedNoticeText: {
+    fontSize: 11,
+    color: "#166534",
+    fontWeight: "700",
+    flex: 1,
+  },
+  rejectedNoticeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    padding: 10,
+    borderRadius: 10,
+    gap: 8,
+    marginBottom: 10,
+  },
+  rejectedNoticeText: {
+    fontSize: 11,
+    color: "#991B1B",
+    fontWeight: "700",
+    flex: 1,
+  },
+  pendingNoticeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    padding: 10,
+    borderRadius: 10,
+    gap: 8,
+    marginBottom: 10,
+  },
+  pendingNoticeText: {
+    fontSize: 11,
+    color: "#92400E",
+    fontWeight: "700",
+    flex: 1,
+  },
+  btnChatOwnerWa: {
+    backgroundColor: "#0D7A53",
+    height: 40,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  btnChatOwnerWaText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
   },
 
   // Search Bar

@@ -9,22 +9,46 @@ import {
   SafeAreaView,
   StatusBar,
   Modal,
+  Linking,
 } from "react-native";
 import { Nav } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
 import {
   ArrowLeft,
   MessageCircle,
   MessageSquare,
   Info,
   CheckCircle2,
+  User,
+  Phone,
 } from "lucide-react-native";
 
-export const KirimPengingatScreen: React.FC<Nav> = ({ navigate }) => {
+interface KirimPengingatScreenProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const KirimPengingatScreen: React.FC<KirimPengingatScreenProps> = ({ navigate, authAccount }) => {
   const [method, setMethod] = useState<"whatsapp" | "sms">("whatsapp");
+  const [recipientName, setRecipientName] = useState("Budi Santoso");
+  const [recipientPhone, setRecipientPhone] = useState("081298765432");
+  const [roomNumber, setRoomNumber] = useState("101");
+  const [amount, setAmount] = useState("1.500.000");
+  const [dueDate, setDueDate] = useState("Hari ini (10 Agustus 2026)");
+  
   const [message, setMessage] = useState(
-    "Halo Budi Santoso,\n\nIni adalah pengingat bahwa pembayaran untuk kamar 04 (Ahmad) dengan total Rp1.500.000 telah jatuh tempo hari ini (12 Juli 2026).\n\nMohon segera lakukan pembayaran. Terima kasih!"
+    `Halo Kak ${recipientName},\n\nKami dari pengelola *Ais Kost Exclusive* ingin menginformasikan pengingat sewa kamar *${roomNumber}* dengan total *Rp ${amount}* jatuh tempo pada *${dueDate}*.\n\nPembayaran dapat ditransfer ke rekening bank pemilik kos. Jika sudah transfer, mohon kirimkan bukti pembayaran. Terima kasih!`
   );
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+
+  const handleSendReminder = () => {
+    const cleanPhone = (recipientPhone || "081298765432").replace(/[^0-9]/g, "").replace(/^0/, "62");
+    if (method === "whatsapp") {
+      Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`).catch(() => {});
+    } else {
+      Linking.openURL(`sms:${cleanPhone}?body=${encodeURIComponent(message)}`).catch(() => {});
+    }
+    setIsSuccessModalOpen(true);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -39,7 +63,7 @@ export const KirimPengingatScreen: React.FC<Nav> = ({ navigate }) => {
         >
           <ArrowLeft size={22} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Kirim Pengingat</Text>
+        <Text style={styles.headerTitle}>Kirim Pengingat Sewa</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -58,8 +82,8 @@ export const KirimPengingatScreen: React.FC<Nav> = ({ navigate }) => {
             </View>
 
             <View style={styles.methodTextCol}>
-              <Text style={styles.methodTitle}>WhatsApp</Text>
-              <Text style={styles.methodSub}>Kirim pengingat melalui WhatsApp</Text>
+              <Text style={styles.methodTitle}>WhatsApp Langsung</Text>
+              <Text style={styles.methodSub}>Buka chat WhatsApp dengan template tagihan siap kirim</Text>
             </View>
 
             <View style={[styles.radioOuter, method === "whatsapp" && styles.radioOuterSelected]}>
@@ -79,7 +103,7 @@ export const KirimPengingatScreen: React.FC<Nav> = ({ navigate }) => {
 
             <View style={styles.methodTextCol}>
               <Text style={styles.methodTitle}>SMS</Text>
-              <Text style={styles.methodSub}>Kirim pengingat melalui SMS</Text>
+              <Text style={styles.methodSub}>Kirim pesan SMS ke nomor HP penghuni</Text>
             </View>
 
             <View style={[styles.radioOuter, method === "sms" && styles.radioOuterSelected]}>
@@ -88,8 +112,21 @@ export const KirimPengingatScreen: React.FC<Nav> = ({ navigate }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Section: Rincian Penghuni Tujuan */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Penghuni Tujuan</Text>
+        <View style={styles.recipientCard}>
+          <View style={styles.recipientRow}>
+            <User size={16} color="#0D7A53" />
+            <Text style={styles.recipientName}>{recipientName} (Kamar {roomNumber})</Text>
+          </View>
+          <View style={styles.recipientRow}>
+            <Phone size={16} color="#6B7280" />
+            <Text style={styles.recipientPhone}>{recipientPhone}</Text>
+          </View>
+        </View>
+
         {/* Section: Pesan Pengingat */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Pesan Pengingat</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Template Pesan Tagihan</Text>
 
         <View style={styles.textAreaContainer}>
           <TextInput
@@ -97,17 +134,17 @@ export const KirimPengingatScreen: React.FC<Nav> = ({ navigate }) => {
             value={message}
             onChangeText={setMessage}
             multiline
-            numberOfLines={6}
+            numberOfLines={7}
             placeholderTextColor="#9CA3AF"
           />
-          <Text style={styles.charCountText}>{message.length}/200</Text>
+          <Text style={styles.charCountText}>{message.length} karakter</Text>
         </View>
 
         {/* Notice Box Tips */}
         <View style={styles.tipsBox}>
-          <Info size={16} color="#D97706" style={{ marginTop: 1 }} />
+          <Info size={16} color="#0D7A53" style={{ marginTop: 1 }} />
           <Text style={styles.tipsText}>
-            Tips: Pesan akan dikirim secara personal ke penghuni.
+            Pesan akan langsung membuka aplikasi WhatsApp resmi ke nomor penghuni dengan teks yang terformat rapi.
           </Text>
         </View>
 
@@ -118,10 +155,11 @@ export const KirimPengingatScreen: React.FC<Nav> = ({ navigate }) => {
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.btnKirim}
-          onPress={() => setIsSuccessModalOpen(true)}
+          onPress={handleSendReminder}
           activeOpacity={0.85}
         >
-          <Text style={styles.btnKirimText}>Kirim Pengingat</Text>
+          <MessageCircle size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+          <Text style={styles.btnKirimText}>Buka Chat & Kirim Tagihan</Text>
         </TouchableOpacity>
       </View>
 
@@ -133,10 +171,10 @@ export const KirimPengingatScreen: React.FC<Nav> = ({ navigate }) => {
               <CheckCircle2 size={36} color="#0D7A53" />
             </View>
 
-            <Text style={styles.dialogTitle}>Pengingat Terkirim!</Text>
+            <Text style={styles.dialogTitle}>Pengingat Dibuka!</Text>
 
             <Text style={styles.dialogDesc}>
-              Pesan pengingat tagihan telah berhasil dikirim ke <Text style={{ fontWeight: "800", color: "#111827" }}>Budi Santoso</Text> melalui {method === "whatsapp" ? "WhatsApp" : "SMS"}.
+              Aplikasi {method === "whatsapp" ? "WhatsApp" : "SMS"} telah dibuka untuk mengirim tagihan sewa ke <Text style={{ fontWeight: "800", color: "#111827" }}>{recipientName}</Text>.
             </Text>
 
             <TouchableOpacity
@@ -188,6 +226,29 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#111827",
     marginBottom: 12,
+  },
+  recipientCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    gap: 8,
+  },
+  recipientRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  recipientName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  recipientPhone: {
+    fontSize: 13,
+    color: "#4B5563",
   },
 
   methodList: {

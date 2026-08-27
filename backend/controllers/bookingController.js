@@ -241,12 +241,30 @@ const verifyDpBooking = async (req, res) => {
   }
 };
 
-// Get Bookings by Customer ID
+// Get Bookings by Customer ID or Email
 const getBookingsByCustomer = async (req, res) => {
   try {
     const { customerId } = req.params;
-    const bookings = await Booking.find({ customerId })
-      .populate("kostId", "name address type images bankAccount facilities")
+    let query = {};
+    if (customerId && customerId.match(/^[0-9a-fA-F]{24}$/)) {
+      query = {
+        $or: [
+          { customerId },
+          { customerEmail: customerId },
+        ],
+      };
+    } else {
+      query = {
+        $or: [
+          { customerEmail: customerId },
+          { customerName: customerId },
+          { customerPhone: customerId },
+        ],
+      };
+    }
+
+    const bookings = await Booking.find(query)
+      .populate("kostId", "name address type images bankAccount facilities price")
       .populate("ownerId", "name phone email")
       .sort({ createdAt: -1 });
 

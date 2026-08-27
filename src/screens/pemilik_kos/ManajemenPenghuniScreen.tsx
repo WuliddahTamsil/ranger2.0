@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Nav } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
+import { Linking } from "react-native";
 import {
   fetchTenantsByOwner,
   addTenantToKost,
@@ -38,6 +40,7 @@ import {
   DollarSign,
   Pencil,
   Trash2,
+  MessageCircle,
 } from "lucide-react-native";
 
 interface TenantData {
@@ -53,7 +56,11 @@ interface TenantData {
   priceMonth: string;
 }
 
-export const ManajemenPenghuniScreen: React.FC<Nav> = ({ navigate }) => {
+interface ManajemenPenghuniProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navigate, authAccount }) => {
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("penghuni");
 
   // Search state
@@ -146,10 +153,12 @@ export const ManajemenPenghuniScreen: React.FC<Nav> = ({ navigate }) => {
   const [loading, setLoading] = useState(false);
   const [tenants, setTenants] = useState<TenantData[]>([]);
 
+  const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+
   const loadTenantsFromBackend = async () => {
     setLoading(true);
     try {
-      const data = await fetchTenantsByOwner("aisk@gmail.com");
+      const data = await fetchTenantsByOwner(ownerEmail);
       if (data && data.length > 0) {
         setTenants(data);
       }
@@ -162,7 +171,13 @@ export const ManajemenPenghuniScreen: React.FC<Nav> = ({ navigate }) => {
 
   useEffect(() => {
     loadTenantsFromBackend();
-  }, []);
+  }, [authAccount]);
+
+  const handleSendWhatsAppReminder = (tenant: TenantData) => {
+    const cleanPhone = (tenant.phone || "081234567890").replace(/[^0-9]/g, "").replace(/^0/, "62");
+    const msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost Exclusive* ingin menginformasikan tagihan sewa kamar *${tenant.roomNumber}* sebesar *${tenant.priceMonth}*.\nSisa periode sewa Anda: *${tenant.daysLeft} hari lagi*.\n\nPembayaran dapat ditransfer ke rekening bank pemilik kos. Terima kasih! 🙏`;
+    Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
+  };
 
   // Open Add Modal
   const handleOpenAddModal = () => {
@@ -226,7 +241,7 @@ export const ManajemenPenghuniScreen: React.FC<Nav> = ({ navigate }) => {
       };
       setTenants([newTenant, ...tenants]);
       try {
-        await addTenantToKost("aisk@gmail.com", {
+        await addTenantToKost(ownerEmail, {
           name: namaLengkap,
           phone: noHp,
           roomNumber: nomorKamar || "101",
@@ -245,7 +260,7 @@ export const ManajemenPenghuniScreen: React.FC<Nav> = ({ navigate }) => {
     setTenants(tenants.filter((t) => t.id !== id));
     setSelectedTenantForOptions(null);
     try {
-      await deleteTenantFromKost("aisk@gmail.com", id);
+      await deleteTenantFromKost(ownerEmail, id);
     } catch (e) {
       console.log("Offline delete tenant:", e);
     }
@@ -676,6 +691,26 @@ export const ManajemenPenghuniScreen: React.FC<Nav> = ({ navigate }) => {
             </Text>
 
             <View style={styles.optionsList}>
+              <TouchableOpacity
+                style={styles.optionRow}
+                onPress={() => {
+                  if (selectedTenantForOptions) {
+                    handleSendWhatsAppReminder(selectedTenantForOptions);
+                    setSelectedTenantForOptions(null);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.optionIconBg, { backgroundColor: "#DCFCE7" }]}>
+                  <MessageCircle size={18} color="#0D7A53" />
+                </View>
+                <View style={styles.optionTextCol}>
+                  <Text style={styles.optionItemTitle}>Kirim Pengingat Sewa (WhatsApp)</Text>
+                  <Text style={styles.optionItemSub}>Kirim pesan invoice tagihan ke no WA penghuni</Text>
+                </View>
+                <ChevronRight size={16} color="#9CA3AF" />
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.optionRow}
                 onPress={() => selectedTenantForOptions && handleOpenEditModal(selectedTenantForOptions)}

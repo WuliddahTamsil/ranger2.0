@@ -13,6 +13,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { Nav } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
 import { fetchOwnerBookings, verifyDpBooking } from "../../services/kostService";
 import {
   ArrowLeft,
@@ -28,7 +29,11 @@ import {
   RefreshCw,
 } from "lucide-react-native";
 
-export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
+interface VerifikasiDpScreenProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate, authAccount }) => {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isProofModalOpen, setIsProofModalOpen] = useState(false);
@@ -40,7 +45,8 @@ export const VerifikasiDpScreen: React.FC<Nav> = ({ navigate }) => {
   const loadBookings = async () => {
     setIsLoading(true);
     try {
-      const bookings = await fetchOwnerBookings("aisk@gmail.com");
+      const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+      const bookings = await fetchOwnerBookings(ownerEmail);
       if (bookings && bookings.length > 0) {
         setAllBookings(bookings);
         setSelectedIndex(0);

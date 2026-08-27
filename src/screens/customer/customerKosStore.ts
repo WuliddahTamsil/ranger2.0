@@ -31,7 +31,37 @@ export interface SelectedKost {
   ownerId?: any;
 }
 
+export interface ActiveCustomerBooking {
+  _id?: string;
+  bookingCode: string;
+  customerId?: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  kostId: string;
+  kostName: string;
+  kostAddress?: string;
+  kostImage?: string;
+  roomId?: string;
+  roomNumber: string;
+  roomType?: string;
+  entryDate: string;
+  durationMonths: number;
+  monthlyPrice: number;
+  totalAmount: number;
+  dpAmount: number;
+  dpProofImage?: string;
+  status: "pending_dp" | "dp_submitted" | "dp_verified" | "rejected" | "active" | "completed" | "cancelled";
+  rejectionReason?: string;
+  verifiedAt?: string;
+  createdAt?: string;
+  ownerPhone?: string;
+  ownerName?: string;
+}
+
 let selectedKost: SelectedKost | null = null;
+let activeCustomerBooking: ActiveCustomerBooking | null = null;
+const listeners = new Set<() => void>();
 
 export const setSelectedKost = (kost: SelectedKost | null) => {
   selectedKost = kost;
@@ -39,4 +69,20 @@ export const setSelectedKost = (kost: SelectedKost | null) => {
 
 export const getSelectedKost = () => {
   return selectedKost;
+};
+
+export const getActiveCustomerBooking = (): ActiveCustomerBooking | null => {
+  return activeCustomerBooking;
+};
+
+export const setActiveCustomerBooking = (booking: ActiveCustomerBooking | null) => {
+  activeCustomerBooking = booking;
+  listeners.forEach((l) => l());
+};
+
+export const subscribeCustomerBooking = (listener: () => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 };

@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Nav } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
 import {
   fetchRoomsByOwner,
   addRoomToKost,
@@ -64,7 +65,11 @@ interface RoomData {
   isNonaktif?: boolean;
 }
 
-export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
+interface ManajemenKamarProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, authAccount }) => {
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("kamar");
 
   // State for Options Modal (Bottom Sheet when clicking 3-dots)
@@ -125,10 +130,12 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
   const [loading, setLoading] = useState(false);
   const [rooms, setRooms] = useState<RoomData[]>([]);
 
+  const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+
   const loadRoomsFromBackend = async () => {
     setLoading(true);
     try {
-      const data = await fetchRoomsByOwner("aisk@gmail.com");
+      const data = await fetchRoomsByOwner(ownerEmail);
       if (data && data.length > 0) {
         setRooms(data);
       }
@@ -141,7 +148,7 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
 
   useEffect(() => {
     loadRoomsFromBackend();
-  }, []);
+  }, [authAccount]);
 
   // Action Handlers
   const handleDuplicateRoom = (room: RoomData) => {
@@ -171,7 +178,7 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
     );
     setSelectedRoomForOptions(null);
     try {
-      await updateRoomInKost("aisk@gmail.com", room.id, { isAvailable: newStatus === "kosong" });
+      await updateRoomInKost(ownerEmail, room.id, { isAvailable: newStatus === "kosong" });
     } catch (e) {
       console.log("Offline update:", e);
     }
@@ -181,7 +188,7 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
     setRooms(rooms.filter((r) => r.id !== room.id));
     setSelectedRoomForOptions(null);
     try {
-      await deleteRoomFromKost("aisk@gmail.com", room.id);
+      await deleteRoomFromKost(ownerEmail, room.id);
     } catch (e) {
       console.log("Offline delete:", e);
     }
@@ -229,7 +236,7 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
         )
       );
       try {
-        await updateRoomInKost("aisk@gmail.com", editingRoomId, {
+        await updateRoomInKost(ownerEmail, editingRoomId, {
           roomNumber: nomorKamar,
           roomType: tipeKamar,
           priceMonthly: numPrice,
@@ -253,7 +260,7 @@ export const ManajemenKamarScreen: React.FC<Nav> = ({ navigate }) => {
       };
       setRooms([newRoom, ...rooms]);
       try {
-        await addRoomToKost("aisk@gmail.com", {
+        await addRoomToKost(ownerEmail, {
           roomNumber: nomorKamar || `10${rooms.length + 1}`,
           roomType: tipeKamar,
           priceMonthly: numPrice,

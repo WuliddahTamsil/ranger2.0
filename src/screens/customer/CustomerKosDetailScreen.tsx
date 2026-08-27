@@ -42,9 +42,14 @@ import {
 import { addCustomerOrder } from "./customerOrderStore";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { createKostBooking, fetchAllKosts } from "../../services/kostService";
-import { getSelectedKost, SelectedKost } from "./customerKosStore";
+import { getSelectedKost, SelectedKost, setActiveCustomerBooking } from "./customerKosStore";
+import { AuthAccount } from "../auth/authTypes";
 
-export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
+interface CustomerKosDetailProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navigate, authAccount }) => {
   const [kostData, setKostData] = useState<SelectedKost | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -145,13 +150,13 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
     // Sync to MongoDB Atlas backend
     try {
       const result = await createKostBooking({
-        customerId: "aisyahphr@gmail.com",
+        customerId: authAccount?.id || authAccount?.email || "aisyahphr@gmail.com",
         kostId: kostData?._id || "66b1a0000000000000000002",
         roomId: selectedRoom?._id,
         roomNumber: selectedRoom?.roomNumber || "101",
-        customerName: tenantName,
-        customerPhone: phone,
-        customerEmail: email,
+        customerName: tenantName || authAccount?.name || "aisyahphr",
+        customerPhone: phone || authAccount?.phone || "081234567890",
+        customerEmail: email || authAccount?.email || "aisyahphr@gmail.com",
         entryDate: startDate,
         durationMonths: durationNum,
         monthlyPrice: pricePerMonth,
@@ -160,8 +165,54 @@ export const CustomerKosDetailScreen: React.FC<Nav> = ({ navigate }) => {
         dpProofImage: proofImage,
       });
       setBookingResponse(result?.data);
+
+      // Save to customerKosStore active booking state for live customer tracking
+      const activeObj = {
+        _id: result?.data?._id || "temp",
+        bookingCode: result?.data?.bookingCode || `KST-${Date.now().toString().slice(-6)}`,
+        customerName: tenantName || authAccount?.name || "aisyahphr",
+        customerPhone: phone || authAccount?.phone || "081234567890",
+        customerEmail: email || authAccount?.email || "aisyahphr@gmail.com",
+        kostId: kostData?._id || "",
+        kostName: kostData?.name || "Ais Kost Exclusive",
+        kostAddress: kostData?.address,
+        kostImage: (kostData?.images && kostData.images[0]) || "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80",
+        roomNumber: selectedRoom?.roomNumber || "101",
+        roomType: selectedRoom?.roomType || "AC Exclusive",
+        entryDate: startDate,
+        durationMonths: durationNum,
+        monthlyPrice: pricePerMonth,
+        totalAmount: totalPrice,
+        dpAmount: dpAmount,
+        dpProofImage: proofImage,
+        status: "dp_submitted" as const,
+        createdAt: new Date().toISOString(),
+      };
+      setActiveCustomerBooking(activeObj);
     } catch (apiErr) {
       console.log("Offline or mocked booking synced locally:", apiErr);
+      const fallbackObj = {
+        _id: "temp_offline",
+        bookingCode: `KST-${Date.now().toString().slice(-6)}`,
+        customerName: tenantName || "aisyahphr",
+        customerPhone: phone || "081234567890",
+        customerEmail: email || "aisyahphr@gmail.com",
+        kostId: kostData?._id || "",
+        kostName: kostData?.name || "Ais Kost Exclusive",
+        kostAddress: kostData?.address,
+        kostImage: (kostData?.images && kostData.images[0]) || "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80",
+        roomNumber: selectedRoom?.roomNumber || "101",
+        roomType: selectedRoom?.roomType || "AC Exclusive",
+        entryDate: startDate,
+        durationMonths: durationNum,
+        monthlyPrice: pricePerMonth,
+        totalAmount: totalPrice,
+        dpAmount: dpAmount,
+        dpProofImage: proofImage,
+        status: "dp_submitted" as const,
+        createdAt: new Date().toISOString(),
+      };
+      setActiveCustomerBooking(fallbackObj);
     } finally {
       setIsSubmitting(false);
       setOrderCreated(true);

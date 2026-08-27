@@ -186,9 +186,9 @@ export default function App() {
       case "c_laundry_tracking":
         return <CustomerLaundryTrackingScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_kos":
-        return <CustomerKosScreen navigate={navigate} />;
+        return <CustomerKosScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_kos_detail":
-        return <CustomerKosDetailScreen navigate={navigate} />;
+        return <CustomerKosDetailScreen navigate={navigate} authAccount={currentAuthAccount} />;
 
       // 2. Driver
       case "d_home":
@@ -204,7 +204,7 @@ export default function App() {
 
       // 5. Pemilik Laundry
       case "pemilik_laundry_home":
-              return <PemilikLaundryHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
+        return <PemilikLaundryHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_order":
         return <LaundryOrderScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_user":
@@ -218,19 +218,19 @@ export default function App() {
 
       // 6. Pemilik Kos
       case "pemilik_kos_home":
-              return <PemilikKosHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
+        return <PemilikKosHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_kos_manajemen_kamar":
-        return <ManajemenKamarScreen navigate={navigate} />;
+        return <ManajemenKamarScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_kos_manajemen_penghuni":
-        return <ManajemenPenghuniScreen navigate={navigate} />;
+        return <ManajemenPenghuniScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_kos_laporan_keuangan":
-        return <LaporanKeuanganScreen navigate={navigate} />;
+        return <LaporanKeuanganScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_kos_profil":
         return <PemilikKosProfilScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_kos_verifikasi_dp":
-        return <VerifikasiDpScreen navigate={navigate} />;
+        return <VerifikasiDpScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_kos_kirim_pengingat":
-        return <KirimPengingatScreen navigate={navigate} />;
+        return <KirimPengingatScreen navigate={navigate} authAccount={currentAuthAccount} />;
 
       // 7. Admin
       case "admin_home":
