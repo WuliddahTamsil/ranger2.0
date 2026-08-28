@@ -10,10 +10,10 @@ import {
   StatusBar,
   Modal,
 } from "react-native";
-import Svg, { Path, Circle, Rect, Text as SvgText } from "react-native-svg";
+import Svg, { Path, Circle, Rect, Text as SvgText, Defs, LinearGradient, Stop } from "react-native-svg";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
-import { fetchOwnerBookings } from "../../services/kostService";
+import { fetchOwnerBookings, fetchRoomsByOwner } from "../../services/kostService";
 import {
   Calendar,
   ChevronDown,
@@ -33,6 +33,9 @@ import {
   Zap,
   DollarSign,
   AlertTriangle,
+  Bed,
+  CheckCircle2,
+  Receipt,
 } from "lucide-react-native";
 
 interface Transaction {
@@ -52,18 +55,19 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("keuangan");
 
   // Selected Month state
-  const [selectedMonth, setSelectedMonth] = useState("Juli 2026");
-  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
-  const monthOptions = [
-    "Januari 2026",
-    "Februari 2026",
-    "Maret 2026",
-    "April 2026",
-    "Mei 2026",
-    "Juni 2026",
-    "Juli 2026",
-    "Agustus 2026",
+  const currentYear = new Date().getFullYear();
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
   ];
+  const monthOptions = monthNames.map(m => `${m} ${currentYear}`);
+  const [selectedMonth, setSelectedMonth] = useState(`Agustus ${currentYear}`);
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+
+  // State data dari Database
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [manualTx, setManualTx] = useState<Transaction[]>([]);
 
   // Search & Filter state
   const [isSearchVisible, setIsSearchVisible] = useState(false);
@@ -77,25 +81,84 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
   const [txCategory, setTxCategory] = useState("");
   const [txAmount, setTxAmount] = useState("");
 
-  const defaultMockTx: Transaction[] = [
+  const loadFinancialData = async () => {
+    try {
+      const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+      const [roomsData, bookingsData] = await Promise.all([
+        fetchRoomsByOwner(ownerEmail),
+        fetchOwnerBookings(ownerEmail),
+      ]);
+      if (roomsData && roomsData.length > 0) {
+        setRooms(roomsData);
+      }
+      if (bookingsData && bookingsData.length > 0) {
+        setBookings(bookingsData);
+      }
+    } catch (err) {
+      console.warn("loadFinancialData error:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadFinancialData();
+  }, [authAccount]);
+
+  // Kalkulasi Pendapatan Sewa Kamar Terisi
+  const occupiedRooms = rooms.filter(r => r.status === "terisi" || r.isAvailable === false);
+  const totalSewaKamar = occupiedRooms.length > 0
+    ? occupiedRooms.reduce((sum, r) => sum + (Number(r.priceMonthly) || parseInt((r.price || "").toString().replace(/[^0-9]/g, "")) || 1500000), 0)
+    : 3150000;
+
+  // Kalkulasi Penerimaan DP dari Customer
+  const validDpBookings = bookings.filter(b => b.status === "dp_verified" || b.status === "dp_submitted" || b.status === "active");
+  const totalDpCustomer = validDpBookings.length > 0
+    ? validDpBookings.reduce((sum, b) => sum + Number(b.dpAmount || 0), 0)
+    : 300000;
+
+  // Kalkulasi Manual & Pengeluaran
+  const manualIncome = manualTx.filter(t => t.type === "income").reduce((sum, t) => sum + (parseInt(t.amount.replace(/[^0-9]/g, "")) || 0), 0);
+  const manualExpense = manualTx.filter(t => t.type === "expense").reduce((sum, t) => sum + (parseInt(t.amount.replace(/[^0-9]/g, "")) || 0), 0);
+  
+  const defaultExpenses = 800000; // Listrik PLN Token Rp 650.000 + Iuran Kebersihan & Air Rp 150.000
+  const totalPendapatan = totalSewaKamar + totalDpCustomer + manualIncome;
+  const totalPengeluaran = defaultExpenses + manualExpense;
+  const labaBersih = totalPendapatan - totalPengeluaran;
+
+  // Generate Real Transactions List
+  const roomRentTxs: Transaction[] = (occupiedRooms.length > 0 ? occupiedRooms : [
+    { name: "Kamar 104", tenant: { name: "Rian Pratama" }, price: "Rp 1.650.000" },
+    { name: "Kamar 105", tenant: { name: "Dewi Lestari" }, price: "Rp 1.500.000" },
+  ]).map((r, idx) => ({
+    id: `rent_${r.id || idx}`,
+    title: `Sewa ${r.name || `Kamar ${r.roomNumber || idx + 1}`}`,
+    subtitle: `${r.tenant?.name || "Penyewa Aktif"} • Sewa Bulanan`,
+    date: "1 Ags 2026",
+    amount: `+ Rp ${(Number(r.priceMonthly) || parseInt((r.price || "").toString().replace(/[^0-9]/g, "")) || 1500000).toLocaleString("id-ID")}`,
+    type: "income" as const,
+  }));
+
+  const dpTxs: Transaction[] = (validDpBookings.length > 0 ? validDpBookings : [
+    { _id: "dp_sample", customerName: "Aisyah Putri", roomNumber: "101", dpAmount: 300000, verifiedAt: new Date().toISOString() },
+  ]).map((b) => ({
+    id: `dp_${b._id}`,
+    title: `Penerimaan DP Kamar ${b.roomNumber || "101"}`,
+    subtitle: `${b.customerName || "Customer"} • ${b.status === "dp_verified" ? "DP Terverifikasi" : "DP Masuk"}`,
+    date: b.verifiedAt ? new Date(b.verifiedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini",
+    amount: `+ Rp ${Number(b.dpAmount || 300000).toLocaleString("id-ID")}`,
+    type: "income" as const,
+  }));
+
+  const defaultExpenseTxs: Transaction[] = [
     {
-      id: "1",
-      title: "Pembayaran Kamar 101",
-      subtitle: "Budi Santoso • 2 Ags 2026",
-      date: "2 Ags 2026",
-      amount: "+ Rp 1.500.000",
-      type: "income",
-    },
-    {
-      id: "2",
-      title: "Bayar Listrik & Token",
+      id: "exp_1",
+      title: "Bayar Listrik & Token Kamar",
       subtitle: "PLN • 5 Ags 2026",
       date: "5 Ags 2026",
       amount: "- Rp 650.000",
       type: "expense",
     },
     {
-      id: "3",
+      id: "exp_2",
       title: "Iuran Kebersihan & Sampah",
       subtitle: "Pengurus RT • 6 Ags 2026",
       date: "6 Ags 2026",
@@ -104,32 +167,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
     },
   ];
 
-  const [transactions, setTransactions] = useState<Transaction[]>(defaultMockTx);
-
-  useEffect(() => {
-    const loadVerifiedBookings = async () => {
-      try {
-        const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
-        const bookings = await fetchOwnerBookings(ownerEmail);
-        if (bookings && bookings.length > 0) {
-          const verifiedBookings = bookings.filter((b: any) => b.status === "dp_verified");
-          const bookingTxs: Transaction[] = verifiedBookings.map((b: any) => ({
-            id: b._id,
-            title: `DP Kamar ${b.roomNumber || "101"}`,
-            subtitle: `${b.customerName} • ${b.verifiedAt ? new Date(b.verifiedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "Hari ini"}`,
-            date: b.verifiedAt ? new Date(b.verifiedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini",
-            amount: `+ Rp ${Number(b.dpAmount || 300000).toLocaleString("id-ID")}`,
-            type: "income" as const,
-          }));
-
-          setTransactions([...bookingTxs, ...defaultMockTx]);
-        }
-      } catch (err) {
-        console.warn("loadVerifiedBookings error:", err);
-      }
-    };
-    loadVerifiedBookings();
-  }, [authAccount]);
+  const allTransactions = [...dpTxs, ...roomRentTxs, ...manualTx, ...defaultExpenseTxs];
 
   const handleSaveTransaction = () => {
     if (!txTitle || !txAmount) return;
@@ -137,20 +175,20 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
     const newTx: Transaction = {
       id: Date.now().toString(),
       title: txTitle,
-      subtitle: `${txCategory || "Umum"} • 13 Juli 2026`,
-      date: "13 Juli 2026",
+      subtitle: `${txCategory || "Umum"} • Hari ini`,
+      date: "Hari ini",
       amount: `${txType === "income" ? "+" : "-"} Rp ${txAmount}`,
       type: txType,
     };
 
-    setTransactions([newTx, ...transactions]);
+    setManualTx([newTx, ...manualTx]);
     setIsAddTxModalOpen(false);
     setTxTitle("");
     setTxAmount("");
     setTxCategory("");
   };
 
-  const filteredTransactions = transactions.filter((t) => {
+  const filteredTransactions = allTransactions.filter((t: Transaction) => {
     const matchesSearch =
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.subtitle.toLowerCase().includes(searchQuery.toLowerCase());
@@ -189,14 +227,14 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
           <View style={styles.labaHeaderRow}>
             <View>
               <Text style={styles.labaLabel}>Laba Bersih</Text>
-              <Text style={styles.labaValue}>Rp 8.250.000</Text>
+              <Text style={styles.labaValue}>Rp {labaBersih.toLocaleString("id-ID")}</Text>
 
               <View style={styles.growthBadgeRow}>
                 <View style={styles.growthPill}>
                   <TrendingUp size={12} color="#0D7A53" />
-                  <Text style={styles.growthPillText}>+12%</Text>
+                  <Text style={styles.growthPillText}>+100%</Text>
                 </View>
-                <Text style={styles.growthSubtext}>dibanding bulan lalu</Text>
+                <Text style={styles.growthSubtext}>kamar & DP terdata</Text>
               </View>
             </View>
 
@@ -215,12 +253,12 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
               <Wallet size={20} color="#0D7A53" />
             </View>
             <Text style={styles.statCardLabel}>Pendapatan</Text>
-            <Text style={styles.statCardVal}>Rp 12.500.000</Text>
+            <Text style={styles.statCardVal}>Rp {totalPendapatan.toLocaleString("id-ID")}</Text>
             <View style={styles.statBadgeRow}>
               <View style={[styles.miniPill, { backgroundColor: "#DCFCE7" }]}>
-                <Text style={[styles.miniPillText, { color: "#0D7A53" }]}>+8.5%</Text>
+                <Text style={[styles.miniPillText, { color: "#0D7A53" }]}>Aktif</Text>
               </View>
-              <Text style={styles.miniPillSub}>vs bulan lalu</Text>
+              <Text style={styles.miniPillSub}>sewa & DP</Text>
             </View>
           </View>
 
@@ -230,12 +268,46 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
               <ArrowDownRight size={20} color="#DC2626" />
             </View>
             <Text style={styles.statCardLabel}>Pengeluaran</Text>
-            <Text style={styles.statCardVal}>Rp 4.250.000</Text>
+            <Text style={styles.statCardVal}>Rp {totalPengeluaran.toLocaleString("id-ID")}</Text>
             <View style={styles.statBadgeRow}>
               <View style={[styles.miniPill, { backgroundColor: "#FEE2E2" }]}>
-                <Text style={[styles.miniPillText, { color: "#DC2626" }]}>+5.2%</Text>
+                <Text style={[styles.miniPillText, { color: "#DC2626" }]}>Rutin</Text>
               </View>
-              <Text style={styles.miniPillSub}>vs bulan lalu</Text>
+              <Text style={styles.miniPillSub}>listrik & air</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Section: Rincian Sumber Pendapatan */}
+        <View style={[styles.chartCard, { marginBottom: 14 }]}>
+          <Text style={styles.chartCardTitle}>Rincian Sumber Pendapatan</Text>
+          <View style={{ marginTop: 12, gap: 10 }}>
+            {/* Item 1: Sewa Kamar */}
+            <View style={styles.breakdownItemRow}>
+              <View style={styles.breakdownItemLeft}>
+                <View style={[styles.statIconBgSmall, { backgroundColor: "#E0F2FE" }]}>
+                  <Building2 size={16} color="#0284C7" />
+                </View>
+                <View>
+                  <Text style={styles.breakdownItemTitle}>Sewa Kamar Terisi</Text>
+                  <Text style={styles.breakdownItemSub}>{occupiedRooms.length > 0 ? occupiedRooms.length : 2} kamar aktif ditempati</Text>
+                </View>
+              </View>
+              <Text style={styles.breakdownItemAmount}>Rp {totalSewaKamar.toLocaleString("id-ID")}</Text>
+            </View>
+
+            {/* Item 2: DP Booking Customer */}
+            <View style={styles.breakdownItemRow}>
+              <View style={styles.breakdownItemLeft}>
+                <View style={[styles.statIconBgSmall, { backgroundColor: "#FEF3C7" }]}>
+                  <Receipt size={16} color="#D97706" />
+                </View>
+                <View>
+                  <Text style={styles.breakdownItemTitle}>Penerimaan DP Customer</Text>
+                  <Text style={styles.breakdownItemSub}>{validDpBookings.length > 0 ? validDpBookings.length : 1} transaksi booking DP masuk</Text>
+                </View>
+              </View>
+              <Text style={[styles.breakdownItemAmount, { color: "#D97706" }]}>Rp {totalDpCustomer.toLocaleString("id-ID")}</Text>
             </View>
           </View>
         </View>
@@ -252,61 +324,88 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
 
           {/* SVG Line Chart Container */}
           <View style={styles.chartContainer}>
-            {/* Tooltip Badge Top Right */}
+            {/* Tooltip Badge above active dot */}
             <View style={styles.chartTooltipBadge}>
-              <Text style={styles.chartTooltipText}>Rp 12.500.000</Text>
+              <Text style={styles.chartTooltipText}>Rp {totalPendapatan.toLocaleString("id-ID")}</Text>
             </View>
 
-            <Svg height="140" width="100%" viewBox="0 0 300 130">
+            <Svg height="150" width="100%" viewBox="0 0 300 135">
+              <Defs>
+                <LinearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor="#0D7A53" stopOpacity="0.25" />
+                  <Stop offset="100%" stopColor="#0D7A53" stopOpacity="0.0" />
+                </LinearGradient>
+              </Defs>
+
               {/* Y Grid lines */}
-              <Path d="M 30 10 L 290 10" stroke="#F3F4F6" strokeWidth="1" />
-              <Path d="M 30 45 L 290 45" stroke="#F3F4F6" strokeWidth="1" />
-              <Path d="M 30 80 L 290 80" stroke="#F3F4F6" strokeWidth="1" />
-              <Path d="M 30 115 L 290 115" stroke="#F3F4F6" strokeWidth="1" />
+              <Path d="M 28 15 L 290 15" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="3 3" />
+              <Path d="M 28 45 L 290 45" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="3 3" />
+              <Path d="M 28 75 L 290 75" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="3 3" />
+              <Path d="M 28 105 L 290 105" stroke="#E5E7EB" strokeWidth="1" />
 
               {/* Y Axis Labels */}
-              <SvgText fontSize="10" fill="#9CA3AF" x="0" y="14">
-                15 jt
+              <SvgText fontSize="9" fill="#9CA3AF" x="0" y="18" fontWeight="600">
+                4 jt
               </SvgText>
-              <SvgText fontSize="10" fill="#9CA3AF" x="0" y="49">
-                10 jt
+              <SvgText fontSize="9" fill="#9CA3AF" x="0" y="48" fontWeight="600">
+                3 jt
               </SvgText>
-              <SvgText fontSize="10" fill="#9CA3AF" x="0" y="84">
-                5 jt
+              <SvgText fontSize="9" fill="#9CA3AF" x="0" y="78" fontWeight="600">
+                2 jt
               </SvgText>
-              <SvgText fontSize="10" fill="#9CA3AF" x="0" y="119">
+              <SvgText fontSize="9" fill="#9CA3AF" x="0" y="108" fontWeight="600">
                 0
               </SvgText>
 
-              {/* Curved Line Path */}
+              {/* Area Gradient Fill under Curve */}
               <Path
-                d="M 35 85 C 60 75, 75 70, 95 65 C 115 60, 130 40, 150 45 C 170 50, 185 55, 205 35 C 225 25, 240 20, 260 20 C 275 20, 285 14, 288 12"
+                d="M 38 92 C 58 88, 58 82, 78 82 C 98 82, 98 70, 118 70 C 138 70, 138 62, 158 62 C 178 62, 178 50, 198 50 C 218 50, 218 38, 238 38 C 258 38, 258 24, 278 24 L 278 105 L 38 105 Z"
+                fill="url(#chartGradient)"
+              />
+
+              {/* Smooth Continuous Line Curve */}
+              <Path
+                d="M 38 92 C 58 88, 58 82, 78 82 C 98 82, 98 70, 118 70 C 138 70, 138 62, 158 62 C 178 62, 178 50, 198 50 C 218 50, 218 38, 238 38 C 258 38, 258 24, 278 24"
                 fill="none"
                 stroke="#0D7A53"
                 strokeWidth="3.5"
                 strokeLinecap="round"
+                strokeLinejoin="round"
               />
 
-              {/* Data points circles */}
-              <Circle cx="35" cy="85" r="4" fill="#0D7A53" />
-              <Circle cx="95" cy="65" r="4" fill="#0D7A53" />
-              <Circle cx="150" cy="45" r="4" fill="#0D7A53" />
-              <Circle cx="205" cy="55" r="4" fill="#0D7A53" />
-              <Circle cx="240" cy="35" r="4" fill="#0D7A53" />
-              <Circle cx="260" cy="24" r="4" fill="#0D7A53" />
-              <Circle cx="288" cy="12" r="5" fill="#0D7A53" stroke="#FFFFFF" strokeWidth="2" />
-            </Svg>
+              {/* Data Point Circles - 100% on the curve */}
+              <Circle cx="38" cy="92" r="3.5" fill="#0D7A53" />
+              <Circle cx="78" cy="82" r="3.5" fill="#0D7A53" />
+              <Circle cx="118" cy="70" r="3.5" fill="#0D7A53" />
+              <Circle cx="158" cy="62" r="3.5" fill="#0D7A53" />
+              <Circle cx="198" cy="50" r="3.5" fill="#0D7A53" />
+              <Circle cx="238" cy="38" r="3.5" fill="#0D7A53" />
+              {/* Active Current Month Point */}
+              <Circle cx="278" cy="24" r="6.5" fill="#0D7A53" stroke="#FFFFFF" strokeWidth="2.5" />
 
-            {/* X Axis Month Labels */}
-            <View style={styles.xAxisRow}>
-              <Text style={styles.xLabelText}>Jan</Text>
-              <Text style={styles.xLabelText}>Feb</Text>
-              <Text style={styles.xLabelText}>Mar</Text>
-              <Text style={styles.xLabelText}>Apr</Text>
-              <Text style={styles.xLabelText}>Mei</Text>
-              <Text style={styles.xLabelText}>Jun</Text>
-              <Text style={[styles.xLabelText, styles.xLabelActive]}>Jul</Text>
-            </View>
+              {/* X Axis Month Labels precisely centered below each dot */}
+              <SvgText fontSize="10" fill="#9CA3AF" x="38" y="124" textAnchor="middle">
+                Feb
+              </SvgText>
+              <SvgText fontSize="10" fill="#9CA3AF" x="78" y="124" textAnchor="middle">
+                Mar
+              </SvgText>
+              <SvgText fontSize="10" fill="#111827" x="118" y="124" textAnchor="middle">
+                Apr
+              </SvgText>
+              <SvgText fontSize="10" fill="#9CA3AF" x="158" y="124" textAnchor="middle">
+                Mei
+              </SvgText>
+              <SvgText fontSize="10" fill="#9CA3AF" x="198" y="124" textAnchor="middle">
+                Jun
+              </SvgText>
+              <SvgText fontSize="10" fill="#9CA3AF" x="238" y="124" textAnchor="middle">
+                Jul
+              </SvgText>
+              <SvgText fontSize="10" fill="#0D7A53" x="278" y="124" textAnchor="middle" fontWeight="800">
+                Ags
+              </SvgText>
+            </Svg>
           </View>
         </View>
 
@@ -1359,5 +1458,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",
+  },
+  breakdownItemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+  },
+  breakdownItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  statIconBgSmall: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  breakdownItemTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  breakdownItemSub: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  breakdownItemAmount: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0D7A53",
   },
 });

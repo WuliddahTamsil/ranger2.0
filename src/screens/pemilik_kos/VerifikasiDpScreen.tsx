@@ -11,10 +11,16 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
+  Alert,
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { fetchOwnerBookings, verifyDpBooking } from "../../services/kostService";
+import {
+  getActiveCustomerBooking,
+  setActiveCustomerBooking,
+} from "../customer/customerKosStore";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -41,9 +47,13 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
   const [isLoading, setIsLoading] = useState(false);
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  const [imgError, setImgError] = useState<boolean>(false);
+  const [rejectionReasonText, setRejectionReasonText] = useState("");
+  const [rejectionError, setRejectionError] = useState("");
 
   const loadBookings = async () => {
     setIsLoading(true);
+    setImgError(false);
     try {
       const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
       const bookings = await fetchOwnerBookings(ownerEmail);
@@ -91,18 +101,41 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
     }
   };
 
+  const handleOpenRejectModal = () => {
+    setRejectionReasonText("");
+    setRejectionError("");
+    setIsRejectModalOpen(true);
+  };
+
   const handleRejectDp = async () => {
+    if (!rejectionReasonText.trim()) {
+      setRejectionError("Alasan penolakan wajib diisi.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const finalReason = rejectionReasonText.trim();
       if (currentBooking?._id && currentBooking._id !== "demo1") {
-        await verifyDpBooking(currentBooking._id, "rejected", "Bukti transfer tidak valid atau belum masuk.");
+        await verifyDpBooking(currentBooking._id, "rejected", finalReason);
+      }
+
+      // Sync rejection state to customer local store
+      const active = getActiveCustomerBooking();
+      if (active) {
+        setActiveCustomerBooking({
+          ...active,
+          status: "rejected",
+          rejectionReason: finalReason,
+        });
       }
     } catch (err) {
       console.warn("Reject DP API error:", err);
     } finally {
       setIsSubmitting(false);
       setIsRejectModalOpen(false);
-      loadBookings();
+      // Kembali ke beranda setelah menolak DP
+      navigate("pemilik_kos_home");
     }
   };
 
@@ -250,10 +283,13 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
             >
               <Image
                 source={{
-                  uri: currentBooking.dpProofImage || "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80",
+                  uri: !imgError && currentBooking.dpProofImage && !currentBooking.dpProofImage.startsWith("blob:")
+                    ? currentBooking.dpProofImage
+                    : "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80",
                 }}
                 style={styles.proofImage}
                 resizeMode="cover"
+                onError={() => setImgError(true)}
               />
             </TouchableOpacity>
 
@@ -284,7 +320,7 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
       <View style={styles.bottomActionBar}>
         <TouchableOpacity
           style={styles.btnTolakDp}
-          onPress={() => setIsRejectModalOpen(true)}
+          onPress={handleOpenRejectModal}
           activeOpacity={0.8}
           disabled={isSubmitting}
         >
@@ -336,31 +372,85 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
         </View>
       </Modal>
 
-      {/* Modal 2: Reject Modal (Tolak Pembayaran DP?) */}
+      {/* Modal 2: Reject Modal (Wajib Isi Alasan Penolakan DP) */}
       <Modal visible={isRejectModalOpen} transparent animationType="fade">
         <View style={styles.modalOverlayCenter}>
-          <View style={styles.dialogCard}>
+          <View style={[styles.dialogCard, { maxWidth: 360 }]}>
             <View style={styles.circleIconRed}>
               <AlertTriangle size={32} color="#EF4444" />
             </View>
 
-            <Text style={styles.dialogTitle}>Tolak Pembayaran DP?</Text>
+            <Text style={styles.dialogTitle}>Tolak Pembayaran DP</Text>
 
             <Text style={styles.dialogDesc}>
-              Apakah Anda yakin ingin menolak pembayaran DP dari {currentBooking.customerName}?
+              Masukkan alasan penolakan untuk <Text style={{ fontWeight: "800", color: "#111827" }}>{currentBooking.customerName || "Customer"}</Text>. Alasan ini akan langsung dikirimkan ke customer:
             </Text>
 
+            {/* Input Alasan Penolakan */}
+            <View style={{ width: "100%", marginBottom: 10 }}>
+              <TextInput
+                style={[
+                  styles.reasonInput,
+                  rejectionError ? { borderColor: "#EF4444", backgroundColor: "#FEF2F2" } : null,
+                ]}
+                placeholder="Tuliskan alasan penolakan secara jelas (wajib diisi)..."
+                placeholderTextColor="#9CA3AF"
+                value={rejectionReasonText}
+                onChangeText={(text) => {
+                  setRejectionReasonText(text);
+                  if (rejectionError) setRejectionError("");
+                }}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+              {rejectionError ? (
+                <Text style={styles.errorText}>⚠️ {rejectionError}</Text>
+              ) : null}
+            </View>
+
+            {/* Quick Reason Chips */}
+            <View style={styles.quickReasonsContainer}>
+              <Text style={styles.quickReasonTitle}>Pilihan cepat:</Text>
+              <View style={styles.quickReasonsRow}>
+                {[
+                  "Bukti transfer tidak jelas / buram",
+                  "Nominal DP tidak sesuai",
+                  "Dana belum masuk mutasi",
+                  "Kamar sudah penuh",
+                ].map((reason, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.quickReasonChip}
+                    onPress={() => {
+                      setRejectionReasonText(reason);
+                      if (rejectionError) setRejectionError("");
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.quickReasonText}>+ {reason}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             <TouchableOpacity
-              style={styles.btnDialogRed}
+              style={[styles.btnDialogRed, isSubmitting && { opacity: 0.6 }]}
               onPress={handleRejectDp}
+              disabled={isSubmitting}
               activeOpacity={0.85}
             >
-              <Text style={styles.btnDialogRedText}>Ya, Tolak DP</Text>
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.btnDialogRedText}>Kirim Alasan & Tolak DP</Text>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.btnDialogCancel}
               onPress={() => setIsRejectModalOpen(false)}
+              disabled={isSubmitting}
               activeOpacity={0.7}
             >
               <Text style={styles.btnDialogCancelText}>Batal</Text>
@@ -381,10 +471,13 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
 
           <Image
             source={{
-              uri: currentBooking.dpProofImage || "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1000&q=80",
+              uri: !imgError && currentBooking.dpProofImage && !currentBooking.dpProofImage.startsWith("blob:")
+                ? currentBooking.dpProofImage
+                : "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1000&q=80",
             }}
             style={styles.fullProofImage}
             resizeMode="contain"
+            onError={() => setImgError(true)}
           />
         </View>
       </Modal>
@@ -744,5 +837,52 @@ const styles = StyleSheet.create({
   statusTagText: {
     fontSize: 11,
     fontWeight: "800",
+  },
+  reasonInput: {
+    width: "100%",
+    minHeight: 80,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    padding: 12,
+    fontSize: 13,
+    color: "#111827",
+    lineHeight: 18,
+  },
+  errorText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#EF4444",
+    marginTop: 4,
+    marginLeft: 2,
+  },
+  quickReasonsContainer: {
+    width: "100%",
+    marginBottom: 16,
+  },
+  quickReasonTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#6B7280",
+    marginBottom: 6,
+  },
+  quickReasonsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  quickReasonChip: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  quickReasonText: {
+    fontSize: 11,
+    color: "#374151",
+    fontWeight: "600",
   },
 });

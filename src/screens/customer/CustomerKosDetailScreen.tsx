@@ -44,6 +44,7 @@ import { CustomerChatModal } from "./CustomerChatModal";
 import { createKostBooking, fetchAllKosts } from "../../services/kostService";
 import { getSelectedKost, SelectedKost, setActiveCustomerBooking } from "./customerKosStore";
 import { AuthAccount } from "../auth/authTypes";
+import { uploadFileToBackend } from "../../services/api";
 
 interface CustomerKosDetailProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -59,6 +60,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
   const [chatVisible, setChatVisible] = useState(false);
   const [orderCreated, setOrderCreated] = useState(false);
   const [proofImage, setProofImage] = useState<string>("https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=400&q=80");
+  const [isUploadingProof, setIsUploadingProof] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingResponse, setBookingResponse] = useState<any>(null);
 
@@ -106,11 +108,29 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        quality: 0.7,
+        quality: 0.8,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setProofImage(result.assets[0].uri);
+        const asset = result.assets[0];
+        setProofImage(asset.uri);
+        setIsUploadingProof(true);
+        try {
+          const uploadRes = await uploadFileToBackend(
+            asset.uri,
+            `bukti_dp_${Date.now()}.jpg`,
+            asset.mimeType || "image/jpeg"
+          );
+          if (uploadRes && uploadRes.data && (uploadRes.data.url || uploadRes.data.webViewLink)) {
+            const driveUrl = uploadRes.data.url || uploadRes.data.webViewLink;
+            setProofImage(driveUrl);
+            console.log("✅ Bukti DP berhasil disimpan ke Google Drive:", driveUrl);
+          }
+        } catch (uploadErr) {
+          console.warn("Upload bukti DP to Google Drive error:", uploadErr);
+        } finally {
+          setIsUploadingProof(false);
+        }
       }
     } catch (err) {
       console.log("Using default sample proof:", err);
@@ -122,6 +142,23 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
     setIsSubmitting(true);
 
     const paymentName = selectedPayment === "bca_va" ? "BCA Transfer (Ais Kost Management)" : selectedPayment === "qris" ? "QRIS AIS KOST" : selectedPayment === "gopay" ? "GoPay" : "ShopeePay";
+
+    // Ensure proof is uploaded to Google Drive / backend
+    let finalProofUrl = proofImage;
+    if (proofImage && (proofImage.startsWith("blob:") || proofImage.startsWith("file:"))) {
+      try {
+        const uploadRes = await uploadFileToBackend(
+          proofImage,
+          `bukti_dp_${Date.now()}.jpg`,
+          "image/jpeg"
+        );
+        if (uploadRes?.data?.url) {
+          finalProofUrl = uploadRes.data.url;
+        }
+      } catch (uploadErr) {
+        console.warn("Fallback upload in saveKosOrder:", uploadErr);
+      }
+    }
 
     const orderId = `RNG-KOS-${Date.now().toString().slice(-6)}`;
     const order: OrderItem = {
@@ -162,7 +199,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         monthlyPrice: pricePerMonth,
         totalAmount: totalPrice,
         dpAmount: dpAmount,
-        dpProofImage: proofImage,
+        dpProofImage: finalProofUrl,
       });
       setBookingResponse(result?.data);
 
@@ -184,7 +221,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         monthlyPrice: pricePerMonth,
         totalAmount: totalPrice,
         dpAmount: dpAmount,
-        dpProofImage: proofImage,
+        dpProofImage: finalProofUrl,
         status: "dp_submitted" as const,
         createdAt: new Date().toISOString(),
       };
@@ -208,7 +245,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         monthlyPrice: pricePerMonth,
         totalAmount: totalPrice,
         dpAmount: dpAmount,
-        dpProofImage: proofImage,
+        dpProofImage: finalProofUrl,
         status: "dp_submitted" as const,
         createdAt: new Date().toISOString(),
       };
@@ -677,7 +714,14 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                   onPress={handlePickProofImage}
                   activeOpacity={0.8}
                 >
-                  {proofImage ? (
+                  {isUploadingProof ? (
+                    <View style={{ alignItems: "center", padding: 25 }}>
+                      <ActivityIndicator size="small" color="#0D7A53" />
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: "#0D7A53", marginTop: 8 }}>
+                        Mengunggah bukti ke Google Drive...
+                      </Text>
+                    </View>
+                  ) : proofImage ? (
                     <Image source={{ uri: proofImage }} style={styles.uploadedPreviewImg} />
                   ) : (
                     <View style={{ alignItems: "center", padding: 20 }}>

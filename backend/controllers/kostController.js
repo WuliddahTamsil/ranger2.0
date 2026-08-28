@@ -229,6 +229,7 @@ const getRoomsByOwner = async (req, res) => {
       image: (r.images && r.images[0]) || (kost.images && kost.images[0]) || "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80",
       description: "Kamar nyaman dan bersih, siap huni.",
       floor: r.floor || 1,
+      isAvailable: r.isAvailable,
     }));
 
     return res.status(200).json({

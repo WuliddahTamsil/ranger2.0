@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
+  Modal,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Nav } from "../../types";
@@ -31,6 +32,9 @@ import {
   Wallet,
   User,
   LogOut,
+  Check,
+  Calendar,
+  X,
 } from "lucide-react-native";
 
 interface PemilikKosHomeProps extends Nav {
@@ -41,6 +45,27 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   const [activeTab, setActiveTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("beranda");
   const [rooms, setRooms] = useState<any[]>([]);
   const [pendingBookings, setPendingBookings] = useState<any[]>([]);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [perluTindakanY, setPerluTindakanY] = useState(0);
+
+  // 12 Months for current year
+  const currentYear = new Date().getFullYear();
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const monthsList = monthNames.map(m => `${m} ${currentYear}`);
+  const [selectedMonth, setSelectedMonth] = useState(`Agustus ${currentYear}`);
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+
+  const scrollToPerluTindakan = () => {
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({
+        y: perluTindakanY > 0 ? perluTindakanY - 10 : 380,
+        animated: true,
+      });
+    }
+  };
 
   const load = async () => {
     try {
@@ -67,19 +92,24 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   }, [authAccount]);
 
   const totalKamar = rooms.length > 0 ? rooms.length : 5;
-  const kamarTerisi = rooms.length > 0 ? rooms.filter(r => r.status === "terisi" || !r.isAvailable).length : 1;
+  const kamarTerisi = rooms.length > 0 ? rooms.filter(r => r.status === "terisi" || r.isAvailable === false).length : 2;
   const kamarKosong = totalKamar - kamarTerisi;
-  const percentFilled = totalKamar > 0 ? Math.round((kamarTerisi / totalKamar) * 100) : 20;
+  const percentFilled = totalKamar > 0 ? Math.round((kamarTerisi / totalKamar) * 100) : 40;
   const estPendapatan = rooms.length > 0
-    ? rooms.reduce((acc, r) => acc + ((r.status === "terisi" || !r.isAvailable) ? (Number(r.priceMonthly) || parseInt((r.price || "").toString().replace(/[^0-9]/g, "")) || 1500000) : 0), 0)
-    : 2200000;
+    ? rooms.reduce((acc, r) => acc + ((r.status === "terisi" || r.isAvailable === false) ? (Number(r.priceMonthly) || parseInt((r.price || "").toString().replace(/[^0-9]/g, "")) || 1500000) : 0), 0)
+    : 3300000;
+  const vacantRooms = rooms.filter(r => r.status === "kosong" || r.isAvailable === true);
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0D7A53" />
 
       {/* Main Scroll Content */}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        ref={scrollViewRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Top Header Banner */}
         <View style={styles.topHeader}>
           <View style={styles.headerTopRow}>
@@ -88,7 +118,11 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
               <Text style={styles.nameText}>{authAccount?.name ? authAccount.name : "ais kost"}</Text>
             </View>
             <View style={styles.headerRight}>
-              <TouchableOpacity style={styles.notifBtn} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.notifBtn}
+                onPress={scrollToPerluTindakan}
+                activeOpacity={0.7}
+              >
                 <Bell size={20} color="#FFFFFF" />
                 <View style={styles.notifBadge} />
               </TouchableOpacity>
@@ -109,8 +143,12 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           {/* Section: Ringkasan Bisnis Bulan Ini */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Ringkasan Bisnis Bulan Ini</Text>
-            <TouchableOpacity style={styles.filterBtn} activeOpacity={0.7}>
-              <Text style={styles.filterText}>Agustus 2026</Text>
+            <TouchableOpacity
+              style={styles.filterBtn}
+              onPress={() => setIsMonthPickerOpen(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.filterText}>{selectedMonth}</Text>
               <ChevronDown size={14} color="#374151" />
             </TouchableOpacity>
           </View>
@@ -209,7 +247,10 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           </View>
 
           {/* Section: Perlu Tindakan */}
-          <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
+          <View
+            style={[styles.sectionHeaderRow, { marginTop: 28 }]}
+            onLayout={(e) => setPerluTindakanY(e.nativeEvent.layout.y)}
+          >
             <Text style={styles.sectionTitle}>Perlu Tindakan</Text>
             <TouchableOpacity style={styles.seeAllLink} activeOpacity={0.7}>
               <Text style={styles.seeAllText}>Lihat Semua</Text>
@@ -300,67 +341,45 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.roomSlider}
           >
-            {/* Kamar 1A */}
-            <View style={styles.roomCard}>
-              <View style={styles.roomCardHeader}>
-                <Text style={styles.roomNameTitle}>Kamar 1A</Text>
-                <View style={styles.badgeGreenSmall}>
-                  <Text style={styles.badgeGreenSmallText}>Kos Putra</Text>
-                </View>
-              </View>
-              <Text style={styles.roomSubtitle}>Tipe Campur AC</Text>
+            {vacantRooms.length > 0 ? (
+              vacantRooms.map((room, idx) => (
+                <View key={room.id || idx} style={styles.roomCard}>
+                  <View style={styles.roomCardHeader}>
+                    <Text style={styles.roomNameTitle}>{room.name}</Text>
+                    <View style={styles.badgeGreenSmall}>
+                      <Text style={styles.badgeGreenSmallText}>Kosong</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.roomSubtitle}>{room.type || "Tipe Standar"}</Text>
 
-              <View style={styles.amenitiesRow}>
-                <View style={styles.amenityChip}>
-                  <Laptop size={12} color="#6B7280" />
-                  <Text style={styles.amenityText}>AC</Text>
-                </View>
-                <View style={styles.amenityChip}>
-                  <Wifi size={12} color="#6B7280" />
-                  <Text style={styles.amenityText}>WiFi</Text>
-                </View>
-                <View style={styles.amenityChip}>
-                  <ShowerHead size={12} color="#6B7280" />
-                  <Text style={styles.amenityText}>KM Dalam</Text>
-                </View>
-              </View>
+                  <View style={styles.amenitiesRow}>
+                    {(room.facilities && room.facilities.length > 0 ? room.facilities.slice(0, 3) : ["AC", "WiFi", "KM Dalam"]).map((fac: string, fIdx: number) => (
+                      <View key={fIdx} style={styles.amenityChip}>
+                        {fac.toLowerCase().includes("wifi") ? (
+                          <Wifi size={12} color="#6B7280" />
+                        ) : fac.toLowerCase().includes("km") || fac.toLowerCase().includes("mandi") ? (
+                          <ShowerHead size={12} color="#6B7280" />
+                        ) : (
+                          <Laptop size={12} color="#6B7280" />
+                        )}
+                        <Text style={styles.amenityText}>{fac}</Text>
+                      </View>
+                    ))}
+                  </View>
 
-              <View style={styles.roomPriceRow}>
-                <Text style={styles.roomPriceVal}>Rp 1.200.000</Text>
-                <Text style={styles.roomPriceUnit}>/bulan</Text>
-              </View>
-            </View>
-
-            {/* Kamar 2A */}
-            <View style={styles.roomCard}>
-              <View style={styles.roomCardHeader}>
-                <Text style={styles.roomNameTitle}>Kamar 2A</Text>
-                <View style={styles.badgeGreenSmall}>
-                  <Text style={styles.badgeGreenSmallText}>Kos Putra</Text>
+                  <View style={styles.roomPriceRow}>
+                    <Text style={styles.roomPriceVal}>{typeof room.price === "number" ? `Rp ${room.price.toLocaleString("id-ID")}` : room.price}</Text>
+                    <Text style={styles.roomPriceUnit}>/bulan</Text>
+                  </View>
                 </View>
+              ))
+            ) : (
+              <View style={[styles.roomCard, { width: 280, justifyContent: "center", alignItems: "center" }]}>
+                <Text style={{ fontSize: 13, color: "#6B7280", textAlign: "center" }}>
+                  Semua kamar terisi penuh.
+                </Text>
               </View>
-              <Text style={styles.roomSubtitle}>Tipe Campur AC</Text>
-
-              <View style={styles.amenitiesRow}>
-                <View style={styles.amenityChip}>
-                  <Laptop size={12} color="#6B7280" />
-                  <Text style={styles.amenityText}>AC</Text>
-                </View>
-                <View style={styles.amenityChip}>
-                  <Wifi size={12} color="#6B7280" />
-                  <Text style={styles.amenityText}>WiFi</Text>
-                </View>
-                <View style={styles.amenityChip}>
-                  <ShowerHead size={12} color="#6B7280" />
-                  <Text style={styles.amenityText}>KM Dalam</Text>
-                </View>
-              </View>
-
-              <View style={styles.roomPriceRow}>
-                <Text style={styles.roomPriceVal}>Rp 1.200.000</Text>
-                <Text style={styles.roomPriceUnit}>/bulan</Text>
-              </View>
-            </View>
+            )}
           </ScrollView>
 
           <View style={{ height: 40 }} />
@@ -424,6 +443,63 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Month Picker Modal */}
+      <Modal
+        visible={isMonthPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsMonthPickerOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setIsMonthPickerOpen(false)}
+        >
+          <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Pilih Periode Bulan</Text>
+                <Text style={styles.modalSubtitle}>Tahun berjalan {currentYear}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsMonthPickerOpen(false)}
+                style={styles.closeModalBtn}
+                activeOpacity={0.7}
+              >
+                <X size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.monthListContainer} showsVerticalScrollIndicator={false}>
+              {monthsList.map((month) => {
+                const isSelected = selectedMonth === month;
+                return (
+                  <TouchableOpacity
+                    key={month}
+                    style={[styles.monthOption, isSelected && styles.monthOptionSelected]}
+                    onPress={() => {
+                      setSelectedMonth(month);
+                      setIsMonthPickerOpen(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.monthOptionLeft}>
+                      <View style={[styles.monthIconCircle, isSelected && styles.monthIconCircleSelected]}>
+                        <Calendar size={15} color={isSelected ? "#FFFFFF" : "#0D7A53"} />
+                      </View>
+                      <Text style={[styles.monthOptionText, isSelected && styles.monthOptionTextSelected]}>
+                        {month}
+                      </Text>
+                    </View>
+                    {isSelected && <Check size={18} color="#0D7A53" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -886,5 +962,92 @@ const styles = StyleSheet.create({
   navTextActive: {
     color: "#0D7A53",
     fontWeight: "700",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    backgroundColor: "#FFFFFF",
+    width: "100%",
+    maxWidth: 380,
+    maxHeight: 520,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  closeModalBtn: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+  },
+  monthListContainer: {
+    maxHeight: 380,
+  },
+  monthOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: "#F9FAFB",
+  },
+  monthOptionSelected: {
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#0D7A53",
+  },
+  monthOptionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  monthIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#E8F5EE",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  monthIconCircleSelected: {
+    backgroundColor: "#0D7A53",
+  },
+  monthOptionText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  monthOptionTextSelected: {
+    fontWeight: "700",
+    color: "#0D7A53",
   },
 });
