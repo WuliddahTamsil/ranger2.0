@@ -27,12 +27,14 @@ import {
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
 import { CustomerChatModal } from "./CustomerChatModal";
+import { AuthAccount } from "../auth/authTypes";
 
 interface PesananProps {
   orders: OrderItem[];
   setOrders: (orders: OrderItem[]) => void;
   reviews: any[];
   setReviews: (reviews: any[]) => void;
+  authAccount?: AuthAccount | null;
 }
 
 export const Pesanan: React.FC<PesananProps> = ({
@@ -40,6 +42,7 @@ export const Pesanan: React.FC<PesananProps> = ({
   setOrders,
   reviews,
   setReviews,
+  authAccount,
 }) => {
   const [activeTab, setActiveTab] = useState<number>(0);
   const [trackModalVisible, setTrackModalVisible] = useState(false);
@@ -398,6 +401,7 @@ export const Pesanan: React.FC<PesananProps> = ({
           visible={Boolean(chatTarget)}
           onClose={() => setChatTarget(null)}
           orderId={chatTarget.orderId}
+          customerId={authAccount?.id}
           participantName={chatTarget.participantName}
           participantType={chatTarget.participantType}
           initialMessage="Halo Kak, ada yang bisa kami bantu terkait pesanan ini?"

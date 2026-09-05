@@ -197,6 +197,8 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
       }
     };
     void fetchOrders();
+    const interval = setInterval(() => void fetchOrders(), 10000);
+    return () => clearInterval(interval);
   }, [authAccount]);
 
   // 4. Global Withdrawals State
@@ -473,7 +475,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
       case 0:
         return renderBerandaContent();
       case 1:
-        return <Order orders={orders} setOrders={setOrders} />;
+        return <Order orders={orders} setOrders={setOrders} ownerId={authAccount?.id} />;
       case 2:
         return <Riwayat orders={orders} />;
       case 3:
@@ -509,7 +511,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           name={storeInfo.ownerName || "Nama Pemilik"}
           role="Pemilik Catering"
           icon={StoreIcon}
-          notificationCount={3}
+          notificationCount={orders.filter((order) => order.status === "Menunggu").length}
           onNotificationPress={() => setNotifModalVisible(true)}
           onRolePress={() => navigate("role")}
         />

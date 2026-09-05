@@ -28,6 +28,7 @@ import {
   AlertTriangle,
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
+import { getChatMessages, sendChatMessage } from "../../services/api";
 
 interface OrderItemDetail {
   name: string;
@@ -63,9 +64,11 @@ export interface OrderData {
 interface OrderProps {
   orders: OrderData[];
   setOrders: (orders: OrderData[]) => void;
+  onStatusChange?: (orderId: string, status: OrderData["status"]) => Promise<boolean>;
+  ownerId?: string;
 }
 
-export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
+export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange, ownerId }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("Semua");
   
@@ -80,6 +83,27 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
 
   const [trackingModalVisible, setTrackingModalVisible] = useState(false);
   const [trackingProgress, setTrackingProgress] = useState(0); // 0 to 4 steps
+
+  useEffect(() => {
+    if (!chatModalVisible || !selectedOrder || chatTarget !== "customer") return;
+    const chatKey = `${selectedOrder.id}-${chatTarget}`;
+    const loadChat = async () => {
+      const result = await getChatMessages(selectedOrder.id);
+      if (result.success && Array.isArray(result.data)) {
+        setChatMessages((previous) => ({
+          ...previous,
+          [chatKey]: result.data.map((message: any) => ({
+            sender: message.sender,
+            text: message.text,
+            time: new Date(message.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          })),
+        }));
+      }
+    };
+    void loadChat();
+    const interval = setInterval(() => void loadChat(), 3000);
+    return () => clearInterval(interval);
+  }, [chatModalVisible, chatTarget, selectedOrder]);
 
   const statuses = ["Semua", "Menunggu", "Diproses", "Siap", "Diambil", "Selesai", "Dibatalkan"];
 
@@ -139,22 +163,12 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
   };
 
   // Status transitions
-  const handleUpdateStatus = (orderId: string, nextStatus: OrderData["status"]) => {
+  const handleUpdateStatus = async (orderId: string, nextStatus: OrderData["status"]) => {
+    if (onStatusChange && !(await onStatusChange(orderId, nextStatus))) return;
     const updated = orders.map((o) => {
       if (o.id === orderId) {
         let driver = o.driver;
-        // Assign a mock driver once order goes to "Diproses" or "Siap"
-        if (nextStatus === "Diproses" && !driver) {
-          driver = {
-            name: "Driver Rangers",
-            vehicle: "Motor",
-            plateNumber: "B 1234 XYZ",
-            rating: 4.9,
-            stage: "Driver menuju outlet",
-            distance: "1,2 km",
-            eta: "5 menit",
-          };
-        } else if (nextStatus === "Siap" && driver) {
+        if (nextStatus === "Siap" && driver) {
           driver.stage = "Driver sampai di outlet, siap pick-up";
           driver.eta = "1 menit";
         } else if (nextStatus === "Diambil" && driver) {
@@ -199,25 +213,25 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
     });
     setOrders(updated);
 
-    // Initialize mock messages if none exist
     const chatKey = `${order.id}-${target}`;
-    if (!chatMessages[chatKey]) {
-      const initialMsgs = target === "customer" 
-        ? [
-            { sender: "customer", text: "Halo, apakah pesanan saya sudah bisa dibuat?", time: "10:25" },
-            { sender: "owner", text: "Halo kak, pesanan sedang kami proses ya. Mohon ditunggu.", time: "10:26" },
-          ]
-        : [
-            { sender: "driver", text: "Saya sudah dekat outlet, mohon siapkan pesanannya ya pak.", time: "10:30" },
-          ];
-      setChatMessages({ ...chatMessages, [chatKey]: initialMsgs });
-    }
+    void getChatMessages(order.id).then((result) => {
+      if (result.success && Array.isArray(result.data)) {
+        setChatMessages((previous) => ({
+          ...previous,
+          [chatKey]: result.data.map((message: any) => ({
+            sender: message.sender,
+            text: message.text,
+            time: new Date(message.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          })),
+        }));
+      }
+    });
 
     setChatModalVisible(true);
   };
 
   // Send message in chat
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (typedMessage.trim() === "" || !selectedOrder) return;
     const chatKey = `${selectedOrder.id}-${chatTarget}`;
     const newMsg = {
@@ -229,23 +243,14 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
     const currentMsgs = chatMessages[chatKey] || [];
     const updatedMsgs = [...currentMsgs, newMsg];
 
+    const result = await sendChatMessage(selectedOrder.id, "owner", typedMessage.trim(), undefined, ownerId);
+    if (!result.success) {
+      Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
+      return;
+    }
     setChatMessages({ ...chatMessages, [chatKey]: updatedMsgs });
     setTypedMessage("");
 
-    // Simulate reply after 1.5 seconds
-    setTimeout(() => {
-      const reply = {
-        sender: chatTarget,
-        text: chatTarget === "customer" 
-          ? "Baik terima kasih atas infonya ya, mohon dibantu kirim segera." 
-          : "Siap pak, saya jalan setelah pesanan siap.",
-        time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-      };
-      setChatMessages((prev) => ({
-        ...prev,
-        [chatKey]: [...updatedMsgs, reply],
-      }));
-    }, 1500);
   };
 
   // Open Tracking

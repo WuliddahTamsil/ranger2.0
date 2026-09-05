@@ -1,20 +1,47 @@
 const ChatMessage = require("../models/ChatMessage");
+const MarketplaceOrder = require("../models/MarketplaceOrder");
+const CateringOrder = require("../models/CateringOrder");
+const Notification = require("../models/Notification");
 
 // Send a chat message
 const sendChatMessage = async (req, res) => {
   try {
-    const { orderId, sender, text, attachment } = req.body;
+    const { orderId, sender, senderId, text, attachment } = req.body;
 
-    if (!orderId || !sender) {
+    if (!orderId || !sender || !senderId) {
       return res.status(400).json({ success: false, message: "orderId dan sender harus diisi" });
     }
+    const order = await MarketplaceOrder.findById(orderId).lean()
+      .catch(() => null) || await CateringOrder.findById(orderId).lean();
+    if (!order) return res.status(404).json({ success: false, message: "Order chat tidak ditemukan" });
+    const customerId = String(order.customerId);
+    const ownerId = String(order.ownerId);
+    if (String(senderId) !== customerId && String(senderId) !== ownerId) {
+      return res.status(403).json({ success: false, message: "Akun tidak terhubung dengan order ini" });
+    }
+    const normalizedSender = sender === "owner" ? ownerId : customerId;
+    const receiverId = normalizedSender === ownerId ? customerId : ownerId;
 
     const message = await ChatMessage.create({
       orderId,
       sender,
+      senderId: normalizedSender,
+      receiverId,
+      customerId,
+      ownerId,
+      storeId: String(order.storeId || ownerId),
       text: text || "",
       attachment,
     });
+    if (require("mongoose").Types.ObjectId.isValid(receiverId)) {
+      await Notification.create({
+        userId: receiverId,
+        title: "Pesan baru",
+        message: `Ada pesan baru terkait pesanan ${order.orderCode}.`,
+        type: "general",
+        relatedId: require("mongoose").Types.ObjectId.isValid(orderId) ? order._id : undefined,
+      });
+    }
 
     // Notify socket.io room if applicable
     if (req.io) {

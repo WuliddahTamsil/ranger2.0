@@ -38,17 +38,23 @@ const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const kostRoutes = require("./routes/kostRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const cateringRoutes = require("./routes/cateringRoutes");
 const chatRoutes = require("./routes/chatRoutes");
 const laundryRoutes = require("./routes/laundryRoutes");
+const marketplaceRoutes = require("./routes/marketplaceRoutes");
+const marketplaceOrderRoutes = require("./routes/marketplaceOrderRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/kosts", kostRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/catering", cateringRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/laundry", laundryRoutes);
+app.use("/api/marketplace", marketplaceRoutes);
+app.use("/api/marketplace/orders", marketplaceOrderRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {

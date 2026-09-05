@@ -41,6 +41,7 @@ interface CustomerChatModalProps {
   visible: boolean;
   onClose: () => void;
   orderId: string;
+  customerId?: string;
   participantName: string;
   participantType: CustomerChatParticipantType;
   initialMessage?: string;
@@ -57,6 +58,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   visible,
   onClose,
   orderId,
+  customerId,
   participantName,
   participantType,
   initialMessage,
@@ -219,7 +221,11 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     };
 
     // Save in database
-    await sendChatMessage(orderId, "customer", text, selectedAttachment);
+    const result = await sendChatMessage(orderId, "customer", text, selectedAttachment, customerId);
+    if (!result.success) {
+      Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
+      return;
+    }
 
     // Save locally for instant UI update
     appendCustomerChatMessage(threadId, message);

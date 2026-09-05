@@ -49,7 +49,7 @@ export interface CustomerAddress {
 }
 
 export interface Product {
-  id: number;
+  id: number | string;
   name: string;
   store: string;
   price: number;
@@ -58,6 +58,7 @@ export interface Product {
   img: string;
   liked: boolean;
   cat: string;
+  ownerId?: string;
 }
 
 export interface Restaurant {

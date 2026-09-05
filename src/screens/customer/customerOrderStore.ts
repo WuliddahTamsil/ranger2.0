@@ -1,10 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ORDERS } from "../../constants/mockData";
 import { OrderItem } from "../../types";
 
 const STORAGE_KEY = "ranger_customer_orders_v1";
 
-let customerOrders: OrderItem[] = [...ORDERS];
+let customerOrders: OrderItem[] = [];
 let hydrated = false;
 const listeners = new Set<(orders: OrderItem[]) => void>();
 
@@ -29,7 +28,9 @@ export const hydrateCustomerOrders = async () => {
     const stored = await AsyncStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as OrderItem[];
-      if (Array.isArray(parsed)) customerOrders = parsed;
+      if (Array.isArray(parsed)) {
+        customerOrders = parsed.filter((order) => !["RNG001", "RNG002", "RNG003", "RNG004"].includes(order.id));
+      }
     }
   } catch {
     // Gunakan data lokal jika storage belum tersedia atau datanya rusak.

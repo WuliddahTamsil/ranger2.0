@@ -7,6 +7,11 @@ const chatMessageSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    customerId: { type: String, required: true, index: true },
+    ownerId: { type: String, required: true, index: true },
+    storeId: { type: String, default: "" },
+    senderId: { type: String, required: true },
+    receiverId: { type: String, required: true },
     sender: {
       type: String,
       enum: ["customer", "owner", "driver", "other"],

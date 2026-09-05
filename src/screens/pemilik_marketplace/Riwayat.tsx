@@ -18,34 +18,6 @@ interface RiwayatProps {
 export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
   const [filter, setFilter] = useState<"Semua" | "Selesai" | "Dibatalkan">("Semua");
 
-  // Default hardcoded history from Dart
-  const defaultHistory: HistoryItem[] = [
-    {
-      id: "MKT-2401",
-      customerName: "Deni Kurniawan",
-      itemSummary: "Nasi Timbel Komplit (2x)",
-      total: 50000,
-      time: "Hari ini, 08:30",
-      status: "Selesai",
-    },
-    {
-      id: "MKT-2399",
-      customerName: "Ayu Lestari",
-      itemSummary: "Es Jeruk Peras (3x)",
-      total: 24000,
-      time: "Kemarin, 16:10",
-      status: "Selesai",
-    },
-    {
-      id: "MKT-2394",
-      customerName: "Rizky Maulana",
-      itemSummary: "Ayam Bakar Madu",
-      total: 28000,
-      time: "05 Agu, 11:30",
-      status: "Dibatalkan",
-    },
-  ];
-
   // Convert parent orders that are completed or cancelled to history format
   const dynamicHistory: HistoryItem[] = orders
     .filter((o) => o.status === "Selesai" || o.status === "Dibatalkan")
@@ -59,9 +31,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
     }));
 
   // Combine both, avoiding duplicates (if any ID matches)
-  const combinedHistory = [...dynamicHistory, ...defaultHistory].filter(
-    (item, index, self) => self.findIndex((t) => t.id === item.id) === index
-  );
+  const combinedHistory = dynamicHistory;
 
   const visibleHistory = combinedHistory.filter(
     (item) => filter === "Semua" || item.status === filter

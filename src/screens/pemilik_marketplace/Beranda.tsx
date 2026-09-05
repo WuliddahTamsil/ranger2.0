@@ -37,6 +37,14 @@ import { rp } from "../../utils/formatters";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { RoleHeader } from "../../components/RoleHeader";
+import {
+  getMarketplaceProductsForOwner,
+  createMarketplaceProduct,
+  updateMarketplaceProduct,
+  deleteMarketplaceProduct,
+  getMarketplaceOrdersForOwner,
+  updateMarketplaceOrderStatus,
+} from "../../services/api";
 
 // Import other screens
 import { Order, OrderData } from "./Order";
@@ -45,7 +53,7 @@ import { Pendapatan } from "./Pendapatan";
 import { Profile } from "./Profile";
 
 interface ProductItem {
-  id: number;
+  id: number | string;
   name: string;
   store: string;
   price: number;
@@ -64,6 +72,10 @@ interface MarketplaceHomeProps extends Nav {
 
 export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount }) => {
   const [currentTab, setCurrentTab] = useState<number>(0);
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === "web") alert(`${title}: ${message}`);
+    else Alert.alert(title, message);
+  };
 
   // 1. Global Store Info State
   const [storeInfo, setStoreInfo] = useState(() => ({
@@ -92,112 +104,61 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
   }, [authAccount]);
 
   // 2. Global Products State
-  const [products, setProducts] = useState<ProductItem[]>([
-    {
-      id: 1,
-      name: "Nasi Timbel Komplit",
-      store: "Toko Sembako Berkah",
-      price: 25000,
-      rating: 4.8,
-      sold: 12,
-      img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=300&h=300&fit=crop&q=80",
-      cat: "Makanan",
-      description: "Nasi timbel khas Sunda lengkap dengan ayam bakar, tahu, tempe, lalapan segar dan sambal goang pedas.",
-      stock: 15,
-      isActive: true,
-    },
-    {
-      id: 2,
-      name: "Batik Kawung Premium",
-      store: "Toko Sembako Berkah",
-      price: 185000,
-      rating: 4.9,
-      sold: 8,
-      img: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&h=300&fit=crop&q=80",
-      cat: "Fashion",
-      description: "Batik tulis motif kawung klasik premium dengan kain primissima sutra yang halus dan dingin dipakai.",
-      stock: 4,
-      isActive: true,
-    },
-    {
-      id: 3,
-      name: "Tas Anyaman Rotan",
-      store: "Toko Sembako Berkah",
-      price: 75000,
-      rating: 4.7,
-      sold: 16,
-      img: "https://images.unsplash.com/photo-1547949003-9792a18a2601?w=300&h=300&fit=crop&q=80",
-      cat: "Kerajinan",
-      description: "Tas anyaman rotan bulat estetis, dibuat handmade oleh pengrajin lokal Kamojang PGE.",
-      stock: 0,
-      isActive: true,
-    },
-  ]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
+
+  useEffect(() => {
+    if (!authAccount) return;
+    void getMarketplaceProductsForOwner(authAccount.id).then((result) => {
+      if (result.success && result.data) {
+        setProducts(result.data.map((product: any) => ({
+          id: product._id,
+          name: product.name,
+          store: storeInfo.storeName,
+          price: product.price,
+          rating: product.rating || 0,
+          sold: product.sold || 0,
+          img: product.img,
+          cat: product.cat,
+          description: product.description,
+          stock: product.stock,
+          isActive: product.isActive,
+        })));
+      } else {
+        setProducts([]);
+      }
+    });
+  }, [authAccount, storeInfo.storeName]);
 
   // 3. Global Orders State
-  const [orders, setOrders] = useState<OrderData[]>([
-    {
-      id: "MKT-2408",
-      customer: "Bambang Wijaya",
-      customerPhone: "0812 3456 7890",
-      items: [{ name: "Nasi Timbel Komplit", quantity: 2, price: 25000 }],
-      total: 50000,
-      subtotal: 50000,
-      deliveryFee: 0,
-      time: "10:24",
-      status: "Menunggu",
-      driver: null,
-      unreadCustomerMessages: 1,
-      unreadDriverMessages: 0,
-    },
-    {
-      id: "MKT-2407",
-      customer: "Siti Aminah",
-      customerPhone: "0821 9876 5432",
-      items: [
-        { name: "Ayam Bakar Madu", quantity: 1, price: 28000 },
-        { name: "Es Jeruk", quantity: 2, price: 8000 },
-      ],
-      total: 44000,
-      subtotal: 44000,
-      deliveryFee: 0,
-      time: "09:48",
-      status: "Diproses",
-      driver: {
-        name: "Driver Rangers",
-        vehicle: "Motor",
-        plateNumber: "B 1234 XYZ",
-        rating: 4.9,
-        stage: "Driver menuju outlet",
-        distance: "1,2 km",
-        eta: "5 menit",
-      },
-      unreadCustomerMessages: 0,
-      unreadDriverMessages: 1,
-    },
-    {
-      id: "MKT-2406",
-      customer: "Rani Setiawati",
-      customerPhone: "0857 1122 3344",
-      items: [{ name: "Nasi Timbel Komplit", quantity: 3, price: 25000 }],
-      total: 75000,
-      subtotal: 75000,
-      deliveryFee: 0,
-      time: "09:15",
-      status: "Selesai",
-      driver: {
-        name: "Andi Kurniawan",
-        vehicle: "Motor",
-        plateNumber: "D 4455 AB",
-        rating: 4.8,
-        stage: "Pesanan selesai",
-        distance: "0 km",
-        eta: "-",
-      },
-      unreadCustomerMessages: 0,
-      unreadDriverMessages: 0,
-    },
-  ]);
+  const [orders, setOrders] = useState<OrderData[]>([]);
+
+  useEffect(() => {
+    if (!authAccount) return;
+    const loadOrders = async () => {
+      const result = await getMarketplaceOrdersForOwner(authAccount.id);
+      if (!result.success || !result.data) {
+        setOrders([]);
+        return;
+      }
+      setOrders(result.data.map((order: any) => ({
+        id: order._id,
+        customer: order.customerName,
+        customerPhone: order.customerPhone || "",
+        items: order.items,
+        total: order.totalAmount,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        status: order.status,
+        driver: null,
+        unreadCustomerMessages: 0,
+        unreadDriverMessages: 0,
+      })));
+    };
+    void loadOrders();
+    const interval = setInterval(() => void loadOrders(), 15000);
+    return () => clearInterval(interval);
+  }, [authAccount]);
 
   // 4. Global Withdrawals State
   const [withdrawals, setWithdrawals] = useState<any[]>([
@@ -296,7 +257,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
     }
   };
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     if (prodName.trim() === "" || prodPrice.trim() === "" || prodStock.trim() === "") {
       Alert.alert("Error", "Mohon isi semua field wajib");
       return;
@@ -316,23 +277,19 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
 
     if (editingProduct) {
       // Edit mode
-      const updated = products.map((p) => {
-        if (p.id === editingProduct.id) {
-          return {
-            ...p,
-            name: prodName.trim(),
-            description: prodDesc.trim(),
-            cat: prodCat,
-            price: priceNum,
-            stock: stockNum,
-            isActive: prodActive,
-            img: prodImg || p.img,
-          };
-        }
-        return p;
+      const result = await updateMarketplaceProduct(editingProduct.id, {
+        name: prodName.trim(), description: prodDesc.trim(), cat: prodCat,
+        price: priceNum, stock: stockNum, isActive: prodActive, img: prodImg || editingProduct.img,
       });
-      setProducts(updated);
-      Alert.alert("Sukses", "Menu berhasil diperbarui");
+      if (!result.success || !result.data) {
+        showAlert("Gagal", result.message || "Gagal memperbarui produk");
+        return;
+      }
+      setProducts(products.map((p) => p.id === editingProduct.id ? {
+        ...p, name: result.data.name, description: result.data.description, cat: result.data.cat,
+        price: result.data.price, stock: result.data.stock, isActive: result.data.isActive, img: result.data.img,
+      } : p));
+      showAlert("Sukses", "Produk berhasil diperbarui");
     } else {
       // Add mode
       const newProduct: ProductItem = {
@@ -348,8 +305,16 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
         stock: stockNum,
         isActive: prodActive,
       };
-      setProducts([newProduct, ...products]);
-      Alert.alert("Sukses", "Menu baru berhasil ditambahkan");
+      const result = await createMarketplaceProduct({
+        ownerId: authAccount.id, name: newProduct.name, price: newProduct.price, img: newProduct.img,
+        cat: newProduct.cat, description: newProduct.description, stock: newProduct.stock, isActive: newProduct.isActive,
+      });
+      if (!result.success || !result.data) {
+        showAlert("Gagal", result.message || "Gagal menyimpan produk");
+        return;
+      }
+      setProducts([{ ...newProduct, id: result.data._id }, ...products]);
+      showAlert("Sukses", "Produk berhasil disimpan ke database");
     }
 
     setProductFormVisible(false);
@@ -361,9 +326,14 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
       {
         text: "Hapus",
         style: "destructive",
-        onPress: () => {
+        onPress: async () => {
+          const result = await deleteMarketplaceProduct(productId);
+          if (!result.success) {
+            showAlert("Gagal", result.message || "Gagal menghapus produk");
+            return;
+          }
           setProducts(products.filter((p) => p.id !== productId));
-          Alert.alert("Sukses", "Menu telah dihapus");
+          showAlert("Sukses", "Produk telah dihapus");
         },
       },
     ]);
@@ -422,7 +392,21 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
       case 0:
         return renderBerandaContent();
       case 1:
-        return <Order orders={orders} setOrders={setOrders} />;
+        return (
+          <Order
+            orders={orders}
+            setOrders={setOrders}
+            onStatusChange={async (orderId, status) => {
+              const result = await updateMarketplaceOrderStatus(orderId, status);
+              if (!result.success) {
+                showAlert("Gagal", result.message || "Gagal memperbarui status pesanan");
+                return false;
+              }
+              return true;
+            }}
+            ownerId={authAccount?.id}
+          />
+        );
       case 2:
         return <Riwayat orders={orders} />;
       case 3:
@@ -458,7 +442,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           name={storeInfo.ownerName || "Nama Pemilik"}
           role="Pemilik Marketplace"
           icon={StoreIcon}
-          notificationCount={3}
+          notificationCount={orders.filter((order) => order.status === "Menunggu").length}
           onNotificationPress={() => setNotifModalVisible(true)}
           onRolePress={() => navigate("role")}
         />
@@ -805,44 +789,20 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
             </View>
 
             <View style={styles.notifList}>
-              <TouchableOpacity 
-                style={styles.notifItemRow} 
-                onPress={() => {
-                  setNotifModalVisible(false);
-                  setCurrentTab(1);
-                }}
-              >
-                <View style={styles.notifIconBg}>
-                  <ShoppingBag size={18} color="#1B7A4E" />
-                </View>
-                <View style={styles.notifBody}>
-                  <Text style={styles.notifRowTitle}>Pesanan Baru</Text>
-                  <Text style={styles.notifRowDesc}>Pesanan marketplace terbaru tersedia untuk diproses.</Text>
-                </View>
-                <Text style={styles.notifTime}>Baru saja</Text>
-              </TouchableOpacity>
-
-              <View style={styles.notifItemRow}>
-                <View style={styles.notifIconBg}>
-                  <AlertTriangle size={18} color="#1B7A4E" />
-                </View>
-                <View style={styles.notifBody}>
-                  <Text style={styles.notifRowTitle}>Stok perlu dicek</Text>
-                  <Text style={styles.notifRowDesc}>Periksa produk dengan stok menipis di Beranda.</Text>
-                </View>
-                <Text style={styles.notifTime}>20 mnt lalu</Text>
-              </View>
-
-              <View style={styles.notifItemRow}>
-                <View style={styles.notifIconBg}>
-                  <MessageSquare size={18} color="#1B7A4E" />
-                </View>
-                <View style={styles.notifBody}>
-                  <Text style={styles.notifRowTitle}>Ulasan customer</Text>
-                  <Text style={styles.notifRowDesc}>Belum ada data ulasan yang dapat ditampilkan.</Text>
-                </View>
-                <Text style={styles.notifTime}>1 jam lalu</Text>
-              </View>
+              {orders.filter((order) => order.status === "Menunggu").length > 0 ? (
+                <TouchableOpacity
+                  style={styles.notifItemRow}
+                  onPress={() => { setNotifModalVisible(false); setCurrentTab(1); }}
+                >
+                  <View style={styles.notifIconBg}><ShoppingBag size={18} color="#1B7A4E" /></View>
+                  <View style={styles.notifBody}>
+                    <Text style={styles.notifRowTitle}>Pesanan Baru</Text>
+                    <Text style={styles.notifRowDesc}>Ada pesanan baru yang perlu diproses.</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.notifRowDesc}>Belum ada notifikasi pesanan.</Text>
+              )}
             </View>
 
             <TouchableOpacity 

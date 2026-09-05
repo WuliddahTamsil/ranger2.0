@@ -172,7 +172,7 @@ export default function App() {
       case "c_home":
         return <CustomerDashboardScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_marketplace":
-        return <MarketplaceScreen navigate={navigate} />;
+        return <MarketplaceScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_catering":
         return <CustomerCateringScreen navigate={navigate} />;
       case "c_catering_detail":

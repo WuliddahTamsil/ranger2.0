@@ -64,6 +64,7 @@ export interface OrderData {
 interface OrderProps {
   orders: OrderData[];
   setOrders: (orders: OrderData[]) => void;
+  ownerId?: string;
 }
 
 interface ChatMessage {
@@ -72,7 +73,7 @@ interface ChatMessage {
   time: string;
 }
 
-export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
+export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId }) => {
   const [selectedStatus, setSelectedStatus] = useState<string>("Semua");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -86,14 +87,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
   const [typedMessage, setTypedMessage] = useState("");
 
   // Chat memory locally
-  const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({
-    "CAT-2408-customer": [
-      { sender: "other", text: "Halo, apakah pesanan catering saya sudah diterima?", time: "10:25" },
-    ],
-    "CAT-2407-driver": [
-      { sender: "other", text: "Saya sudah di dekat dapur catering, Bu. Sedang bersiap ambil box.", time: "09:49" },
-    ],
-  });
+  const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
 
   // Tracking animation mock state
   const [trackingProgress, setTrackingProgress] = useState(1);
@@ -258,7 +252,10 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders }) => {
     setTypedMessage("");
 
     // Save in database
-    await sendChatMessage(selectedOrder.id, "owner", text);
+    const result = await sendChatMessage(selectedOrder.id, "owner", text, undefined, ownerId);
+    if (!result.success) {
+      Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
+    }
   };
 
   // Open Tracking map

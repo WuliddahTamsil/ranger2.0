@@ -46,4 +46,6 @@ const cateringProductSchema = new mongoose.Schema(
   }
 );
 
+cateringProductSchema.index({ ownerId: 1, createdAt: -1 });
+
 module.exports = mongoose.model("CateringProduct", cateringProductSchema);

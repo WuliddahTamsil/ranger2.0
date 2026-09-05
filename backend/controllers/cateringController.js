@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const CateringProduct = require("../models/CateringProduct");
 const User = require("../models/User");
 const CateringOrder = require("../models/CateringOrder");
+const Notification = require("../models/Notification");
 
 // Create product (by Pemilik Catering)
 const createProduct = async (req, res) => {
@@ -18,7 +19,15 @@ const createProduct = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(ownerId)) {
       return res.status(400).json({
         success: false,
-        message: "Gagal: Akun Anda adalah akun lokal browser. Silakan Log Out dan masuk dengan akun database (catering@test.com) untuk dapat menambahkan menu.",
+        message: "Akun ini masih tersimpan lokal di browser dan belum memiliki ID database. Silakan keluar lalu masuk kembali setelah server aktif.",
+      });
+    }
+
+    const owner = await User.findById(ownerId).select("role");
+    if (!owner || owner.role !== "pemilik_catering") {
+      return res.status(403).json({
+        success: false,
+        message: "Menu hanya dapat ditambahkan oleh akun pemilik catering yang terdaftar.",
       });
     }
 
@@ -150,6 +159,18 @@ const getProductsByShop = async (req, res) => {
   }
 };
 
+const getAllActiveProducts = async (req, res) => {
+  try {
+    const products = await CateringProduct.find({ isActive: true, stock: { $gt: 0 } })
+      .populate("ownerId", "name roleData")
+      .sort({ createdAt: -1 });
+    return res.status(200).json({ success: true, count: products.length, data: products });
+  } catch (error) {
+    console.error("Get all active catering products error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mengambil menu catering" });
+  }
+};
+
 // Create catering order (by Customer)
 const createCateringOrder = async (req, res) => {
   try {
@@ -173,9 +194,17 @@ const createCateringOrder = async (req, res) => {
       cateringDate,
       cateringTime,
       notes,
+      productId,
+      storeId,
+      driverTip,
+      voucherId,
+      discount,
     } = req.body;
 
-    const orderCode = `RNG-CAT-${Date.now().toString().slice(-6)}`;
+    if (!ownerId || !customerId || !customerName || !address || !menuName || !paymentMethod) {
+      return res.status(400).json({ success: false, message: "Data pesanan catering belum lengkap" });
+    }
+    const orderCode = `RNG-CAT-${Date.now().toString().slice(-8)}`;
 
     const newOrder = await CateringOrder.create({
       orderCode,
@@ -184,12 +213,17 @@ const createCateringOrder = async (req, res) => {
       customerName,
       customerPhone,
       address,
+      storeId: storeId || String(ownerId),
+      productId: productId || "",
       menuName,
       portions,
       price,
       totalAmount,
       deliveryFee: deliveryFee || 0,
       serviceFee: serviceFee || 0,
+      driverTip: driverTip || 0,
+      voucherId: voucherId || "",
+      discount: discount || 0,
       paymentOption,
       paymentMethod,
       paymentStatus,
@@ -201,6 +235,26 @@ const createCateringOrder = async (req, res) => {
       notes: notes || "",
     });
 
+    req.io?.to(`owner:${ownerId}`).emit("order_created", newOrder);
+    req.io?.to(`customer:${customerId}`).emit("order_created", newOrder);
+    if (mongoose.Types.ObjectId.isValid(customerId)) {
+      await Notification.create({
+        userId: customerId,
+        title: "Pesanan catering berhasil dibuat",
+        message: `Pesanan ${newOrder.orderCode} telah diteruskan ke catering.`,
+        type: "payment_confirmed",
+        relatedId: newOrder._id,
+      });
+    }
+    if (mongoose.Types.ObjectId.isValid(ownerId)) {
+      await Notification.create({
+        userId: ownerId,
+        title: "Pesanan catering baru masuk",
+        message: `${customerName} membuat pesanan ${newOrder.orderCode}.`,
+        type: "order_new",
+        relatedId: newOrder._id,
+      });
+    }
     return res.status(201).json({
       success: true,
       message: "Pemesanan catering berhasil dibuat",
@@ -209,6 +263,16 @@ const createCateringOrder = async (req, res) => {
   } catch (error) {
     console.error("❌ Create catering order error:", error);
     return res.status(500).json({ success: false, message: "Gagal membuat pemesanan catering", error: error.message });
+  }
+};
+
+const getCateringOrdersByCustomer = async (req, res) => {
+  try {
+    const orders = await CateringOrder.find({ customerId: req.params.customerId }).sort({ createdAt: -1 }).lean();
+    return res.status(200).json({ success: true, data: orders });
+  } catch (error) {
+    console.error("Get catering orders by customer error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mengambil pesanan customer" });
   }
 };
 
@@ -242,6 +306,17 @@ const updateCateringOrderStatus = async (req, res) => {
 
     order.status = status;
     await order.save();
+    if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+      await Notification.create({
+        userId: order.customerId,
+        title: "Status pesanan catering diperbarui",
+        message: `Pesanan ${order.orderCode} sekarang ${order.status}.`,
+        type: "order_status",
+        relatedId: order._id,
+      });
+    }
+    req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
+    req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);
 
     return res.status(200).json({
       success: true,
@@ -261,7 +336,9 @@ module.exports = {
   deleteProduct,
   getAllCateringShops,
   getProductsByShop,
+  getAllActiveProducts,
   createCateringOrder,
   getCateringOrdersByOwner,
+  getCateringOrdersByCustomer,
   updateCateringOrderStatus,
 };
