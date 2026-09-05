@@ -25,10 +25,14 @@ const createOrder = async (req, res) => {
     const safeDriverTip = Number(driverTip || 0);
     const safeDiscount = Math.max(0, Number(discount || 0));
     const totalAmount = Math.max(0, subtotal + safeDeliveryFee + safeServiceFee + safeDriverTip - safeDiscount);
+    const ownerProfile = await User.findById(ownerId).select("name address roleData");
     const order = await MarketplaceOrder.create({
       orderCode: `RNG-MKT-${Date.now().toString().slice(-8)}`,
       ownerId, storeId: String(ownerId), customerId: customerId || "", customerName, customerPhone: customerPhone || "", address, notes: notes || "",
-      items: orderItems, subtotal, deliveryFee: safeDeliveryFee, serviceFee: safeServiceFee,
+      items: orderItems,
+      storeName: ownerProfile?.roleData?.businessName || ownerProfile?.name || "",
+      storeAddress: ownerProfile?.roleData?.businessAddress || ownerProfile?.roleData?.address || ownerProfile?.address || "",
+      subtotal, deliveryFee: safeDeliveryFee, serviceFee: safeServiceFee,
       driverTip: safeDriverTip, voucherId: voucherId || "", discount: safeDiscount,
       totalAmount, paymentMethod: paymentMethod || "cod",
       paymentStatus: paymentStatus || (paymentMethod === "cod" ? "Menunggu pembayaran di tempat" : "Berhasil"),
@@ -104,6 +108,18 @@ const updateOrderStatus = async (req, res) => {
     }
     req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
     req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);
+    if (order.driverId) req.io?.to(`driver:${order.driverId}`).emit("order_status_updated", order);
+    if (order.status === "Siap" && !order.driverId) {
+      const drivers = await User.find({ role: "driver", status: { $ne: "rejected" } }).select("_id");
+      await Promise.all(drivers.map((driver) => Notification.create({
+        userId: driver._id,
+        title: "Pesanan Baru untuk Diantarkan",
+        message: `${order.storeName || "Toko"} - ${order.customerName}, pickup: ${order.storeAddress || "alamat toko"}.`,
+        type: "order_new",
+        relatedId: order._id,
+      })));
+      drivers.forEach((driver) => req.io?.to(`driver:${driver._id}`).emit("order_assigned", order));
+    }
     return res.json({ success: true, data: order });
   } catch (error) {
     console.error("Update marketplace order error:", error);
@@ -111,4 +127,54 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
-module.exports = { createOrder, getOrdersByOwner, getOrdersByCustomer, updateOrderStatus };
+const getOrdersByDriver = async (req, res) => {
+  try {
+    const orders = await MarketplaceOrder.find({
+      $or: [
+        { driverId: req.params.driverId },
+        { driverId: { $in: ["", null] }, status: "Siap" },
+        { driverId: { $exists: false }, status: "Siap" },
+      ],
+      customerId: { $nin: ["", null] },
+    }).populate("ownerId", "name address roleData").sort({ createdAt: -1 }).lean();
+    const normalizedOrders = orders.map((order) => ({
+      ...order,
+      ownerId: order.ownerId?._id || order.ownerId,
+      storeName: order.storeName || order.ownerId?.roleData?.businessName || order.ownerId?.name || "",
+      storeAddress: order.storeAddress || order.ownerId?.roleData?.businessAddress || order.ownerId?.roleData?.address || order.ownerId?.address || "",
+    }));
+    return res.json({ success: true, data: normalizedOrders });
+  } catch (error) {
+    console.error("Get driver marketplace orders error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mengambil order driver" });
+  }
+};
+
+const assignDriver = async (req, res) => {
+  try {
+    const { driverId } = req.body;
+    const driver = await User.findOne({ _id: driverId, role: "driver" }).select("_id name phone");
+    if (!driver) return res.status(400).json({ success: false, message: "Driver tidak valid" });
+    const order = await MarketplaceOrder.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        $or: [
+          { driverId: { $in: ["", null] }, status: "Siap" },
+          { driverId: String(driver._id) },
+        ],
+      },
+      { driverId: String(driver._id), driverName: driver.name, driverPhone: driver.phone, status: "Menuju Pickup" },
+      { new: true, runValidators: true }
+    );
+    if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    req.io?.to(`driver:${driver._id}`).emit("order_assigned", order);
+    req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);
+    req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
+    return res.json({ success: true, data: order });
+  } catch (error) {
+    console.error("Assign marketplace driver error:", error);
+    return res.status(400).json({ success: false, message: "Gagal menugaskan driver" });
+  }
+};
+
+module.exports = { createOrder, getOrdersByOwner, getOrdersByCustomer, getOrdersByDriver, assignDriver, updateOrderStatus };

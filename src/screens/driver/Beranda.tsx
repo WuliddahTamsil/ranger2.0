@@ -32,6 +32,7 @@ import { rp } from "../../utils/formatters";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { RoleHeader } from "../../components/RoleHeader";
+import { getMarketplaceOrdersForDriver, updateMarketplaceOrderStatus, assignMarketplaceDriver } from "../../services/api";
 
 // Import other screens
 import { Order, DriverOrder } from "./Order";
@@ -104,47 +105,38 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   const [balance, setBalance] = useState<number>(130000);
 
   // 3. Global Orders State
-  const [orders, setOrders] = useState<DriverOrder[]>([
-    {
-      id: "ORD-201",
-      customer: "Bambang Wijaya",
-      phone: "0812-3456-7890",
-      type: "Catering",
-      time: "11:04",
-      from: "Dapur Catering Bu Haji Nani",
-      to: "Kawasan PGE Kamojang Office",
-      dist: "3.5 km",
-      pay: 20000,
-      driverShare: 20000,
-      status: "Menunggu",
-    },
-    {
-      id: "ORD-202",
-      customer: "Siti Aminah",
-      phone: "0822-9876-5432",
-      type: "Marketplace",
-      time: "10:35",
-      from: "Toko Sembako Jaya",
-      to: "Perumahan Kamojang Indah Blok C",
-      dist: "2.1 km",
-      pay: 15000,
-      driverShare: 15000,
-      status: "Menunggu",
-    },
-    {
-      id: "ORD-203",
-      customer: "Pelanggan terdaftar",
-      phone: "0856-1122-3344",
-      type: "Laundry",
-      time: "09:12",
-      from: "Laundry Barokah Kamojang",
-      to: "Mess Karyawan Kamojang Room 4",
-      dist: "1.2 km",
-      pay: 10000,
-      driverShare: 10000,
-      status: "Selesai",
-    },
-  ]);
+  const [orders, setOrders] = useState<DriverOrder[]>([]);
+
+  useEffect(() => {
+    if (!authAccount?.id) {
+      setOrders([]);
+      return;
+    }
+    const loadOrders = async () => {
+      const result = await getMarketplaceOrdersForDriver(authAccount.id);
+      if (!result.success || !Array.isArray(result.data)) {
+        setOrders([]);
+        return;
+      }
+      setOrders(result.data.map((order: any) => ({
+        id: order._id,
+        customer: order.customerName,
+        phone: order.customerPhone || "",
+        type: "Marketplace",
+        time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        from: order.storeAddress || order.storeName || `Toko marketplace ${order.storeId || order.ownerId}`,
+        to: order.address,
+        dist: "—",
+        pay: order.totalAmount,
+        driverShare: order.driverTip || order.deliveryFee || 0,
+        status: order.status === "Menuju Pickup" ? "Menuju Pickup" : order.status === "Sampai Pickup" ? "Sampai Pickup" : order.status === "Diambil" || order.status === "Mengantar" ? "Mengantar" : order.status === "Selesai" ? "Selesai" : order.status === "Dibatalkan" ? "Dibatalkan" : "Menunggu",
+        items: order.items,
+      })));
+    };
+    void loadOrders();
+    const interval = setInterval(() => void loadOrders(), 5000);
+    return () => clearInterval(interval);
+  }, [authAccount?.id]);
 
   // 4. Global Transactions State
   const [transactions, setTransactions] = useState<TransactionRecord[]>([
@@ -227,6 +219,24 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             transactions={transactions}
             setTransactions={setTransactions}
             isOnline={isOnline}
+            onStatusChange={async (orderId, status) => {
+              const backendStatus = status;
+              const result = await updateMarketplaceOrderStatus(orderId, backendStatus);
+              if (!result.success) {
+                Alert.alert("Gagal", result.message || "Status order gagal diperbarui");
+                return false;
+              }
+              return true;
+            }}
+            onAcceptOrder={async (orderId) => {
+              const result = await assignMarketplaceDriver(orderId, authAccount?.id || "");
+              if (!result.success) {
+                Alert.alert("Gagal", result.message || "Order gagal diterima");
+                return false;
+              }
+              return true;
+            }}
+            driverId={authAccount?.id}
           />
         );
       case 2:

@@ -239,6 +239,40 @@ export const updateMarketplaceOrderStatus = async (id: string, status: string) =
   }
 };
 
+export const getMarketplaceOrdersForDriver = async (driverId: string) => {
+  try {
+    const res = await fetch(getApiUrl(`/marketplace/orders/driver/${driverId}?t=${Date.now()}`), { cache: "no-store" });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("getMarketplaceOrdersForDriver error:", err);
+    return { success: false, data: [], message: "Gagal mengambil order driver" };
+  }
+};
+
+export const assignMarketplaceDriver = async (orderId: string, driverId: string) => {
+  try {
+    const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/assign-driver`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ driverId }),
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("assignMarketplaceDriver error:", err);
+    return { success: false, message: "Gagal menugaskan driver" };
+  }
+};
+
+export const getDrivers = async () => {
+  try {
+    const res = await fetch(getApiUrl("/auth/mitra?role=driver"));
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("getDrivers error:", err);
+    return { success: false, data: [] };
+  }
+};
+
 export const getNotifications = async (userId: string) => {
   try {
     const res = await fetch(getApiUrl(`/notifications/${userId}`));

@@ -44,6 +44,8 @@ import {
   deleteMarketplaceProduct,
   getMarketplaceOrdersForOwner,
   updateMarketplaceOrderStatus,
+  getDrivers,
+  assignMarketplaceDriver,
 } from "../../services/api";
 
 // Import other screens
@@ -131,6 +133,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
 
   // 3. Global Orders State
   const [orders, setOrders] = useState<OrderData[]>([]);
+  const [drivers, setDrivers] = useState<{ id: string; name: string; phone: string }[]>([]);
 
   useEffect(() => {
     if (!authAccount) return;
@@ -150,7 +153,15 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
         deliveryFee: order.deliveryFee,
         time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
         status: order.status,
-        driver: null,
+        driver: order.driverId ? {
+          name: order.driverName || "Driver",
+          vehicle: "Kurir",
+          plateNumber: "",
+          rating: 5,
+          stage: order.status === "Diambil" ? "Sedang mengantar pesanan" : "Menunggu pickup",
+          distance: "—",
+          eta: "—",
+        } : null,
         unreadCustomerMessages: 0,
         unreadDriverMessages: 0,
       })));
@@ -159,6 +170,14 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
     const interval = setInterval(() => void loadOrders(), 15000);
     return () => clearInterval(interval);
   }, [authAccount]);
+
+  useEffect(() => {
+    void getDrivers().then((result) => {
+      if (result.success && Array.isArray(result.data)) {
+        setDrivers(result.data.map((driver: any) => ({ id: driver._id, name: driver.name, phone: driver.phone || "" })));
+      }
+    });
+  }, []);
 
   // 4. Global Withdrawals State
   const [withdrawals, setWithdrawals] = useState<any[]>([
@@ -405,6 +424,15 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
               return true;
             }}
             ownerId={authAccount?.id}
+            drivers={drivers}
+            onAssignDriver={async (orderId, driverId) => {
+              const result = await assignMarketplaceDriver(orderId, driverId);
+              if (!result.success) {
+                showAlert("Gagal", result.message || "Driver gagal ditugaskan");
+                return false;
+              }
+              return true;
+            }}
           />
         );
       case 2:

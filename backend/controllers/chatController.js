@@ -16,11 +16,12 @@ const sendChatMessage = async (req, res) => {
     if (!order) return res.status(404).json({ success: false, message: "Order chat tidak ditemukan" });
     const customerId = String(order.customerId);
     const ownerId = String(order.ownerId);
-    if (String(senderId) !== customerId && String(senderId) !== ownerId) {
+    const driverId = String(order.driverId || "");
+    if (String(senderId) !== customerId && String(senderId) !== ownerId && String(senderId) !== driverId) {
       return res.status(403).json({ success: false, message: "Akun tidak terhubung dengan order ini" });
     }
-    const normalizedSender = sender === "owner" ? ownerId : customerId;
-    const receiverId = normalizedSender === ownerId ? customerId : ownerId;
+    const normalizedSender = sender === "owner" ? ownerId : sender === "driver" ? driverId : customerId;
+    const receiverId = normalizedSender === ownerId || normalizedSender === driverId ? customerId : ownerId;
 
     const message = await ChatMessage.create({
       orderId,

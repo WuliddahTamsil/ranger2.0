@@ -66,9 +66,11 @@ interface OrderProps {
   setOrders: (orders: OrderData[]) => void;
   onStatusChange?: (orderId: string, status: OrderData["status"]) => Promise<boolean>;
   ownerId?: string;
+  drivers?: { id: string; name: string; phone: string }[];
+  onAssignDriver?: (orderId: string, driverId: string) => Promise<boolean>;
 }
 
-export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange, ownerId }) => {
+export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange, ownerId, drivers = [], onAssignDriver }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("Semua");
   
@@ -587,6 +589,29 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                 </View>
 
                 {/* Driver card */}
+                {!selectedOrder.driver && drivers.length > 0 && (
+                  <>
+                    <Text style={styles.detailSecTitle}>Tugaskan Driver</Text>
+                    {drivers.map((driver) => (
+                      <TouchableOpacity
+                        key={driver.id}
+                        style={styles.detailCard}
+                        onPress={async () => {
+                          if (onAssignDriver && await onAssignDriver(selectedOrder.id, driver.id)) {
+                            setDetailModalVisible(false);
+                          }
+                        }}
+                      >
+                        <Truck size={20} color="#1B7A4E" />
+                        <View style={styles.detailCardBody}>
+                          <Text style={styles.detailCardName}>{driver.name}</Text>
+                          <Text style={styles.detailCardSub}>{driver.phone || "Nomor belum tersedia"}</Text>
+                        </View>
+                        <Text style={styles.sheetBtnTextSolid}>Pilih</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                )}
                 {selectedOrder.driver && (
                   <>
                     <Text style={styles.detailSecTitle}>Driver / Kurir</Text>

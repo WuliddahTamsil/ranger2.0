@@ -29,6 +29,9 @@ const cateringOrderSchema = new mongoose.Schema(
     },
     storeId: { type: String, default: "" },
     productId: { type: String, default: "" },
+    driverId: { type: String, default: "", index: true },
+    driverName: { type: String, default: "" },
+    driverPhone: { type: String, default: "" },
     menuName: {
       type: String,
       required: true,

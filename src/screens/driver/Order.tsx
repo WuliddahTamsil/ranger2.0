@@ -26,6 +26,7 @@ import {
   ChevronRight,
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
+import { getChatMessages, sendChatMessage } from "../../services/api";
 
 export interface DriverOrder {
   id: string;
@@ -39,6 +40,7 @@ export interface DriverOrder {
   pay: number;
   driverShare: number;
   status: "Menunggu" | "Menuju Pickup" | "Sampai Pickup" | "Mengantar" | "Selesai" | "Dibatalkan";
+  items?: { name: string; quantity: number; price: number }[];
 }
 
 interface OrderProps {
@@ -49,6 +51,9 @@ interface OrderProps {
   transactions: any[];
   setTransactions: (txs: any[]) => void;
   isOnline: boolean;
+  onStatusChange?: (orderId: string, status: DriverOrder["status"]) => Promise<boolean>;
+  onAcceptOrder?: (orderId: string) => Promise<boolean>;
+  driverId?: string;
 }
 
 interface ChatMessage {
@@ -65,21 +70,44 @@ export const Order: React.FC<OrderProps> = ({
   transactions,
   setTransactions,
   isOnline,
+  onStatusChange,
+  onAcceptOrder,
+  driverId,
 }) => {
   const [activeTab, setActiveTab] = useState<"Masuk" | "Aktif" | "Selesai" | "Batal">("Masuk");
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<DriverOrder | null>(null);
   
-  // Chat simulator states
   const [typedMessage, setTypedMessage] = useState("");
-  const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({
-    "ORD-201": [
-      { sender: "customer", text: "Pak, tolong sesuai alamat ya. Rumah pagar hitam.", time: "11:05" },
-    ],
-  });
+  const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
+
+  React.useEffect(() => {
+    if (!chatModalVisible || !selectedOrder) return;
+    const loadMessages = async () => {
+      const result = await getChatMessages(selectedOrder.id);
+      if (result.success && Array.isArray(result.data)) {
+        setChatMessages((previous) => ({
+          ...previous,
+          [selectedOrder.id]: result.data.map((message: any) => ({
+            sender: message.sender === "driver" ? "driver" : "customer",
+            text: message.text,
+            time: new Date(message.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          })),
+        }));
+      }
+    };
+    void loadMessages();
+    const interval = setInterval(() => void loadMessages(), 3000);
+    return () => clearInterval(interval);
+  }, [chatModalVisible, selectedOrder]);
 
   const handleUpdateStatus = (orderId: string, nextStatus: DriverOrder["status"]) => {
+    if (onStatusChange) {
+      void onStatusChange(orderId, nextStatus).then((success) => {
+        if (!success) return;
+      });
+    }
     let alertMsg = "";
     let isFinished = false;
     let earnedAmount = 0;
@@ -129,7 +157,8 @@ export const Order: React.FC<OrderProps> = ({
     Alert.alert("Status Diperbarui", alertMsg);
   };
 
-  const handleAcceptOrder = (orderId: string) => {
+  const handleAcceptOrder = async (orderId: string) => {
+    if (onAcceptOrder && !(await onAcceptOrder(orderId))) return;
     handleUpdateStatus(orderId, "Menuju Pickup");
   };
 
@@ -143,8 +172,7 @@ export const Order: React.FC<OrderProps> = ({
     setChatModalVisible(true);
   };
 
-  // Send message simulator
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (typedMessage.trim() === "" || !selectedOrder) return;
 
     const chatKey = selectedOrder.id;
@@ -163,18 +191,11 @@ export const Order: React.FC<OrderProps> = ({
     });
     setTypedMessage("");
 
-    // Simulate reply
-    setTimeout(() => {
-      const replyMsg: ChatMessage = {
-        sender: "customer",
-        text: "Baik Pak, saya tunggu di depan teras ya.",
-        time: "Baru saja",
-      };
-      setChatMessages((prev) => ({
-        ...prev,
-        [chatKey]: [...updatedHistory, replyMsg],
-      }));
-    }, 2000);
+    const result = await sendChatMessage(selectedOrder.id, "driver", newMsg.text, undefined, driverId);
+    if (!result.success) {
+      Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
+      return;
+    }
   };
 
   // Filters based on tab selection
@@ -426,6 +447,19 @@ export const Order: React.FC<OrderProps> = ({
                 </View>
 
                 {/* Route Information */}
+                {selectedOrder.items && selectedOrder.items.length > 0 && (
+                  <>
+                    <Text style={styles.detailSecTitle}>Pesanan Customer</Text>
+                    <View style={styles.routeDetailCard}>
+                      {selectedOrder.items.map((item) => (
+                        <View key={`${item.name}-${item.quantity}`} style={styles.priceRow}>
+                          <Text style={styles.priceLabel}>{item.name} x{item.quantity}</Text>
+                          <Text style={styles.priceVal}>{rp(item.price * item.quantity)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
                 <Text style={styles.detailSecTitle}>Rute Perjalanan</Text>
                 <View style={styles.routeDetailCard}>
                   <View style={styles.routeDetailItem}>
