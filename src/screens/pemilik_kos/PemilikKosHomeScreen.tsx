@@ -12,7 +12,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
-import { fetchRoomsByOwner, fetchOwnerBookings } from "../../services/kostService";
+import { fetchRoomsByOwner, fetchOwnerBookings, fetchTransactionsByOwner } from "../../services/kostService";
 import {
   Bell,
   Building2,
@@ -44,18 +44,21 @@ interface PemilikKosHomeProps extends Nav {
 export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, authAccount }) => {
   const [activeTab, setActiveTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("beranda");
   const [rooms, setRooms] = useState<any[]>([]);
+  const [allBookings, setAllBookings] = useState<any[]>([]);
   const [pendingBookings, setPendingBookings] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const scrollViewRef = useRef<ScrollView>(null);
   const [perluTindakanY, setPerluTindakanY] = useState(0);
 
-  // 12 Months for current year
+  // 12 Months for current year (Defaults to current month e.g. September 2026)
+  const currentMonthIdx = new Date().getMonth();
   const currentYear = new Date().getFullYear();
   const monthNames = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
   ];
   const monthsList = monthNames.map(m => `${m} ${currentYear}`);
-  const [selectedMonth, setSelectedMonth] = useState(`Agustus ${currentYear}`);
+  const [selectedMonth, setSelectedMonth] = useState(`${monthNames[currentMonthIdx]} ${currentYear}`);
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
 
   const scrollToPerluTindakan = () => {
@@ -70,17 +73,23 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   const load = async () => {
     try {
       const ownerEmail = authAccount?.email || "aisk@gmail.com";
-      const [roomsData, bookingsData] = await Promise.all([
+      const [roomsData, bookingsData, txData] = await Promise.all([
         fetchRoomsByOwner(ownerEmail),
-        fetchOwnerBookings(ownerEmail, "dp_submitted"),
+        fetchOwnerBookings(ownerEmail),
+        fetchTransactionsByOwner(ownerEmail),
       ]);
       if (roomsData && roomsData.length > 0) {
         setRooms(roomsData);
       }
       if (bookingsData && bookingsData.length > 0) {
-        setPendingBookings(bookingsData);
+        setAllBookings(bookingsData);
+        setPendingBookings(bookingsData.filter((b: any) => b.status === "dp_submitted"));
       } else {
+        setAllBookings([]);
         setPendingBookings([]);
+      }
+      if (txData && Array.isArray(txData)) {
+        setTransactions(txData);
       }
     } catch (err) {
       console.log("Using default overview stats:", err);
@@ -91,14 +100,28 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
     load();
   }, [authAccount]);
 
-  const totalKamar = rooms.length > 0 ? rooms.length : 5;
-  const kamarTerisi = rooms.length > 0 ? rooms.filter(r => r.status === "terisi" || r.isAvailable === false).length : 2;
+  const totalKamar = rooms.length;
+  const kamarTerisi = rooms.filter(r => r.status === "terisi" || r.isAvailable === false).length;
   const kamarKosong = totalKamar - kamarTerisi;
-  const percentFilled = totalKamar > 0 ? Math.round((kamarTerisi / totalKamar) * 100) : 40;
-  const estPendapatan = rooms.length > 0
-    ? rooms.reduce((acc, r) => acc + ((r.status === "terisi" || r.isAvailable === false) ? (Number(r.priceMonthly) || parseInt((r.price || "").toString().replace(/[^0-9]/g, "")) || 1500000) : 0), 0)
-    : 3300000;
+  const percentFilled = totalKamar > 0 ? Math.round((kamarTerisi / totalKamar) * 100) : 0;
+  
+  // Real Financial Calculations matching LaporanKeuanganScreen
+  const validBookings = allBookings.filter(b => b.status === "dp_verified" || b.status === "dp_submitted" || b.status === "active");
+  const totalDpCustomer = validBookings.reduce((sum, b) => sum + Number(b.dpAmount || 0), 0);
+  const settledBookings = validBookings.filter(b => b.settlementStatus === "settled" || (b.settledAmount && b.settledAmount > 0));
+  const totalPelunasanCustomer = settledBookings.reduce(
+    (sum, b) => sum + (Number(b.settledAmount) || (Number(b.totalAmount || 0) - Number(b.dpAmount || 0)) || 0),
+    0
+  );
+  const manualIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const manualExpense = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  
+  const totalPendapatan = totalDpCustomer + totalPelunasanCustomer + manualIncome;
+  const totalPengeluaran = manualExpense;
+  const labaBersih = totalPendapatan - totalPengeluaran;
+
   const vacantRooms = rooms.filter(r => r.status === "kosong" || r.isAvailable === true);
+  const overdueRooms = rooms.filter(r => r.isOverdue === true);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -153,24 +176,34 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
             </TouchableOpacity>
           </View>
 
-          {/* Income Card */}
-          <View style={styles.incomeCard}>
-            <Text style={styles.incomeLabel}>Estimasi Pendapatan</Text>
-            <Text style={styles.incomeAmount}>Rp {estPendapatan.toLocaleString("id-ID")}</Text>
+          {/* Income Card (Matching Laporan Keuangan Laba Bersih) */}
+          <TouchableOpacity
+            style={styles.incomeCard}
+            onPress={() => navigate("pemilik_kos_laporan_keuangan")}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.incomeLabel}>Laba Bersih</Text>
+            <Text style={styles.incomeAmount}>Rp {labaBersih.toLocaleString("id-ID")}</Text>
 
             <View style={styles.incomeBadgeRow}>
-              <View style={styles.trendBadge}>
-                <TrendingUp size={13} color="#0D7A53" />
-                <Text style={styles.trendText}>+100%</Text>
+              <View style={[styles.trendBadge, labaBersih === 0 && { backgroundColor: "rgba(255,255,255,0.15)" }]}>
+                <TrendingUp size={13} color={labaBersih === 0 ? "#FFFFFF" : "#0D7A53"} />
+                <Text style={[styles.trendText, labaBersih === 0 && { color: "#FFFFFF" }]}>
+                  {labaBersih > 0 ? "+100%" : "0%"}
+                </Text>
               </View>
-              <Text style={styles.trendSubtext}>semua kamar aktif</Text>
+              <Text style={styles.trendSubtext}>
+                {kamarTerisi > 0 || validBookings.length > 0
+                  ? `${kamarTerisi} kamar • ${validBookings.length} booking terdata`
+                  : "Belum ada transaksi"}
+              </Text>
             </View>
 
-            {/* Wallet Watermark Outline */}
+            {/* Document / Wallet Watermark Outline */}
             <View style={styles.walletWatermark}>
-              <Wallet size={72} color="rgba(255, 255, 255, 0.08)" />
+              <FileText size={72} color="rgba(255, 255, 255, 0.12)" />
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Section: Tingkat Keterisian */}
           <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 14 }]}>
@@ -252,75 +285,97 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
             onLayout={(e) => setPerluTindakanY(e.nativeEvent.layout.y)}
           >
             <Text style={styles.sectionTitle}>Perlu Tindakan</Text>
-            <TouchableOpacity style={styles.seeAllLink} activeOpacity={0.7}>
-              <Text style={styles.seeAllText}>Lihat Semua</Text>
-              <ChevronRight size={14} color="#0D7A53" />
-            </TouchableOpacity>
+            {(pendingBookings.length > 0 || overdueRooms.length > 0) && (
+              <TouchableOpacity
+                style={styles.seeAllLink}
+                onPress={() => navigate("pemilik_kos_verifikasi_dp")}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.seeAllText}>Lihat Semua</Text>
+                <ChevronRight size={14} color="#0D7A53" />
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* Card 1: Booking Kamar Baru */}
-          <View style={[styles.actionCard, { borderLeftColor: "#FF6500" }]}>
-            <View style={styles.actionCardHeader}>
-              <View style={styles.actionHeaderLeft}>
-                <View style={[styles.actionIconCircle, { backgroundColor: "#FFF7ED" }]}>
-                  <Bell size={16} color="#FF6500" />
+          {/* Card 1: Booking Kamar Baru (Only shown if pending bookings exist) */}
+          {pendingBookings.length > 0 && (
+            <View style={[styles.actionCard, { borderLeftColor: "#FF6500" }]}>
+              <View style={styles.actionCardHeader}>
+                <View style={styles.actionHeaderLeft}>
+                  <View style={[styles.actionIconCircle, { backgroundColor: "#FFF7ED" }]}>
+                    <Bell size={16} color="#FF6500" />
+                  </View>
+                  <Text style={styles.actionCardTitle}>
+                    Booking Kamar Baru ({pendingBookings.length})
+                  </Text>
                 </View>
-                <Text style={styles.actionCardTitle}>
-                  {pendingBookings.length > 0 ? `Booking Kamar Baru (${pendingBookings.length})` : "Booking Kamar Masuk"}
-                </Text>
-              </View>
-              <View style={styles.badgeGreen}>
-                <Text style={styles.badgeGreenText}>Baru saja</Text>
-              </View>
-            </View>
-
-            <Text style={styles.actionDesc}>
-              {pendingBookings.length > 0 ? (
-                <>
-                  <Text style={styles.boldDescText}>{pendingBookings[0].customerName || "Aisyah Putri"}</Text> telah membayar DP Rp {Number(pendingBookings[0].dpAmount || 300000).toLocaleString("id-ID")} untuk Kamar {pendingBookings[0].roomNumber || "101"}.
-                </>
-              ) : (
-                <>
-                  <Text style={styles.boldDescText}>Aisyah Putri</Text> telah mengajukan booking untuk kamar kos Anda.
-                </>
-              )}
-            </Text>
-
-            <TouchableOpacity
-              style={styles.btnOrangePill}
-              onPress={() => navigate("pemilik_kos_verifikasi_dp")}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.btnOrangePillText}>Verifikasi DP</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Card 2: Tagihan Jatuh Tempo */}
-          <View style={[styles.actionCard, { borderLeftColor: "#EF4444" }]}>
-            <View style={styles.actionCardHeader}>
-              <View style={styles.actionHeaderLeft}>
-                <View style={[styles.actionIconCircle, { backgroundColor: "#FEE2E2" }]}>
-                  <AlertCircle size={16} color="#EF4444" />
+                <View style={styles.badgeGreen}>
+                  <Text style={styles.badgeGreenText}>Baru saja</Text>
                 </View>
-                <Text style={styles.actionCardTitle}>Tagihan Jatuh Tempo</Text>
               </View>
-              <View style={styles.badgeRed}>
-                <Text style={styles.badgeRedText}>Hari ini</Text>
-              </View>
+
+              <Text style={styles.actionDesc}>
+                <Text style={styles.boldDescText}>{pendingBookings[0].customerName || "Customer"}</Text> telah membayar DP Rp {Number(pendingBookings[0].dpAmount || 300000).toLocaleString("id-ID")} untuk Kamar {pendingBookings[0].roomNumber || "101"}.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.btnOrangePill}
+                onPress={() => navigate("pemilik_kos_verifikasi_dp")}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnOrangePillText}>Verifikasi DP</Text>
+              </TouchableOpacity>
             </View>
+          )}
 
-            <Text style={styles.actionDesc}>
-              Kamar 04 (Ahmad) jatuh tempo hari ini sebesar <Text style={styles.boldDescText}>Rp 1.500.000</Text>.
-            </Text>
+          {/* Card 2: Tagihan Jatuh Tempo (Only shown if overdue rooms exist) */}
+          {overdueRooms.length > 0 && (
+            <View style={[styles.actionCard, { borderLeftColor: "#EF4444" }]}>
+              <View style={styles.actionCardHeader}>
+                <View style={styles.actionHeaderLeft}>
+                  <View style={[styles.actionIconCircle, { backgroundColor: "#FEE2E2" }]}>
+                    <AlertCircle size={16} color="#EF4444" />
+                  </View>
+                  <Text style={styles.actionCardTitle}>Tagihan Jatuh Tempo</Text>
+                </View>
+                <View style={styles.badgeRed}>
+                  <Text style={styles.badgeRedText}>Hari ini</Text>
+                </View>
+              </View>
 
-            <TouchableOpacity
-              style={styles.btnPinkPill}
-              onPress={() => navigate("pemilik_kos_kirim_pengingat")}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.btnPinkPillText}>Kirim Pengingat</Text>
-            </TouchableOpacity>
-          </View>
+              <Text style={styles.actionDesc}>
+                Kamar {overdueRooms[0].roomNumber || "01"} ({overdueRooms[0].tenantName || "Penghuni"}) jatuh tempo hari ini sebesar <Text style={styles.boldDescText}>Rp {Number(overdueRooms[0].priceMonthly || 1000000).toLocaleString("id-ID")}</Text>.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.btnPinkPill}
+                onPress={() => navigate("pemilik_kos_kirim_pengingat")}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnPinkPillText}>Kirim Pengingat</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Empty State: Shown when no pending actions */}
+          {pendingBookings.length === 0 && overdueRooms.length === 0 && (
+            <View style={[styles.actionCard, { borderLeftColor: "#0D7A53", backgroundColor: "#F0FDF4" }]}>
+              <View style={styles.actionCardHeader}>
+                <View style={styles.actionHeaderLeft}>
+                  <View style={[styles.actionIconCircle, { backgroundColor: "#DCFCE7" }]}>
+                    <Check size={16} color="#0D7A53" />
+                  </View>
+                  <Text style={[styles.actionCardTitle, { color: "#166534" }]}>Semua Berjalan Lancar</Text>
+                </View>
+                <View style={[styles.badgeGreen, { backgroundColor: "#DCFCE7" }]}>
+                  <Text style={[styles.badgeGreenText, { color: "#166534" }]}>Aktif</Text>
+                </View>
+              </View>
+              <Text style={[styles.actionDesc, { color: "#374151" }]}>
+                Belum ada pesanan booking baru atau tagihan jatuh tempo. Notifikasi verifikasi DP akan otomatis muncul di sini saat customer memesan kamar.
+              </Text>
+            </View>
+          )}
 
           {/* Section: Status Kamar Kosong */}
           <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>

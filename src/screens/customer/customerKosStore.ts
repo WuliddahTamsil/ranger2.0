@@ -11,7 +11,10 @@ export interface SelectedKost {
   facilities: string[];
   rules?: string[];
   images: string[];
+  rating?: number;
+  reviewCount?: number;
   bankAccount?: {
+    paymentType?: "bank" | "qris";
     bankName: string;
     accountNumber: string;
     accountHolder: string;

@@ -75,6 +75,41 @@ const registerUser = async (req, res) => {
       }).catch(err => console.warn("Auto LaundryStore creation note:", err.message));
     }
 
+    if (role === "pemilik_kos") {
+      const Kost = require("../models/Kost");
+      const kostName = finalRoleData?.businessName || user.name || "Kost Nyaman Eksklusif";
+      let kostType = "Campur";
+      if (finalRoleData?.propertyType?.toLowerCase().includes("putri")) kostType = "Putri";
+      else if (finalRoleData?.propertyType?.toLowerCase().includes("putra")) kostType = "Putra";
+
+      await Kost.create({
+        ownerId: user._id,
+        name: kostName.charAt(0).toUpperCase() + kostName.slice(1),
+        type: kostType,
+        address: user.address || finalRoleData?.businessAddress || "Jl. Kamojang No. 12, Garut",
+        city: "Garut",
+        district: "Kamojang",
+        description: "Kos eksklusif nyaman, bersih, aman, dan berfasilitas lengkap untuk mahasiswa & pekerja.",
+        price: 1200000,
+        dpAmount: 300000,
+        facilities: ["WiFi", "AC", "KM Dalam", "Kasur", "Lemari", "Meja Belajar", "Dapur Bersama", "Parkir Motor"],
+        rules: ["Akses 24 Jam", "Dilarang Merokok di Kamar", "Tamu Lawan Jenis Maks Pukul 21.00"],
+        images: [
+          user.profilePhoto || "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80",
+        ],
+        rooms: [],
+        bankAccount: {
+          bankName: "BCA",
+          accountNumber: "8830192831",
+          accountHolder: user.name,
+        },
+        rating: 4.9,
+        reviewCount: 12,
+        isActive: true,
+      }).catch(err => console.warn("Auto Kost creation note:", err.message));
+    }
+
     return res.status(201).json({
       success: true,
       message: "Pendaftaran berhasil",

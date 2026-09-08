@@ -16,6 +16,7 @@ export interface KostData {
   rules: string[];
   images: string[];
   bankAccount?: {
+    paymentType?: "bank" | "qris";
     bankName: string;
     accountNumber: string;
     accountHolder: string;
@@ -99,6 +100,33 @@ export const fetchKostsByOwner = async (ownerId: string) => {
   }
 };
 
+export const fetchKostProperty = async (ownerId: string) => {
+  try {
+    const url = getApiUrl(`/kosts/property/${ownerId}`);
+    const response = await fetch(url);
+    const result = await response.json();
+    return result.data || null;
+  } catch (error) {
+    console.error("❌ fetchKostProperty error:", error);
+    return null;
+  }
+};
+
+export const updateKostProperty = async (ownerId: string, propertyData: Partial<KostData>) => {
+  try {
+    const url = getApiUrl(`/kosts/property/${ownerId}`);
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(propertyData),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("❌ updateKostProperty error:", error);
+    throw error;
+  }
+};
+
 export const createNewKost = async (data: Partial<KostData>) => {
   try {
     const url = getApiUrl("/kosts");
@@ -153,6 +181,24 @@ export const verifyDpBooking = async (bookingId: string, status: "dp_verified" |
     return await response.json();
   } catch (error) {
     console.error("❌ verifyDpBooking error:", error);
+    throw error;
+  }
+};
+
+export const settleKostBooking = async (
+  bookingId: string,
+  data: { paymentMethod: "transfer" | "cash"; settledAmount?: number; notes?: string; proofImage?: string }
+) => {
+  try {
+    const url = getApiUrl(`/bookings/${bookingId}/settle`);
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("❌ settleKostBooking error:", error);
     throw error;
   }
 };
@@ -251,6 +297,21 @@ export const addTenantToKost = async (ownerId: string, tenantData: any) => {
   }
 };
 
+export const updateTenantInKost = async (ownerId: string, tenantId: string, tenantData: any) => {
+  try {
+    const url = getApiUrl(`/kosts/tenants/${ownerId}/${tenantId}`);
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(tenantData),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("❌ updateTenantInKost error:", error);
+    throw error;
+  }
+};
+
 export const deleteTenantFromKost = async (ownerId: string, tenantId: string) => {
   try {
     const url = getApiUrl(`/kosts/tenants/${ownerId}/${tenantId}`);
@@ -258,6 +319,55 @@ export const deleteTenantFromKost = async (ownerId: string, tenantId: string) =>
     return await response.json();
   } catch (error) {
     console.error("❌ deleteTenantFromKost error:", error);
+    throw error;
+  }
+};
+
+// =================== TRANSACTIONS & EXPENSES API ===================
+export const fetchTransactionsByOwner = async (ownerId: string) => {
+  try {
+    const url = getApiUrl(`/transactions/owner/${ownerId}`);
+    const response = await fetch(url);
+    const result = await response.json();
+    return result.data || [];
+  } catch (error) {
+    console.warn("fetchTransactionsByOwner error:", error);
+    return [];
+  }
+};
+
+export const createOwnerTransaction = async (txData: {
+  title: string;
+  category?: string;
+  amount: number;
+  type: "income" | "expense";
+  date?: string | Date;
+  notes?: string;
+  receiptImage?: string;
+  ownerId?: string;
+  ownerEmail?: string;
+}) => {
+  try {
+    const url = getApiUrl("/transactions");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(txData),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("❌ createOwnerTransaction error:", error);
+    throw error;
+  }
+};
+
+export const deleteOwnerTransaction = async (txId: string) => {
+  try {
+    const url = getApiUrl(`/transactions/${txId}`);
+    const response = await fetch(url, { method: "DELETE" });
+    return await response.json();
+  } catch (error) {
+    console.error("❌ deleteOwnerTransaction error:", error);
     throw error;
   }
 };

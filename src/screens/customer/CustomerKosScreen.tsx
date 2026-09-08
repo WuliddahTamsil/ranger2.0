@@ -10,6 +10,8 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Modal,
+  Alert,
 } from "react-native";
 import {
   ArrowLeft,
@@ -23,6 +25,7 @@ import {
   Star,
   Heart,
   ChevronRight,
+  ChevronDown,
   X,
   Wifi,
   Laptop,
@@ -38,6 +41,11 @@ import {
   MessageCircle,
   Building2,
   Calendar,
+  FileText,
+  Download,
+  Printer,
+  Share2,
+  Check,
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { fetchAllKosts, fetchCustomerBookings } from "../../services/kostService";
@@ -49,52 +57,50 @@ interface CustomerKosScreenProps extends Nav {
   authAccount?: AuthAccount | null;
 }
 
+const DISMISSED_BOOKING_KEY = "ranger_dismissed_booking_banners";
+
+const getIsBannerDismissed = (bookingId?: string) => {
+  try {
+    if (typeof window !== "undefined" && window.localStorage && bookingId) {
+      const dismissedList = JSON.parse(window.localStorage.getItem(DISMISSED_BOOKING_KEY) || "[]");
+      return dismissedList.includes(bookingId);
+    }
+  } catch (e) {}
+  return false;
+};
+
+const setBannerDismissedInStorage = (bookingId?: string) => {
+  try {
+    if (typeof window !== "undefined" && window.localStorage && bookingId) {
+      const dismissedList = JSON.parse(window.localStorage.getItem(DISMISSED_BOOKING_KEY) || "[]");
+      if (!dismissedList.includes(bookingId)) {
+        dismissedList.push(bookingId);
+        window.localStorage.setItem(DISMISSED_BOOKING_KEY, JSON.stringify(dismissedList));
+      }
+    }
+  } catch (e) {}
+};
+
+const setBannerRestoredInStorage = (bookingId?: string) => {
+  try {
+    if (typeof window !== "undefined" && window.localStorage && bookingId) {
+      const dismissedList = JSON.parse(window.localStorage.getItem(DISMISSED_BOOKING_KEY) || "[]");
+      const updated = dismissedList.filter((id: string) => id !== bookingId);
+      window.localStorage.setItem(DISMISSED_BOOKING_KEY, JSON.stringify(updated));
+    }
+  } catch (e) {}
+};
+
 export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, authAccount }) => {
   const [activeCategory, setActiveCategory] = useState<"semua" | "putra" | "putri" | "campur">("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [isBannerVisible, setIsBannerVisible] = useState(true);
   const [loading, setLoading] = useState(false);
   const [dbKosts, setDbKosts] = useState<any[]>([]);
-  const [activeBooking, setActiveBooking] = useState<ActiveCustomerBooking | null>(getActiveCustomerBooking());
-
-  const defaultMockKosts = [
-    {
-      id: "1",
-      name: "Kos Putri Melati",
-      type: "Putri",
-      status: "Tersedia",
-      location: "Jl. Aster No. 7, Kamojang",
-      rating: 4.8,
-      reviews: 120,
-      price: "750.000",
-      facilities: ["WiFi", "AC", "KM Dalam", "Parkir"],
-      img: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80",
-    },
-    {
-      id: "2",
-      name: "Kos Putra Garuda",
-      type: "Putra",
-      status: "Tersedia",
-      location: "Jl. Raya Kamojang No. 20",
-      rating: 4.8,
-      reviews: 120,
-      price: "600.000",
-      facilities: ["WiFi", "KM Dalam", "Dapur"],
-      img: "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=600&q=80",
-    },
-    {
-      id: "3",
-      name: "Kos Campur Harmoni",
-      type: "Campur",
-      status: "Penuh",
-      location: "Jl. Mawar No. 15",
-      rating: 4.8,
-      reviews: 120,
-      price: "900.000",
-      facilities: ["WiFi", "AC", "KM Dalam", "Laundry"],
-      img: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=80",
-    },
-  ];
+  const [activeBooking, setActiveBooking] = useState<ActiveCustomerBooking | null>(null);
+  const [isBookingBannerVisible, setIsBookingBannerVisible] = useState(true);
+  const [isNotaModalOpen, setIsNotaModalOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     const loadKosts = async () => {
@@ -102,51 +108,88 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
       try {
         const data = await fetchAllKosts();
         if (data && data.length > 0) {
-          const mapped = data.map((k: any) => ({
-            id: k._id || k.id,
-            name: k.name,
-            type: k.type,
-            status: k.rooms && k.rooms.some((r: any) => r.isAvailable) ? "Tersedia" : "Penuh",
-            location: k.address,
-            rating: k.rating || 4.9,
-            reviews: 45,
-            price: Number(k.price).toLocaleString("id-ID"),
-            facilities: k.facilities && k.facilities.length > 0 ? k.facilities : ["WiFi", "AC", "KM Dalam"],
-            img: (k.images && k.images[0]) || "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80",
-            raw: k,
-          }));
+          const mapped = data.map((k: any) => {
+            const allRooms = Array.isArray(k.rooms) ? k.rooms : [];
+            const roomPrices = allRooms
+              .map((r: any) => Number(r.priceMonthly) || 0)
+              .filter((p: number) => p > 0);
+            const minPrice = roomPrices.length > 0 ? Math.min(...roomPrices) : Number(k.price || 0);
+
+            // Photos: prioritize owner's uploaded room photos
+            const roomPhotos = allRooms
+              .flatMap((r: any) => (Array.isArray(r.images) ? r.images : []))
+              .filter(Boolean);
+            const kostPhotos = (Array.isArray(k.images) ? k.images : []).filter(Boolean);
+            const allPhotos = roomPhotos.length > 0 ? roomPhotos : kostPhotos;
+            const primaryImg =
+              allPhotos[0] ||
+              "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80";
+
+            // Facilities from rooms or kost
+            const roomFacilities = allRooms.flatMap((r: any) => (Array.isArray(r.facilities) ? r.facilities : []));
+            const uniqueFacilities = Array.from(new Set([...roomFacilities, ...(k.facilities || [])])).slice(0, 5);
+
+            return {
+              id: k._id || k.id,
+              name: k.name,
+              type: k.type || "Campur",
+              status: allRooms.length === 0 ? "Tersedia" : allRooms.some((r: any) => r.isAvailable) ? "Tersedia" : "Penuh",
+              location: k.address || k.city || "Alamat Kost",
+              rating: k.rating || 5.0,
+              reviews: k.reviewCount || 0,
+              price: minPrice.toLocaleString("id-ID"),
+              facilities: uniqueFacilities,
+              img: primaryImg,
+              photoCount: allPhotos.length > 0 ? allPhotos.length : 1,
+              raw: {
+                ...k,
+                price: minPrice,
+                images: allPhotos.length > 0 ? allPhotos : [primaryImg],
+                facilities: uniqueFacilities,
+              },
+            };
+          });
           setDbKosts(mapped);
+        } else {
+          setDbKosts([]);
         }
 
-        // Fetch customer's real bookings
-        const emailOrId = authAccount?.email || authAccount?.id || "aisyahphr@gmail.com";
-        const myBookings = await fetchCustomerBookings(emailOrId);
-        if (myBookings && myBookings.length > 0) {
-          const latest = myBookings[0];
-          const activeObj: ActiveCustomerBooking = {
-            _id: latest._id,
-            bookingCode: latest.bookingCode,
-            customerName: latest.customerName,
-            customerPhone: latest.customerPhone,
-            customerEmail: latest.customerEmail,
-            kostId: latest.kostId?._id || latest.kostId,
-            kostName: latest.kostId?.name || "Ais Kost Exclusive",
-            kostAddress: latest.kostId?.address,
-            roomNumber: latest.roomNumber || "101",
-            entryDate: latest.entryDate ? new Date(latest.entryDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Segera",
-            durationMonths: latest.durationMonths || 1,
-            monthlyPrice: latest.monthlyPrice || 1500000,
-            totalAmount: latest.totalAmount || 1500000,
-            dpAmount: latest.dpAmount || 300000,
-            dpProofImage: latest.dpProofImage,
-            status: latest.status || "dp_submitted",
-            rejectionReason: latest.rejectionReason,
-            verifiedAt: latest.verifiedAt,
-            createdAt: latest.createdAt,
-            ownerPhone: latest.ownerId?.phone || "087805987309",
-            ownerName: latest.ownerId?.name || "Pemilik Kost",
-          };
-          setActiveBooking(activeObj);
+        // Fetch customer's real bookings ONLY if logged-in account is a customer
+        if (authAccount?.email && authAccount.role === "customer") {
+          const myBookings = await fetchCustomerBookings(authAccount.email);
+          if (myBookings && myBookings.length > 0) {
+            const latest = myBookings[0];
+            const activeObj: ActiveCustomerBooking = {
+              _id: latest._id,
+              bookingCode: latest.bookingCode,
+              customerName: latest.customerName,
+              customerPhone: latest.customerPhone,
+              customerEmail: latest.customerEmail,
+              kostId: latest.kostId?._id || latest.kostId,
+              kostName: latest.kostId?.name || "Kost Pilihan",
+              kostAddress: latest.kostId?.address,
+              roomNumber: latest.roomNumber || "101",
+              entryDate: latest.entryDate ? new Date(latest.entryDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Segera",
+              durationMonths: latest.durationMonths || 1,
+              monthlyPrice: latest.monthlyPrice || 1500000,
+              totalAmount: latest.totalAmount || 1500000,
+              dpAmount: latest.dpAmount || 300000,
+              dpProofImage: latest.dpProofImage,
+              status: latest.status || "dp_submitted",
+              rejectionReason: latest.rejectionReason,
+              verifiedAt: latest.verifiedAt,
+              createdAt: latest.createdAt,
+              ownerPhone: latest.ownerId?.phone || "087805987309",
+              ownerName: latest.ownerId?.name || "Pemilik Kost",
+            };
+            setActiveBooking(activeObj);
+            const isDismissed = getIsBannerDismissed(activeObj._id || activeObj.bookingCode);
+            setIsBookingBannerVisible(!isDismissed);
+          } else {
+            setActiveBooking(null);
+          }
+        } else {
+          setActiveBooking(null);
         }
       } catch (err) {
         console.warn("loadKosts error:", err);
@@ -157,12 +200,23 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
     loadKosts();
     const unsub = subscribeCustomerBooking(() => {
-      setActiveBooking(getActiveCustomerBooking());
+      if (authAccount?.role === "customer") {
+        const active = getActiveCustomerBooking();
+        if (active && active.customerEmail === authAccount.email) {
+          setActiveBooking(active);
+          const isDismissed = getIsBannerDismissed(active._id || active.bookingCode);
+          setIsBookingBannerVisible(!isDismissed);
+        } else {
+          setActiveBooking(null);
+        }
+      } else {
+        setActiveBooking(null);
+      }
     });
     return unsub;
   }, [authAccount]);
 
-  const kosList = dbKosts.length > 0 ? [...dbKosts, ...defaultMockKosts.filter(m => !dbKosts.some(d => d.name === m.name))] : defaultMockKosts;
+  const kosList = dbKosts;
 
   const filteredKosList = kosList.filter((item) => {
     const matchesCategory =
@@ -178,8 +232,280 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
   const handleOpenWhatsAppOwner = (phone?: string, kostName?: string, roomNumber?: string) => {
     const cleanPhone = (phone || "087805987309").replace(/[^0-9]/g, "").replace(/^0/, "62");
-    const msg = `Halo Pemilik ${kostName || "Kost"}, saya ingin konfirmasi perihal booking kamar No. ${roomNumber || ""} saya di aplikasi Rangers.`;
+    const msg = `Halo Pemilik ${kostName || "Kost"}, saya ingin konfirmasi perihal booking kamar No. ${roomNumber || ""} saya di aplikasi The Ranger.`;
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
+  };
+
+  const handleShareReceiptWa = () => {
+    if (!activeBooking) return;
+    const cleanPhone = (activeBooking.ownerPhone || "087805987309").replace(/[^0-9]/g, "").replace(/^0/, "62");
+    const sisaBayar = Number(activeBooking.totalAmount || 700000) - Number(activeBooking.dpAmount || 140000);
+    const msg = `*BUKTI NOTA KONFIRMASI PEMESANAN KOST*\n` +
+      `*The Ranger App*\n\n` +
+      `📄 No. Nota / Booking: *${activeBooking.bookingCode}*\n` +
+      `🏠 Nama Kos: *${activeBooking.kostName}*\n` +
+      `🚪 Kamar: *${activeBooking.roomNumber}* (${activeBooking.roomType || "AC"})\n` +
+      `📅 Tgl Masuk: *${activeBooking.entryDate}*\n` +
+      `👤 Penghuni: *${activeBooking.customerName || authAccount?.name || "Customer"}*\n` +
+      `📱 No HP: *${activeBooking.customerPhone || authAccount?.phone || "-"}*\n\n` +
+      `💰 Total Sewa (${activeBooking.durationMonths || 1} bln): Rp ${Number(activeBooking.totalAmount || 700000).toLocaleString("id-ID")}\n` +
+      `✅ *DP 20% Terbayar: Rp ${Number(activeBooking.dpAmount || 140000).toLocaleString("id-ID")} (LUNAS)*\n` +
+      `⏳ Sisa Pelunasan Saat Masuk: Rp ${sisaBayar.toLocaleString("id-ID")}\n\n` +
+      `_Status: Kamar Resmi Terkunci & Siap Ditempati._`;
+
+    Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
+  };
+
+  const handlePrintOrDownloadPdf = () => {
+    if (!activeBooking) return;
+    setIsDownloading(true);
+
+    try {
+      if (typeof window !== "undefined") {
+        const printWindow = window.open("", "_blank");
+        if (printWindow) {
+          const sisaBayar = Number(activeBooking.totalAmount || 700000) - Number(activeBooking.dpAmount || 140000);
+          const receiptHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Nota Konfirmasi Pemesanan - ${activeBooking.bookingCode || "THE-RANGER"}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      margin: 0;
+      padding: 40px 20px;
+      color: #1f2937;
+      background: #f3f4f6;
+    }
+    .ticket {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+    }
+    .header {
+      background: linear-gradient(135deg, #0D7A53 0%, #15803D 100%);
+      color: #ffffff;
+      padding: 28px 24px;
+      text-align: center;
+      position: relative;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .header p {
+      margin: 6px 0 0 0;
+      font-size: 13px;
+      opacity: 0.92;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 14px;
+      background: #ffffff;
+      color: #0D7A53;
+      padding: 6px 16px;
+      border-radius: 30px;
+      font-weight: 800;
+      font-size: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+    }
+    .body {
+      padding: 28px;
+    }
+    .code-box {
+      background: #f9fafb;
+      border: 1.5px dashed #0D7A53;
+      border-radius: 12px;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .code-title {
+      font-size: 11px;
+      color: #6b7280;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .code-val {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0D7A53;
+      margin-top: 2px;
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: #0D7A53;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      border-bottom: 1.5px solid #e5e7eb;
+      padding-bottom: 6px;
+      margin: 22px 0 12px 0;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .label {
+      color: #6b7280;
+      font-weight: 500;
+    }
+    .val {
+      font-weight: 700;
+      color: #111827;
+      text-align: right;
+    }
+    .total-box {
+      background: #f0fdf4;
+      border: 1.5px solid #86efac;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-top: 20px;
+    }
+    .instructions {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 24px;
+      font-size: 12.5px;
+      color: #1e40af;
+      line-height: 1.6;
+    }
+    .footer {
+      text-align: center;
+      padding: 18px;
+      font-size: 11px;
+      color: #9ca3af;
+      border-top: 1px solid #f3f4f6;
+      background: #fafafa;
+    }
+    @media print {
+      body { background: transparent; padding: 0; }
+      .ticket { box-shadow: none; border: 1px solid #ccc; max-width: 100%; border-radius: 0; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket">
+    <div class="header">
+      <h1>THE RANGER</h1>
+      <p>Bukti Resmi Konfirmasi Pemesanan & Pembayaran DP Kos</p>
+      <div class="badge">✓ RESMI TERVERIFIKASI & KAMAR TERKUNCI</div>
+    </div>
+    <div class="body">
+      <div class="code-box">
+        <div>
+          <div class="code-title">Nomor Nota / Kode Pemesanan</div>
+          <div class="code-val">${activeBooking.bookingCode || "KST-ONLINE"}</div>
+        </div>
+        <div style="text-align: right;">
+          <div class="code-title">Tanggal Terbit</div>
+          <div style="font-size: 12px; font-weight: 700; color: #374151; margin-top: 2px;">
+            ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">Informasi Penghuni</div>
+      <div class="row">
+        <span class="label">Nama Calon Penghuni</span>
+        <span class="val">${activeBooking.customerName || authAccount?.name || "Customer"}</span>
+      </div>
+      <div class="row">
+        <span class="label">No. WhatsApp / HP</span>
+        <span class="val">${activeBooking.customerPhone || authAccount?.phone || "-"}</span>
+      </div>
+      <div class="row">
+        <span class="label">Email</span>
+        <span class="val">${activeBooking.customerEmail || authAccount?.email || "aisyahphr@gmail.com"}</span>
+      </div>
+
+      <div class="section-title">Detail Hunian & Kamar</div>
+      <div class="row">
+        <span class="label">Nama Kos</span>
+        <span class="val" style="color: #0D7A53; font-weight: 800;">${activeBooking.kostName || "Kost"}</span>
+      </div>
+      <div class="row">
+        <span class="label">Nomor Kamar</span>
+        <span class="val">Kamar ${activeBooking.roomNumber || "101"} (${activeBooking.roomType || "AC"})</span>
+      </div>
+      <div class="row">
+        <span class="label">Tanggal Masuk (Check-in)</span>
+        <span class="val">${activeBooking.entryDate || "-"}</span>
+      </div>
+      <div class="row">
+        <span class="label">Durasi Sewa</span>
+        <span class="val">${activeBooking.durationMonths || 1} Bulan</span>
+      </div>
+
+      <div class="section-title">Rincian Pembayaran DP & Sewa</div>
+      <div class="row">
+        <span class="label">Biaya Sewa Bulanan</span>
+        <span class="val">Rp ${Number(activeBooking.monthlyPrice || 700000).toLocaleString("id-ID")}</span>
+      </div>
+      <div class="row">
+        <span class="label">Total Biaya Sewa (${activeBooking.durationMonths || 1} Bulan)</span>
+        <span class="val">Rp ${Number(activeBooking.totalAmount || 700000).toLocaleString("id-ID")}</span>
+      </div>
+      <div class="total-box">
+        <div class="row" style="margin-bottom: 6px;">
+          <span style="font-weight: 800; color: #166534; font-size: 13px;">Uang Muka (DP 20%) - DIBAYAR</span>
+          <span style="font-weight: 800; color: #166534; font-size: 16px;">Rp ${Number(activeBooking.dpAmount || 140000).toLocaleString("id-ID")} (LUNAS ✓)</span>
+        </div>
+        <div class="row" style="margin-bottom: 0;">
+          <span style="font-size: 12px; color: #4b5563; font-weight: 600;">Sisa Pelunasan Saat Check-in:</span>
+          <span style="font-weight: 800; color: #b45309; font-size: 14px;">Rp ${sisaBayar.toLocaleString("id-ID")}</span>
+        </div>
+      </div>
+
+      <div class="instructions">
+        <strong>📌 Petunjuk Serah Terima Kunci:</strong><br/>
+        Simpan atau cetak nota ini sebagai tanda bukti sah pemesanan kamar Anda. Tunjukkan nota digital/cetak ini kepada pemilik kos saat tiba di lokasi untuk serah terima kunci kamar dan pelunasan sisa sewa.
+      </div>
+    </div>
+    <div class="footer">
+      Diterbitkan secara otomatis oleh Sistem The Ranger App • Terverifikasi Real-Time
+    </div>
+  </div>
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    }
+  </script>
+</body>
+</html>
+          `;
+          printWindow.document.open();
+          printWindow.document.write(receiptHtml);
+          printWindow.document.close();
+        }
+      }
+    } catch (e) {
+      console.warn("Print error:", e);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -209,8 +535,8 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Active Customer Booking Status Card */}
-        {activeBooking && (
+        {/* Active Customer Booking Status Card (Only for verified customer bookings) */}
+        {activeBooking && activeBooking._id && authAccount?.role === "customer" && isBookingBannerVisible && (
           <View
             style={[
               styles.activeBookingCard,
@@ -222,38 +548,55 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
             ]}
           >
             <View style={styles.bookingCardHeader}>
-              <View style={styles.bookingCodePill}>
-                <Building2 size={13} color="#0D7A53" />
-                <Text style={styles.bookingCodeText}>{activeBooking.bookingCode}</Text>
-              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, flexWrap: "wrap" }}>
+                <View style={styles.bookingCodePill}>
+                  <Building2 size={13} color="#0D7A53" />
+                  <Text style={styles.bookingCodeText}>{activeBooking.bookingCode}</Text>
+                </View>
 
-              <View
-                style={[
-                  styles.statusBadgePill,
-                  activeBooking.status === "dp_verified"
-                    ? { backgroundColor: "#DCFCE7" }
-                    : activeBooking.status === "rejected"
-                    ? { backgroundColor: "#FEE2E2" }
-                    : { backgroundColor: "#FEF3C7" },
-                ]}
-              >
-                <Text
+                <View
                   style={[
-                    styles.statusBadgePillText,
+                    styles.statusBadgePill,
                     activeBooking.status === "dp_verified"
-                      ? { color: "#166534" }
+                      ? { backgroundColor: "#DCFCE7" }
                       : activeBooking.status === "rejected"
-                      ? { color: "#DC2626" }
-                      : { color: "#D97706" },
+                      ? { backgroundColor: "#FEE2E2" }
+                      : { backgroundColor: "#FEF3C7" },
                   ]}
                 >
-                  {activeBooking.status === "dp_verified"
-                    ? "✓ DP Diterima (Siap Huni)"
-                    : activeBooking.status === "rejected"
-                    ? "❌ DP Ditolak"
-                    : "⏳ Menunggu Verifikasi DP"}
-                </Text>
+                  <Text
+                    style={[
+                      styles.statusBadgePillText,
+                      activeBooking.status === "dp_verified"
+                        ? { color: "#166534" }
+                        : activeBooking.status === "rejected"
+                        ? { color: "#DC2626" }
+                        : { color: "#D97706" },
+                    ]}
+                  >
+                    {activeBooking.status === "dp_verified"
+                      ? "✓ DP Diterima (Siap Huni)"
+                      : activeBooking.status === "rejected"
+                      ? "❌ DP Ditolak"
+                      : "⏳ Menunggu Verifikasi DP"}
+                  </Text>
+                </View>
               </View>
+
+              {/* Tombol Close untuk Menutup Badge / Banner DP Diterima */}
+              <TouchableOpacity
+                onPress={() => {
+                  if (activeBooking) {
+                    setBannerDismissedInStorage(activeBooking._id || activeBooking.bookingCode);
+                  }
+                  setIsBookingBannerVisible(false);
+                }}
+                style={styles.closeBookingBannerBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={16} color="#6B7280" />
+              </TouchableOpacity>
             </View>
 
             <Text style={styles.bookingKostTitle}>{activeBooking.kostName}</Text>
@@ -291,15 +634,95 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               </View>
             )}
 
-            {/* Quick Action */}
+            {/* Quick Actions (Nota & WhatsApp) */}
+            <View style={{ gap: 8, marginTop: 14 }}>
+              {/* Button 1: Download / Lihat Nota Konfirmasi Booking (Hanya muncul jika DP sudah di-ACC / Diterima) */}
+              {(activeBooking.status === "dp_verified" || activeBooking.status === "completed") && (
+                <TouchableOpacity
+                  style={styles.btnDownloadNota}
+                  onPress={() => setIsNotaModalOpen(true)}
+                  activeOpacity={0.85}
+                >
+                  <FileText size={16} color="#0D7A53" />
+                  <Text style={styles.btnDownloadNotaText}>Unduh / Lihat Nota Konfirmasi</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Button 2: WhatsApp Chat */}
+              <TouchableOpacity
+                style={styles.btnChatOwnerWa}
+                onPress={() => handleOpenWhatsAppOwner(activeBooking.ownerPhone, activeBooking.kostName, activeBooking.roomNumber)}
+                activeOpacity={0.85}
+              >
+                <MessageCircle size={16} color="#FFFFFF" />
+                <Text style={styles.btnChatOwnerWaText}>Chat WhatsApp Pemilik Kos</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Mini History / Tracking Widget (Ketika banner ditutup oleh customer) */}
+        {activeBooking && activeBooking._id && authAccount?.role === "customer" && !isBookingBannerVisible && (
+          <View style={styles.miniTrackingBar}>
             <TouchableOpacity
-              style={styles.btnChatOwnerWa}
-              onPress={() => handleOpenWhatsAppOwner(activeBooking.ownerPhone, activeBooking.kostName, activeBooking.roomNumber)}
-              activeOpacity={0.85}
+              style={styles.miniTrackingLeft}
+              onPress={() => {
+                if (activeBooking) {
+                  setBannerRestoredInStorage(activeBooking._id || activeBooking.bookingCode);
+                }
+                setIsBookingBannerVisible(true);
+              }}
+              activeOpacity={0.8}
             >
-              <MessageCircle size={16} color="#FFFFFF" />
-              <Text style={styles.btnChatOwnerWaText}>Chat WhatsApp Pemilik Kos</Text>
+              <View style={styles.miniTrackingIconBg}>
+                <Building2 size={13} color="#0D7A53" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={styles.miniTrackingCode}>{activeBooking.bookingCode}</Text>
+                  <Text
+                    style={[
+                      styles.miniTrackingStatus,
+                      activeBooking.status === "dp_verified"
+                        ? { color: "#166534" }
+                        : activeBooking.status === "rejected"
+                        ? { color: "#DC2626" }
+                        : { color: "#D97706" },
+                    ]}
+                  >
+                    {activeBooking.status === "dp_verified"
+                      ? "• DP Diterima"
+                      : activeBooking.status === "rejected"
+                      ? "• DP Ditolak"
+                      : "• Menunggu Verifikasi"}
+                  </Text>
+                </View>
+                <Text style={styles.miniTrackingSub} numberOfLines={1}>
+                  {activeBooking.kostName} (Kamar {activeBooking.roomNumber})
+                </Text>
+              </View>
             </TouchableOpacity>
+
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              {(activeBooking.status === "dp_verified" || activeBooking.status === "completed") && (
+                <TouchableOpacity
+                  style={styles.miniTrackingNotaBtn}
+                  onPress={() => setIsNotaModalOpen(true)}
+                  activeOpacity={0.8}
+                >
+                  <FileText size={12} color="#0D7A53" />
+                  <Text style={styles.miniTrackingNotaText}>Nota</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.miniTrackingExpandBtn}
+                onPress={() => setIsBookingBannerVisible(true)}
+                activeOpacity={0.7}
+              >
+                <ChevronDown size={14} color="#4B5563" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -447,7 +870,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
                 {/* Photo Count Badge */}
                 <View style={styles.photoCountBadge}>
-                  <Text style={styles.photoCountText}>📷 8 Foto</Text>
+                  <Text style={styles.photoCountText}>📷 {item.photoCount} Foto</Text>
                 </View>
 
                 {/* Heart Action */}
@@ -533,7 +956,9 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                 <View style={styles.ratingRow}>
                   <Star size={13} color="#EAB308" fill="#EAB308" />
                   <Text style={styles.ratingVal}>{item.rating}</Text>
-                  <Text style={styles.reviewsText}>({item.reviews} ulasan)</Text>
+                  <Text style={styles.reviewsText}>
+                    ({item.reviews > 0 ? `${item.reviews} ulasan` : "Belum ada ulasan"})
+                  </Text>
                 </View>
 
                 {/* Facility Chips Row */}
@@ -588,7 +1013,9 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
           <View style={styles.guaranteeItem}>
             <Users size={16} color="#0284C7" />
             <Text style={styles.guaranteeText}>
-              <Text style={{ fontWeight: "800", color: "#111827" }}>+2.000 Kos</Text>{"\n"}
+              <Text style={{ fontWeight: "800", color: "#111827" }}>
+                {dbKosts.length > 0 ? `${dbKosts.length} Properti Kos` : "Pilihan Kos"}
+              </Text>{"\n"}
               Pilihan terbaik untukmu
             </Text>
           </View>
@@ -603,6 +1030,154 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Modal Nota Konfirmasi & Bukti Pembayaran DP */}
+      <Modal visible={isNotaModalOpen} transparent animationType="slide">
+        <View style={styles.notaModalOverlay}>
+          <View style={styles.notaModalContent}>
+            {/* Modal Header */}
+            <View style={styles.notaModalHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={styles.notaHeaderIconBg}>
+                  <FileText size={18} color="#0D7A53" />
+                </View>
+                <Text style={styles.notaModalHeaderTitle}>Nota Resmi Pemesanan</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.notaCloseBtn}
+                onPress={() => setIsNotaModalOpen(false)}
+                activeOpacity={0.7}
+              >
+                <X size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Scrollable Receipt Body */}
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.notaScrollArea}>
+              <View style={styles.receiptCard}>
+                {/* Top Green Banner */}
+                <View style={styles.receiptTopBanner}>
+                  <Text style={styles.receiptBrand}>THE RANGER</Text>
+                  <Text style={styles.receiptSubBrand}>E-Receipt & Konfirmasi Sewa Kos</Text>
+                  <View style={styles.receiptVerifiedBadge}>
+                    <Check size={13} color="#0D7A53" strokeWidth={3} />
+                    <Text style={styles.receiptVerifiedText}>DP TERVERIFIKASI • RESMI</Text>
+                  </View>
+                </View>
+
+                {/* Receipt Details */}
+                <View style={styles.receiptBody}>
+                  {/* Code & Date */}
+                  <View style={styles.receiptCodeBox}>
+                    <View>
+                      <Text style={styles.receiptCodeLabel}>NO. NOTA / KODE BOOKING</Text>
+                      <Text style={styles.receiptCodeVal}>{activeBooking?.bookingCode || "KST-ONLINE"}</Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={styles.receiptCodeLabel}>TGL TERBIT</Text>
+                      <Text style={styles.receiptDateVal}>
+                        {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Section 1: Penghuni */}
+                  <Text style={styles.receiptSectionHeader}>DATA PENGHUNI</Text>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Nama Calon Penghuni</Text>
+                    <Text style={styles.receiptValBold}>{activeBooking?.customerName || authAccount?.name || "Customer"}</Text>
+                  </View>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>No. WhatsApp</Text>
+                    <Text style={styles.receiptVal}>{activeBooking?.customerPhone || authAccount?.phone || "-"}</Text>
+                  </View>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Email</Text>
+                    <Text style={styles.receiptVal}>{activeBooking?.customerEmail || authAccount?.email || "aisyahphr@gmail.com"}</Text>
+                  </View>
+
+                  {/* Section 2: Hunian & Kamar */}
+                  <Text style={styles.receiptSectionHeader}>RINCIAN HUNIAN</Text>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Nama Kos</Text>
+                    <Text style={[styles.receiptValBold, { color: "#0D7A53" }]}>{activeBooking?.kostName || "Kost"}</Text>
+                  </View>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Nomor Kamar</Text>
+                    <Text style={styles.receiptValBold}>Kamar {activeBooking?.roomNumber || "101"} ({activeBooking?.roomType || "AC"})</Text>
+                  </View>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Tgl Masuk (Check-in)</Text>
+                    <Text style={styles.receiptValBold}>{activeBooking?.entryDate || "-"}</Text>
+                  </View>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Durasi Sewa</Text>
+                    <Text style={styles.receiptVal}>{activeBooking?.durationMonths || 1} Bulan</Text>
+                  </View>
+
+                  {/* Section 3: Pembayaran */}
+                  <Text style={styles.receiptSectionHeader}>RINCIAN PEMBAYARAN</Text>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Harga Sewa Bulanan</Text>
+                    <Text style={styles.receiptVal}>Rp {Number(activeBooking?.monthlyPrice || 700000).toLocaleString("id-ID")}</Text>
+                  </View>
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Total Biaya Sewa ({activeBooking?.durationMonths || 1} Bulan)</Text>
+                    <Text style={styles.receiptValBold}>Rp {Number(activeBooking?.totalAmount || 700000).toLocaleString("id-ID")}</Text>
+                  </View>
+
+                  {/* Highlight DP Box */}
+                  <View style={styles.receiptDpBox}>
+                    <View style={styles.receiptRow}>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#166534" }}>DP Terbayar (20%)</Text>
+                      <Text style={{ fontSize: 15, fontWeight: "900", color: "#166534" }}>
+                        Rp {Number(activeBooking?.dpAmount || 140000).toLocaleString("id-ID")} (LUNAS ✓)
+                      </Text>
+                    </View>
+                    <View style={[styles.receiptRow, { marginTop: 4, marginBottom: 0 }]}>
+                      <Text style={{ fontSize: 11, color: "#6B7280" }}>Sisa Saat Check-in</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#B45309" }}>
+                        Rp {Number((activeBooking?.totalAmount || 700000) - (activeBooking?.dpAmount || 140000)).toLocaleString("id-ID")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Petunjuk */}
+                  <View style={styles.receiptNoticeBox}>
+                    <Text style={styles.receiptNoticeTitle}>📌 Petunjuk Serah Terima Kunci:</Text>
+                    <Text style={styles.receiptNoticeText}>
+                      Tunjukkan nota / bukti digital ini kepada pemilik kos saat check-in di lokasi untuk serah terima kunci kamar Anda.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={{ height: 16 }} />
+            </ScrollView>
+
+            {/* Modal Bottom Buttons */}
+            <View style={styles.notaBottomActions}>
+              <TouchableOpacity
+                style={styles.btnCetakPdf}
+                onPress={handlePrintOrDownloadPdf}
+                activeOpacity={0.85}
+              >
+                <Printer size={16} color="#FFFFFF" />
+                <Text style={styles.btnCetakPdfText}>Cetak / Simpan PDF Nota</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btnKirimWaNota}
+                onPress={handleShareReceiptWa}
+                activeOpacity={0.85}
+              >
+                <Share2 size={15} color="#0D7A53" />
+                <Text style={styles.btnKirimWaNotaText}>Kirim via WhatsApp</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -686,6 +1261,79 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
+  },
+  closeBookingBannerBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0, 0, 0, 0.05)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 6,
+  },
+  // Mini History / Tracking Widget (Pill Bar Kecil)
+  miniTrackingBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  miniTrackingLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  miniTrackingIconBg: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  miniTrackingCode: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  miniTrackingStatus: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  miniTrackingSub: {
+    fontSize: 11,
+    color: "#4B5563",
+    fontWeight: "500",
+    marginTop: 1,
+  },
+  miniTrackingNotaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  miniTrackingNotaText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  miniTrackingExpandBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
   },
   bookingCodePill: {
     flexDirection: "row",
@@ -1167,5 +1815,235 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9CA3AF",
     textAlign: "center",
+  },
+
+  // Nota & E-Receipt Action Buttons & Modal Styles
+  btnDownloadNota: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#E6F4EA",
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#0D7A53",
+  },
+  btnDownloadNotaText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+
+  notaModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    justifyContent: "flex-end",
+  },
+  notaModalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "92%",
+    paddingBottom: 24,
+  },
+  notaModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  notaHeaderIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#E6F4EA",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notaModalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  notaCloseBtn: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+  },
+  notaScrollArea: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  receiptCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  receiptTopBanner: {
+    backgroundColor: "#0D7A53",
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    alignItems: "center",
+  },
+  receiptBrand: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 1,
+  },
+  receiptSubBrand: {
+    fontSize: 11,
+    color: "#E6F4EA",
+    marginTop: 2,
+  },
+  receiptVerifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  receiptVerifiedText: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#0D7A53",
+  },
+  receiptBody: {
+    padding: 18,
+  },
+  receiptCodeBox: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "#0D7A53",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  receiptCodeLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#6B7280",
+    letterSpacing: 0.5,
+  },
+  receiptCodeVal: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#0D7A53",
+    marginTop: 2,
+  },
+  receiptDateVal: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+    marginTop: 2,
+  },
+  receiptSectionHeader: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0D7A53",
+    letterSpacing: 0.5,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    paddingBottom: 4,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  receiptRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  receiptLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  receiptVal: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  receiptValBold: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  receiptDpBox: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+  },
+  receiptNoticeBox: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 14,
+  },
+  receiptNoticeTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1E40AF",
+    marginBottom: 2,
+  },
+  receiptNoticeText: {
+    fontSize: 11,
+    color: "#1E40AF",
+    lineHeight: 16,
+  },
+  notaBottomActions: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    gap: 8,
+  },
+  btnCetakPdf: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#0D7A53",
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  btnCetakPdfText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  btnKirimWaNota: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#E6F4EA",
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#0D7A53",
+  },
+  btnKirimWaNotaText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0D7A53",
   },
 });

@@ -11,7 +11,12 @@ import {
   Image,
   Modal,
   ActivityIndicator,
+  Platform,
+  Alert,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import { uploadFileToBackend } from "../../services/api";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import {
@@ -19,6 +24,8 @@ import {
   addRoomToKost,
   updateRoomInKost,
   deleteRoomFromKost,
+  fetchKostProperty,
+  updateKostProperty,
 } from "../../services/kostService";
 import {
   Search,
@@ -46,6 +53,23 @@ import {
   ChevronRight,
   CheckCircle,
   Building2,
+  ImagePlus,
+  Camera,
+  SlidersHorizontal,
+  ShieldCheck,
+  Utensils,
+  Shirt,
+  Check,
+  FileText,
+  Zap,
+  Droplets,
+  Snowflake,
+  Fan,
+  Bed,
+  DoorClosed,
+  Table,
+  Armchair,
+  Bath,
 } from "lucide-react-native";
 
 interface RoomData {
@@ -58,9 +82,12 @@ interface RoomData {
   tenant?: {
     name: string;
     avatar: string;
+    phone?: string;
+    entryDate?: string;
   };
   price: string;
   image: string;
+  images?: string[];
   description?: string;
   isNonaktif?: boolean;
 }
@@ -99,6 +126,8 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
     "Meja",
   ]);
   const [kamarStatus, setKamarStatus] = useState<"tersedia" | "tidak_tersedia">("tersedia");
+  const [roomPhotos, setRoomPhotos] = useState<string[]>([]);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const handleOpenAddModal = () => {
     setModalMode("add");
@@ -109,6 +138,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
     setDeskripsi("Kamar nyaman dan bersih, cocok untuk mahasiswa atau pekerja.");
     setSelectedFacilities(["AC", "WiFi", "KM Dalam", "Kasur", "Lemari"]);
     setKamarStatus("tersedia");
+    setRoomPhotos([]);
     setAddStep(1);
     setIsAddModalOpen(true);
   };
@@ -120,8 +150,9 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
     setTipeKamar(room.type);
     setHargaSewa(room.price);
     setDeskripsi(room.description || "Kamar nyaman dan bersih, cocok untuk mahasiswa atau pekerja.");
-    setSelectedFacilities([...room.facilities, ...room.inclusions]);
+    setSelectedFacilities(Array.isArray(room.facilities) ? [...room.facilities] : []);
     setKamarStatus(room.status === "kosong" ? "tersedia" : "tidak_tersedia");
+    setRoomPhotos(room.images && room.images.length > 0 ? room.images : (room.image ? [room.image] : []));
     setSelectedRoomForOptions(null);
     setAddStep(1);
     setIsAddModalOpen(true);
@@ -130,25 +161,130 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   const [loading, setLoading] = useState(false);
   const [rooms, setRooms] = useState<RoomData[]>([]);
 
+  // Property (Fasilitas Bersama & Peraturan Kos) State
+  const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
+  const [sharedFacilities, setSharedFacilities] = useState<string[]>([
+    "WiFi",
+    "KM Dalam",
+    "Kasur",
+    "Lemari",
+    "Meja",
+    "Kursi",
+    "Termasuk Listrik & Air",
+  ]);
+  const [propertyRules, setPropertyRules] = useState<string[]>([
+    "Akses 24 Jam",
+    "Dilarang Merokok di Kamar",
+    "Tamu Lawan Jenis Maks Pukul 21.00",
+  ]);
+  const [propertyDescription, setPropertyDescription] = useState<string>(
+    "Kos eksklusif nyaman, bersih, aman, dan berfasilitas lengkap untuk mahasiswa & pekerja."
+  );
+  const [customFacilityInput, setCustomFacilityInput] = useState<string>("");
+  const [customRuleInput, setCustomRuleInput] = useState<string>("");
+  const [isSavingProperty, setIsSavingProperty] = useState(false);
+  const [propertyActiveTab, setPropertyActiveTab] = useState<"fasilitas" | "peraturan" | "deskripsi">("fasilitas");
+
   const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
 
   const loadRoomsFromBackend = async () => {
     setLoading(true);
     try {
       const data = await fetchRoomsByOwner(ownerEmail);
-      if (data && data.length > 0) {
-        setRooms(data);
-      }
+      setRooms(data || []);
     } catch (err) {
       console.warn("Using offline rooms:", err);
+      setRooms([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadPropertyDetails = async () => {
+    try {
+      const data = await fetchKostProperty(ownerEmail);
+      if (data) {
+        if (Array.isArray(data.facilities) && data.facilities.length > 0) {
+          setSharedFacilities(data.facilities);
+        }
+        if (Array.isArray(data.rules) && data.rules.length > 0) {
+          setPropertyRules(data.rules);
+        }
+        if (data.description) {
+          setPropertyDescription(data.description);
+        }
+      }
+    } catch (err) {
+      console.warn("Using local property details:", err);
+    }
+  };
+
   useEffect(() => {
     loadRoomsFromBackend();
+    loadPropertyDetails();
   }, [authAccount]);
+
+  const handleToggleSharedFacility = (facName: string) => {
+    if (sharedFacilities.includes(facName)) {
+      setSharedFacilities(sharedFacilities.filter((f) => f !== facName));
+    } else {
+      setSharedFacilities([...sharedFacilities, facName]);
+    }
+  };
+
+  const handleAddCustomFacility = () => {
+    const trimmed = customFacilityInput.trim();
+    if (!trimmed) return;
+    if (!sharedFacilities.includes(trimmed)) {
+      setSharedFacilities([...sharedFacilities, trimmed]);
+    }
+    setCustomFacilityInput("");
+  };
+
+  const handleRemoveFacility = (facName: string) => {
+    setSharedFacilities(sharedFacilities.filter((f) => f !== facName));
+  };
+
+  const handleToggleRule = (ruleText: string) => {
+    if (propertyRules.includes(ruleText)) {
+      setPropertyRules(propertyRules.filter((r) => r !== ruleText));
+    } else {
+      setPropertyRules([...propertyRules, ruleText]);
+    }
+  };
+
+  const handleAddCustomRule = () => {
+    const trimmed = customRuleInput.trim();
+    if (!trimmed) return;
+    if (!propertyRules.includes(trimmed)) {
+      setPropertyRules([...propertyRules, trimmed]);
+    }
+    setCustomRuleInput("");
+  };
+
+  const handleRemoveRule = (ruleText: string) => {
+    setPropertyRules(propertyRules.filter((r) => r !== ruleText));
+  };
+
+  const handleSavePropertyDetails = async () => {
+    setIsSavingProperty(true);
+    try {
+      await updateKostProperty(ownerEmail, {
+        facilities: sharedFacilities,
+        rules: propertyRules,
+        description: propertyDescription,
+      });
+      Alert.alert(
+        "Berhasil Disimpan! 🎉",
+        "Fasilitas bersama & peraturan kos berhasil diperbarui secara real-time untuk seluruh kamar!"
+      );
+      setIsPropertyModalOpen(false);
+    } catch (e: any) {
+      Alert.alert("Gagal Menyimpan", e.message || "Gagal memperbarui properti kos");
+    } finally {
+      setIsSavingProperty(false);
+    }
+  };
 
   // Action Handlers
   const handleDuplicateRoom = (room: RoomData) => {
@@ -216,78 +352,181 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
     }
   };
 
+  const handlePickRoomPhotos = async () => {
+    if (roomPhotos.length >= 5) {
+      Alert.alert("Batas Maksimal", "Anda hanya dapat mengunggah maksimal 5 foto per kamar.");
+      return;
+    }
+
+    try {
+      setIsUploadingPhoto(true);
+
+      if (Platform.OS === "web") {
+        const docRes = await DocumentPicker.getDocumentAsync({
+          type: ["image/*"],
+          multiple: true,
+        });
+
+        if (!docRes.canceled && docRes.assets) {
+          const remainingSlots = 5 - roomPhotos.length;
+          const selectedAssets = docRes.assets.slice(0, remainingSlots);
+
+          for (const asset of selectedAssets) {
+            try {
+              const uploadRes = await uploadFileToBackend(
+                asset.uri,
+                asset.name || `kamar_${Date.now()}.jpg`,
+                asset.mimeType || "image/jpeg"
+              );
+              if (uploadRes?.success && uploadRes?.data?.url) {
+                setRoomPhotos((prev) => {
+                  if (prev.length < 5) return [...prev, uploadRes.data.url];
+                  return prev;
+                });
+              } else if (asset.uri) {
+                setRoomPhotos((prev) => (prev.length < 5 ? [...prev, asset.uri] : prev));
+              }
+            } catch (uploadErr) {
+              console.warn("Upload error:", uploadErr);
+              if (asset.uri) {
+                setRoomPhotos((prev) => (prev.length < 5 ? [...prev, asset.uri] : prev));
+              }
+            }
+          }
+        }
+        return;
+      }
+
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Izin Ditolak", "Izin akses galeri diperlukan untuk memilih foto kamar.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: 5 - roomPhotos.length,
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets) {
+        const remainingSlots = 5 - roomPhotos.length;
+        const selectedAssets = result.assets.slice(0, remainingSlots);
+
+        for (const asset of selectedAssets) {
+          try {
+            const uploadRes = await uploadFileToBackend(
+              asset.uri,
+              asset.fileName || `kamar_${Date.now()}.jpg`,
+              asset.mimeType || "image/jpeg"
+            );
+            if (uploadRes?.success && uploadRes?.data?.url) {
+              setRoomPhotos((prev) => {
+                if (prev.length < 5) return [...prev, uploadRes.data.url];
+                return prev;
+              });
+            } else if (asset.uri) {
+              setRoomPhotos((prev) => (prev.length < 5 ? [...prev, asset.uri] : prev));
+            }
+          } catch (uploadErr) {
+            console.warn("Upload error:", uploadErr);
+            if (asset.uri) {
+              setRoomPhotos((prev) => (prev.length < 5 ? [...prev, asset.uri] : prev));
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Pick photos error:", err);
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleRemovePhoto = (indexToRemove: number) => {
+    setRoomPhotos(roomPhotos.filter((_, idx) => idx !== indexToRemove));
+  };
+
   const handleSaveRoom = async () => {
     const numPrice = parseInt(hargaSewa.replace(/[^0-9]/g, "")) || 1200000;
+    const primaryImage = roomPhotos[0] || "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=500&auto=format&fit=crop&q=80";
+
+    const cleanNum = (nomorKamar || `10${rooms.length + 1}`).replace(/^(Kamar\s*)+/gi, "").trim();
+
     if (modalMode === "edit" && editingRoomId) {
-      setRooms(
-        rooms.map((r) =>
-          r.id === editingRoomId
-            ? {
-                ...r,
-                name: nomorKamar || r.name,
-                type: tipeKamar,
-                price: hargaSewa,
-                description: deskripsi,
-                status: kamarStatus === "tersedia" ? "kosong" : "terisi",
-                facilities: selectedFacilities.slice(0, 3),
-                inclusions: selectedFacilities.slice(3),
-              }
-            : r
-        )
-      );
       try {
         await updateRoomInKost(ownerEmail, editingRoomId, {
-          roomNumber: nomorKamar,
+          roomNumber: cleanNum,
           roomType: tipeKamar,
           priceMonthly: numPrice,
           isAvailable: kamarStatus === "tersedia",
           facilities: selectedFacilities,
+          images: roomPhotos,
+          image: primaryImage,
         });
       } catch (e) {
-        console.log("Offline edit:", e);
+        console.log("Edit room error:", e);
       }
     } else {
-      const newRoom: RoomData = {
-        id: Date.now().toString(),
-        name: nomorKamar || `10${rooms.length + 1}`,
-        type: tipeKamar,
-        status: kamarStatus === "tersedia" ? "kosong" : "terisi",
-        facilities: selectedFacilities.slice(0, 3),
-        inclusions: selectedFacilities.slice(3),
-        price: hargaSewa,
-        image: "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=500&auto=format&fit=crop&q=80",
-        description: deskripsi,
-      };
-      setRooms([newRoom, ...rooms]);
       try {
         await addRoomToKost(ownerEmail, {
-          roomNumber: nomorKamar || `10${rooms.length + 1}`,
+          roomNumber: cleanNum,
           roomType: tipeKamar,
           priceMonthly: numPrice,
           isAvailable: kamarStatus === "tersedia",
           facilities: selectedFacilities,
+          images: roomPhotos,
+          image: primaryImage,
         });
       } catch (e) {
-        console.log("Offline add:", e);
+        console.log("Add room error:", e);
       }
     }
+    await loadRoomsFromBackend();
     setIsAddModalOpen(false);
     setAddStep(1);
   };
 
   const allFacilityOptions = [
-    { label: "AC", icon: Laptop },
-    { label: "Kipas", icon: Wind },
+    { label: "AC", icon: Snowflake },
+    { label: "Kipas", icon: Fan },
     { label: "WiFi", icon: Wifi },
     { label: "KM Dalam", icon: ShowerHead },
-    { label: "KM Luar", icon: ShowerHead },
-    { label: "Kasur", icon: Home },
-    { label: "Lemari", icon: Home },
-    { label: "Meja", icon: Home },
-    { label: "Kursi", icon: Home },
+    { label: "KM Luar", icon: Bath },
+    { label: "Kasur", icon: Bed },
+    { label: "Lemari", icon: DoorClosed },
+    { label: "Meja", icon: Table },
+    { label: "Kursi", icon: Armchair },
     { label: "TV", icon: Tv },
     { label: "Dispenser", icon: CupSoda },
     { label: "Parkir", icon: Car },
+    { label: "Termasuk Listrik", icon: Zap },
+    { label: "Termasuk Air", icon: Droplets },
+  ];
+
+  const presetSharedFacilities = [
+    { label: "Dapur Bersama", icon: Utensils },
+    { label: "Parkir Motor & Mobil", icon: Car },
+    { label: "Ruang Jemur", icon: Shirt },
+    { label: "Ruang Tamu Bersama", icon: Building2 },
+    { label: "WiFi Bersama", icon: Wifi },
+    { label: "Kulkas Bersama", icon: Utensils },
+    { label: "Mesin Cuci", icon: Shirt },
+    { label: "Dispenser Air Minum", icon: CupSoda },
+    { label: "CCTV 24 Jam", icon: ShieldCheck },
+    { label: "Penjaga Kos", icon: User },
+    { label: "Termasuk Listrik & Air", icon: CheckCircle },
+  ];
+
+  const presetRules = [
+    "Akses 24 Jam",
+    "Dilarang Merokok di Kamar",
+    "Tamu Lawan Jenis Dilarang Menginap",
+    "Jam Malam / Gerbang Ditutup Pukul 23.00 WIB",
+    "Menjaga Ketenangan & Kebersihan Bersama",
+    "Dilarang Membawa Hewan Peliharaan",
+    "Dilarang Membawa Minuman Keras / Narkoba",
   ];
 
   return (
@@ -360,116 +599,181 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
           </View>
         </View>
 
+        {/* Fasilitas Bersama & Peraturan Kos Quick Action Card (1 Untuk Semua Kamar) */}
+        <TouchableOpacity
+          style={styles.propertyConfigCard}
+          onPress={() => setIsPropertyModalOpen(true)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.propertyConfigLeft}>
+            <View style={styles.propertyConfigIconBg}>
+              <SlidersHorizontal size={20} color="#0D7A53" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                <Text style={styles.propertyConfigTitle}>Fasilitas Bersama & Peraturan</Text>
+                <View style={styles.propertyBadgeAll}>
+                  <Text style={styles.propertyBadgeAllText}>Semua Kamar</Text>
+                </View>
+              </View>
+              <Text style={styles.propertyConfigSub} numberOfLines={1}>
+                {sharedFacilities.length} Fasilitas Bersama • {propertyRules.length} Peraturan Kos
+              </Text>
+            </View>
+          </View>
+          <View style={styles.propertyConfigArrow}>
+            <ChevronRight size={18} color="#0D7A53" />
+          </View>
+        </TouchableOpacity>
+
         {/* Active Tab Indicator Bar */}
         <View style={styles.activeTabIndicator} />
 
-        {/* Room List Cards */}
-        <View style={styles.roomList}>
-          {filteredRooms.map((room) => (
-            <View
-              key={room.id}
-              style={[styles.roomCard, (room.isNonaktif || room.status === "nonaktif") && styles.roomCardNonaktif]}
+        {/* Room List or Empty State */}
+        {rooms.length === 0 ? (
+          <View style={{ alignItems: "center", paddingVertical: 44, backgroundColor: "#FFFFFF", borderRadius: 16, marginTop: 12, marginBottom: 24, borderWidth: 1, borderColor: "#E5E7EB", paddingHorizontal: 20 }}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#E8F5EE", justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
+              <Home size={32} color="#0D7A53" />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#111827", marginBottom: 6 }}>
+              Belum Ada Kamar Terdaftar
+            </Text>
+            <Text style={{ fontSize: 13, color: "#6B7280", textAlign: "center", paddingHorizontal: 16, lineHeight: 20 }}>
+              Mulai tambahkan tipe kamar kos Anda (nomor kamar, harga sewa, fasilitas, dan foto) agar calon penyewa bisa melihat dan memesan.
+            </Text>
+            <TouchableOpacity
+              style={{ marginTop: 22, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#0D7A53", paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 }}
+              onPress={handleOpenAddModal}
+              activeOpacity={0.85}
             >
-              {/* Room Image with Badge */}
-              <View style={styles.roomImgContainer}>
-                <Image source={{ uri: room.image }} style={styles.roomImg} />
-                <View
-                  style={[
-                    styles.statusBadge,
-                    room.status === "terisi"
-                      ? styles.statusBadgeGreen
-                      : room.status === "nonaktif" || room.isNonaktif
-                      ? styles.statusBadgeGray
-                      : styles.statusBadgeOrange,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      room.status === "terisi"
-                        ? styles.statusTextGreen
-                        : room.status === "nonaktif" || room.isNonaktif
-                        ? styles.statusTextGray
-                        : styles.statusTextOrange,
-                    ]}
-                  >
-                    {room.status === "terisi"
-                      ? "Terisi"
-                      : room.status === "nonaktif" || room.isNonaktif
-                      ? "Nonaktif"
-                      : "Kosong"}
-                  </Text>
-                </View>
-              </View>
+              <Plus size={18} color="#FFFFFF" />
+              <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 14 }}>Tambah Kamar Pertama</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.roomList}>
+            {filteredRooms.map((room) => {
+              const cleanName = (room.name || "101").replace(/^(Kamar\s*)+/gi, "").trim() || "101";
+              const rawFacs = Array.isArray(room.facilities) ? room.facilities : [];
+              const uniqueFacs = Array.from(new Set(rawFacs.filter((f) => !f.toLowerCase().includes("listrik") && !f.toLowerCase().includes("air"))));
+              const mainFacs = uniqueFacs.slice(0, 3);
+              const extraCount = uniqueFacs.length - 3;
 
-              {/* Room Details */}
-              <View style={styles.roomDetailsCol}>
-                {/* Title & Type & Options Button */}
-                <View style={styles.roomHeaderRow}>
-                  <View style={styles.roomTitleWrap}>
-                    <Text style={styles.roomTitle}>{room.name}</Text>
-                    <View style={styles.typeBadge}>
-                      <Text style={styles.typeBadgeText}>{room.type}</Text>
+              return (
+                <View
+                  key={room.id}
+                  style={[styles.roomCard, (room.isNonaktif || room.status === "nonaktif") && styles.roomCardNonaktif]}
+                >
+                  {/* Room Image with Badge */}
+                  <View style={styles.roomImgContainer}>
+                    <Image source={{ uri: room.image }} style={styles.roomImg} resizeMode="cover" />
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        room.status === "terisi"
+                          ? styles.statusBadgeGreen
+                          : room.status === "nonaktif" || room.isNonaktif
+                          ? styles.statusBadgeGray
+                          : styles.statusBadgeOrange,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          room.status === "terisi"
+                            ? styles.statusTextGreen
+                            : room.status === "nonaktif" || room.isNonaktif
+                            ? styles.statusTextGray
+                            : styles.statusTextOrange,
+                        ]}
+                      >
+                        {room.status === "terisi"
+                          ? "Terisi"
+                          : room.status === "nonaktif" || room.isNonaktif
+                          ? "Nonaktif"
+                          : "Kosong"}
+                      </Text>
                     </View>
                   </View>
-                  <TouchableOpacity
-                    style={styles.moreBtn}
-                    onPress={() => setSelectedRoomForOptions(room)}
-                    activeOpacity={0.7}
-                  >
-                    <MoreHorizontal size={20} color="#6B7280" />
-                  </TouchableOpacity>
-                </View>
 
-                {/* Facilities Icons Row */}
-                <View style={styles.facilitiesRow}>
-                  {room.facilities.map((fac, idx) => (
-                    <View key={idx} style={styles.facChip}>
-                      {fac.includes("AC") && <Laptop size={12} color="#6B7280" />}
-                      {fac.includes("WiFi") && <Wifi size={12} color="#6B7280" />}
-                      {fac.includes("KM") && <ShowerHead size={12} color="#6B7280" />}
-                      {fac.includes("Kipas") && <Wind size={12} color="#6B7280" />}
-                      <Text style={styles.facText}>{fac}</Text>
+                  {/* Room Details */}
+                  <View style={styles.roomDetailsCol}>
+                    {/* Header Row: Title & Type & More Options */}
+                    <View style={styles.roomHeaderRow}>
+                      <View style={styles.roomTitleWrap}>
+                        <Text style={styles.roomTitle} numberOfLines={1}>Kamar {cleanName}</Text>
+                        <View style={styles.typeBadge}>
+                          <Text style={styles.typeBadgeText}>{room.type}</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.moreBtn}
+                        onPress={() => setSelectedRoomForOptions(room)}
+                        activeOpacity={0.7}
+                      >
+                        <MoreHorizontal size={18} color="#9CA3AF" />
+                      </TouchableOpacity>
                     </View>
-                  ))}
-                </View>
 
-                {/* Inclusions Text Row */}
-                <Text style={styles.inclusionsText}>
-                  🏠 {room.inclusions.join(", ")}
-                </Text>
-
-                {/* Tenant / Available & Price Footer Row */}
-                <View style={styles.roomFooterRow}>
-                  {room.isNonaktif || room.status === "nonaktif" ? (
-                    <View style={styles.availableRow}>
-                      <EyeOff size={16} color="#6B7280" />
-                      <Text style={[styles.availableText, { color: "#6B7280" }]}>Disembunyikan</Text>
+                    {/* Facilities Chips Row (Clean, max 3 + counter) */}
+                    <View style={styles.facilitiesRow}>
+                      {mainFacs.map((fac, idx) => (
+                        <View key={idx} style={styles.facChip}>
+                          {fac.includes("AC") ? <Laptop size={11} color="#0D7A53" /> :
+                           fac.includes("WiFi") ? <Wifi size={11} color="#0D7A53" /> :
+                           fac.includes("KM") ? <ShowerHead size={11} color="#0D7A53" /> :
+                           <Home size={11} color="#0D7A53" />}
+                          <Text style={styles.facText}>{fac}</Text>
+                        </View>
+                      ))}
+                      {extraCount > 0 && (
+                        <View style={styles.facChipMore}>
+                          <Text style={styles.facTextMore}>+{extraCount}</Text>
+                        </View>
+                      )}
                     </View>
-                  ) : room.status === "terisi" && room.tenant ? (
-                    <View style={styles.tenantRow}>
-                      <Image source={{ uri: room.tenant.avatar }} style={styles.tenantAvatar} />
-                      <View>
-                        <Text style={styles.tenantLabel}>Penghuni</Text>
-                        <Text style={styles.tenantName}>{room.tenant.name}</Text>
+
+                    {/* Inclusions Row (Only if owner selected Termasuk Listrik / Air) */}
+                    {Array.isArray(room.facilities) && room.facilities.some((f: string) => f.toLowerCase().includes("listrik") || f.toLowerCase().includes("air")) && (
+                      <View style={styles.inclusionBadgeRow}>
+                        <Text style={styles.inclusionBadgeText}>
+                          {room.facilities.filter((f: string) => f.toLowerCase().includes("listrik") || f.toLowerCase().includes("air")).join(" • ")}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Tenant / Available & Price Footer Row */}
+                    <View style={styles.roomFooterRow}>
+                      {room.isNonaktif || room.status === "nonaktif" ? (
+                        <View style={styles.availableRow}>
+                          <EyeOff size={14} color="#6B7280" />
+                          <Text style={[styles.availableText, { color: "#6B7280" }]}>Disembunyikan</Text>
+                        </View>
+                      ) : room.status === "terisi" && room.tenant ? (
+                        <View style={styles.tenantRow}>
+                          <Image source={{ uri: room.tenant.avatar }} style={styles.tenantAvatar} />
+                          <View style={{ maxWidth: 75 }}>
+                            <Text style={styles.tenantName} numberOfLines={1}>{room.tenant.name}</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.availableRow}>
+                          <Building2 size={14} color="#EA580C" />
+                          <Text style={styles.availableText}>Siap Huni</Text>
+                        </View>
+                      )}
+
+                      <View style={styles.priceRow}>
+                        <Text style={styles.priceVal}>{room.price}</Text>
+                        <Text style={styles.priceUnit}>/bln</Text>
                       </View>
                     </View>
-                  ) : (
-                    <View style={styles.availableRow}>
-                      <Building2 size={16} color="#EA580C" />
-                      <Text style={styles.availableText}>Tersedia</Text>
-                    </View>
-                  )}
-
-                  <View style={styles.priceRow}>
-                    <Text style={styles.priceVal}>{room.price}</Text>
-                    <Text style={styles.priceUnit}>/bln</Text>
                   </View>
                 </View>
-              </View>
-            </View>
-          ))}
-        </View>
+              );
+            })}
+          </View>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -639,14 +943,66 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                     })}
                   </View>
 
-                  <Text style={[styles.stepTitle, { marginTop: 24 }]}>Foto Kamar</Text>
-                  <Text style={styles.stepSubtitle}>Tambahkan foto kamar (Maks. 5 foto)</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 24, marginBottom: 4 }}>
+                    <Text style={styles.stepTitle}>Foto Kamar</Text>
+                    <View style={[styles.countBadge, roomPhotos.length >= 5 && { backgroundColor: "#FEE2E2" }]}>
+                      <Text style={[styles.countBadgeText, roomPhotos.length >= 5 && { color: "#DC2626" }]}>
+                        {roomPhotos.length}/5 Foto
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.stepSubtitle}>Tambahkan foto kamar kos Anda (Maksimal 5 foto)</Text>
+
+                  {/* Uploaded Photos Grid */}
+                  {roomPhotos.length > 0 && (
+                    <View style={styles.photoGridContainer}>
+                      {roomPhotos.map((photoUri, index) => (
+                        <View key={index} style={styles.photoThumbWrapper}>
+                          <Image source={{ uri: photoUri }} style={styles.photoThumbImg} />
+                          {index === 0 && (
+                            <View style={styles.photoMainBadge}>
+                              <Text style={styles.photoMainBadgeText}>Utama</Text>
+                            </View>
+                          )}
+                          <TouchableOpacity
+                            style={styles.photoDeleteBtn}
+                            onPress={() => handleRemovePhoto(index)}
+                            activeOpacity={0.8}
+                          >
+                            <X size={12} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  )}
 
                   {/* Add Photo Dashed Box */}
-                  <TouchableOpacity style={styles.uploadPhotoBox} activeOpacity={0.7}>
-                    <Plus size={24} color="#0D7A53" />
-                    <Text style={styles.uploadPhotoText}>Tambah Foto</Text>
-                  </TouchableOpacity>
+                  {roomPhotos.length < 5 ? (
+                    <TouchableOpacity
+                      style={[styles.uploadPhotoBox, isUploadingPhoto && { opacity: 0.6 }]}
+                      onPress={handlePickRoomPhotos}
+                      disabled={isUploadingPhoto}
+                      activeOpacity={0.7}
+                    >
+                      {isUploadingPhoto ? (
+                        <View style={{ alignItems: "center", gap: 6, paddingVertical: 6 }}>
+                          <ActivityIndicator size="small" color="#0D7A53" />
+                          <Text style={styles.uploadPhotoText}>Mengunggah foto ke Cloudinary...</Text>
+                        </View>
+                      ) : (
+                        <View style={{ alignItems: "center", gap: 4, paddingVertical: 4 }}>
+                          <Plus size={24} color="#0D7A53" />
+                          <Text style={styles.uploadPhotoText}>Tambah Foto ({5 - roomPhotos.length} tersisa)</Text>
+                          <Text style={{ fontSize: 11, color: "#9CA3AF" }}>Format JPG, PNG (Maks 10MB)</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.maxPhotoReachedBanner}>
+                      <CheckCircle size={16} color="#0D7A53" />
+                      <Text style={styles.maxPhotoReachedText}>Maksimal 5 foto telah dipilih</Text>
+                    </View>
+                  )}
 
                   <TouchableOpacity
                     style={[styles.btnPrimary, { marginTop: 28 }]}
@@ -669,7 +1025,11 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                   <View style={styles.summaryPreviewBox}>
                     <View style={styles.previewHeaderRow}>
                       <View style={styles.previewImgBox}>
-                        <Building2 size={24} color="#9CA3AF" />
+                        {roomPhotos.length > 0 ? (
+                          <Image source={{ uri: roomPhotos[0] }} style={{ width: "100%", height: "100%", borderRadius: 12 }} />
+                        ) : (
+                          <Building2 size={24} color="#9CA3AF" />
+                        )}
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -686,7 +1046,11 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
 
                     <View style={styles.previewDetailRow}>
                       <Text style={styles.previewDetailLabel}>Fasilitas</Text>
-                      <Text style={styles.previewDetailVal}>{selectedFacilities.join(", ")}</Text>
+                      <Text style={styles.previewDetailVal}>{selectedFacilities.join(", ") || "-"}</Text>
+                    </View>
+                    <View style={styles.previewDetailRow}>
+                      <Text style={styles.previewDetailLabel}>Foto Kamar</Text>
+                      <Text style={styles.previewDetailVal}>{roomPhotos.length} foto terpilih</Text>
                     </View>
                     <View style={styles.previewDetailRow}>
                       <Text style={styles.previewDetailLabel}>Deskripsi</Text>
@@ -874,6 +1238,292 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Property Configuration Modal (Fasilitas Bersama & Peraturan Kos - 1 Untuk Seluruh Kos) */}
+      <Modal visible={isPropertyModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlayBottom}>
+          <View style={styles.propertyModalSheet}>
+            {/* Header */}
+            <View style={styles.sheetHeader}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                  <Text style={styles.sheetTitle}>Pengaturan Properti Kos</Text>
+                  <View style={styles.propertyBadgeAll}>
+                    <Text style={styles.propertyBadgeAllText}>Semua Kamar</Text>
+                  </View>
+                </View>
+                <Text style={styles.sheetSub}>
+                  Atur fasilitas bersama dan peraturan kos yang berlaku untuk seluruh kamar.
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsPropertyModalOpen(false)}
+                style={styles.sheetCloseBtn}
+                activeOpacity={0.7}
+              >
+                <X size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Segmented Tab Bar */}
+            <View style={styles.propSegmentWrap}>
+              <TouchableOpacity
+                style={[styles.propSegmentBtn, propertyActiveTab === "fasilitas" && styles.propSegmentBtnActive]}
+                onPress={() => setPropertyActiveTab("fasilitas")}
+                activeOpacity={0.8}
+              >
+                <SlidersHorizontal size={13} color={propertyActiveTab === "fasilitas" ? "#FFFFFF" : "#0D7A53"} />
+                <Text
+                  style={[styles.propSegmentText, propertyActiveTab === "fasilitas" && styles.propSegmentTextActive]}
+                  numberOfLines={1}
+                >
+                  Fasilitas
+                </Text>
+                <View
+                  style={[
+                    styles.tabCountPill,
+                    propertyActiveTab === "fasilitas" ? styles.tabCountPillActive : styles.tabCountPillInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tabCountPillText,
+                      propertyActiveTab === "fasilitas" && styles.tabCountPillTextActive,
+                    ]}
+                  >
+                    {sharedFacilities.length}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.propSegmentBtn, propertyActiveTab === "peraturan" && styles.propSegmentBtnActive]}
+                onPress={() => setPropertyActiveTab("peraturan")}
+                activeOpacity={0.8}
+              >
+                <ShieldCheck size={13} color={propertyActiveTab === "peraturan" ? "#FFFFFF" : "#0D7A53"} />
+                <Text
+                  style={[styles.propSegmentText, propertyActiveTab === "peraturan" && styles.propSegmentTextActive]}
+                  numberOfLines={1}
+                >
+                  Peraturan
+                </Text>
+                <View
+                  style={[
+                    styles.tabCountPill,
+                    propertyActiveTab === "peraturan" ? styles.tabCountPillActive : styles.tabCountPillInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tabCountPillText,
+                      propertyActiveTab === "peraturan" && styles.tabCountPillTextActive,
+                    ]}
+                  >
+                    {propertyRules.length}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.propSegmentBtn, propertyActiveTab === "deskripsi" && styles.propSegmentBtnActive]}
+                onPress={() => setPropertyActiveTab("deskripsi")}
+                activeOpacity={0.8}
+              >
+                <FileText size={13} color={propertyActiveTab === "deskripsi" ? "#FFFFFF" : "#0D7A53"} />
+                <Text
+                  style={[styles.propSegmentText, propertyActiveTab === "deskripsi" && styles.propSegmentTextActive]}
+                  numberOfLines={1}
+                >
+                  Deskripsi
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Tab Contents */}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, gap: 16 }}>
+              {propertyActiveTab === "fasilitas" && (
+                <View style={{ gap: 14 }}>
+                  <Text style={styles.propSectionHint}>
+                    Pilih fasilitas umum yang dapat digunakan bersama oleh semua penghuni kos:
+                  </Text>
+
+                  {/* Preset Facilities Grid */}
+                  <View style={styles.propChipGrid}>
+                    {presetSharedFacilities.map((fac, idx) => {
+                      const isSelected = sharedFacilities.includes(fac.label);
+                      const IconComp = fac.icon;
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          style={[styles.propChip, isSelected && styles.propChipActive]}
+                          onPress={() => handleToggleSharedFacility(fac.label)}
+                          activeOpacity={0.8}
+                        >
+                          <IconComp size={16} color={isSelected ? "#0D7A53" : "#6B7280"} />
+                          <Text style={[styles.propChipText, isSelected && styles.propChipTextActive]}>
+                            {fac.label}
+                          </Text>
+                          {isSelected && <Check size={14} color="#0D7A53" />}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* Custom Facility Input */}
+                  <View style={styles.customInputRow}>
+                    <TextInput
+                      style={styles.customInputBox}
+                      value={customFacilityInput}
+                      onChangeText={setCustomFacilityInput}
+                      placeholder="Tambah fasilitas bersama lainnya..."
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    <TouchableOpacity
+                      style={styles.customAddBtn}
+                      onPress={handleAddCustomFacility}
+                      activeOpacity={0.8}
+                    >
+                      <Plus size={16} color="#FFFFFF" />
+                      <Text style={styles.customAddBtnText}>Tambah</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Active Facilities Tag Cloud with delete */}
+                  <View style={styles.activeTagCloud}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 6 }}>
+                      Fasilitas Bersama Aktif ({sharedFacilities.length}):
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      {sharedFacilities.map((fac, idx) => (
+                        <View key={idx} style={styles.activeTagItem}>
+                          <Text style={styles.activeTagItemText}>{fac}</Text>
+                          <TouchableOpacity onPress={() => handleRemoveFacility(fac)} activeOpacity={0.7}>
+                            <X size={13} color="#DC2626" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {propertyActiveTab === "peraturan" && (
+                <View style={{ gap: 14 }}>
+                  <Text style={styles.propSectionHint}>
+                    Tetapkan peraturan kos yang wajib ditaati oleh semua penghuni:
+                  </Text>
+
+                  {/* Quick Preset Rules */}
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151" }}>Pilihan Cepat:</Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      {presetRules.map((rule, idx) => {
+                        const isSelected = propertyRules.includes(rule);
+                        return (
+                          <TouchableOpacity
+                            key={idx}
+                            style={[styles.rulePresetChip, isSelected && styles.rulePresetChipActive]}
+                            onPress={() => handleToggleRule(rule)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[styles.rulePresetChipText, isSelected && styles.rulePresetChipTextActive]}>
+                              {isSelected ? "✓ " : "+ "}
+                              {rule}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Custom Rule Input */}
+                  <View style={styles.customInputRow}>
+                    <TextInput
+                      style={styles.customInputBox}
+                      value={customRuleInput}
+                      onChangeText={setCustomRuleInput}
+                      placeholder="Tulis peraturan khusus lainnya..."
+                      placeholderTextColor="#9CA3AF"
+                    />
+                    <TouchableOpacity
+                      style={styles.customAddBtn}
+                      onPress={handleAddCustomRule}
+                      activeOpacity={0.8}
+                    >
+                      <Plus size={16} color="#FFFFFF" />
+                      <Text style={styles.customAddBtnText}>Tambah</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Active Rules List */}
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151" }}>
+                      Daftar Peraturan Kos Aktif ({propertyRules.length}):
+                    </Text>
+                    {propertyRules.length === 0 ? (
+                      <Text style={{ fontSize: 12, color: "#9CA3AF", fontStyle: "italic" }}>
+                        Belum ada peraturan yang ditambahkan.
+                      </Text>
+                    ) : (
+                      propertyRules.map((rule, idx) => (
+                        <View key={idx} style={styles.activeRuleCard}>
+                          <Text style={styles.activeRuleIdx}>{idx + 1}.</Text>
+                          <Text style={styles.activeRuleText}>{rule}</Text>
+                          <TouchableOpacity
+                            onPress={() => handleRemoveRule(rule)}
+                            style={styles.activeRuleDeleteBtn}
+                            activeOpacity={0.7}
+                          >
+                            <Trash2 size={15} color="#DC2626" />
+                          </TouchableOpacity>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {propertyActiveTab === "deskripsi" && (
+                <View style={{ gap: 12 }}>
+                  <Text style={styles.propSectionHint}>
+                    Deskripsi keseluruhan kos yang akan tampil di halaman detail customer:
+                  </Text>
+                  <TextInput
+                    style={styles.descInputBox}
+                    value={propertyDescription}
+                    onChangeText={setPropertyDescription}
+                    placeholder="Tulis deskripsi keunggulan, kenyamanan, dan lokasi kos Anda..."
+                    placeholderTextColor="#9CA3AF"
+                    multiline
+                    numberOfLines={6}
+                    textAlignVertical="top"
+                  />
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Bottom Sticky Action Button */}
+            <View style={styles.propModalFooter}>
+              <TouchableOpacity
+                style={styles.btnSaveProperty}
+                onPress={handleSavePropertyDetails}
+                disabled={isSavingProperty}
+                activeOpacity={0.85}
+              >
+                {isSavingProperty ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <CheckCircle size={18} color="#FFFFFF" />
+                    <Text style={styles.btnSavePropertyText}>Simpan ke Seluruh Kos</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1036,27 +1686,33 @@ const styles = StyleSheet.create({
   roomDetailsCol: {
     flex: 1,
     justifyContent: "space-between",
+    paddingVertical: 2,
   },
   roomHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 6,
   },
   roomTitleWrap: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
+    overflow: "hidden",
   },
   roomTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   typeBadge: {
     backgroundColor: "#E8F5EE",
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: 6,
+    alignSelf: "center",
   },
   typeBadgeText: {
     fontSize: 10,
@@ -1064,49 +1720,70 @@ const styles = StyleSheet.create({
     color: "#0D7A53",
   },
   moreBtn: {
-    padding: 4,
+    padding: 3,
   },
   facilitiesRow: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 4,
     marginVertical: 4,
   },
   facChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 3,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 6,
   },
   facText: {
-    fontSize: 11,
-    color: "#4B5563",
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#374151",
   },
-  inclusionsText: {
-    fontSize: 11,
+  facChipMore: {
+    backgroundColor: "#E5E7EB",
+    paddingHorizontal: 5,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  facTextMore: {
+    fontSize: 9,
+    fontWeight: "700",
     color: "#6B7280",
-    marginBottom: 6,
+  },
+  inclusionBadgeRow: {
+    marginTop: 1,
+    marginBottom: 4,
+  },
+  inclusionBadgeText: {
+    fontSize: 10,
+    color: "#0D7A53",
+    fontWeight: "600",
   },
   roomFooterRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderTopWidth: 1,
-    borderTopColor: "#F9FAFB",
+    borderTopColor: "#F3F4F6",
     paddingTop: 6,
+    marginTop: 2,
   },
   tenantRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
   },
   tenantAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
   },
   tenantLabel: {
-    fontSize: 9,
+    fontSize: 8,
     color: "#9CA3AF",
   },
   tenantName: {
@@ -1130,12 +1807,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   priceVal: {
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "900",
     color: "#0D7A53",
   },
   priceUnit: {
-    fontSize: 10,
+    fontSize: 9.5,
+    fontWeight: "600",
     color: "#6B7280",
   },
   bottomNav: {
@@ -1492,5 +2170,398 @@ const styles = StyleSheet.create({
     height: 44,
     fontSize: 13,
     color: "#111827",
+  },
+  countBadge: {
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  countBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  photoGridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 12,
+  },
+  photoThumbWrapper: {
+    width: 76,
+    height: 76,
+    borderRadius: 14,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  photoThumbImg: {
+    width: "100%",
+    height: "100%",
+  },
+  photoMainBadge: {
+    position: "absolute",
+    bottom: 4,
+    left: 4,
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  photoMainBadgeText: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  photoDeleteBtn: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "rgba(220, 38, 38, 0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  maxPhotoReachedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#DCFCE7",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  maxPhotoReachedText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  // Property Configuration Quick Action Card
+  propertyConfigCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  propertyConfigLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  propertyConfigIconBg: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  propertyConfigTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#065F46",
+  },
+  propertyBadgeAll: {
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  propertyBadgeAllText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  propertyConfigSub: {
+    fontSize: 12,
+    color: "#047857",
+    fontWeight: "500",
+  },
+  propertyConfigArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+  // Property Configuration Modal Bottom Sheet
+  propertyModalSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "90%",
+    width: "100%",
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  sheetSub: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  propSegmentWrap: {
+    flexDirection: "row",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 14,
+    marginHorizontal: 20,
+    marginVertical: 14,
+    padding: 4,
+    gap: 4,
+  },
+  propSegmentBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 9,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+  },
+  propSegmentBtnActive: {
+    backgroundColor: "#0D7A53",
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  propSegmentText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  propSegmentTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  tabCountPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 18,
+  },
+  tabCountPillActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+  },
+  tabCountPillInactive: {
+    backgroundColor: "#E5E7EB",
+  },
+  tabCountPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#4B5563",
+  },
+  tabCountPillTextActive: {
+    color: "#FFFFFF",
+  },
+  propSectionHint: {
+    fontSize: 13,
+    color: "#4B5563",
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+  propChipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  propChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  propChipActive: {
+    backgroundColor: "#E8F5EE",
+    borderColor: "#0D7A53",
+  },
+  propChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
+  propChipTextActive: {
+    color: "#0D7A53",
+    fontWeight: "700",
+  },
+  customInputRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  customInputBox: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 44,
+    fontSize: 13,
+    color: "#111827",
+  },
+  customAddBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 12,
+  },
+  customAddBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  activeTagCloud: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+    borderRadius: 14,
+    padding: 12,
+  },
+  activeTagItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  activeTagItemText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  rulePresetChip: {
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  rulePresetChipActive: {
+    backgroundColor: "#E8F5EE",
+    borderColor: "#0D7A53",
+  },
+  rulePresetChipText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
+  rulePresetChipTextActive: {
+    color: "#0D7A53",
+    fontWeight: "700",
+  },
+  activeRuleCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+  },
+  activeRuleIdx: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  activeRuleText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#374151",
+    lineHeight: 18,
+  },
+  activeRuleDeleteBtn: {
+    padding: 4,
+  },
+  descInputBox: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    padding: 14,
+    fontSize: 13,
+    color: "#111827",
+    minHeight: 120,
+    lineHeight: 20,
+  },
+  propModalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    backgroundColor: "#FFFFFF",
+  },
+  btnSaveProperty: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0D7A53",
+    height: 50,
+    borderRadius: 14,
+    gap: 8,
+  },
+  btnSavePropertyText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  modalOverlayBottom: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    justifyContent: "flex-end",
   },
 });

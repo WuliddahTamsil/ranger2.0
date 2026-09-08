@@ -18,11 +18,14 @@ import { Linking } from "react-native";
 import {
   fetchTenantsByOwner,
   addTenantToKost,
+  updateTenantInKost,
   deleteTenantFromKost,
+  settleKostBooking,
 } from "../../services/kostService";
 import {
   Search,
   Plus,
+  Minus,
   X,
   Phone,
   Calendar,
@@ -41,10 +44,24 @@ import {
   Pencil,
   Trash2,
   MessageCircle,
+  CheckCircle2,
+  CreditCard,
+  Banknote,
+  Receipt,
+  Check,
+  Camera,
+  UploadCloud,
+  Eye,
+  Maximize2,
+  FileText,
+  Clock,
+  ExternalLink,
 } from "lucide-react-native";
 
 interface TenantData {
   id: string;
+  bookingId?: string;
+  bookingCode?: string;
   name: string;
   avatar: string;
   status: "aktif" | "akan_keluar";
@@ -54,6 +71,20 @@ interface TenantData {
   entryDate: string;
   daysLeft: number;
   priceMonth: string;
+  totalAmount?: number;
+  dpAmount?: number;
+  settledAmount?: number;
+  remainingAmount?: number;
+  isSettled?: boolean;
+  settlementMethod?: "transfer" | "cash";
+  settledAt?: string;
+  settlementNotes?: string;
+  settlementProofImage?: string;
+  dpProofImage?: string;
+  dpPaidAt?: string;
+  dpVerifiedAt?: string;
+  customerEmail?: string;
+  durationMonths?: number;
 }
 
 interface ManajemenPenghuniProps extends Nav {
@@ -73,6 +104,20 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   // State for Options Bottom Sheet
   const [selectedTenantForOptions, setSelectedTenantForOptions] = useState<TenantData | null>(null);
 
+  // State for Check-in Settlement Modal
+  const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
+  const [settlingTenant, setSettlingTenant] = useState<TenantData | null>(null);
+  const [settlementMethod, setSettlementMethod] = useState<"transfer" | "cash">("transfer");
+  const [settlementAmountInput, setSettlementAmountInput] = useState("");
+  const [settlementNotes, setSettlementNotes] = useState("");
+  const [settlementProofImage, setSettlementProofImage] = useState<string | null>(null);
+  const [isSubmittingSettlement, setIsSubmittingSettlement] = useState(false);
+
+  // State for Receipt & Payment History Modal
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [viewingReceiptTenant, setViewingReceiptTenant] = useState<TenantData | null>(null);
+  const [fullImagePreviewUrl, setFullImagePreviewUrl] = useState<string | null>(null);
+
   // State for Add/Edit Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
@@ -85,6 +130,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   const [tipeKamar, setTipeKamar] = useState("Tipe AC");
   const [tanggalMasuk, setTanggalMasuk] = useState("10/08/26");
   const [hargaSewa, setHargaSewa] = useState("1.200.000");
+  const [durasiSewa, setDurasiSewa] = useState("1");
 
   // Dropdown Picker State
   const [isTipeKamarDropdownOpen, setIsTipeKamarDropdownOpen] = useState(false);
@@ -159,11 +205,10 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     setLoading(true);
     try {
       const data = await fetchTenantsByOwner(ownerEmail);
-      if (data && data.length > 0) {
-        setTenants(data);
-      }
+      setTenants(data || []);
     } catch (err) {
       console.warn("Using offline tenants:", err);
+      setTenants([]);
     } finally {
       setLoading(false);
     }
@@ -175,7 +220,19 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
 
   const handleSendWhatsAppReminder = (tenant: TenantData) => {
     const cleanPhone = (tenant.phone || "081234567890").replace(/[^0-9]/g, "").replace(/^0/, "62");
-    const msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost Exclusive* ingin menginformasikan tagihan sewa kamar *${tenant.roomNumber}* sebesar *${tenant.priceMonth}*.\nSisa periode sewa Anda: *${tenant.daysLeft} hari lagi*.\n\nPembayaran dapat ditransfer ke rekening bank pemilik kos. Terima kasih! 🙏`;
+    const rawPrice = (tenant.priceMonth || "700.000").replace(/^Rp\s*/, "");
+    const formattedPrice = `Rp ${rawPrice}`;
+    const duration = tenant.durationMonths || 1;
+
+    let msg = "";
+    if (duration > 1) {
+      // Sewa > 1 bulan: Pengingat tagihan sewa bulanan / sisa periode berjalan
+      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost Exclusive* ingin menginformasikan tagihan sewa kamar *${tenant.roomNumber}* sebesar *${formattedPrice}*.\nSisa periode sewa Anda: *${tenant.daysLeft} hari lagi*.\n\nPembayaran dapat ditransfer ke rekening bank/QRIS pemilik kos. Jika sudah transfer, mohon kirimkan bukti pembayarannya ya Kak. Terima kasih! 🙏`;
+    } else {
+      // Sewa 1 bulan: Masa sewa akan habis, konfirmasi apakah mau memperpanjang atau checkout
+      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost Exclusive* ingin menginformasikan bahwa masa sewa kamar *${tenant.roomNumber}* Anda tersisa *${tenant.daysLeft} hari lagi*.\n\nApakah Kakak berencana untuk *memperpanjang sewa* untuk bulan berikutnya atau *selesai (checkout)* di akhir periode ini?\n\n• *Jika ingin memperpanjang*: Kakak dapat melakukan transfer sewa sebesar *${formattedPrice}* ke rekening pemilik kos dan kirim bukti transfernya ke sini.\n• *Jika selesai sewa*: Mohon konfirmasikan tanggal & jam rencana checkout Kakak agar kami dapat mempersiapkan proses serah terima kamar.\n\nTerima kasih banyak atas kerjasamanya! 🙏✨`;
+    }
+
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
   };
 
@@ -189,6 +246,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     setTipeKamar("Tipe AC");
     setTanggalMasuk("10/08/26");
     setHargaSewa("1.200.000");
+    setDurasiSewa("1");
     setIsAddModalOpen(true);
   };
 
@@ -202,6 +260,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     setTipeKamar(t.roomType);
     setTanggalMasuk(t.entryDate);
     setHargaSewa(t.priceMonth.replace("Rp ", "").replace(".", ""));
+    setDurasiSewa(String(t.durationMonths || 1));
     setSelectedTenantForOptions(null);
     setIsAddModalOpen(true);
   };
@@ -209,8 +268,18 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   // Save Tenant Handler
   const handleSaveTenant = async () => {
     if (!namaLengkap) return;
+    const months = parseInt(durasiSewa) || 1;
+    const cleanPrice = hargaSewa ? `Rp ${hargaSewa}` : "Rp 700.000";
 
     if (modalMode === "edit" && editingTenantId) {
+      const existingTenant = tenants.find((t) => t.id === editingTenantId);
+      let newDaysLeft = existingTenant?.daysLeft || (months * 30);
+      try {
+        const now = new Date();
+        const targetDueDate = new Date(now.getFullYear(), now.getMonth() + months, now.getDate());
+        newDaysLeft = Math.max(0, Math.ceil((targetDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      } catch {}
+
       setTenants(
         tenants.map((t) =>
           t.id === editingTenantId
@@ -221,11 +290,28 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
                 roomNumber: nomorKamar || t.roomNumber,
                 roomType: tipeKamar,
                 entryDate: tanggalMasuk || t.entryDate,
-                priceMonth: `Rp ${hargaSewa || "1.200.000"}`,
+                priceMonth: cleanPrice,
+                durationMonths: months,
+                daysLeft: newDaysLeft,
+                status: newDaysLeft <= 10 ? "akan_keluar" : "aktif",
               }
             : t
         )
       );
+
+      try {
+        await updateTenantInKost(ownerEmail, editingTenantId, {
+          name: namaLengkap,
+          phone: noHp,
+          roomNumber: nomorKamar,
+          roomType: tipeKamar,
+          entryDate: tanggalMasuk,
+          priceMonthly: hargaSewa,
+          durationMonths: months,
+        });
+      } catch (e) {
+        console.log("Offline update tenant:", e);
+      }
     } else {
       const newTenant: TenantData = {
         id: Date.now().toString(),
@@ -236,8 +322,9 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
         roomType: tipeKamar,
         phone: noHp || "081299998888",
         entryDate: tanggalMasuk || "10 Ags 2026",
-        daysLeft: 30,
-        priceMonth: `Rp ${hargaSewa || "1.200.000"}`,
+        daysLeft: months * 30,
+        priceMonth: cleanPrice,
+        durationMonths: months,
       };
       setTenants([newTenant, ...tenants]);
       try {
@@ -246,7 +333,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
           phone: noHp,
           roomNumber: nomorKamar || "101",
           entryDate: new Date().toISOString(),
-          durationMonths: 1,
+          durationMonths: months,
         });
       } catch (e) {
         console.log("Offline add tenant:", e);
@@ -266,12 +353,115 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     }
   };
 
+  // Check-in Settlement Handlers
+  const handlePickProofImage = () => {
+    if (typeof document !== "undefined") {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            setSettlementProofImage(base64);
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      input.click();
+    }
+  };
+
+  const handleOpenSettlementModal = (tenant: TenantData) => {
+    setSelectedTenantForOptions(null);
+    setSettlingTenant(tenant);
+    const total = tenant.totalAmount || parseInt((tenant.priceMonth || "").replace(/[^0-9]/g, "")) || 700000;
+    const dp = tenant.dpAmount !== undefined ? tenant.dpAmount : Math.round(total * 0.2);
+    const rem = tenant.remainingAmount !== undefined ? tenant.remainingAmount : (total - dp);
+    setSettlementAmountInput(rem.toString());
+    setSettlementMethod("transfer");
+    setSettlementNotes("Pelunasan sewa check-in hari pertama");
+    setSettlementProofImage(null);
+    setIsSettlementModalOpen(true);
+  };
+
+  const handleConfirmSettlement = async () => {
+    if (!settlingTenant) return;
+    setIsSubmittingSettlement(true);
+    try {
+      const amountNum = parseInt(settlementAmountInput.replace(/[^0-9]/g, "")) || settlingTenant.remainingAmount || 0;
+      if (settlingTenant.bookingId) {
+        await settleKostBooking(settlingTenant.bookingId, {
+          paymentMethod: settlementMethod,
+          settledAmount: amountNum,
+          notes: settlementNotes,
+          proofImage: settlementProofImage || undefined,
+        });
+      }
+      setTenants((prev) =>
+        prev.map((t) =>
+          t.id === settlingTenant.id
+            ? {
+                ...t,
+                isSettled: true,
+                settledAmount: amountNum,
+                remainingAmount: 0,
+                settlementMethod: settlementMethod,
+                settledAt: new Date().toISOString(),
+                settlementProofImage: settlementProofImage || undefined,
+              }
+            : t
+        )
+      );
+      setIsSettlementModalOpen(false);
+      await loadTenantsFromBackend();
+    } catch (err) {
+      console.error("Settlement error:", err);
+      setTenants((prev) =>
+        prev.map((t) =>
+          t.id === settlingTenant.id
+            ? {
+                ...t,
+                isSettled: true,
+                remainingAmount: 0,
+                settlementMethod: settlementMethod,
+                settlementProofImage: settlementProofImage || undefined,
+              }
+            : t
+        )
+      );
+      setIsSettlementModalOpen(false);
+    } finally {
+      setIsSubmittingSettlement(false);
+    }
+  };
+
   // Dynamic Counters
   const totalPenghuni = tenants.length;
   const aktifCount = tenants.filter((t) => t.status === "aktif").length;
   const akanKeluarCount = tenants.filter((t) => t.status === "akan_keluar").length;
   const aktifPercentage = totalPenghuni > 0 ? Math.round((aktifCount / totalPenghuni) * 100) : 0;
   const akanKeluarPercentage = totalPenghuni > 0 ? Math.round((akanKeluarCount / totalPenghuni) * 100) : 0;
+
+  // Real Cash In & Pending Check-in Settlement
+  const totalReceivedCash = tenants.reduce((acc, t) => {
+    const total = t.totalAmount || parseInt((t.priceMonth || "").replace(/[^0-9]/g, "")) || 0;
+    const dp = t.dpAmount !== undefined ? t.dpAmount : Math.round(total * 0.2);
+    if (t.isSettled) {
+      return acc + (t.settledAmount ? (dp + t.settledAmount) : total);
+    }
+    return acc + dp;
+  }, 0);
+
+  const totalPendingSettlement = tenants.reduce((acc, t) => {
+    if (t.isSettled) return acc;
+    const total = t.totalAmount || parseInt((t.priceMonth || "").replace(/[^0-9]/g, "")) || 0;
+    const dp = t.dpAmount !== undefined ? t.dpAmount : Math.round(total * 0.2);
+    const rem = t.remainingAmount !== undefined ? t.remainingAmount : (total - dp);
+    return acc + rem;
+  }, 0);
 
   // Filtered Tenant List
   const filteredTenants = tenants.filter((t) => {
@@ -388,91 +578,170 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
           </TouchableOpacity>
         </View>
 
-        {/* Tenant Cards List */}
-        <View style={styles.tenantList}>
-          {filteredTenants.map((t) => (
-            <View key={t.id} style={styles.tenantCard}>
-              <View style={styles.tenantTopRow}>
-                {/* Avatar */}
-                <Image source={{ uri: t.avatar }} style={styles.avatarImg} />
+        {/* Tenant Cards List or Empty State */}
+        {tenants.length === 0 ? (
+          <View style={{ alignItems: "center", paddingVertical: 40, backgroundColor: "#FFFFFF", borderRadius: 16, marginTop: 8, marginBottom: 20, borderWidth: 1, borderColor: "#E5E7EB", paddingHorizontal: 20 }}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#EFF6FF", justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
+              <Users size={32} color="#2563EB" />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: "700", color: "#111827", marginBottom: 6 }}>
+              Belum Ada Penghuni
+            </Text>
+            <Text style={{ fontSize: 13, color: "#6B7280", textAlign: "center", paddingHorizontal: 16, lineHeight: 20 }}>
+              Daftar penghuni kos Anda akan otomatis terisi saat pesanan booking customer Anda verifikasi, atau Anda dapat menambahkannya secara manual.
+            </Text>
+            <TouchableOpacity
+              style={{ marginTop: 22, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#2563EB", paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 }}
+              onPress={handleOpenAddModal}
+              activeOpacity={0.85}
+            >
+              <Plus size={18} color="#FFFFFF" />
+              <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 14 }}>Tambah Penghuni Manual</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.tenantList}>
+            {filteredTenants.map((t) => (
+              <View key={t.id} style={styles.tenantCard}>
+                <View style={styles.tenantTopRow}>
+                  {/* Avatar */}
+                  <Image source={{ uri: t.avatar }} style={styles.avatarImg} />
 
-                {/* Info Column */}
-                <View style={styles.tenantInfoCol}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.tenantNameTitle}>{t.name}</Text>
-                    <View style={t.status === "aktif" ? styles.badgeGreen : styles.badgeRed}>
-                      <Text style={t.status === "aktif" ? styles.badgeGreenText : styles.badgeRedText}>
-                        {t.status === "aktif" ? "Aktif" : "Akan Keluar"}
-                      </Text>
+                  {/* Info Column */}
+                  <View style={styles.tenantInfoCol}>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.tenantNameTitle}>{t.name}</Text>
+                      <View style={t.status === "aktif" ? styles.badgeGreen : styles.badgeRed}>
+                        <Text style={t.status === "aktif" ? styles.badgeGreenText : styles.badgeRedText}>
+                          {t.status === "aktif" ? "Aktif" : "Akan Keluar"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.roomTypeSub}>
+                      {t.roomNumber} • {t.roomType}
+                    </Text>
+
+                    <View style={styles.detailMetaRow}>
+                      <Phone size={13} color="#9CA3AF" />
+                      <Text style={styles.detailMetaText}>{t.phone}</Text>
+                    </View>
+
+                    <View style={styles.detailMetaRow}>
+                      <Calendar size={13} color="#9CA3AF" />
+                      <Text style={styles.detailMetaText}>Masuk: {t.entryDate}</Text>
                     </View>
                   </View>
 
-                  <Text style={styles.roomTypeSub}>
-                    {t.roomNumber} • {t.roomType}
-                  </Text>
+                  {/* Right Options & Price Column */}
+                  <View style={styles.tenantRightCol}>
+                    <TouchableOpacity
+                      style={styles.moreOptionsBtn}
+                      onPress={() => setSelectedTenantForOptions(t)}
+                      activeOpacity={0.7}
+                    >
+                      <MoreVertical size={18} color="#9CA3AF" />
+                    </TouchableOpacity>
 
-                  <View style={styles.detailMetaRow}>
-                    <Phone size={13} color="#9CA3AF" />
-                    <Text style={styles.detailMetaText}>{t.phone}</Text>
-                  </View>
-
-                  <View style={styles.detailMetaRow}>
-                    <Calendar size={13} color="#9CA3AF" />
-                    <Text style={styles.detailMetaText}>Masuk: {t.entryDate}</Text>
+                    <View style={styles.leasePriceWrap}>
+                      <Text style={styles.leaseLabel}>Sisa Sewa</Text>
+                      <Text style={[styles.leaseDaysText, t.daysLeft <= 10 && { color: "#EA580C" }]}>
+                        {t.daysLeft} hari lagi
+                      </Text>
+                      <Text style={styles.tenantPriceVal}>{t.priceMonth}</Text>
+                      <Text style={styles.tenantPriceUnit}>/ bulan</Text>
+                    </View>
                   </View>
                 </View>
 
-                {/* Right Options & Price Column */}
-                <View style={styles.tenantRightCol}>
+                {/* Settlement Status Banner / Action */}
+                {t.isSettled ? (
                   <TouchableOpacity
-                    style={styles.moreOptionsBtn}
-                    onPress={() => setSelectedTenantForOptions(t)}
-                    activeOpacity={0.7}
+                    style={styles.settlementBannerSuccess}
+                    onPress={() => {
+                      setViewingReceiptTenant(t);
+                      setIsReceiptModalOpen(true);
+                    }}
+                    activeOpacity={0.75}
                   >
-                    <MoreVertical size={18} color="#9CA3AF" />
+                    <View style={styles.settlementBannerLeft}>
+                      <CheckCircle2 size={15} color="#0D7A53" />
+                      <Text style={styles.settlementBannerSuccessText}>
+                        Lunas Check-in • {t.settlementMethod === "cash" ? "Tunai (Cash)" : "Transfer Bank"}
+                      </Text>
+                    </View>
+                    <View style={styles.settlementBannerRightLink}>
+                      <Text style={styles.settlementBannerSuccessDate}>
+                        Lihat Bukti
+                      </Text>
+                      <ChevronRight size={13} color="#0D7A53" />
+                    </View>
                   </TouchableOpacity>
-
-                  <View style={styles.leasePriceWrap}>
-                    <Text style={styles.leaseLabel}>Sisa Sewa</Text>
-                    <Text style={[styles.leaseDaysText, t.daysLeft <= 10 && { color: "#EA580C" }]}>
-                      {t.daysLeft} hari lagi
-                    </Text>
-                    <Text style={styles.tenantPriceVal}>{t.priceMonth}</Text>
-                    <Text style={styles.tenantPriceUnit}>/ bulan</Text>
+                ) : (
+                  <View style={styles.settlementBannerPending}>
+                    <View style={styles.settlementBannerTopRow}>
+                      <View style={styles.settlementPendingBadge}>
+                        <Text style={styles.settlementPendingBadgeText}>Belum Lunas Check-in</Text>
+                      </View>
+                      <Text style={styles.settlementBreakdownText}>
+                        DP: Rp {(t.dpAmount !== undefined ? t.dpAmount : Math.round((t.totalAmount || 700000) * 0.2)).toLocaleString("id-ID")} • Sisa: Rp {(t.remainingAmount !== undefined ? t.remainingAmount : (t.totalAmount || 700000) - (t.dpAmount || 140000)).toLocaleString("id-ID")}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.inputSettlementActionBtn}
+                      onPress={() => handleOpenSettlementModal(t)}
+                      activeOpacity={0.85}
+                    >
+                      <Banknote size={15} color="#FFFFFF" />
+                      <Text style={styles.inputSettlementActionBtnText}>Input Pelunasan (TF / Cash)</Text>
+                      <ChevronRight size={14} color="#FFFFFF" />
+                    </TouchableOpacity>
                   </View>
-                </View>
+                )}
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
 
         {/* Bottom Financial Summary Row (Pendapatan & Tunggakan) */}
         <View style={styles.financialSummaryRow}>
-          {/* Card 1: Pendapatan */}
-          <TouchableOpacity style={[styles.finCard, { backgroundColor: "#ECFDF5" }]} activeOpacity={0.8}>
+          {/* Card 1: Pendapatan (Real Cash Received) */}
+          <TouchableOpacity
+            style={[styles.finCard, { backgroundColor: "#F0FDF4", borderColor: "#DCFCE7" }]}
+            onPress={() => navigate("pemilik_kos_laporan_keuangan")}
+            activeOpacity={0.8}
+          >
             <View style={styles.finHeaderRow}>
               <View style={[styles.finIconCircle, { backgroundColor: "#0D7A53" }]}>
-                <DollarSign size={16} color="#FFFFFF" />
+                <DollarSign size={15} color="#FFFFFF" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.finLabel}>Pendapatan</Text>
-                <Text style={[styles.finVal, { color: "#0D7A53" }]}>Rp 12.500.000</Text>
+                <Text style={[styles.finVal, { color: "#0D7A53" }]}>
+                  Rp {totalReceivedCash.toLocaleString("id-ID")}
+                </Text>
               </View>
-              <ChevronRight size={16} color="#0D7A53" />
+              <ChevronRight size={15} color="#0D7A53" />
             </View>
           </TouchableOpacity>
 
-          {/* Card 2: Tunggakan */}
-          <TouchableOpacity style={[styles.finCard, { backgroundColor: "#FEF2F2" }]} activeOpacity={0.8}>
+          {/* Card 2: Tunggakan (Pending Check-in Settlement) */}
+          <TouchableOpacity
+            style={[styles.finCard, { backgroundColor: "#FEF2F2", borderColor: "#FEE2E2" }]}
+            onPress={() => navigate("pemilik_kos_laporan_keuangan")}
+            activeOpacity={0.8}
+          >
             <View style={styles.finHeaderRow}>
               <View style={[styles.finIconCircle, { backgroundColor: "#DC2626" }]}>
-                <AlertCircle size={16} color="#FFFFFF" />
+                <AlertCircle size={15} color="#FFFFFF" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.finLabel}>Tunggakan</Text>
-                <Text style={[styles.finVal, { color: "#DC2626" }]}>Rp 1.500.000</Text>
+                <Text style={[styles.finVal, { color: "#DC2626" }]}>
+                  Rp {totalPendingSettlement.toLocaleString("id-ID")}
+                </Text>
               </View>
-              <ChevronRight size={16} color="#DC2626" />
+              <ChevronRight size={15} color="#DC2626" />
             </View>
           </TouchableOpacity>
         </View>
@@ -661,6 +930,66 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
                 </View>
               </View>
 
+              {/* Field 5: Durasi Sewa (Bulan) */}
+              <View style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={styles.label}>Durasi Sewa</Text>
+                  {modalMode === "edit" && (
+                    <Text style={{ fontSize: 11, color: "#0D7A53", fontWeight: "700" }}>
+                      *Edit durasi jika perpanjang
+                    </Text>
+                  )}
+                </View>
+
+                <View style={styles.durationInputRow}>
+                  <TouchableOpacity
+                    style={styles.durationStepperBtn}
+                    onPress={() => setDurasiSewa(Math.max(1, (parseInt(durasiSewa) || 1) - 1).toString())}
+                    activeOpacity={0.7}
+                  >
+                    <Minus size={16} color="#0D7A53" />
+                  </TouchableOpacity>
+
+                  <View style={styles.durationInputWrap}>
+                    <TextInput
+                      style={styles.durationTextInput}
+                      value={durasiSewa}
+                      onChangeText={(val) => setDurasiSewa(val.replace(/[^0-9]/g, ""))}
+                      keyboardType="numeric"
+                      placeholder="1"
+                    />
+                    <Text style={styles.durationUnitText}>Bulan</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.durationStepperBtn}
+                    onPress={() => setDurasiSewa(((parseInt(durasiSewa) || 1) + 1).toString())}
+                    activeOpacity={0.7}
+                  >
+                    <Plus size={16} color="#0D7A53" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Quick Selection Chips */}
+                <View style={styles.quickDurationChipsRow}>
+                  {["1", "2", "3", "6", "12"].map((m) => {
+                    const isSelected = durasiSewa === m;
+                    return (
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.quickDurationChip, isSelected && styles.quickDurationChipActive]}
+                        onPress={() => setDurasiSewa(m)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.quickDurationChipText, isSelected && styles.quickDurationChipTextActive]}>
+                          {m} Bln
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
               {/* Submit Button */}
               <TouchableOpacity
                 style={styles.btnPrimary}
@@ -691,6 +1020,49 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
             </Text>
 
             <View style={styles.optionsList}>
+              {selectedTenantForOptions?.isSettled ? (
+                <TouchableOpacity
+                  style={styles.optionRow}
+                  onPress={() => {
+                    if (selectedTenantForOptions) {
+                      const t = selectedTenantForOptions;
+                      setSelectedTenantForOptions(null);
+                      setViewingReceiptTenant(t);
+                      setIsReceiptModalOpen(true);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.optionIconBg, { backgroundColor: "#DCFCE7" }]}>
+                    <Receipt size={18} color="#0D7A53" />
+                  </View>
+                  <View style={styles.optionTextCol}>
+                    <Text style={styles.optionItemTitle}>Riwayat & Bukti Pembayaran</Text>
+                    <Text style={styles.optionItemSub}>Lihat kwitansi pelunasan & bukti transfer</Text>
+                  </View>
+                  <ChevronRight size={16} color="#9CA3AF" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.optionRow}
+                  onPress={() => {
+                    if (selectedTenantForOptions) {
+                      handleOpenSettlementModal(selectedTenantForOptions);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.optionIconBg, { backgroundColor: "#FEF3C7" }]}>
+                    <Banknote size={18} color="#D97706" />
+                  </View>
+                  <View style={styles.optionTextCol}>
+                    <Text style={styles.optionItemTitle}>Input Pelunasan Sewa (Check-in)</Text>
+                    <Text style={styles.optionItemSub}>Input sisa DP saat penghuni masuk (TF / Cash)</Text>
+                  </View>
+                  <ChevronRight size={16} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
                 style={styles.optionRow}
                 onPress={() => {
@@ -870,6 +1242,471 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
             </View>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* MODAL 4: Input Pelunasan Check-in Modal */}
+      <Modal visible={isSettlementModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.addModalCard}>
+            <View style={styles.dragHandle} />
+
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Input Pelunasan Check-in</Text>
+                <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
+                  Pembayaran sisa sewa hari pertama menempati kost
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={() => setIsSettlementModalOpen(false)}
+                activeOpacity={0.7}
+              >
+                <X size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              {/* Tenant Summary Banner */}
+              {settlingTenant && (
+                <View style={styles.settleTenantBanner}>
+                  <View style={styles.settleTenantHeader}>
+                    <Image source={{ uri: settlingTenant.avatar }} style={styles.settleAvatar} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.settleTenantName}>{settlingTenant.name}</Text>
+                      <Text style={styles.settleTenantRoom}>
+                        {settlingTenant.roomNumber} • {settlingTenant.roomType}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.settlePriceDivider} />
+
+                  <View style={styles.settlePriceRow}>
+                    <Text style={styles.settlePriceLabel}>Total Sewa Bulan ke-1</Text>
+                    <Text style={styles.settlePriceVal}>
+                      Rp {(settlingTenant.totalAmount || parseInt((settlingTenant.priceMonth || "").replace(/[^0-9]/g, "")) || 700000).toLocaleString("id-ID")}
+                    </Text>
+                  </View>
+
+                  <View style={styles.settlePriceRow}>
+                    <Text style={[styles.settlePriceLabel, { color: "#0D7A53" }]}>DP Sudah Dibayar (20%)</Text>
+                    <Text style={[styles.settlePriceVal, { color: "#0D7A53" }]}>
+                      - Rp {(settlingTenant.dpAmount !== undefined ? settlingTenant.dpAmount : Math.round((settlingTenant.totalAmount || 700000) * 0.2)).toLocaleString("id-ID")}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.settlePriceRow, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "#E5E7EB" }]}>
+                    <Text style={[styles.settlePriceLabel, { fontWeight: "700", color: "#111827" }]}>
+                      Sisa Wajib Pelunasan (80%)
+                    </Text>
+                    <Text style={[styles.settlePriceVal, { fontWeight: "800", color: "#EA580C", fontSize: 15 }]}>
+                      Rp {(settlingTenant.remainingAmount !== undefined ? settlingTenant.remainingAmount : (settlingTenant.totalAmount || 700000) - (settlingTenant.dpAmount || 140000)).toLocaleString("id-ID")}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Payment Method Selector (Transfer vs Cash) */}
+              <Text style={[styles.label, { marginTop: 14 }]}>Metode Pembayaran Pelunasan</Text>
+              <View style={styles.methodChoiceRow}>
+                {/* Option 1: Transfer */}
+                <TouchableOpacity
+                  style={[
+                    styles.methodChoiceCard,
+                    settlementMethod === "transfer" && styles.methodChoiceCardActive,
+                  ]}
+                  onPress={() => setSettlementMethod("transfer")}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.methodIconWrap, settlementMethod === "transfer" && styles.methodIconWrapActive]}>
+                    <CreditCard size={15} color={settlementMethod === "transfer" ? "#0D7A53" : "#6B7280"} />
+                  </View>
+                  <View style={styles.methodTextCol}>
+                    <Text style={[styles.methodChoiceTitle, settlementMethod === "transfer" && styles.methodChoiceTitleActive]}>
+                      Transfer Bank / QRIS
+                    </Text>
+                    <Text style={styles.methodChoiceSub}>Via rekening pemilik</Text>
+                  </View>
+                  {settlementMethod === "transfer" && (
+                    <View style={styles.methodSelectedCheck}>
+                      <Check size={9} color="#FFFFFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Option 2: Tunai / Cash */}
+                <TouchableOpacity
+                  style={[
+                    styles.methodChoiceCard,
+                    settlementMethod === "cash" && styles.methodChoiceCardActive,
+                  ]}
+                  onPress={() => setSettlementMethod("cash")}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.methodIconWrap, settlementMethod === "cash" && styles.methodIconWrapActive]}>
+                    <Banknote size={15} color={settlementMethod === "cash" ? "#0D7A53" : "#6B7280"} />
+                  </View>
+                  <View style={styles.methodTextCol}>
+                    <Text style={[styles.methodChoiceTitle, settlementMethod === "cash" && styles.methodChoiceTitleActive]}>
+                      Tunai / Cash Langsung
+                    </Text>
+                    <Text style={styles.methodChoiceSub}>Diterima saat check-in</Text>
+                  </View>
+                  {settlementMethod === "cash" && (
+                    <View style={styles.methodSelectedCheck}>
+                      <Check size={9} color="#FFFFFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Amount Input */}
+              <Text style={[styles.label, { marginTop: 12 }]}>Jumlah Pelunasan (Rp)</Text>
+              <View style={styles.amountInputWrap}>
+                <Text style={styles.amountPrefix}>Rp</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={settlementAmountInput}
+                  onChangeText={setSettlementAmountInput}
+                  placeholder="560000"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {/* Proof of Payment Upload (Optional) */}
+              <View style={{ marginTop: 12 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <Text style={styles.label}>Bukti Pembayaran</Text>
+                  <View style={styles.optionalBadge}>
+                    <Text style={styles.optionalBadgeText}>Opsional</Text>
+                  </View>
+                </View>
+
+                {settlementProofImage ? (
+                  <View style={styles.proofPreviewCard}>
+                    <Image source={{ uri: settlementProofImage }} style={styles.proofPreviewImg} />
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={styles.proofPreviewTitle}>Bukti Foto Terlampir</Text>
+                      <Text style={styles.proofPreviewSub}>Struk / kwitansi pembayaran siap disimpan</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.proofRemoveBtn}
+                      onPress={() => setSettlementProofImage(null)}
+                      activeOpacity={0.7}
+                    >
+                      <Trash2 size={16} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.proofUploadBox}
+                    onPress={handlePickProofImage}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.proofUploadIconBg}>
+                      <Camera size={16} color="#0D7A53" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={styles.proofUploadText}>Upload Bukti / Struk Pelunasan</Text>
+                      <Text style={styles.proofUploadSub}>Format JPG, PNG (opsional untuk tracking)</Text>
+                    </View>
+                    <View style={styles.proofUploadAddBtn}>
+                      <Plus size={14} color="#0D7A53" />
+                    </View>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Notes */}
+              <Text style={[styles.label, { marginTop: 12 }]}>Catatan Pembayaran (Opsional)</Text>
+              <TextInput
+                style={[styles.input, { height: 52, textAlignVertical: "top", paddingTop: 8 }]}
+                value={settlementNotes}
+                onChangeText={setSettlementNotes}
+                placeholder="Cth: Diterima tunai saat serah terima kunci kamar"
+                placeholderTextColor="#9CA3AF"
+                multiline
+              />
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={[styles.btnConfirmSettlement, isSubmittingSettlement && { opacity: 0.7 }]}
+                onPress={handleConfirmSettlement}
+                disabled={isSubmittingSettlement}
+                activeOpacity={0.85}
+              >
+                {isSubmittingSettlement ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <View style={styles.btnConfirmContent}>
+                    <CheckCircle2 size={16} color="#FFFFFF" />
+                    <Text style={styles.btnConfirmText} numberOfLines={1}>
+                      Konfirmasi Pelunasan & Simpan
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 5: Riwayat & Bukti Pembayaran Modal */}
+      <Modal visible={isReceiptModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.addModalCard, { maxHeight: "90%" }]}>
+            <View style={styles.dragHandle} />
+
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Riwayat & Bukti Pembayaran</Text>
+                <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
+                  Kwitansi resmi pelunasan sewa kamar
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={() => setIsReceiptModalOpen(false)}
+                activeOpacity={0.7}
+              >
+                <X size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              {viewingReceiptTenant && (
+                <>
+                  {/* Status Banner */}
+                  <View style={styles.receiptTopStatusCard}>
+                    <View style={styles.receiptStatusBadgeRow}>
+                      <View style={styles.receiptStatusBadgeGreen}>
+                        <CheckCircle2 size={13} color="#0D7A53" />
+                        <Text style={styles.receiptStatusBadgeGreenText}>LUNAS CHECK-IN (100%)</Text>
+                      </View>
+                      <Text style={styles.receiptBookingCode}>
+                        {viewingReceiptTenant.bookingCode ? `#${viewingReceiptTenant.bookingCode}` : "#BOOK-KST"}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.receiptTotalLabel}>Total Nilai Sewa</Text>
+                    <Text style={styles.receiptTotalAmount}>
+                      Rp {(viewingReceiptTenant.totalAmount || parseInt((viewingReceiptTenant.priceMonth || "").replace(/[^0-9]/g, "")) || 700000).toLocaleString("id-ID")}
+                    </Text>
+
+                    <View style={styles.receiptTenantInfoRow}>
+                      <Image source={{ uri: viewingReceiptTenant.avatar }} style={styles.receiptAvatar} />
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.receiptTenantName}>{viewingReceiptTenant.name}</Text>
+                        <Text style={styles.receiptTenantSub}>
+                          Kamar {viewingReceiptTenant.roomNumber} • {viewingReceiptTenant.roomType}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text style={{ fontSize: 11, color: "#6B7280" }}>Tanggal Masuk</Text>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#111827" }}>
+                          {viewingReceiptTenant.entryDate}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Section Title */}
+                  <Text style={[styles.label, { marginTop: 16, marginBottom: 8 }]}>Rincian Tahapan Pembayaran</Text>
+
+                  {/* Stage 1: DP 20% */}
+                  <View style={styles.paymentStageCard}>
+                    <View style={styles.paymentStageHeader}>
+                      <View style={[styles.paymentStageStepBg, { backgroundColor: "#FEF3C7" }]}>
+                        <Text style={[styles.paymentStageStepText, { color: "#D97706" }]}>1</Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                          <Text style={styles.paymentStageTitle}>Pembayaran DP (20%)</Text>
+                          <View style={styles.verifiedMiniPill}>
+                            <CheckCircle2 size={11} color="#0D7A53" />
+                            <Text style={styles.verifiedMiniPillText}>Terverifikasi</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.paymentStageSub}>Dibayar customer saat pemesanan kamar</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.stageAmountRow}>
+                      <Text style={styles.stageAmountLabel}>Nominal DP</Text>
+                      <Text style={[styles.stageAmountVal, { color: "#D97706" }]}>
+                        Rp {(viewingReceiptTenant.dpAmount !== undefined ? viewingReceiptTenant.dpAmount : Math.round((viewingReceiptTenant.totalAmount || 700000) * 0.2)).toLocaleString("id-ID")}
+                      </Text>
+                    </View>
+
+                    <View style={styles.stageMetaRow}>
+                      <Text style={styles.stageMetaLabel}>Metode Transaksi</Text>
+                      <Text style={styles.stageMetaVal}>Transfer Bank (Online)</Text>
+                    </View>
+
+                    {viewingReceiptTenant.dpPaidAt && (
+                      <View style={styles.stageMetaRow}>
+                        <Text style={styles.stageMetaLabel}>Waktu Pembayaran</Text>
+                        <Text style={styles.stageMetaVal}>
+                          {new Date(viewingReceiptTenant.dpPaidAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* DP Proof Image Preview if available */}
+                    {viewingReceiptTenant.dpProofImage ? (
+                      <View style={styles.proofAttachmentCard}>
+                        <View style={styles.proofAttachmentLeft}>
+                          <Image source={{ uri: viewingReceiptTenant.dpProofImage }} style={styles.proofThumbImg} />
+                          <View style={{ marginLeft: 10, flex: 1 }}>
+                            <Text style={styles.proofAttachmentTitle}>Bukti Transfer DP</Text>
+                            <Text style={styles.proofAttachmentSub}>Klik untuk melihat gambar penuh</Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.btnViewFullProof}
+                          onPress={() => viewingReceiptTenant.dpProofImage && setFullImagePreviewUrl(viewingReceiptTenant.dpProofImage)}
+                          activeOpacity={0.7}
+                        >
+                          <Eye size={14} color="#0D7A53" />
+                          <Text style={styles.btnViewFullProofText}>Lihat</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.noProofInfoBox}>
+                        <FileText size={14} color="#9CA3AF" />
+                        <Text style={styles.noProofInfoText}>Bukti transfer DP diverifikasi melalui sistem</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Stage 2: Pelunasan Check-in 80% */}
+                  <View style={[styles.paymentStageCard, { marginTop: 12, borderColor: "#DCFCE7" }]}>
+                    <View style={styles.paymentStageHeader}>
+                      <View style={[styles.paymentStageStepBg, { backgroundColor: "#DCFCE7" }]}>
+                        <Text style={[styles.paymentStageStepText, { color: "#0D7A53" }]}>2</Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                          <Text style={styles.paymentStageTitle}>Pelunasan Check-in (80%)</Text>
+                          <View style={styles.verifiedMiniPill}>
+                            <CheckCircle2 size={11} color="#0D7A53" />
+                            <Text style={styles.verifiedMiniPillText}>Diterima</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.paymentStageSub}>Diserahkan saat hari pertama masuk kost</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.stageAmountRow}>
+                      <Text style={styles.stageAmountLabel}>Nominal Pelunasan</Text>
+                      <Text style={[styles.stageAmountVal, { color: "#0D7A53" }]}>
+                        Rp {(viewingReceiptTenant.settledAmount || (viewingReceiptTenant.totalAmount || 700000) - (viewingReceiptTenant.dpAmount || 140000)).toLocaleString("id-ID")}
+                      </Text>
+                    </View>
+
+                    <View style={styles.stageMetaRow}>
+                      <Text style={styles.stageMetaLabel}>Metode Pelunasan</Text>
+                      <Text style={[styles.stageMetaVal, { fontWeight: "700", color: "#111827" }]}>
+                        {viewingReceiptTenant.settlementMethod === "cash" ? "💵 Tunai / Cash Langsung" : "💳 Transfer Bank / QRIS"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.stageMetaRow}>
+                      <Text style={styles.stageMetaLabel}>Waktu Pelunasan</Text>
+                      <Text style={styles.stageMetaVal}>
+                        {viewingReceiptTenant.settledAt
+                          ? new Date(viewingReceiptTenant.settledAt).toLocaleDateString("id-ID", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "Hari Pertama Check-in"}
+                      </Text>
+                    </View>
+
+                    {viewingReceiptTenant.settlementNotes ? (
+                      <View style={styles.stageNotesBox}>
+                        <Text style={styles.stageNotesLabel}>Catatan:</Text>
+                        <Text style={styles.stageNotesVal}>{viewingReceiptTenant.settlementNotes}</Text>
+                      </View>
+                    ) : null}
+
+                    {/* Settlement Proof Image Preview if available */}
+                    {viewingReceiptTenant.settlementProofImage ? (
+                      <View style={[styles.proofAttachmentCard, { backgroundColor: "#FFFFFF" }]}>
+                        <View style={styles.proofAttachmentLeft}>
+                          <Image source={{ uri: viewingReceiptTenant.settlementProofImage }} style={styles.proofThumbImg} />
+                          <View style={{ marginLeft: 10, flex: 1 }}>
+                            <Text style={styles.proofAttachmentTitle}>Bukti Foto / Kwitansi</Text>
+                            <Text style={styles.proofAttachmentSub}>Klik untuk memperbesar gambar</Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.btnViewFullProof}
+                          onPress={() => viewingReceiptTenant.settlementProofImage && setFullImagePreviewUrl(viewingReceiptTenant.settlementProofImage)}
+                          activeOpacity={0.7}
+                        >
+                          <Eye size={14} color="#0D7A53" />
+                          <Text style={styles.btnViewFullProofText}>Lihat</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.noProofInfoBox}>
+                        <CheckCircle2 size={14} color="#0D7A53" />
+                        <Text style={styles.noProofInfoText}>
+                          {viewingReceiptTenant.settlementMethod === "cash"
+                            ? "Pelunasan tunai telah dikonfirmasi langsung oleh pemilik kos"
+                            : "Pelunasan transfer telah dikonfirmasi oleh pemilik kos"}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Close Action */}
+                  <TouchableOpacity
+                    style={[styles.btnConfirmSettlement, { marginTop: 20 }]}
+                    onPress={() => setIsReceiptModalOpen(false)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.btnConfirmText}>Tutup Rincian Kwitansi</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 6: Fullscreen Image Preview Modal */}
+      <Modal visible={!!fullImagePreviewUrl} transparent animationType="fade">
+        <View style={styles.fullImageOverlay}>
+          <SafeAreaView style={styles.fullImageSafeArea}>
+            <View style={styles.fullImageHeader}>
+              <Text style={styles.fullImageTitle}>Bukti Pembayaran</Text>
+              <TouchableOpacity
+                style={styles.fullImageCloseBtn}
+                onPress={() => setFullImagePreviewUrl(null)}
+                activeOpacity={0.7}
+              >
+                <X size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.fullImageWrap}>
+              {fullImagePreviewUrl ? (
+                <Image
+                  source={{ uri: fullImagePreviewUrl }}
+                  style={styles.fullImageContent}
+                  resizeMode="contain"
+                />
+              ) : null}
+            </View>
+          </SafeAreaView>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -1115,13 +1952,15 @@ const styles = StyleSheet.create({
   // Financial Summary Cards
   financialSummaryRow: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 16,
+    gap: 12,
+    marginBottom: 20,
+    marginTop: 4,
   },
   finCard: {
     flex: 1,
     borderRadius: 16,
     padding: 12,
+    borderWidth: 1,
   },
   finHeaderRow: {
     flexDirection: "row",
@@ -1507,5 +2346,667 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#0D7A53",
+  },
+
+  // Check-in Settlement Card & Banner Styles
+  settlementBannerSuccess: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 10,
+  },
+  settlementBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  settlementBannerRightLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  settlementBannerSuccessText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  settlementBannerSuccessDate: {
+    fontSize: 11,
+    color: "#15803D",
+    fontWeight: "600",
+  },
+  settlementBannerPending: {
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FEF3C7",
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 10,
+    gap: 8,
+  },
+  settlementBannerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  settlementPendingBadge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  settlementPendingBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#D97706",
+  },
+  settlementBreakdownText: {
+    fontSize: 11,
+    color: "#92400E",
+    fontWeight: "600",
+  },
+  inputSettlementActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0D7A53",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  inputSettlementActionBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+
+  // Check-in Settlement Modal Styles
+  settleTenantBanner: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  settleTenantHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  settleAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+  },
+  settleTenantName: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  settleTenantRoom: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  settlePriceDivider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 10,
+  },
+  settlePriceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginVertical: 2,
+  },
+  settlePriceLabel: {
+    fontSize: 12,
+    color: "#4B5563",
+  },
+  settlePriceVal: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  // Payment Method Selection Cards (Slim Compact Style)
+  methodChoiceRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 4,
+  },
+  methodChoiceCard: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    position: "relative",
+  },
+  methodChoiceCardActive: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#0D7A53",
+  },
+  methodIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+  methodIconWrapActive: {
+    backgroundColor: "#DCFCE7",
+  },
+  methodTextCol: {
+    flex: 1,
+  },
+  methodChoiceTitle: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  methodChoiceTitleActive: {
+    color: "#0D7A53",
+  },
+  methodChoiceSub: {
+    fontSize: 9.5,
+    color: "#9CA3AF",
+    marginTop: 1,
+  },
+  methodSelectedCheck: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#0D7A53",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Amount Input Wrap
+  amountInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    backgroundColor: "#F9FAFB",
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  amountPrefix: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#374151",
+    marginRight: 6,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  // Proof of Payment Upload Styles
+  optionalBadge: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  optionalBadgeText: {
+    fontSize: 10,
+    color: "#6B7280",
+    fontWeight: "600",
+  },
+  proofUploadBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderStyle: "dashed",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  proofUploadIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proofUploadText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  proofUploadSub: {
+    fontSize: 10,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  proofUploadAddBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proofPreviewCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    borderRadius: 10,
+    padding: 8,
+  },
+  proofPreviewImg: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  proofPreviewTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  proofPreviewSub: {
+    fontSize: 10,
+    color: "#15803D",
+    marginTop: 1,
+  },
+  proofRemoveBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: "#FEE2E2",
+  },
+
+  // Confirm Settlement Button
+  btnConfirmSettlement: {
+    backgroundColor: "#0D7A53",
+    height: 46,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 18,
+    elevation: 2,
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    paddingHorizontal: 16,
+  },
+  btnConfirmContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  btnConfirmText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+
+  // Receipt Modal Styles
+  receiptTopStatusCard: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    borderRadius: 16,
+    padding: 14,
+  },
+  receiptStatusBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  receiptStatusBadgeGreen: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  receiptStatusBadgeGreenText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  receiptBookingCode: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+  receiptTotalLabel: {
+    fontSize: 11,
+    color: "#4B5563",
+    marginTop: 10,
+  },
+  receiptTotalAmount: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#0D7A53",
+    marginTop: 2,
+  },
+  receiptTenantInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  receiptAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F3F4F6",
+  },
+  receiptTenantName: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  receiptTenantSub: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  paymentStageCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    padding: 12,
+  },
+  paymentStageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  paymentStageStepBg: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  paymentStageStepText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  paymentStageTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  paymentStageSub: {
+    fontSize: 10.5,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  verifiedMiniPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  verifiedMiniPillText: {
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  stageAmountRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  stageAmountLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  stageAmountVal: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  stageMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  stageMetaLabel: {
+    fontSize: 11,
+    color: "#9CA3AF",
+  },
+  stageMetaVal: {
+    fontSize: 11,
+    color: "#4B5563",
+    fontWeight: "600",
+  },
+  stageNotesBox: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  stageNotesLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+  stageNotesVal: {
+    fontSize: 11,
+    color: "#374151",
+    marginTop: 2,
+  },
+  proofAttachmentCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 8,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  proofAttachmentLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  proofThumbImg: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    backgroundColor: "#E5E7EB",
+  },
+  proofAttachmentTitle: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  proofAttachmentSub: {
+    fontSize: 9.5,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  btnViewFullProof: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  btnViewFullProofText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  noProofInfoBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F9FAFB",
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  noProofInfoText: {
+    fontSize: 10.5,
+    color: "#6B7280",
+    flex: 1,
+  },
+
+  // Full Image Modal
+  fullImageOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+  },
+  fullImageSafeArea: {
+    flex: 1,
+  },
+  fullImageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  fullImageTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  fullImageCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fullImageWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  fullImageContent: {
+    width: "100%",
+    height: "100%",
+  },
+
+  // Duration input styles
+  durationInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  durationStepperBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  durationInputWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    height: 44,
+    paddingHorizontal: 12,
+  },
+  durationTextInput: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+    textAlign: "center",
+    minWidth: 40,
+  },
+  durationUnitText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#6B7280",
+    marginLeft: 4,
+  },
+  quickDurationChipsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  quickDurationChip: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  quickDurationChipActive: {
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
+  },
+  quickDurationChipText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#4B5563",
+  },
+  quickDurationChipTextActive: {
+    color: "#FFFFFF",
   },
 });

@@ -294,10 +294,53 @@ const getUserNotifications = async (req, res) => {
   }
 };
 
+// Settle remaining payment on Check-in (Pelunasan Cash or Transfer)
+const settleBookingPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paymentMethod, settledAmount, notes, proofImage } = req.body;
+
+    const booking = await Booking.findById(id).populate("kostId");
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Pemesanan tidak ditemukan" });
+    }
+
+    const remaining = Math.max(0, booking.totalAmount - booking.dpAmount);
+    booking.settlementStatus = "settled";
+    booking.settledAmount = Number(settledAmount) || remaining;
+    booking.settlementPaymentMethod = paymentMethod || "cash";
+    booking.settledAt = new Date();
+    if (notes) booking.settlementNotes = notes;
+    if (proofImage) booking.settlementProofImage = proofImage;
+    booking.status = "active";
+
+    await booking.save();
+
+    // Create Notification for Customer
+    await Notification.create({
+      userId: booking.customerId,
+      title: "🎉 Pelunasan Sewa Berhasil!",
+      message: `Pelunasan sewa kamar ${booking.roomNumber} sebesar Rp ${booking.settledAmount.toLocaleString("id-ID")} (${(booking.settlementPaymentMethod || "cash").toUpperCase()}) telah diterima pemilik kos. Selamat menempati kamar!`,
+      type: "booking_settled",
+      relatedId: booking._id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Pelunasan sewa sebesar Rp ${booking.settledAmount.toLocaleString("id-ID")} berhasil dicatat (${booking.settlementPaymentMethod.toUpperCase()})`,
+      data: booking,
+    });
+  } catch (error) {
+    console.error("❌ Settle booking error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mencatat pelunasan", error: error.message });
+  }
+};
+
 module.exports = {
   createBooking,
   getBookingsByOwner,
   verifyDpBooking,
+  settleBookingPayment,
   getBookingsByCustomer,
   getUserNotifications,
 };

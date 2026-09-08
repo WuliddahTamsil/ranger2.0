@@ -82,6 +82,28 @@ const bookingSchema = new mongoose.Schema(
     notes: {
       type: String,
     },
+    settlementStatus: {
+      type: String,
+      enum: ["unpaid", "settled"],
+      default: "unpaid",
+    },
+    settledAmount: {
+      type: Number,
+      default: 0,
+    },
+    settlementPaymentMethod: {
+      type: String,
+      enum: ["transfer", "cash"],
+    },
+    settledAt: {
+      type: Date,
+    },
+    settlementNotes: {
+      type: String,
+    },
+    settlementProofImage: {
+      type: String,
+    },
   },
   {
     timestamps: true,

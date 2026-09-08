@@ -44,6 +44,7 @@ const chatRoutes = require("./routes/chatRoutes");
 const laundryRoutes = require("./routes/laundryRoutes");
 const marketplaceRoutes = require("./routes/marketplaceRoutes");
 const marketplaceOrderRoutes = require("./routes/marketplaceOrderRoutes");
+const transactionRoutes = require("./routes/transactionRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -55,6 +56,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/laundry", laundryRoutes);
 app.use("/api/marketplace", marketplaceRoutes);
 app.use("/api/marketplace/orders", marketplaceOrderRoutes);
+app.use("/api/transactions", transactionRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {

@@ -1,4 +1,4 @@
-const { uploadToGoogleDrive } = require("../config/googleDrive");
+const { uploadToCloudinary } = require("../config/cloudinary");
 
 const uploadFile = async (req, res) => {
   try {
@@ -8,7 +8,7 @@ const uploadFile = async (req, res) => {
 
     console.log(`📤 Processing file '${req.file.originalname}' (${req.file.mimetype})...`);
     const hostUrl = req.hostUrl || `http://localhost:${process.env.PORT || 5000}`;
-    const result = await uploadToGoogleDrive(
+    const result = await uploadToCloudinary(
       req.file.buffer,
       req.file.originalname,
       req.file.mimetype,

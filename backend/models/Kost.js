@@ -13,6 +13,7 @@ const roomSchema = new mongoose.Schema({
     phone: { type: String },
     entryDate: { type: Date },
     dueDate: { type: Date },
+    durationMonths: { type: Number, default: 1 },
   },
   facilities: [{ type: String }],
   images: [{ type: String }],
@@ -64,6 +65,7 @@ const kostSchema = new mongoose.Schema(
     images: [{ type: String }], // Google Drive direct URLs
     rooms: [roomSchema],
     bankAccount: {
+      paymentType: { type: String, enum: ["bank", "qris"], default: "bank" },
       bankName: { type: String, default: "BCA" },
       accountNumber: { type: String, default: "" },
       accountHolder: { type: String, default: "" },
