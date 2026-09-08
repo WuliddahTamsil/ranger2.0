@@ -6,6 +6,7 @@ const {
   updateMitraStatus,
   getUserProfile,
   updateUserProfile,
+  getSystemStats,
 } = require("../controllers/authController");
 
 const router = express.Router();
@@ -16,5 +17,6 @@ router.get("/mitra", getMitraAccounts);
 router.put("/mitra/:id/status", updateMitraStatus);
 router.get("/profile/:id", getUserProfile);
 router.put("/profile/:id", updateUserProfile);
+router.get("/admin/stats", getSystemStats);
 
 module.exports = router;

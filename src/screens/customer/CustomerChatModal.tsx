@@ -10,6 +10,9 @@ import {
   Image,
   Alert,
   Platform,
+  ScrollView,
+  SafeAreaView,
+  KeyboardAvoidingView,
 } from "react-native";
 import {
   Bike,
@@ -23,6 +26,7 @@ import {
   Trash2,
   Download,
   CheckCheck,
+  ArrowLeft,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -63,7 +67,8 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   participantType,
   initialMessage,
 }) => {
-  const threadId = `chat_${orderId}`;
+  const isDriver = participantType === "driver";
+  const threadId = `chat_${orderId}_${participantType}`;
   const [thread, setThread] = useState<CustomerChatThread | undefined>();
   const [typedMessage, setTypedMessage] = useState("");
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
@@ -73,13 +78,18 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   useEffect(() => {
     if (!visible) return;
 
+    const defaultGreeting = isDriver
+      ? "Halo Pak Kurir, saya customer pesanan ini."
+      : "Halo Toko, ada yang ingin saya tanyakan mengenai pesanan ini.";
+    const activeInitialMsg = initialMessage || defaultGreeting;
+
     // Ensure local thread exists first
     const existing = ensureCustomerChatThread({
       id: threadId,
       orderId,
       participantType,
       participantName,
-      lastMessage: initialMessage || "Percakapan baru",
+      lastMessage: activeInitialMsg,
       updatedAt: "Baru saja",
       unreadCount: 0,
       messages: [],
@@ -87,7 +97,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     setThread(existing);
 
     const loadMessages = async () => {
-      const res = await getChatMessages(orderId);
+      const res = await getChatMessages(orderId, isDriver ? "driver" : "owner");
       if (res.success && Array.isArray(res.data)) {
         const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
           id: m._id,
@@ -102,7 +112,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           orderId,
           participantType,
           participantName,
-          lastMessage: mapped.length > 0 ? mapped[mapped.length - 1].text : "Percakapan baru",
+          lastMessage: mapped.length > 0 ? mapped[mapped.length - 1].text : activeInitialMsg,
           updatedAt: mapped.length > 0 ? mapped[mapped.length - 1].time : "Baru saja",
           unreadCount: 0,
           messages: mapped,
@@ -121,7 +131,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       clearInterval(interval);
       unsubscribe();
     };
-  }, [initialMessage, orderId, participantName, participantType, threadId, visible]);
+  }, [initialMessage, isDriver, orderId, participantName, participantType, threadId, visible]);
 
   const handlePickImage = async () => {
     setIsAttachMenuOpen(false);
@@ -220,8 +230,15 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       attachment: selectedAttachment ? { ...selectedAttachment } : undefined,
     };
 
-    // Save in database
-    const result = await sendChatMessage(orderId, "customer", text, selectedAttachment, customerId);
+    // Save in database with explicit target channel
+    const result = await sendChatMessage(
+      orderId,
+      "customer",
+      text,
+      selectedAttachment,
+      customerId,
+      isDriver ? "driver" : "owner"
+    );
     if (!result.success) {
       Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
       return;
@@ -233,27 +250,47 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     setSelectedAttachment(null);
   };
 
-  const isDriver = participantType === "driver";
   const Icon = isDriver ? Bike : Store;
+  const suggestions = isDriver
+    ? ["Saya tunggu di depan ya Pak", "Tolong titip di pos satpam", "Sudah dekat dengan lokasi?"]
+    : ["Mohon pastikan pesanan sesuai", "Kira-kira siap berapa menit lagi?", "Terima kasih banyak!"];
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.sheetHandle} />
-
+    <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={styles.fullContainer}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
           {/* Header */}
           <View style={styles.header}>
-            <View style={[styles.avatar, { backgroundColor: isDriver ? "#E8F5EE" : "#FFF3E0" }]}>
-              <Icon size={20} color={isDriver ? "#1B7A4E" : "#D97706"} />
+            <TouchableOpacity onPress={onClose} style={styles.backButton} activeOpacity={0.7}>
+              <ArrowLeft size={22} color="#111827" />
+            </TouchableOpacity>
+            <View style={[styles.avatar, { backgroundColor: isDriver ? "#E8F5EE" : "#FFF7ED" }]}>
+              <Icon size={20} color={isDriver ? "#1B7A4E" : "#EA580C"} />
             </View>
             <View style={styles.headerCopy}>
-              <Text style={styles.title}>{participantName}</Text>
-              <Text style={styles.subtitle}>Order #{orderId} • {isDriver ? "Driver" : "Pemilik/Merchant"}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={styles.title} numberOfLines={1}>{participantName}</Text>
+                <View style={[styles.rolePill, { backgroundColor: isDriver ? "#DCFCE7" : "#FFEDD5" }]}>
+                  <Text style={[styles.rolePillText, { color: isDriver ? "#166534" : "#9A3412" }]}>
+                    {isDriver ? "KURIR" : "TOKO"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.subtitle}>Order #{orderId} • {isDriver ? "Online / Siap Mengantar" : "Toko Aktif"}</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={20} color="#111827" />
-            </TouchableOpacity>
+          </View>
+
+          {/* Channel Identification Banner */}
+          <View style={[styles.channelBanner, isDriver ? styles.channelBannerDriver : styles.channelBannerStore]}>
+            {isDriver ? <Bike size={14} color="#15803D" /> : <Store size={14} color="#C2410C" />}
+            <Text style={[styles.channelBannerText, isDriver ? styles.channelBannerTextDriver : styles.channelBannerTextStore]}>
+              {isDriver
+                ? "Terhubung langsung dengan Kurir Pengantar Pesanan"
+                : "Terhubung langsung dengan Mitra Toko / Penjual"}
+            </Text>
           </View>
 
           {/* Messages FlatList */}
@@ -262,9 +299,19 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messageList}
             ListEmptyComponent={
-              <Text style={styles.emptyText}>
-                Mulai percakapan dengan {isDriver ? "driver" : "pemilik layanan"}.
-              </Text>
+              <View style={styles.emptyWrap}>
+                <View style={[styles.emptyIconBg, { backgroundColor: isDriver ? "#E8F5EE" : "#FFF7ED" }]}>
+                  <Icon size={26} color={isDriver ? "#1B7A4E" : "#EA580C"} />
+                </View>
+                <Text style={styles.emptyTitle}>
+                  {isDriver ? "Mulai Percakapan dengan Kurir" : "Mulai Percakapan dengan Toko"}
+                </Text>
+                <Text style={styles.emptyText}>
+                  {isDriver
+                    ? "Kirim pesan untuk petunjuk alamat atau cek posisi kurir."
+                    : "Tanyakan rincian atau catatan khusus pesanan Anda langsung ke toko."}
+                </Text>
+              </View>
             }
             renderItem={({ item }) => {
               const isMe = item.sender === "customer";
@@ -350,6 +397,26 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             </View>
           )}
 
+          {/* Quick suggestions */}
+          <View style={styles.quickChipsWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickChipsScroll}
+            >
+              {suggestions.map((chip, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.quickChip}
+                  onPress={() => setTypedMessage(chip)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.quickChipText}>{chip}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           {/* Input Row */}
           <View style={styles.inputRow}>
             {/* Add File / Paperclip Button */}
@@ -383,7 +450,6 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
               <Send size={16} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-        </View>
 
         {/* Attachment Options Action Sheet */}
         <Modal visible={isAttachMenuOpen} transparent animationType="fade" onRequestClose={() => setIsAttachMenuOpen(false)}>
@@ -447,38 +513,35 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             </View>
           </Modal>
         )}
-      </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
+  fullContainer: {
     flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(15,23,42,0.45)",
-  },
-  sheet: {
-    height: "82%",
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 16,
-  },
-  sheetHandle: {
-    width: 42,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#D1D5DB",
-    alignSelf: "center",
-    marginBottom: 14,
+    backgroundColor: "#F8FAFC",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
-    paddingBottom: 13,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    backgroundColor: "#F3F4F6",
   },
   avatar: {
     width: 42,
@@ -499,7 +562,46 @@ const styles = StyleSheet.create({
   subtitle: {
     color: "#6B7280",
     fontSize: 10,
-    marginTop: 4,
+    marginTop: 2,
+  },
+  rolePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  rolePillText: {
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  channelBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  channelBannerDriver: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  channelBannerStore: {
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FEF3C7",
+  },
+  channelBannerText: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
+  channelBannerTextDriver: {
+    color: "#15803D",
+  },
+  channelBannerTextStore: {
+    color: "#B45309",
   },
   closeButton: {
     width: 34,
@@ -511,11 +613,53 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingVertical: 14,
   },
+  emptyWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+  },
+  emptyIconBg: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 4,
+  },
   emptyText: {
     color: "#9CA3AF",
     fontSize: 12,
     textAlign: "center",
-    marginTop: 28,
+    lineHeight: 18,
+  },
+  quickChipsWrapper: {
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  quickChipsScroll: {
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  quickChip: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  quickChipText: {
+    fontSize: 11,
+    color: "#374151",
+    fontWeight: "600",
   },
   messageWrap: {
     marginBottom: 12,

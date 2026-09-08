@@ -204,7 +204,23 @@ const createCateringOrder = async (req, res) => {
     if (!ownerId || !customerId || !customerName || !address || !menuName || !paymentMethod) {
       return res.status(400).json({ success: false, message: "Data pesanan catering belum lengkap" });
     }
+
+    // Deduct stock if productId exists and is valid
+    if (productId && mongoose.Types.ObjectId.isValid(productId)) {
+      const product = await CateringProduct.findById(productId);
+      if (product && product.stock < Number(portions)) {
+        return res.status(400).json({ success: false, message: `Porsi yang dipesan melebihi stok yang tersedia (sisa ${product.stock})` });
+      }
+      if (product) {
+        await CateringProduct.updateOne(
+          { _id: productId, stock: { $gte: Number(portions) } },
+          { $inc: { stock: -Number(portions) } }
+        );
+      }
+    }
+
     const orderCode = `RNG-CAT-${Date.now().toString().slice(-8)}`;
+    const ownerProfile = await User.findById(ownerId).select("name address roleData");
 
     const newOrder = await CateringOrder.create({
       orderCode,
@@ -214,6 +230,8 @@ const createCateringOrder = async (req, res) => {
       customerPhone,
       address,
       storeId: storeId || String(ownerId),
+      storeName: ownerProfile?.roleData?.businessName || ownerProfile?.name || "Mitra Catering",
+      storeAddress: ownerProfile?.roleData?.businessAddress || ownerProfile?.roleData?.address || ownerProfile?.address || "Dapur Catering",
       productId: productId || "",
       menuName,
       portions,
@@ -293,7 +311,7 @@ const getCateringOrdersByOwner = async (req, res) => {
   }
 };
 
-// Update catering order status (by Pemilik Catering)
+// Update catering order status (by Pemilik Catering or Driver)
 const updateCateringOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -306,6 +324,7 @@ const updateCateringOrderStatus = async (req, res) => {
 
     order.status = status;
     await order.save();
+
     if (mongoose.Types.ObjectId.isValid(order.customerId)) {
       await Notification.create({
         userId: order.customerId,
@@ -315,8 +334,29 @@ const updateCateringOrderStatus = async (req, res) => {
         relatedId: order._id,
       });
     }
+
     req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
     req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);
+    if (order.driverId) {
+      req.io?.to(`driver:${order.driverId}`).emit("order_status_updated", order);
+    }
+
+    // If order is ready and not yet assigned to driver, broadcast to all drivers
+    if (status === "Siap" && !order.driverId) {
+      const drivers = await User.find({ role: "driver", status: { $ne: "rejected" } }).select("_id");
+      await Promise.all(
+        drivers.map((driver) =>
+          Notification.create({
+            userId: driver._id,
+            title: "Pesanan Catering Siap Diantar",
+            message: `${order.storeName || "Dapur Catering"} - ${order.customerName} (${order.portions} porsi). Pickup: ${order.storeAddress || "Dapur"}.`,
+            type: "order_new",
+            relatedId: order._id,
+          })
+        )
+      );
+      drivers.forEach((driver) => req.io?.to(`driver:${driver._id}`).emit("order_assigned", order));
+    }
 
     return res.status(200).json({
       success: true,
@@ -326,6 +366,64 @@ const updateCateringOrderStatus = async (req, res) => {
   } catch (error) {
     console.error("❌ Update catering order status error:", error);
     return res.status(500).json({ success: false, message: "Gagal memperbarui status pesanan", error: error.message });
+  }
+};
+
+// Get catering orders for driver (available orders or assigned to driver)
+const getOrdersByDriver = async (req, res) => {
+  try {
+    const orders = await CateringOrder.find({
+      $or: [
+        { driverId: req.params.driverId },
+        { driverId: { $in: ["", null] }, status: "Siap" },
+        { driverId: { $exists: false }, status: "Siap" },
+      ],
+      customerId: { $nin: ["", null] },
+    }).sort({ createdAt: -1 }).lean();
+
+    return res.json({ success: true, data: orders });
+  } catch (error) {
+    console.error("Get driver catering orders error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mengambil order driver catering" });
+  }
+};
+
+// Driver accepts catering order
+const assignDriver = async (req, res) => {
+  try {
+    const { driverId } = req.body;
+    const driver = await User.findOne({ _id: driverId, role: "driver" }).select("_id name phone");
+    if (!driver) return res.status(400).json({ success: false, message: "Driver tidak valid" });
+
+    const order = await CateringOrder.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        $or: [
+          { driverId: { $in: ["", null] }, status: "Siap" },
+          { driverId: String(driver._id) },
+        ],
+      },
+      {
+        driverId: String(driver._id),
+        driverName: driver.name,
+        driverPhone: driver.phone,
+        status: "Menuju Pickup",
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan catering tidak ditemukan atau sudah diambil driver lain" });
+    }
+
+    req.io?.to(`driver:${driver._id}`).emit("order_assigned", order);
+    req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);
+    req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
+
+    return res.json({ success: true, data: order });
+  } catch (error) {
+    console.error("Assign catering driver error:", error);
+    return res.status(400).json({ success: false, message: "Gagal menugaskan driver untuk pesanan catering" });
   }
 };
 
@@ -341,4 +439,6 @@ module.exports = {
   getCateringOrdersByOwner,
   getCateringOrdersByCustomer,
   updateCateringOrderStatus,
+  getOrdersByDriver,
+  assignDriver,
 };

@@ -43,7 +43,7 @@ import { Pesanan } from "./Pesanan";
 import { Inbox, CustomerNotification, CustomerChatThread } from "./Inbox";
 import { Profile } from "./Profile";
 import { hydrateCustomerChatThreads, subscribeCustomerChatThreads } from "./customerInboxStore";
-import { getAllActiveCateringProducts, getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer } from "../../services/api";
+import { getAllActiveCateringProducts, getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer, getNotifications, markNotificationRead } from "../../services/api";
 
 interface CartItem {
   id: number | string;
@@ -154,6 +154,8 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
         items: order.items,
         notes: order.notes,
         address: order.address,
+        driverId: order.driverId,
+        driverName: order.driverName,
       })) : [];
       const cateringOrders = cateringResult.success ? cateringResult.data.map((order: any) => ({
         id: order._id,
@@ -161,7 +163,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
         iconName: "Coffee",
         color: "#EA580C",
         item: order.menuName,
-        detail: `${order.portions} porsi`,
+        detail: `${order.storeName || "Dapur Catering"} • ${order.portions} porsi`,
         status: order.status,
         statusColor: "orange",
         date: new Date(order.createdAt).toLocaleDateString("id-ID"),
@@ -179,12 +181,48 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
         cateringPortions: order.portions,
         notes: order.notes,
         address: order.address,
+        driverId: order.driverId,
+        driverName: order.driverName,
+        driverPhone: order.driverPhone,
+        driverVehicle: order.driverVehicle,
+        storeName: order.storeName,
+        storeAddress: order.storeAddress,
       })) : [];
-      setOrders([...marketplaceOrders, ...cateringOrders]);
+
+      const allCustomerOrders = [...marketplaceOrders, ...cateringOrders];
+      setOrders(allCustomerOrders);
+
+      // Dynamically build chat threads for active orders
+      const dynamicThreads: CustomerChatThread[] = [];
+      allCustomerOrders.forEach((o: any) => {
+        if (o.driverName) {
+          dynamicThreads.push({
+            id: `driver_${o.id}`,
+            orderId: o.id,
+            participantType: "driver",
+            participantName: `${o.driverName} (Kurir)`,
+            lastMessage: `Kurir mengantar pesanan #${o.id.slice(-5)}.`,
+            updatedAt: "Baru saja",
+            unreadCount: 0,
+          });
+        }
+        dynamicThreads.push({
+          id: `merchant_${o.id}`,
+          orderId: o.id,
+          participantType: "merchant",
+          participantName: o.storeName || o.detail?.split(" • ")[0] || "Mitra Toko",
+          lastMessage: `Status pesanan: ${o.status}.`,
+          updatedAt: "Hari ini",
+          unreadCount: 0,
+        });
+      });
+      if (dynamicThreads.length > 0) {
+        setChatThreads(dynamicThreads);
+      }
     };
     let activeOrderLoader = true;
     void loadBackendOrders();
-    const interval = setInterval(() => void loadBackendOrders(), 10000);
+    const interval = setInterval(() => void loadBackendOrders(), 3500);
     return () => {
       activeOrderLoader = false;
       clearInterval(interval);
@@ -205,6 +243,31 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
       read: n.read,
     }))
   );
+
+  useEffect(() => {
+    if (!authAccount?.id) return;
+    let active = true;
+    const fetchLiveNotifs = async () => {
+      const res = await getNotifications(authAccount.id);
+      if (active && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const mapped: CustomerNotification[] = res.data.map((n: any) => ({
+          id: n._id,
+          type: n.type === "order_new" || n.type === "order_status" ? "transaksi" : n.type === "payment_confirmed" ? "sistem" : "promo",
+          title: n.title,
+          msg: n.message,
+          time: new Date(n.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          read: Boolean(n.isRead),
+        }));
+        setNotifications(mapped);
+      }
+    };
+    void fetchLiveNotifs();
+    const interval = setInterval(fetchLiveNotifs, 8000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [authAccount?.id]);
 
   // Global Chat Threads State
   const [chatThreads, setChatThreads] = useState<CustomerChatThread[]>([
@@ -408,6 +471,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
             chatThreads={chatThreads}
             setChatThreads={setChatThreads}
             setCustomerTab={setCurrentTab}
+            authAccount={authAccount}
           />
         );
       case 4:

@@ -325,7 +325,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
         isActive: prodActive,
       };
       const result = await createMarketplaceProduct({
-        ownerId: authAccount.id, name: newProduct.name, price: newProduct.price, img: newProduct.img,
+        ownerId: authAccount?.id || "", name: newProduct.name, price: newProduct.price, img: newProduct.img,
         cat: newProduct.cat, description: newProduct.description, stock: newProduct.stock, isActive: newProduct.isActive,
       });
       if (!result.success || !result.data) {
@@ -339,7 +339,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
     setProductFormVisible(false);
   };
 
-  const handleDeleteProduct = (productId: number) => {
+  const handleDeleteProduct = (productId: string | number) => {
     Alert.alert("Hapus Menu?", "Apakah Anda yakin ingin menghapus menu ini dari daftar?", [
       { text: "Batal", style: "cancel" },
       {

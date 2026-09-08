@@ -34,8 +34,13 @@ import {
 } from "lucide-react-native";
 import { BackHeader } from "../../components/BackHeader";
 import { Nav, CateringPaymentOption, OrderItem } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
 import { addCustomerOrder } from "./customerOrderStore";
 import { CustomerChatModal } from "./CustomerChatModal";
+
+interface CustomerCateringDetailProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
 
 type FormStep = "form" | "checkout";
 type PaymentMethod = "qris" | "gopay" | "bca_va" | "ovo";
@@ -70,7 +75,7 @@ const createDateOptions = () => {
   return options;
 };
 
-export const CustomerCateringDetailScreen: React.FC<Nav> = ({ navigate }) => {
+export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps> = ({ navigate, authAccount }) => {
   const selectedCateringShop = getSelectedCateringShop();
   const [step, setStep] = useState<FormStep>("form");
   const [menus, setMenus] = useState<any[]>([]);

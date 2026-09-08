@@ -85,7 +85,7 @@ export const Order: React.FC<OrderProps> = ({
   React.useEffect(() => {
     if (!chatModalVisible || !selectedOrder) return;
     const loadMessages = async () => {
-      const result = await getChatMessages(selectedOrder.id);
+      const result = await getChatMessages(selectedOrder.id, "driver");
       if (result.success && Array.isArray(result.data)) {
         setChatMessages((previous) => ({
           ...previous,
@@ -191,7 +191,7 @@ export const Order: React.FC<OrderProps> = ({
     });
     setTypedMessage("");
 
-    const result = await sendChatMessage(selectedOrder.id, "driver", newMsg.text, undefined, driverId);
+    const result = await sendChatMessage(selectedOrder.id, "driver", newMsg.text, undefined, driverId, "driver");
     if (!result.success) {
       Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
       return;

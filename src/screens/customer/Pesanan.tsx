@@ -23,11 +23,16 @@ import {
   Clock,
   X,
   Navigation,
+  Bike,
+  MessageCircle,
+  ArrowLeft,
+  CheckCircle2,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
+import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 
 interface PesananProps {
   orders: OrderItem[];
@@ -123,18 +128,26 @@ export const Pesanan: React.FC<PesananProps> = ({
     setTrackModalVisible(true);
   };
 
-  const handleOpenChat = (order: OrderItem) => {
+  const handleOpenChat = (order: OrderItem, targetType: "driver" | "merchant" = "merchant") => {
     const normalizedType = order.type.toLowerCase();
     const isLaundryDriver = normalizedType.includes("laund") && order.status.toLowerCase().includes("kirim");
-    const participantName = normalizedType.includes("kos")
-      ? "Pemilik Kos Putra Garuda"
-      : isLaundryDriver
-        ? "Driver Laundry"
-        : order.detail.split(" • ")[0] || order.type;
+    const resolvedType = targetType === "driver" || isLaundryDriver ? "driver" : "merchant";
+    
+    let participantName = "";
+    if (resolvedType === "driver") {
+      participantName = (order as any).driverName
+        ? `${(order as any).driverName} (Kurir)`
+        : "Kurir Rangers";
+    } else {
+      participantName = normalizedType.includes("kos")
+        ? "Pemilik Kos"
+        : (order as any).storeName || order.detail.split(" • ")[0] || order.item || order.type;
+    }
+
     setChatTarget({
       orderId: order.id,
       participantName,
-      participantType: isLaundryDriver ? "driver" : "merchant",
+      participantType: resolvedType,
     });
   };
 
@@ -182,6 +195,11 @@ export const Pesanan: React.FC<PesananProps> = ({
           const statusStyle = getStatusColors(item.status);
           const isCompleted = item.status === "Selesai";
           const hasReviewed = reviews.some((r) => r.orderId === item.id);
+          const hasDriver = Boolean(
+            (item as any).driverName ||
+            (item as any).driverId ||
+            ["Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim"].includes(item.status)
+          );
 
           return (
             <View style={styles.orderCard}>
@@ -225,27 +243,81 @@ export const Pesanan: React.FC<PesananProps> = ({
               )}
 
               <View style={styles.cardFooter}>
-                <View style={styles.dateCol}>
-                  <Text style={styles.dateText}>{item.date}</Text>
-                  <Text style={styles.totalValue}>{rp(item.total)}</Text>
+                <View style={styles.cardPriceRow}>
+                  <View style={styles.dateCol}>
+                    <Text style={styles.dateLabel}>Tanggal Pesanan</Text>
+                    <Text style={styles.dateText}>{item.date}</Text>
+                  </View>
+                  <View style={styles.priceCol}>
+                    <Text style={styles.totalLabel}>Total Bayar</Text>
+                    <Text style={styles.totalValue}>{rp(item.total)}</Text>
+                  </View>
                 </View>
 
-                <View style={styles.actionBtnRow}>
-                  {isCompleted && !hasReviewed && (
-                    <TouchableOpacity
-                      style={[styles.actionBtn, styles.actionBtnOutline]}
-                      onPress={() => handleOpenReview(item)}
-                    >
-                      <Text style={styles.actionBtnTextOutline}>Ulasan</Text>
-                    </TouchableOpacity>
-                  )}
+                <View style={styles.cardActionDivider} />
 
-                  {!item.status.toLowerCase().includes("batal") && (
+                <View style={styles.actionBtnRow}>
+                  {isCompleted ? (
+                    // === TAB SELESAI (Completed Orders) ===
                     <>
-                      <TouchableOpacity style={[styles.actionBtn, styles.actionBtnOutline]} onPress={() => handleOpenChat(item)}>
-                        <Text style={styles.actionBtnTextOutline}>Chat</Text>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnOutlineGray]}
+                        onPress={() => handleOpenChat(item, "merchant")}
+                      >
+                        <Store size={13} color="#4B5563" />
+                        <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSolid]} onPress={() => handleOpenTracking(item)}>
+
+                      {!hasReviewed ? (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnReview]}
+                          onPress={() => handleOpenReview(item)}
+                        >
+                          <Star size={13} color="#D97706" />
+                          <Text style={styles.actionBtnTextReview}>Beri Ulasan</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.reviewedBadge}>
+                          <Star size={12} color="#16A34A" />
+                          <Text style={styles.reviewedBadgeText}>Sudah Diulas</Text>
+                        </View>
+                      )}
+                    </>
+                  ) : item.status.toLowerCase().includes("batal") ? (
+                    // === TAB DIBATALKAN (Cancelled Orders) ===
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionBtnOutlineGray]}
+                      onPress={() => handleOpenChat(item, "merchant")}
+                    >
+                      <Store size={13} color="#4B5563" />
+                      <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    // === TAB AKTIF (Active Orders in Progress) ===
+                    <>
+                      {hasDriver ? (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnDriver]}
+                          onPress={() => handleOpenChat(item, "driver")}
+                        >
+                          <Bike size={13} color="#1B7A4E" />
+                          <Text style={styles.actionBtnTextDriver}>Chat Kurir</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnMerchantActive]}
+                          onPress={() => handleOpenChat(item, "merchant")}
+                        >
+                          <Store size={13} color="#EA580C" />
+                          <Text style={styles.actionBtnTextMerchantActive}>Chat Toko</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnSolid]}
+                        onPress={() => handleOpenTracking(item)}
+                      >
+                        <Navigation size={13} color="#FFFFFF" />
                         <Text style={styles.actionBtnTextSolid}>Lacak</Text>
                       </TouchableOpacity>
                     </>
@@ -268,131 +340,352 @@ export const Pesanan: React.FC<PesananProps> = ({
         }
       />
 
-      {/* 1. Modal Lacak Order */}
+      {/* 1. Lacak Order Full Page */}
       {selectedOrder && (
-        <Modal visible={trackModalVisible} transparent animationType="slide">
-          <View style={styles.modalBgBottom}>
-            <View style={styles.sheetContainer}>
-              <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>Lacak Kiriman #{selectedOrder.id}</Text>
-                <TouchableOpacity onPress={() => setTrackModalVisible(false)}>
-                  <X size={20} color="#111827" />
-                </TouchableOpacity>
+        <Modal 
+          visible={trackModalVisible} 
+          transparent={false} 
+          animationType="slide"
+          onRequestClose={() => setTrackModalVisible(false)}
+        >
+          <SafeAreaView style={styles.fullPageContainer}>
+            {/* Full Page Header */}
+            <View style={styles.fullPageHeader}>
+              <TouchableOpacity 
+                style={styles.fullPageBackBtn} 
+                onPress={() => setTrackModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <ArrowLeft size={22} color="#111827" />
+              </TouchableOpacity>
+              <View style={styles.fullPageHeaderCopy}>
+                <Text style={styles.fullPageHeaderTitle}>Lacak Pesanan</Text>
+                <Text style={styles.fullPageHeaderSubtitle} numberOfLines={1}>
+                  #{selectedOrder.id} • {selectedOrder.item}
+                </Text>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColors(selectedOrder.status).bg }]}>
+                <Text style={[styles.statusBadgeText, { color: getStatusColors(selectedOrder.status).fg }]}>
+                  {selectedOrder.status}
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView 
+              style={styles.fullPageScroll} 
+              contentContainerStyle={styles.fullPageScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Real Interactive Google Maps (Spacious full width & 280 height) */}
+              <View style={styles.mapCardWrapper}>
+                <LiveOrderTrackingMap
+                  storeName={selectedOrder.detail.split(" • ")[0] || "Mitra Toko"}
+                  storeAddress={selectedOrder.address || "Kamal, Bangkalan, Madura"}
+                  customerAddress={selectedOrder.address || "Telang, Kamal, Bangkalan"}
+                  driverName={(selectedOrder as any).driverName}
+                  driverVehicle={(selectedOrder as any).driverVehicle}
+                  orderStatus={selectedOrder.status}
+                  height={280}
+                />
               </View>
 
-              <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
-                {/* Simulated Peta Peta */}
-                <View style={styles.mapSimulation}>
-                  <Navigation size={24} color="#1B7A4E" style={styles.movingMarker} />
-                  <MapPin size={18} color="#EF4444" style={styles.destMarker} />
-                  <Text style={styles.mapPlaceholderText}>[ PETA PELACAKAN KURIR RANGERS ]</Text>
-                  <Text style={styles.mapSubtext}>Kurir: Pak Asep (Motor · D 4521 ABC)</Text>
+              {/* Courier Info Card (if driver assigned) */}
+              {Boolean((selectedOrder as any).driverName || (selectedOrder as any).driverId || ["Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim"].includes(selectedOrder.status)) && (
+                <View style={styles.driverHighlightCard}>
+                  <View style={styles.driverAvatarCircle}>
+                    <Bike size={22} color="#1B7A4E" />
+                  </View>
+                  <View style={styles.driverInfoBody}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={styles.driverHighlightName}>
+                        {(selectedOrder as any).driverName || "Kurir Rangers"}
+                      </Text>
+                      <View style={styles.driverRoleTag}>
+                        <Text style={styles.driverRoleTagText}>Kurir</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.driverHighlightSub}>
+                      {(selectedOrder as any).driverVehicle || "Honda Beat • M 4589 XZ"}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.driverQuickChatBtn}
+                    onPress={() => {
+                      setTrackModalVisible(false);
+                      handleOpenChat(selectedOrder, "driver");
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Bike size={14} color="#FFFFFF" />
+                    <Text style={styles.driverQuickChatBtnText}>Chat</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Dynamic Timeline status list */}
+              <View style={styles.timelineCard}>
+                <Text style={styles.timelineCardTitle}>Status Pengiriman Real-time</Text>
+
+                {/* Step 1: Diterima */}
+                <View style={styles.timelineRow}>
+                  <View style={[styles.timelineDot, styles.timelineDotActive]}>
+                    <CheckCircle2 size={12} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.timelineBody}>
+                    <Text style={styles.timelineTitle}>Pesanan Diterima</Text>
+                    <Text style={styles.timelineDesc}>Pesanan telah masuk ke sistem dan dikonfirmasi.</Text>
+                  </View>
+                </View>
+                
+                <View style={[styles.timelineLine, ["Diproses", "Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim", "Selesai"].includes(selectedOrder.status) && styles.timelineLineActive]} />
+
+                {/* Step 2: Disiapkan */}
+                <View style={styles.timelineRow}>
+                  <View style={[styles.timelineDot, ["Diproses", "Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim", "Selesai"].includes(selectedOrder.status) && styles.timelineDotActive]}>
+                    {["Diproses", "Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim", "Selesai"].includes(selectedOrder.status) ? (
+                      <CheckCircle2 size={12} color="#FFFFFF" />
+                    ) : null}
+                  </View>
+                  <View style={styles.timelineBody}>
+                    <Text style={styles.timelineTitle}>Sedang Dipersiapkan</Text>
+                    <Text style={styles.timelineDesc}>Mitra toko sedang memproses dan menyiapkan pesanan Anda.</Text>
+                  </View>
                 </View>
 
-                {/* Timeline status list */}
-                <Text style={styles.detailSecTitle}>Status Pengiriman</Text>
-                <View style={styles.timelineCard}>
-                  <View style={styles.timelineRow}>
-                    <View style={[styles.timelineDot, styles.timelineDotActive]} />
-                    <View style={styles.timelineBody}>
-                      <Text style={styles.timelineTitle}>Pesanan Sampai Tujuan</Text>
-                      <Text style={styles.timelineDesc}>Rangers kurir sedang berada di depan pagar rumah.</Text>
-                    </View>
+                <View style={[styles.timelineLine, ["Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim", "Selesai"].includes(selectedOrder.status) && styles.timelineLineActive]} />
+
+                {/* Step 3: Siap / Kurir Menuju Dapur */}
+                <View style={styles.timelineRow}>
+                  <View style={[styles.timelineDot, ["Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim", "Selesai"].includes(selectedOrder.status) && styles.timelineDotActive]}>
+                    {["Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim", "Selesai"].includes(selectedOrder.status) ? (
+                      <CheckCircle2 size={12} color="#FFFFFF" />
+                    ) : null}
                   </View>
-                  
-                  <View style={styles.timelineLine} />
-
-                  <View style={styles.timelineRow}>
-                    <View style={styles.timelineDot} />
-                    <View style={styles.timelineBody}>
-                      <Text style={styles.timelineTitle}>Sedang Diantar</Text>
-                      <Text style={styles.timelineDesc}>Pesanan sedang dibawa menuju lokasi Anda.</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.timelineLine} />
-
-                  <View style={styles.timelineRow}>
-                    <View style={styles.timelineDot} />
-                    <View style={styles.timelineBody}>
-                      <Text style={styles.timelineTitle}>Driver Menjemput</Text>
-                      <Text style={styles.timelineDesc}>Pak Asep mengambil pesanan di merchant partner.</Text>
-                    </View>
+                  <View style={styles.timelineBody}>
+                    <Text style={styles.timelineTitle}>Pesanan Siap & Alokasi Kurir</Text>
+                    <Text style={styles.timelineDesc}>
+                      {selectedOrder.status === "Siap"
+                        ? "Pesanan sudah siap di outlet! Menunggu kurir mengambil."
+                        : ["Menuju Pickup", "Sampai Pickup"].includes(selectedOrder.status)
+                        ? `Kurir ${(selectedOrder as any).driverName || "Rangers"} sedang menuju toko penjemputan.`
+                        : "Kurir telah ditugaskan."}
+                    </Text>
                   </View>
                 </View>
 
-                <TouchableOpacity 
-                  style={styles.sheetBtnClose}
-                  onPress={() => setTrackModalVisible(false)}
+                <View style={[styles.timelineLine, ["Diambil", "Mengantar", "Dikirim", "Selesai"].includes(selectedOrder.status) && styles.timelineLineActive]} />
+
+                {/* Step 4: Diantar */}
+                <View style={styles.timelineRow}>
+                  <View style={[styles.timelineDot, ["Diambil", "Mengantar", "Dikirim", "Selesai"].includes(selectedOrder.status) && styles.timelineDotActive]}>
+                    {["Diambil", "Mengantar", "Dikirim", "Selesai"].includes(selectedOrder.status) ? (
+                      <CheckCircle2 size={12} color="#FFFFFF" />
+                    ) : null}
+                  </View>
+                  <View style={styles.timelineBody}>
+                    <Text style={styles.timelineTitle}>Sedang Diantar Kurir</Text>
+                    <Text style={styles.timelineDesc}>
+                      {["Diambil", "Mengantar", "Dikirim"].includes(selectedOrder.status)
+                        ? `Kurir ${(selectedOrder as any).driverName || "Rangers"} sedang dalam perjalanan membawa pesanan ke lokasimu.`
+                        : selectedOrder.status === "Selesai"
+                        ? "Pengantaran telah diselesaikan."
+                        : "Menunggu kurir memulai perjalanan."}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={[styles.timelineLine, selectedOrder.status === "Selesai" && styles.timelineLineActive]} />
+
+                {/* Step 5: Selesai */}
+                <View style={styles.timelineRow}>
+                  <View style={[styles.timelineDot, selectedOrder.status === "Selesai" && styles.timelineDotActive]}>
+                    {selectedOrder.status === "Selesai" ? <CheckCircle2 size={12} color="#FFFFFF" /> : null}
+                  </View>
+                  <View style={styles.timelineBody}>
+                    <Text style={styles.timelineTitle}>Pesanan Sampai di Tujuan</Text>
+                    <Text style={styles.timelineDesc}>
+                      {selectedOrder.status === "Selesai"
+                        ? "Pesanan telah diterima. Terima kasih telah memesan!"
+                        : "Kurir akan menyelesaikan pesanan saat sampai di tujuan."}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Actions Row */}
+              <View style={styles.fullPageActionRow}>
+                <TouchableOpacity
+                  style={[styles.fullPageActionBtn, styles.fullPageActionBtnDriver]}
+                  onPress={() => {
+                    setTrackModalVisible(false);
+                    handleOpenChat(selectedOrder, "driver");
+                  }}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.sheetBtnCloseText}>Tutup</Text>
+                  <Bike size={16} color="#1B7A4E" />
+                  <Text style={styles.fullPageActionBtnDriverText}>Chat Kurir</Text>
                 </TouchableOpacity>
-              </ScrollView>
-            </View>
-          </View>
+
+                <TouchableOpacity
+                  style={[styles.fullPageActionBtn, styles.fullPageActionBtnMerchant]}
+                  onPress={() => {
+                    setTrackModalVisible(false);
+                    handleOpenChat(selectedOrder, "merchant");
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Store size={16} color="#EA580C" />
+                  <Text style={styles.fullPageActionBtnMerchantText}>Chat Toko</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
         </Modal>
       )}
 
-      {/* 2. Modal Rating & Ulasan */}
+      {/* 2. Rating & Ulasan Full Page */}
       {selectedOrder && (
-        <Modal visible={reviewModalVisible} transparent animationType="slide">
-          <View style={styles.modalBgBottom}>
-            <View style={styles.sheetContainer}>
-              <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>Beri Ulasan Pesanan</Text>
-                <TouchableOpacity onPress={() => setReviewModalVisible(false)}>
-                  <X size={20} color="#111827" />
-                </TouchableOpacity>
+        <Modal 
+          visible={reviewModalVisible} 
+          transparent={false} 
+          animationType="slide" 
+          onRequestClose={() => setReviewModalVisible(false)}
+        >
+          <SafeAreaView style={styles.fullPageContainer}>
+            {/* Full Page Header */}
+            <View style={styles.fullPageHeader}>
+              <TouchableOpacity 
+                style={styles.fullPageBackBtn} 
+                onPress={() => setReviewModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <ArrowLeft size={22} color="#111827" />
+              </TouchableOpacity>
+              <View style={styles.fullPageHeaderCopy}>
+                <Text style={styles.fullPageHeaderTitle}>Beri Ulasan</Text>
+                <Text style={styles.fullPageHeaderSubtitle} numberOfLines={1}>
+                  Order #{selectedOrder.id}
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView 
+              style={styles.fullPageScroll} 
+              contentContainerStyle={styles.fullPageScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Order Info Card */}
+              <View style={styles.reviewOrderCard}>
+                <View style={styles.reviewOrderIconBg}>
+                  <ShoppingBag size={24} color="#1B7A4E" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reviewItemName}>{selectedOrder.item}</Text>
+                  <Text style={styles.reviewItemDetail}>{selectedOrder.detail}</Text>
+                  <Text style={styles.reviewItemPrice}>{rp(selectedOrder.total)}</Text>
+                </View>
               </View>
 
-              <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
-                <Text style={styles.reviewLabel}>Pesanan Anda:</Text>
-                <Text style={styles.reviewItemName}>{selectedOrder.item}</Text>
+              {/* Rating Section Card */}
+              <View style={styles.reviewRatingCard}>
+                <Text style={styles.reviewRatingHeading}>Bagaimana pesanan Anda?</Text>
+                <Text style={styles.reviewRatingSubheading}>
+                  Ketuk bintang untuk memberi penilaian
+                </Text>
 
-                {/* Rating stars picker row */}
-                <Text style={styles.inputLabel}>Pilih Bintang Rating</Text>
-                <View style={styles.starsRow}>
+                <View style={styles.starsPickerRow}>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <TouchableOpacity
                       key={star}
                       onPress={() => setRatingVal(star)}
+                      activeOpacity={0.7}
+                      style={styles.starTouchItem}
                     >
                       <Star
-                        size={32}
-                        color={star <= ratingVal ? "#D97706" : "#D1D5DB"}
-                        fill={star <= ratingVal ? "#D97706" : "none"}
+                        size={40}
+                        color={star <= ratingVal ? "#F59E0B" : "#D1D5DB"}
+                        fill={star <= ratingVal ? "#F59E0B" : "none"}
                       />
                     </TouchableOpacity>
                   ))}
                 </View>
 
-                <Text style={styles.inputLabel}>Tulis Komentar / Masukan</Text>
+                {/* Rating description tag */}
+                <View style={styles.ratingCaptionPill}>
+                  <Text style={styles.ratingCaptionText}>
+                    {ratingVal === 5
+                      ? "⭐⭐⭐⭐⭐ Luar Biasa / Sangat Puas!"
+                      : ratingVal === 4
+                      ? "⭐⭐⭐⭐ Puas & Enak"
+                      : ratingVal === 3
+                      ? "⭐⭐⭐ Cukup / Standar"
+                      : ratingVal === 2
+                      ? "⭐⭐ Kurang Puas"
+                      : "⭐ Sangat Kecewa"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Quick Tag Chips */}
+              <View style={styles.reviewTagsCard}>
+                <Text style={styles.reviewSectionTitle}>Pilihan Cepat (Bisa dipilih):</Text>
+                <View style={styles.reviewTagGrid}>
+                  {[
+                    "Rasa Enak 😋",
+                    "Porsi Pas 👍",
+                    "Pengemasan Rapi 📦",
+                    "Pengiriman Cepat ⚡",
+                    "Sesuai Pesanan ✨",
+                    "Pelayanan Ramah 😊",
+                  ].map((tag, idx) => {
+                    const isSelected = commentText.includes(tag);
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[styles.feedbackChip, isSelected && styles.feedbackChipSelected]}
+                        onPress={() => {
+                          if (isSelected) {
+                            setCommentText(commentText.replace(tag, "").trim());
+                          } else {
+                            setCommentText((prev) => (prev ? `${prev}, ${tag}` : tag));
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.feedbackChipText, isSelected && styles.feedbackChipTextSelected]}>
+                          {tag}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Comment Text Area */}
+              <View style={styles.reviewInputCard}>
+                <Text style={styles.reviewSectionTitle}>Ulasan & Saran Anda</Text>
                 <TextInput
-                  style={styles.textAreaInput}
+                  style={styles.reviewTextArea}
                   multiline
-                  numberOfLines={4}
+                  numberOfLines={5}
                   value={commentText}
                   onChangeText={setCommentText}
-                  placeholder="Ceritakan pengalaman Anda berbelanja..."
+                  placeholder="Ceritakan detail pengalaman Anda mengenai rasa makanan, kebersihan kemasan, atau pelayanan kurir..."
+                  placeholderTextColor="#9CA3AF"
+                  textAlignVertical="top"
                 />
+              </View>
 
-                <View style={styles.sheetActions}>
-                  <TouchableOpacity 
-                    style={[styles.sheetBtn, styles.sheetBtnOutline]}
-                    onPress={() => setReviewModalVisible(false)}
-                  >
-                    <Text style={styles.sheetBtnTextOutline}>Batal</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.sheetBtn, styles.sheetBtnSolid]}
-                    onPress={handleSaveReview}
-                  >
-                    <Text style={styles.sheetBtnTextSolid}>Kirim Ulasan</Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </View>
-          </View>
+              {/* Submit CTA */}
+              <TouchableOpacity
+                style={styles.submitReviewBtn}
+                onPress={handleSaveReview}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.submitReviewBtnText}>Kirim Ulasan Sekarang</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </SafeAreaView>
         </Modal>
       )}
 
@@ -404,7 +697,11 @@ export const Pesanan: React.FC<PesananProps> = ({
           customerId={authAccount?.id}
           participantName={chatTarget.participantName}
           participantType={chatTarget.participantType}
-          initialMessage="Halo Kak, ada yang bisa kami bantu terkait pesanan ini?"
+          initialMessage={
+            chatTarget.participantType === "driver"
+              ? "Halo Pak Kurir, saya customer pesanan ini."
+              : "Halo Toko, ada yang ingin saya tanyakan mengenai pesanan ini."
+          }
         />
       )}
     </SafeAreaView>
@@ -545,50 +842,134 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   cardFooter: {
+    marginTop: 8,
+  },
+  cardPriceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    alignItems: "center",
   },
   dateCol: {
     gap: 2,
   },
-  dateText: {
+  dateLabel: {
     fontSize: 10,
     color: "#9CA3AF",
+    fontWeight: "600",
+  },
+  dateText: {
+    fontSize: 11,
+    color: "#4B5563",
+    fontWeight: "700",
+  },
+  priceCol: {
+    alignItems: "flex-end",
+    gap: 2,
+  },
+  totalLabel: {
+    fontSize: 10,
+    color: "#9CA3AF",
+    fontWeight: "600",
   },
   totalValue: {
     fontSize: 15,
     fontWeight: "900",
     color: "#111827",
   },
+  cardActionDivider: {
+    height: 1,
+    backgroundColor: "#F3F4F6",
+    marginVertical: 10,
+  },
   actionBtnRow: {
     flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
     gap: 8,
+    flexWrap: "wrap",
   },
   actionBtn: {
-    height: 32,
-    paddingHorizontal: 14,
-    borderRadius: 16,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 5,
   },
   actionBtnOutline: {
     borderWidth: 1,
     borderColor: "#1B7A4E",
     backgroundColor: "#FFFFFF",
   },
+  actionBtnOutlineGray: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+  },
   actionBtnSolid: {
     backgroundColor: "#1B7A4E",
+  },
+  actionBtnDriver: {
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  actionBtnMerchantActive: {
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+  },
+  actionBtnReview: {
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
   },
   actionBtnTextOutline: {
     color: "#1B7A4E",
     fontSize: 11,
     fontWeight: "800",
   },
+  actionBtnTextGray: {
+    color: "#4B5563",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   actionBtnTextSolid: {
     color: "#FFFFFF",
     fontSize: 11,
     fontWeight: "800",
+  },
+  actionBtnTextDriver: {
+    color: "#166534",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnTextMerchantActive: {
+    color: "#C2410C",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnTextReview: {
+    color: "#B45309",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  reviewedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 10,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  reviewedBadgeText: {
+    color: "#16A34A",
+    fontSize: 11,
+    fontWeight: "700",
   },
   emptyContainer: {
     alignItems: "center",
@@ -608,86 +989,133 @@ const styles = StyleSheet.create({
     paddingHorizontal: 36,
     lineHeight: 16,
   },
-  // Modal layout styles
-  modalBgBottom: {
+  // Full Page Layout Styles (Lacak, Ulasan, Chat)
+  fullPageContainer: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
+    backgroundColor: "#F8FAFC",
   },
-  sheetContainer: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
-    maxHeight: "92%",
-  },
-  sheetHeader: {
+  fullPageHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 12,
-    marginBottom: 14,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+    gap: 12,
   },
-  sheetTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  sheetScroll: {
-    maxHeight: 460,
-  },
-  mapSimulation: {
-    backgroundColor: "#E8F5EE",
+  fullPageBackBtn: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
-    height: 180,
+    backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
-    position: "relative",
-    overflow: "hidden",
   },
-  movingMarker: {
-    position: "absolute",
-    top: 60,
-    left: 80,
+  fullPageHeaderCopy: {
+    flex: 1,
+    gap: 2,
   },
-  destMarker: {
-    position: "absolute",
-    top: 90,
-    right: 70,
-  },
-  mapPlaceholderText: {
-    fontSize: 11,
+  fullPageHeaderTitle: {
+    fontSize: 16,
     fontWeight: "800",
-    color: "#1B7A4E",
-    letterSpacing: 0.5,
+    color: "#0F172A",
   },
-  mapSubtext: {
-    fontSize: 10,
-    color: "#4B5563",
-    marginTop: 4,
+  fullPageHeaderSubtitle: {
+    fontSize: 11,
+    color: "#64748B",
     fontWeight: "500",
   },
-  detailSecTitle: {
-    fontSize: 11,
+  fullPageScroll: {
+    flex: 1,
+  },
+  fullPageScrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+    gap: 16,
+  },
+  mapCardWrapper: {
+    borderRadius: 20,
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  driverHighlightCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 12,
+  },
+  driverAvatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  driverInfoBody: {
+    flex: 1,
+    gap: 3,
+  },
+  driverHighlightName: {
+    fontSize: 14,
     fontWeight: "800",
-    color: "#4B5563",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginTop: 16,
-    marginBottom: 8,
+    color: "#0F172A",
+  },
+  driverRoleTag: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  driverRoleTagText: {
+    color: "#166534",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  driverHighlightSub: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  driverQuickChatBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#1B7A4E",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  driverQuickChatBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
   },
   timelineCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
     padding: 16,
+  },
+  timelineCardTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 14,
   },
   timelineRow: {
     flexDirection: "row",
@@ -695,16 +1123,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   timelineDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#D1D5DB",
-    marginTop: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
   },
   timelineDotActive: {
     backgroundColor: "#1B7A4E",
-    borderWidth: 2,
-    borderColor: "#A7F3D0",
   },
   timelineBody: {
     flex: 1,
@@ -713,97 +1140,205 @@ const styles = StyleSheet.create({
   timelineTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#111827",
+    color: "#0F172A",
   },
   timelineDesc: {
     fontSize: 11,
-    color: "#6B7280",
-    lineHeight: 15,
+    color: "#64748B",
+    lineHeight: 16,
   },
   timelineLine: {
     width: 2,
-    height: 16,
-    backgroundColor: "#E5E7EB",
-    marginLeft: 4,
+    height: 20,
+    backgroundColor: "#E2E8F0",
+    marginLeft: 10,
     marginVertical: 2,
   },
-  sheetBtnClose: {
+  timelineLineActive: {
     backgroundColor: "#1B7A4E",
-    height: 48,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 20,
   },
-  sheetBtnCloseText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  // Review modal specific
-  reviewLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  reviewItemName: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#4B5563",
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  starsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginVertical: 8,
-  },
-  textAreaInput: {
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 14,
-    padding: 12,
-    fontSize: 14,
-    color: "#111827",
-    textAlignVertical: "top",
-    marginBottom: 16,
-  },
-  sheetActions: {
+  fullPageActionRow: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 4,
   },
-  sheetBtn: {
+  fullPageActionBtn: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     height: 48,
     borderRadius: 14,
+  },
+  fullPageActionBtnDriver: {
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  fullPageActionBtnDriverText: {
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  fullPageActionBtnMerchant: {
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+  },
+  fullPageActionBtnMerchantText: {
+    color: "#EA580C",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  // Review Full Page Styles
+  reviewOrderCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  reviewOrderIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#E8F5EE",
     alignItems: "center",
     justifyContent: "center",
   },
-  sheetBtnOutline: {
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+  reviewItemName: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  reviewItemDetail: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  reviewItemPrice: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1B7A4E",
+    marginTop: 4,
+  },
+  reviewRatingCard: {
     backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  sheetBtnSolid: {
-    backgroundColor: "#1B7A4E",
+  reviewRatingHeading: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
   },
-  sheetBtnTextOutline: {
-    color: "#4B5563",
-    fontSize: 14,
+  reviewRatingSubheading: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  starsPickerRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 14,
+  },
+  starTouchItem: {
+    padding: 4,
+  },
+  ratingCaptionPill: {
+    backgroundColor: "#FFFBEB",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  ratingCaptionText: {
+    color: "#B45309",
+    fontSize: 12,
     fontWeight: "800",
   },
-  sheetBtnTextSolid: {
+  reviewTagsCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  reviewSectionTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 12,
+  },
+  reviewTagGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  feedbackChip: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  feedbackChipSelected: {
+    backgroundColor: "#E8F5EE",
+    borderColor: "#1B7A4E",
+  },
+  feedbackChipText: {
+    fontSize: 12,
+    color: "#475569",
+    fontWeight: "600",
+  },
+  feedbackChipTextSelected: {
+    color: "#166534",
+    fontWeight: "800",
+  },
+  reviewInputCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  reviewTextArea: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 14,
+    padding: 14,
+    fontSize: 13,
+    color: "#0F172A",
+    minHeight: 110,
+    lineHeight: 18,
+  },
+  submitReviewBtn: {
+    backgroundColor: "#1B7A4E",
+    height: 50,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+    elevation: 2,
+    shadowColor: "#1B7A4E",
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  submitReviewBtnText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
   },
 });

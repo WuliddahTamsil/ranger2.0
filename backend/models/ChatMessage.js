@@ -17,6 +17,12 @@ const chatMessageSchema = new mongoose.Schema(
       enum: ["customer", "owner", "driver", "other"],
       required: true,
     },
+    target: {
+      type: String,
+      enum: ["customer", "driver", "owner", "all"],
+      default: "all",
+      index: true,
+    },
     text: {
       type: String,
       default: "",

@@ -159,35 +159,31 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
       if (result.success && result.data) {
         const mapped = result.data.map((o: any) => {
           let frontendStatus = o.status;
-          if (o.status === "Dikirim") {
+          if (o.status === "Dikirim" || o.status === "Mengantar") {
             frontendStatus = "Diambil";
+          } else if (o.status === "Menuju Pickup" || o.status === "Sampai Pickup") {
+            frontendStatus = "Siap";
           }
+
+          const hasDriver = Boolean(o.driverId || o.driverName);
           return {
             id: o._id,
             customer: o.customerName,
             customerPhone: o.customerPhone,
             items: [{ name: o.menuName, quantity: o.portions, price: o.price }],
             total: o.totalAmount,
-            subtotal: o.totalAmount - o.deliveryFee - o.serviceFee,
-            deliveryFee: o.deliveryFee,
+            subtotal: o.totalAmount - (o.deliveryFee || 0) - (o.serviceFee || 0),
+            deliveryFee: o.deliveryFee || 0,
             time: new Date(o.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
             status: frontendStatus,
-            driver: o.status === "Dikirim" ? {
-              name: "Driver Rangers",
+            driver: hasDriver ? {
+              name: o.driverName || "Driver Rangers",
               vehicle: "Motor",
-              plateNumber: "B 1234 XYZ",
+              plateNumber: o.driverPhone ? `HP: ${o.driverPhone}` : "Rangers Express",
               rating: 4.9,
-              stage: "Pesanan sedang dikirim",
-              distance: "0.8 km",
-              eta: "10 mnt",
-            } : o.status === "Selesai" ? {
-              name: "Driver Rangers",
-              vehicle: "Motor",
-              plateNumber: "B 1234 XYZ",
-              rating: 4.9,
-              stage: "Pesanan selesai",
-              distance: "0 km",
-              eta: "-",
+              stage: o.status === "Selesai" ? "Pesanan selesai" : o.status === "Mengantar" || o.status === "Diambil" || o.status === "Dikirim" ? "Pesanan sedang dikirim" : "Driver menuju outlet catering",
+              distance: "1.2 km",
+              eta: "5 mnt",
             } : null,
             unreadCustomerMessages: 0,
             unreadDriverMessages: 0,
@@ -197,7 +193,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
       }
     };
     void fetchOrders();
-    const interval = setInterval(() => void fetchOrders(), 10000);
+    const interval = setInterval(() => void fetchOrders(), 3500);
     return () => clearInterval(interval);
   }, [authAccount]);
 

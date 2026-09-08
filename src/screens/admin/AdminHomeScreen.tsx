@@ -5,11 +5,30 @@ import { ShieldCheck, Users, CheckCircle, AlertCircle, LogOut } from "lucide-rea
 import { rp } from "../../utils/formatters";
 import { AuthAccount, ROLE_LABELS } from "../auth/authTypes";
 import { loadMitraAccounts, updateAccountStatus } from "../auth/authService";
+import { getAdminStats } from "../../services/api";
 
 export const AdminHomeScreen: React.FC<Nav> = ({ navigate }) => {
   const [mitraAccounts, setMitraAccounts] = useState<AuthAccount[]>([]);
+  const [stats, setStats] = useState<{
+    totalMitra: number;
+    totalDrivers: number;
+    totalCustomers: number;
+    pendingMitra: number;
+    totalTransactionsAmount: number;
+    totalOrdersCount: number;
+  } | null>(null);
 
-  const refresh = async () => setMitraAccounts(await loadMitraAccounts());
+  const refresh = async () => {
+    const [mitras, statsRes] = await Promise.all([
+      loadMitraAccounts(),
+      getAdminStats(),
+    ]);
+    setMitraAccounts(mitras);
+    if (statsRes.success && statsRes.data) {
+      setStats(statsRes.data);
+    }
+  };
+
   useEffect(() => { void refresh(); }, []);
 
   const approve = async (account: AuthAccount) => {
@@ -53,17 +72,22 @@ export const AdminHomeScreen: React.FC<Nav> = ({ navigate }) => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* System Summary */}
         <View style={styles.systemCard}>
-          <Text style={styles.systemLabel}>Total Transaksi Komunitas (Bulan Ini)</Text>
-          <Text style={styles.systemVal}>{rp(48500000)}</Text>
+          <Text style={styles.systemLabel}>Total Transaksi Komunitas (Realtime)</Text>
+          <Text style={styles.systemVal}>{rp(stats ? stats.totalTransactionsAmount : 48500000)}</Text>
           <View style={styles.systemStats}>
             <View style={styles.statItem}>
-              <Text style={styles.statVal}>128 Mitra</Text>
+              <Text style={styles.statVal}>{stats?.totalMitra ?? mitraAccounts.length} Mitra</Text>
               <Text style={styles.statLbl}>UMKM & Layanan</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statVal}>34 Driver</Text>
+              <Text style={styles.statVal}>{stats?.totalDrivers ?? 0} Driver</Text>
               <Text style={styles.statLbl}>Rangers Aktif</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statVal}>{stats?.totalOrdersCount ?? 0} Order</Text>
+              <Text style={styles.statLbl}>Selesai/Aktif</Text>
             </View>
           </View>
         </View>

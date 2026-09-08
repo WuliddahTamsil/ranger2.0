@@ -32,7 +32,16 @@ import { rp } from "../../utils/formatters";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { RoleHeader } from "../../components/RoleHeader";
-import { getMarketplaceOrdersForDriver, updateMarketplaceOrderStatus, assignMarketplaceDriver } from "../../services/api";
+import {
+  getMarketplaceOrdersForDriver,
+  updateMarketplaceOrderStatus,
+  assignMarketplaceDriver,
+  getCateringOrdersForDriver,
+  updateCateringOrderStatus,
+  assignCateringDriver,
+  getNotifications,
+  markNotificationRead,
+} from "../../services/api";
 
 // Import other screens
 import { Order, DriverOrder } from "./Order";
@@ -48,6 +57,16 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   const [currentTab, setCurrentTab] = useState<number>(0);
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
+  const [driverNotifs, setDriverNotifs] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!authAccount?.id || !notifModalVisible) return;
+    void getNotifications(authAccount.id).then((res) => {
+      if (res.success && Array.isArray(res.data)) {
+        setDriverNotifs(res.data);
+      }
+    });
+  }, [authAccount?.id, notifModalVisible]);
 
   // 1. Global Driver Info State
   const [driverInfo, setDriverInfo] = useState(() => ({
@@ -113,28 +132,54 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       return;
     }
     const loadOrders = async () => {
-      const result = await getMarketplaceOrdersForDriver(authAccount.id);
-      if (!result.success || !Array.isArray(result.data)) {
-        setOrders([]);
-        return;
-      }
-      setOrders(result.data.map((order: any) => ({
+      const [mktRes, catRes] = await Promise.all([
+        getMarketplaceOrdersForDriver(authAccount.id),
+        getCateringOrdersForDriver(authAccount.id),
+      ]);
+
+      const normalizeStatus = (rawStatus: string): DriverOrder["status"] => {
+        if (rawStatus === "Menuju Pickup") return "Menuju Pickup";
+        if (rawStatus === "Sampai Pickup") return "Sampai Pickup";
+        if (rawStatus === "Diambil" || rawStatus === "Mengantar" || rawStatus === "Dikirim") return "Mengantar";
+        if (rawStatus === "Selesai") return "Selesai";
+        if (rawStatus === "Dibatalkan") return "Dibatalkan";
+        return "Menunggu";
+      };
+
+      const mktOrders: DriverOrder[] = (mktRes.success && Array.isArray(mktRes.data)) ? mktRes.data.map((order: any) => ({
         id: order._id,
         customer: order.customerName,
         phone: order.customerPhone || "",
-        type: "Marketplace",
+        type: "Marketplace" as const,
         time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
         from: order.storeAddress || order.storeName || `Toko marketplace ${order.storeId || order.ownerId}`,
         to: order.address,
-        dist: "—",
+        dist: "1.5 km",
         pay: order.totalAmount,
-        driverShare: order.driverTip || order.deliveryFee || 0,
-        status: order.status === "Menuju Pickup" ? "Menuju Pickup" : order.status === "Sampai Pickup" ? "Sampai Pickup" : order.status === "Diambil" || order.status === "Mengantar" ? "Mengantar" : order.status === "Selesai" ? "Selesai" : order.status === "Dibatalkan" ? "Dibatalkan" : "Menunggu",
+        driverShare: order.driverTip || order.deliveryFee || 5000,
+        status: normalizeStatus(order.status),
         items: order.items,
-      })));
+      })) : [];
+
+      const catOrders: DriverOrder[] = (catRes.success && Array.isArray(catRes.data)) ? catRes.data.map((order: any) => ({
+        id: order._id,
+        customer: order.customerName,
+        phone: order.customerPhone || "",
+        type: "Catering" as const,
+        time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        from: order.storeAddress || order.storeName || "Dapur Catering",
+        to: order.address,
+        dist: "2.0 km",
+        pay: order.totalAmount,
+        driverShare: order.driverTip || order.deliveryFee || 8000,
+        status: normalizeStatus(order.status),
+        items: [{ name: `${order.menuName} (${order.portions} pax)`, quantity: order.portions, price: order.price }],
+      })) : [];
+
+      setOrders([...mktOrders, ...catOrders]);
     };
     void loadOrders();
-    const interval = setInterval(() => void loadOrders(), 5000);
+    const interval = setInterval(() => void loadOrders(), 4000);
     return () => clearInterval(interval);
   }, [authAccount?.id]);
 
@@ -161,10 +206,19 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   ]);
 
   // Handler quick update status from Beranda active order card
-  const handleUpdateStatus = (orderId: string, nextStatus: DriverOrder["status"]) => {
+  const handleUpdateStatus = async (orderId: string, nextStatus: DriverOrder["status"]) => {
     let alertMsg = "";
     let isFinished = false;
     let earnedAmount = 0;
+
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (targetOrder) {
+      if (targetOrder.type === "Catering") {
+        await updateCateringOrderStatus(orderId, nextStatus);
+      } else {
+        await updateMarketplaceOrderStatus(orderId, nextStatus);
+      }
+    }
 
     const updated = orders.map((o) => {
       if (o.id === orderId) {
@@ -220,8 +274,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             setTransactions={setTransactions}
             isOnline={isOnline}
             onStatusChange={async (orderId, status) => {
-              const backendStatus = status;
-              const result = await updateMarketplaceOrderStatus(orderId, backendStatus);
+              const targetOrder = orders.find((o) => o.id === orderId);
+              const result = targetOrder?.type === "Catering"
+                ? await updateCateringOrderStatus(orderId, status)
+                : await updateMarketplaceOrderStatus(orderId, status);
               if (!result.success) {
                 Alert.alert("Gagal", result.message || "Status order gagal diperbarui");
                 return false;
@@ -229,7 +285,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
               return true;
             }}
             onAcceptOrder={async (orderId) => {
-              const result = await assignMarketplaceDriver(orderId, authAccount?.id || "");
+              const targetOrder = orders.find((o) => o.id === orderId);
+              const result = targetOrder?.type === "Catering"
+                ? await assignCateringDriver(orderId, authAccount?.id || "")
+                : await assignMarketplaceDriver(orderId, authAccount?.id || "");
               if (!result.success) {
                 Alert.alert("Gagal", result.message || "Order gagal diterima");
                 return false;
@@ -518,27 +577,31 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             </View>
 
             <View style={styles.notifList}>
-              <View style={styles.notifRow}>
-                <View style={styles.notifIconBg}>
-                  <Wallet size={18} color="#1B7A4E" />
+              {driverNotifs.length > 0 ? (
+                driverNotifs.map((n) => (
+                  <View key={n._id} style={styles.notifRow}>
+                    <View style={styles.notifIconBg}>
+                      {n.type === "order_new" ? (
+                        <Truck size={18} color="#1B7A4E" />
+                      ) : (
+                        <Wallet size={18} color="#1B7A4E" />
+                      )}
+                    </View>
+                    <View style={styles.notifBody}>
+                      <Text style={styles.notifRowTitle}>{n.title}</Text>
+                      <Text style={styles.notifRowDesc}>{n.message}</Text>
+                    </View>
+                    <Text style={styles.notifTime}>
+                      {new Date(n.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                  <Bell size={28} color="#9CA3AF" />
+                  <Text style={{ color: "#6B7280", marginTop: 8, fontSize: 13 }}>Belum ada notifikasi baru</Text>
                 </View>
-                <View style={styles.notifBody}>
-                  <Text style={styles.notifRowTitle}>Top Up Saldo Sukses</Text>
-                  <Text style={styles.notifRowDesc}>Top up saldo deposit sebesar Rp50.000 telah masuk.</Text>
-                </View>
-                <Text style={styles.notifTime}>3 mnt lalu</Text>
-              </View>
-
-              <View style={styles.notifRow}>
-                <View style={styles.notifIconBg}>
-                  <Truck size={18} color="#1B7A4E" />
-                </View>
-                <View style={styles.notifBody}>
-                  <Text style={styles.notifRowTitle}>Akun Driver Terverifikasi</Text>
-                  <Text style={styles.notifRowDesc}>Dokumen pendaftaran Anda telah disetujui admin.</Text>
-                </View>
-                <Text style={styles.notifTime}>1 hari lalu</Text>
-              </View>
+              )}
             </View>
 
             <TouchableOpacity 

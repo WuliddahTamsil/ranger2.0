@@ -2,13 +2,18 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { ArrowRight, CalendarDays, ChefHat, MapPin } from "lucide-react-native";
 import { Nav } from "../../types";
+import { AuthAccount } from "../auth/authTypes";
 import { BackHeader } from "../../components/BackHeader";
 import { Stars } from "../../components/Stars";
 import { rp } from "../../utils/formatters";
 import { getCateringShops } from "../../services/api";
 import { setSelectedCateringShop } from "./customerCateringStore";
 
-export const CustomerCateringScreen: React.FC<Nav> = ({ navigate }) => {
+interface CustomerCateringProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ navigate }) => {
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

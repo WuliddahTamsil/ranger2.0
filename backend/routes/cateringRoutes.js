@@ -11,6 +11,8 @@ const {
   getCateringOrdersByOwner,
   getCateringOrdersByCustomer,
   updateCateringOrderStatus,
+  getOrdersByDriver,
+  assignDriver,
 } = require("../controllers/cateringController");
 
 const router = express.Router();
@@ -20,6 +22,10 @@ router.get("/", getAllCateringShops);
 router.get("/products/active", getAllActiveProducts);
 router.get("/:ownerId/products", getProductsByShop);
 router.post("/orders", createCateringOrder);
+
+// Driver Endpoints
+router.get("/orders/driver/:driverId", getOrdersByDriver);
+router.put("/orders/:id/assign-driver", assignDriver);
 
 // Partner Endpoints
 router.get("/products/owner/:ownerId", getProductsByOwner);

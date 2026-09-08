@@ -28,6 +28,8 @@ import {
   CustomerChatMessage,
   CustomerChatThread,
 } from "./customerInboxStore";
+import { getChatMessages, sendChatMessage } from "../../services/api";
+import { AuthAccount } from "../auth/authTypes";
 
 export type { CustomerChatThread } from "./customerInboxStore";
 
@@ -46,6 +48,7 @@ interface InboxProps {
   chatThreads: CustomerChatThread[];
   setChatThreads: (threads: CustomerChatThread[]) => void;
   setCustomerTab: (tabIndex: number) => void;
+  authAccount?: AuthAccount | null;
 }
 
 type Message = CustomerChatMessage;
@@ -56,6 +59,7 @@ export const Inbox: React.FC<InboxProps> = ({
   chatThreads,
   setChatThreads,
   setCustomerTab,
+  authAccount,
 }) => {
   const [activeTab, setActiveTab] = useState<"Notifikasi" | "Chat">("Notifikasi");
   const [chatModalVisible, setChatModalVisible] = useState(false);
@@ -84,6 +88,35 @@ export const Inbox: React.FC<InboxProps> = ({
     });
   }, [chatThreads]);
 
+  // Fetch live chat messages when thread modal opens
+  useEffect(() => {
+    if (!chatModalVisible || !selectedThread) return;
+
+    const fetchThreadMessages = async () => {
+      const res = await getChatMessages(
+        selectedThread.orderId,
+        selectedThread.participantType === "driver" ? "driver" : "owner"
+      );
+      if (res.success && Array.isArray(res.data)) {
+        const mapped: Message[] = res.data.map((m: any) => ({
+          id: m._id,
+          sender: m.sender === "customer" ? "customer" : "other",
+          text: m.text,
+          time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          attachment: m.attachment,
+        }));
+        setMessagesHistory((prev) => ({
+          ...prev,
+          [selectedThread.id]: mapped,
+        }));
+      }
+    };
+
+    void fetchThreadMessages();
+    const interval = setInterval(() => void fetchThreadMessages(), 2500);
+    return () => clearInterval(interval);
+  }, [chatModalVisible, selectedThread]);
+
   const handleMarkNotificationRead = (id: number) => {
     const updated = notifications.map((n) => (n.id === id ? { ...n, read: true } : n));
     setNotifications(updated);
@@ -95,7 +128,7 @@ export const Inbox: React.FC<InboxProps> = ({
     setNotifications(updated);
   };
 
-  const openChatThread = (thread: CustomerChatThread) => {
+  const openChatThread = async (thread: CustomerChatThread) => {
     setSelectedThread(thread);
     setChatModalVisible(true);
 
@@ -105,57 +138,62 @@ export const Inbox: React.FC<InboxProps> = ({
     );
     setChatThreads(updatedThreads);
     markCustomerChatThreadRead(thread.id);
+
+    // Pre-fetch messages
+    const res = await getChatMessages(thread.orderId);
+    if (res.success && Array.isArray(res.data)) {
+      const mapped: Message[] = res.data.map((m: any) => ({
+        id: m._id,
+        sender: m.sender === "customer" ? "customer" : "other",
+        text: m.text,
+        time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+        attachment: m.attachment,
+      }));
+      setMessagesHistory((prev) => ({
+        ...prev,
+        [thread.id]: mapped,
+      }));
+    }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (typedMessage.trim() === "" || !selectedThread) return;
 
     const threadKey = selectedThread.id;
+    const textToSend = typedMessage.trim();
+    setTypedMessage("");
+
     const newMsg: Message = {
       id: `${threadKey}_${Date.now()}`,
       sender: "customer",
-      text: typedMessage.trim(),
-      time: "Baru saja",
+      text: textToSend,
+      time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
     };
 
     const currentHistory = messagesHistory[threadKey] || [];
     const updatedHistory = [...currentHistory, newMsg];
 
-    setMessagesHistory({
-      ...messagesHistory,
+    setMessagesHistory((prev) => ({
+      ...prev,
       [threadKey]: updatedHistory,
-    });
+    }));
     appendCustomerChatMessage(threadKey, newMsg);
 
     // Update last message in thread list
     const updatedThreads = chatThreads.map((t) =>
-      t.id === selectedThread.id ? { ...t, lastMessage: typedMessage.trim(), updatedAt: "Baru saja", messages: updatedHistory } : t
+      t.id === selectedThread.id ? { ...t, lastMessage: textToSend, updatedAt: "Baru saja", messages: updatedHistory } : t
     );
     setChatThreads(updatedThreads);
 
-    setTypedMessage("");
-
-    // Simulate merchant/driver automatic reply
-    setTimeout(() => {
-      const replyMsg: Message = {
-        id: `${threadKey}_${Date.now()}_reply`,
-        sender: "other",
-        text: "Siap Kak, terima kasih konfirmasinya.",
-        time: "Baru saja",
-      };
-      setMessagesHistory((prev) => ({
-        ...prev,
-        [threadKey]: [...updatedHistory, replyMsg],
-      }));
-      appendCustomerChatMessage(threadKey, replyMsg);
-
-      // Update thread last message again
-      updateCustomerChatThread(selectedThread.id, {
-        lastMessage: "Siap Kak, terima kasih konfirmasinya.",
-        updatedAt: "Baru saja",
-        messages: [...updatedHistory, replyMsg],
-      });
-    }, 2000);
+    // Send real message to backend
+    await sendChatMessage(
+      selectedThread.orderId,
+      "customer",
+      textToSend,
+      undefined,
+      authAccount?.id,
+      selectedThread.participantType === "driver" ? "driver" : "owner"
+    );
   };
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;

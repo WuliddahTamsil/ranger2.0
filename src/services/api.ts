@@ -359,12 +359,54 @@ export const getCateringOrdersForCustomer = async (customerId: string) => {
   }
 };
 
-export const sendChatMessage = async (orderId: string, sender: string, text: string, attachment?: any, senderId?: string) => {
+export const getCateringOrdersForDriver = async (driverId: string) => {
+  try {
+    const res = await fetch(getApiUrl(`/catering/orders/driver/${driverId}?t=${Date.now()}`), { cache: "no-store" });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("getCateringOrdersForDriver error:", err);
+    return { success: false, data: [], message: "Gagal mengambil order driver catering" };
+  }
+};
+
+export const assignCateringDriver = async (orderId: string, driverId: string) => {
+  try {
+    const res = await fetch(getApiUrl(`/catering/orders/${orderId}/assign-driver`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ driverId }),
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("assignCateringDriver error:", err);
+    return { success: false, message: "Gagal menugaskan driver catering" };
+  }
+};
+
+export const getAdminStats = async () => {
+  try {
+    const res = await fetch(getApiUrl("/auth/admin/stats"));
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("getAdminStats error:", err);
+    return { success: false, data: null };
+  }
+};
+
+export const sendChatMessage = async (
+  orderId: string,
+  sender: string,
+  text: string,
+  attachment?: any,
+  senderId?: string,
+  target?: "customer" | "driver" | "owner",
+  targetReceiverId?: string
+) => {
   try {
     const res = await fetch(getApiUrl("/chat/send"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId, sender, senderId, text, attachment }),
+      body: JSON.stringify({ orderId, sender, senderId, text, attachment, target, targetReceiverId }),
     });
     return await readApiJson(res);
   } catch (err) {
@@ -373,9 +415,12 @@ export const sendChatMessage = async (orderId: string, sender: string, text: str
   }
 };
 
-export const getChatMessages = async (orderId: string) => {
+export const getChatMessages = async (orderId: string, target?: "driver" | "owner") => {
   try {
-    const res = await fetch(getApiUrl(`/chat/messages/${orderId}`));
+    const url = target
+      ? getApiUrl(`/chat/messages/${orderId}?target=${target}`)
+      : getApiUrl(`/chat/messages/${orderId}`);
+    const res = await fetch(url);
     return await readApiJson(res);
   } catch (err) {
     console.error("❌ getChatMessages error:", err);

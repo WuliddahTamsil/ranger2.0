@@ -5,5 +5,6 @@ const router = express.Router();
 
 router.get("/:userId", getNotifications);
 router.patch("/:id/read", markNotificationRead);
+router.put("/:id/read", markNotificationRead);
 
 module.exports = router;

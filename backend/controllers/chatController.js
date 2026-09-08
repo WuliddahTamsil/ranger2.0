@@ -1,27 +1,44 @@
 const ChatMessage = require("../models/ChatMessage");
 const MarketplaceOrder = require("../models/MarketplaceOrder");
 const CateringOrder = require("../models/CateringOrder");
+const LaundryOrder = require("../models/LaundryOrder");
 const Notification = require("../models/Notification");
 
 // Send a chat message
 const sendChatMessage = async (req, res) => {
   try {
-    const { orderId, sender, senderId, text, attachment } = req.body;
+    const { orderId, sender, senderId, text, attachment, target, targetReceiverId } = req.body;
 
     if (!orderId || !sender || !senderId) {
       return res.status(400).json({ success: false, message: "orderId dan sender harus diisi" });
     }
-    const order = await MarketplaceOrder.findById(orderId).lean()
-      .catch(() => null) || await CateringOrder.findById(orderId).lean();
+    const order =
+      (await MarketplaceOrder.findById(orderId).lean().catch(() => null)) ||
+      (await CateringOrder.findById(orderId).lean().catch(() => null)) ||
+      (await LaundryOrder.findById(orderId).lean().catch(() => null));
     if (!order) return res.status(404).json({ success: false, message: "Order chat tidak ditemukan" });
+
     const customerId = String(order.customerId);
     const ownerId = String(order.ownerId);
-    const driverId = String(order.driverId || "");
+    const driverId = String(order.driverId || order.driverPickupId || order.driverDeliveryId || "");
+
     if (String(senderId) !== customerId && String(senderId) !== ownerId && String(senderId) !== driverId) {
       return res.status(403).json({ success: false, message: "Akun tidak terhubung dengan order ini" });
     }
     const normalizedSender = sender === "owner" ? ownerId : sender === "driver" ? driverId : customerId;
-    const receiverId = normalizedSender === ownerId || normalizedSender === driverId ? customerId : ownerId;
+
+    let receiverId;
+    if (targetReceiverId) {
+      receiverId = String(targetReceiverId);
+    } else if (normalizedSender === ownerId || normalizedSender === driverId) {
+      receiverId = customerId;
+    } else {
+      // Customer sending
+      receiverId = target === "driver" && driverId ? driverId : ownerId;
+    }
+
+    // Determine message channel target
+    const resolvedTarget = target || (sender === "driver" ? "driver" : sender === "owner" ? "owner" : "all");
 
     const message = await ChatMessage.create({
       orderId,
@@ -31,6 +48,7 @@ const sendChatMessage = async (req, res) => {
       customerId,
       ownerId,
       storeId: String(order.storeId || ownerId),
+      target: resolvedTarget,
       text: text || "",
       attachment,
     });
@@ -63,7 +81,29 @@ const sendChatMessage = async (req, res) => {
 const getChatMessages = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const messages = await ChatMessage.find({ orderId }).sort({ createdAt: 1 });
+    const { target } = req.query;
+
+    let filter = { orderId };
+    if (target === "driver") {
+      filter = {
+        orderId,
+        $or: [
+          { sender: "driver" },
+          { target: "driver" },
+        ],
+      };
+    } else if (target === "owner") {
+      filter = {
+        orderId,
+        $or: [
+          { sender: "owner" },
+          { target: "owner" },
+          { target: { $exists: false }, sender: { $ne: "driver" } },
+        ],
+      };
+    }
+
+    const messages = await ChatMessage.find(filter).sort({ createdAt: 1 });
 
     return res.status(200).json({
       success: true,

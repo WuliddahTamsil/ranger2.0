@@ -28,6 +28,8 @@ const cateringOrderSchema = new mongoose.Schema(
       required: true,
     },
     storeId: { type: String, default: "" },
+    storeName: { type: String, default: "" },
+    storeAddress: { type: String, default: "" },
     productId: { type: String, default: "" },
     driverId: { type: String, default: "", index: true },
     driverName: { type: String, default: "" },
@@ -91,7 +93,7 @@ const cateringOrderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Menunggu", "Diproses", "Dikirim", "Selesai", "Dibatalkan"],
+      enum: ["Menunggu", "Diproses", "Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim", "Selesai", "Dibatalkan"],
       default: "Menunggu",
     },
     notes: {
@@ -103,5 +105,9 @@ const cateringOrderSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+cateringOrderSchema.index({ ownerId: 1, createdAt: -1 });
+cateringOrderSchema.index({ customerId: 1, createdAt: -1 });
+cateringOrderSchema.index({ driverId: 1, status: 1 });
 
 module.exports = mongoose.model("CateringOrder", cateringOrderSchema);

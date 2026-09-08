@@ -28,6 +28,7 @@ import {
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
 import { updateCateringOrderStatus, getChatMessages, sendChatMessage } from "../../services/api";
+import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 
 // Data types matching the approved design
 export interface DriverProfile {
@@ -106,7 +107,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId }) => {
     if (!chatModalVisible || !selectedOrder) return;
 
     const loadMessages = async () => {
-      const res = await getChatMessages(selectedOrder.id);
+      const res = await getChatMessages(selectedOrder.id, chatTarget === "driver" ? "driver" : "owner");
       if (res.success && Array.isArray(res.data)) {
         const mapped = res.data.map((m: any) => ({
           sender: m.sender === "owner" ? ("owner" as const) : ("other" as const),
@@ -141,49 +142,18 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId }) => {
     if (nextStatus === "Diproses") {
       messageText = "Pesanan catering diterima dan mulai dimasak.";
     } else if (nextStatus === "Siap") {
-      messageText = "Pesanan selesai dimasak dan siap diantar.";
-      driverData = {
-        name: "Driver Rangers",
-        vehicle: "Motor",
-        plateNumber: "B 1234 XYZ",
-        rating: 4.9,
-        stage: "Driver menuju catering",
-        distance: "1.2 km",
-        eta: "5 mnt",
-      };
+      messageText = "Pesanan selesai disiapkan. Menunggu penjemputan driver.";
     } else if (nextStatus === "Diambil") {
       messageText = "Pesanan diserahkan ke driver untuk pengiriman.";
-      driverData = {
-        name: "Driver Rangers",
-        vehicle: "Motor",
-        plateNumber: "B 1234 XYZ",
-        rating: 4.9,
-        stage: "Pesanan sedang dikirim",
-        distance: "0.8 km",
-        eta: "10 mnt",
-      };
     } else if (nextStatus === "Selesai") {
       messageText = "Pesanan selesai diantar ke alamat customer.";
-      driverData = {
-        name: "Driver Rangers",
-        vehicle: "Motor",
-        plateNumber: "B 1234 XYZ",
-        rating: 4.9,
-        stage: "Pesanan selesai",
-        distance: "0 km",
-        eta: "-",
-      };
     } else if (nextStatus === "Dibatalkan") {
       messageText = "Pesanan catering dibatalkan.";
     }
 
     // Update status in MongoDB if valid ObjectId
     if (orderId && orderId.length === 24) {
-      let backendStatus = nextStatus;
-      if (nextStatus === "Siap" || nextStatus === "Diambil") {
-        backendStatus = "Dikirim" as any;
-      }
-      await updateCateringOrderStatus(orderId, backendStatus);
+      await updateCateringOrderStatus(orderId, nextStatus);
     }
 
     const updated = orders.map((o) => {
@@ -191,7 +161,6 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId }) => {
         return {
           ...o,
           status: nextStatus,
-          driver: driverData !== null ? driverData : o.driver,
         };
       }
       return o;
@@ -204,7 +173,6 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId }) => {
       setSelectedOrder({
         ...selectedOrder,
         status: nextStatus,
-        driver: driverData !== null ? driverData : selectedOrder.driver,
       });
     }
 
@@ -252,7 +220,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId }) => {
     setTypedMessage("");
 
     // Save in database
-    const result = await sendChatMessage(selectedOrder.id, "owner", text, undefined, ownerId);
+    const result = await sendChatMessage(selectedOrder.id, "owner", text, undefined, ownerId, chatTarget === "driver" ? "driver" : "owner");
     if (!result.success) {
       Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
     }
@@ -775,39 +743,18 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId }) => {
                   <X size={20} color="#111827" />
                 </TouchableOpacity>
               </View>
-
-              <View style={styles.trackingContainer}>
-                {/* Simulated Map */}
-                <View style={styles.simulatedMap}>
-                  <View style={styles.mapPinStore}>
-                    <ShoppingBag size={12} color="#FFFFFF" />
-                    <Text style={styles.mapLabel}>Dapur</Text>
-                  </View>
-                  
-                  {/* Moving Line */}
-                  <View style={styles.mapRouteLine}>
-                    <View 
-                      style={[
-                        styles.mapRouteProgress, 
-                        { width: trackingProgress === 2 ? "50%" : trackingProgress >= 3 ? "100%" : "0%" }
-                      ]} 
-                    />
-                  </View>
-                  
-                  {/* Driver moving pin */}
-                  <View 
-                    style={[
-                      styles.mapPinDriver,
-                      { left: trackingProgress === 1 ? "15%" : trackingProgress === 2 ? "50%" : trackingProgress >= 3 ? "85%" : "15%" }
-                    ]}
-                  >
-                    <Truck size={12} color="#FFFFFF" />
-                  </View>
-
-                  <View style={styles.mapPinCust}>
-                    <MapPin size={12} color="#FFFFFF" />
-                    <Text style={styles.mapLabel}>Customer</Text>
-                  </View>
+              <View style={styles.trackingContainer}>
+                {/* Real Interactive Google Maps */}
+                <View style={{ marginBottom: 12 }}>
+                  <LiveOrderTrackingMap
+                    storeName="Dapur Catering Saya"
+                    storeAddress="Dapur Catering, Bangkalan"
+                    customerAddress={selectedOrder.customer}
+                    driverName={selectedOrder.driver?.name}
+                    driverVehicle={selectedOrder.driver?.plateNumber}
+                    orderStatus={selectedOrder.status}
+                    height={230}
+                  />
                 </View>
 
                 {/* Driver information */}

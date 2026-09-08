@@ -174,11 +174,11 @@ export default function App() {
       case "c_marketplace":
         return <MarketplaceScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_catering":
-        return <CustomerCateringScreen navigate={navigate} />;
+        return <CustomerCateringScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_catering_detail":
-        return <CustomerCateringDetailScreen navigate={navigate} />;
+        return <CustomerCateringDetailScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_catering_tracking":
-        return <CustomerCateringTrackingScreen navigate={navigate} />;
+        return <CustomerCateringTrackingScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_laundry":
         return <CustomerLaundryScreen navigate={navigate} />;
       case "c_laundry_detail":

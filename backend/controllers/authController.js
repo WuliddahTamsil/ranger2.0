@@ -310,6 +310,60 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
+// Admin System Stats
+const getSystemStats = async (req, res) => {
+  try {
+    const MarketplaceOrder = require("../models/MarketplaceOrder");
+    const CateringOrder = require("../models/CateringOrder");
+    const LaundryOrder = require("../models/LaundryOrder");
+    const Booking = require("../models/Booking");
+
+    const [
+      totalMitra,
+      totalDrivers,
+      totalCustomers,
+      pendingMitra,
+      marketplaceOrders,
+      cateringOrders,
+      laundryOrders,
+      bookings
+    ] = await Promise.all([
+      User.countDocuments({ role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_laundry", "pemilik_kos"] } }),
+      User.countDocuments({ role: "driver" }),
+      User.countDocuments({ role: "customer" }),
+      User.countDocuments({ status: "pending", role: { $ne: "customer" } }),
+      MarketplaceOrder.find({ status: { $ne: "Dibatalkan" } }).select("totalAmount"),
+      CateringOrder.find({ status: { $ne: "Dibatalkan" } }).select("totalAmount"),
+      LaundryOrder.find({ status: { $ne: "DIBATALKAN" } }).select("totalAmount"),
+      Booking.find({ status: { $nin: ["rejected", "cancelled"] } }).select("totalAmount"),
+    ]);
+
+    const sumAmounts = (list) => list.reduce((acc, curr) => acc + (Number(curr.totalAmount) || 0), 0);
+    const totalTransactionsAmount =
+      sumAmounts(marketplaceOrders) +
+      sumAmounts(cateringOrders) +
+      sumAmounts(laundryOrders) +
+      sumAmounts(bookings);
+
+    const totalOrdersCount = marketplaceOrders.length + cateringOrders.length + laundryOrders.length + bookings.length;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalMitra,
+        totalDrivers,
+        totalCustomers,
+        pendingMitra,
+        totalTransactionsAmount,
+        totalOrdersCount,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Get system stats error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mengambil statistik sistem", error: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -317,4 +371,5 @@ module.exports = {
   updateMitraStatus,
   getUserProfile,
   updateUserProfile,
+  getSystemStats,
 };
