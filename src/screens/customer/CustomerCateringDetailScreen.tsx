@@ -102,6 +102,8 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
           name: m.name,
           description: m.description || "",
           price: m.price,
+          img: m.img,
+          images: Array.isArray(m.images) && m.images.length > 0 ? m.images : (m.img ? [m.img] : []),
         }));
         setMenus(mapped);
         setSelectedMenu(mapped[0]);

@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'http://127.0.0.1:5000/api';
 
 async function runE2ETest() {
   console.log('======================================================');
@@ -15,31 +15,35 @@ async function runE2ETest() {
     console.log('\n[STEP 1] Customer: Mengambil daftar produk catering aktif...');
     const productsRes = await fetch(`${API_BASE}/catering/products/active`).then(r => r.json());
     console.log(`✓ Ditemukan ${productsRes.data?.length || 0} produk aktif.`);
+    const targetProduct = productsRes.data?.find(p => (p.stock || 0) >= 10) || productsRes.data?.[0];
+    if (!targetProduct) throw new Error('Tidak ada produk catering aktif yang tersedia.');
+    const chosenProductId = targetProduct._id;
+    const chosenOwnerId = targetProduct.ownerId?._id || ownerId;
 
     // 2. Customer places a Catering Order
     console.log('\n[STEP 2] Customer: Membuat pesanan catering baru...');
     const orderPayload = {
-      ownerId,
+      ownerId: chosenOwnerId,
       customerId,
       customerName: 'Ahmad E2E Customer',
       customerPhone: '081234567890',
       address: 'Jl. Telang Raya No. 45, Kamal, Bangkalan',
-      menuName: 'Paket Catering Hemat Barokah',
-      portions: 15,
-      price: 25000,
-      totalAmount: 375000,
+      menuName: targetProduct.name || 'Paket Catering Hemat Barokah',
+      portions: 10,
+      price: targetProduct.price || 25000,
+      totalAmount: (targetProduct.price || 25000) * 10 + 17000,
       deliveryFee: 15000,
       serviceFee: 2000,
       paymentOption: 'lunas',
       paymentMethod: 'Transfer Bank (BCA)',
       paymentStatus: 'Lunas',
-      paidAmount: 392000,
+      paidAmount: (targetProduct.price || 25000) * 10 + 17000,
       remainingAmount: 0,
       cateringDate: '2026-09-09',
       cateringTime: '12:00',
       notes: 'Pedas sedang, tolong jangan terlalu asin.',
-      productId,
-      storeId: ownerId,
+      productId: chosenProductId,
+      storeId: chosenOwnerId,
     };
 
     const orderRes = await fetch(`${API_BASE}/catering/orders`, {
@@ -60,7 +64,7 @@ async function runE2ETest() {
 
     // 3. Pemilik Catering checks orders
     console.log(`\n[STEP 3] Pemilik Catering: Mengecek order masuk di dashboard dapur...`);
-    const ownerOrdersRes = await fetch(`${API_BASE}/catering/orders/owner/${ownerId}`).then(r => r.json());
+    const ownerOrdersRes = await fetch(`${API_BASE}/catering/orders/owner/${chosenOwnerId}`).then(r => r.json());
     const foundInOwner = ownerOrdersRes.data.find(o => o._id === createdOrder._id);
     if (!foundInOwner) {
       throw new Error('Pesanan tidak ditemukan di dashboard Pemilik Catering');
@@ -106,17 +110,52 @@ async function runE2ETest() {
     console.log(`✓ Driver berhasil mengambil order! Status sekarang: "${assignRes.data.status}"`);
     console.log(`  - Driver Assigned: ${assignRes.data.driverName} (${assignRes.data.driverPhone})`);
 
-    // 7. Driver delivers order through all phases
-    const driverPhases = ['Sampai Pickup', 'Diambil', 'Mengantar', 'Dikirim', 'Selesai'];
-    console.log('\n[STEP 7] Driver: Menjalankan alur pengiriman...');
-    for (const phase of driverPhases) {
-      const stepRes = await fetch(`${API_BASE}/catering/orders/${createdOrder._id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: phase })
-      }).then(r => r.json());
-      console.log(`  -> Driver update status: "${stepRes.data.status}"`);
-    }
+    // 7. Driver starts journey using Start button and completes all phases with verified notifications
+    console.log('\n[STEP 7] Driver: Menguji tombol Start Navigasi & Notifikasi Multi-Role...');
+    
+    // 7A. Driver clicks "MULAI JALAN KE TOKO" -> status "Menuju Pickup"
+    console.log('  -> [ACTION] Driver menekan tombol "MULAI JALAN KE TOKO"');
+    const stepMenuju = await fetch(`${API_BASE}/catering/orders/${createdOrder._id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'Menuju Pickup' })
+    }).then(r => r.json());
+    console.log(`     ✓ Status pesanan diperbarui ke: "${stepMenuju.data.status}"`);
+
+    const ownerNotifs1 = await fetch(`${API_BASE}/notifications/${chosenOwnerId}`).then(r => r.json());
+    const notifToOwner1 = ownerNotifs1.data?.[0];
+    console.log(`     ✓ Notifikasi Masuk ke Pemilik Toko/Dapur: "${notifToOwner1?.title}" - "${notifToOwner1?.message}"`);
+
+    // 7B. Driver arrives at store -> status "Sampai Pickup"
+    console.log('  -> [ACTION] Driver sampai di lokasi toko & mengonfirmasi tiba');
+    const stepSampai = await fetch(`${API_BASE}/catering/orders/${createdOrder._id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'Sampai Pickup' })
+    }).then(r => r.json());
+    console.log(`     ✓ Status pesanan diperbarui ke: "${stepSampai.data.status}"`);
+
+    // 7C. Driver clicks "MULAI ANTAR KE CUSTOMER" -> status "Mengantar"
+    console.log('  -> [ACTION] Driver menekan tombol "MULAI ANTAR KE CUSTOMER"');
+    const stepMengantar = await fetch(`${API_BASE}/catering/orders/${createdOrder._id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'Mengantar' })
+    }).then(r => r.json());
+    console.log(`     ✓ Status pesanan diperbarui ke: "${stepMengantar.data.status}"`);
+
+    const custNotifs = await fetch(`${API_BASE}/notifications/${customerId}`).then(r => r.json());
+    const notifToCustomer = custNotifs.data?.[0];
+    console.log(`     ✓ Notifikasi Masuk ke Customer: "${notifToCustomer?.title}" - "${notifToCustomer?.message}"`);
+
+    // 7D. Driver completes delivery -> status "Selesai"
+    console.log('  -> [ACTION] Driver menyelesaikan pengantaran');
+    const stepSelesai = await fetch(`${API_BASE}/catering/orders/${createdOrder._id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'Selesai' })
+    }).then(r => r.json());
+    console.log(`     ✓ Status pesanan diperbarui ke: "${stepSelesai.data.status}"`);
 
     // 8. Customer checks live tracking
     console.log('\n[STEP 8] Customer: Melacak status pesanan secara real-time...');

@@ -30,15 +30,17 @@ const sendChatMessage = async (req, res) => {
     let receiverId;
     if (targetReceiverId) {
       receiverId = String(targetReceiverId);
-    } else if (normalizedSender === ownerId || normalizedSender === driverId) {
-      receiverId = customerId;
+    } else if (sender === "driver") {
+      receiverId = target === "owner" ? ownerId : customerId;
+    } else if (sender === "owner") {
+      receiverId = target === "driver" && driverId ? driverId : customerId;
     } else {
       // Customer sending
       receiverId = target === "driver" && driverId ? driverId : ownerId;
     }
 
     // Determine message channel target
-    const resolvedTarget = target || (sender === "driver" ? "driver" : sender === "owner" ? "owner" : "all");
+    const resolvedTarget = target || (sender === "driver" ? "driver" : sender === "owner" ? "owner" : "customer");
 
     const message = await ChatMessage.create({
       orderId,
@@ -81,10 +83,66 @@ const sendChatMessage = async (req, res) => {
 const getChatMessages = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { target } = req.query;
+    const { target, role } = req.query;
+
+    const order =
+      (await MarketplaceOrder.findById(orderId).lean().catch(() => null)) ||
+      (await CateringOrder.findById(orderId).lean().catch(() => null)) ||
+      (await LaundryOrder.findById(orderId).lean().catch(() => null));
+
+    const customerId = order ? String(order.customerId || "") : "";
+    const ownerId = order ? String(order.ownerId || "") : "";
+    const driverId = order ? String(order.driverId || order.driverPickupId || order.driverDeliveryId || "") : "";
 
     let filter = { orderId };
-    if (target === "driver") {
+
+    if (role === "driver") {
+      if (target === "owner") {
+        filter = {
+          orderId,
+          $or: [
+            { sender: "driver", target: "owner" },
+            { sender: "owner", target: "driver" },
+            ...(ownerId ? [{ sender: "driver", receiverId: ownerId }] : []),
+            ...(driverId ? [{ sender: "owner", receiverId: driverId }] : []),
+          ],
+        };
+      } else {
+        filter = {
+          orderId,
+          $or: [
+            { sender: "driver", target: "customer" },
+            { sender: "customer", target: "driver" },
+            ...(customerId ? [{ sender: "driver", receiverId: customerId }] : []),
+            ...(driverId ? [{ sender: "customer", receiverId: driverId }] : []),
+          ],
+        };
+      }
+    } else if (role === "owner") {
+      if (target === "driver") {
+        filter = {
+          orderId,
+          $or: [
+            { sender: "owner", target: "driver" },
+            { sender: "driver", target: "owner" },
+            ...(driverId ? [{ sender: "owner", receiverId: driverId }] : []),
+            ...(ownerId ? [{ sender: "driver", receiverId: ownerId }] : []),
+          ],
+        };
+      } else {
+        filter = {
+          orderId,
+          $or: [
+            { sender: "owner", target: "customer" },
+            { sender: "customer", target: "owner" },
+            { sender: "owner", target: { $in: ["all", null, undefined] } },
+            { sender: "customer", target: { $in: ["all", null, undefined] } },
+            ...(customerId ? [{ sender: "owner", receiverId: customerId }] : []),
+            ...(ownerId ? [{ sender: "customer", receiverId: ownerId }] : []),
+          ],
+        };
+      }
+    } else if (target === "driver") {
       filter = {
         orderId,
         $or: [
@@ -99,6 +157,14 @@ const getChatMessages = async (req, res) => {
           { sender: "owner" },
           { target: "owner" },
           { target: { $exists: false }, sender: { $ne: "driver" } },
+        ],
+      };
+    } else if (target === "customer") {
+      filter = {
+        orderId,
+        $or: [
+          { sender: "customer" },
+          { target: "customer" },
         ],
       };
     }

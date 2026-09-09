@@ -415,10 +415,18 @@ export const sendChatMessage = async (
   }
 };
 
-export const getChatMessages = async (orderId: string, target?: "driver" | "owner") => {
+export const getChatMessages = async (
+  orderId: string,
+  target?: "driver" | "owner" | "customer",
+  role?: "driver" | "owner" | "customer"
+) => {
   try {
-    const url = target
-      ? getApiUrl(`/chat/messages/${orderId}?target=${target}`)
+    const params = new URLSearchParams();
+    if (target) params.append("target", target);
+    if (role) params.append("role", role);
+    const queryString = params.toString();
+    const url = queryString
+      ? getApiUrl(`/chat/messages/${orderId}?${queryString}`)
       : getApiUrl(`/chat/messages/${orderId}`);
     const res = await fetch(url);
     return await readApiJson(res);

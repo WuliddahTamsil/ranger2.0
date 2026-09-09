@@ -33,12 +33,15 @@ const getAllProducts = async (req, res) => {
 
 const createProduct = async (req, res) => {
   try {
-    const { ownerId, name, description, cat, price, stock, isActive, img } = req.body;
+    const { ownerId, name, description, cat, price, stock, isActive, img, images } = req.body;
     const owner = await validateOwner(ownerId);
     if (!owner) return res.status(403).json({ success: false, message: "Akun pemilik marketplace tidak valid" });
     if (!name?.trim() || price === undefined) {
       return res.status(400).json({ success: false, message: "Nama produk dan harga wajib diisi" });
     }
+    const imageList = Array.isArray(images) && images.length > 0 ? images : (img ? [img] : []);
+    const primaryImg = (imageList.length > 0 ? imageList[0] : img) || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop&q=80";
+
     const product = await MarketplaceProduct.create({
       ownerId: owner._id,
       name: name.trim(),
@@ -47,7 +50,8 @@ const createProduct = async (req, res) => {
       price: Number(price),
       stock: Number(stock || 0),
       isActive: isActive !== undefined ? Boolean(isActive) : true,
-      img: img || "",
+      img: primaryImg,
+      images: imageList.length > 0 ? imageList : (primaryImg ? [primaryImg] : []),
     });
     return res.status(201).json({ success: true, message: "Produk berhasil disimpan", data: product });
   } catch (error) {
@@ -58,7 +62,16 @@ const createProduct = async (req, res) => {
 
 const updateProduct = async (req, res) => {
   try {
-    const product = await MarketplaceProduct.findByIdAndUpdate(req.params.id, req.body, {
+    const updatePayload = { ...req.body };
+    if (Array.isArray(updatePayload.images) && updatePayload.images.length > 0) {
+      if (!updatePayload.img) {
+        updatePayload.img = updatePayload.images[0];
+      }
+    } else if (updatePayload.img && (!updatePayload.images || updatePayload.images.length === 0)) {
+      updatePayload.images = [updatePayload.img];
+    }
+
+    const product = await MarketplaceProduct.findByIdAndUpdate(req.params.id, updatePayload, {
       new: true,
       runValidators: true,
     });

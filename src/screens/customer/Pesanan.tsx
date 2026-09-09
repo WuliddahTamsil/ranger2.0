@@ -27,12 +27,14 @@ import {
   MessageCircle,
   ArrowLeft,
   CheckCircle2,
+  FileText,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
+import { FormalInvoiceModal, InvoiceData, InvoiceItemDetail } from "../../components/FormalInvoiceModal";
 
 interface PesananProps {
   orders: OrderItem[];
@@ -54,6 +56,8 @@ export const Pesanan: React.FC<PesananProps> = ({
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null);
   const [chatTarget, setChatTarget] = useState<{ orderId: string; participantName: string; participantType: "driver" | "merchant" } | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(null);
+  const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
 
   // Review states
   const [ratingVal, setRatingVal] = useState(5);
@@ -151,6 +155,73 @@ export const Pesanan: React.FC<PesananProps> = ({
     });
   };
 
+  const handleOpenInvoice = (order: OrderItem) => {
+    const raw = order as any;
+    const cleanId = (order.id || "").replace(/^#/, "");
+    const formattedId = cleanId.length >= 8 ? cleanId.slice(-8).toUpperCase() : cleanId.toUpperCase();
+
+    // Map items
+    let parsedItems: InvoiceItemDetail[] = [];
+    if (raw.items && Array.isArray(raw.items) && raw.items.length > 0) {
+      parsedItems = raw.items.map((i: any) => ({
+        name: i.name || i.title || order.item,
+        quantity: Number(i.quantity || i.qty) || 1,
+        price: Number(i.price) || (order.total / (Number(i.quantity || i.qty) || 1)),
+        total: (Number(i.quantity || i.qty) || 1) * (Number(i.price) || order.total),
+      }));
+    } else {
+      let qty = 1;
+      const qtyMatch = order.detail?.match(/\((\d+)x\)/);
+      if (qtyMatch) {
+        qty = parseInt(qtyMatch[1], 10);
+      }
+      const itemPrice = qty > 0 ? Math.round((order.total - (order.deliveryFee || 0) - (order.serviceFee || 0)) / qty) : order.total;
+      
+      parsedItems = [
+        {
+          name: order.item || "Pesanan The Ranger",
+          quantity: qty,
+          price: itemPrice > 0 ? itemPrice : order.total,
+          total: itemPrice > 0 ? itemPrice * qty : order.total,
+        },
+      ];
+    }
+
+    const customerAddressStr = typeof order.address === "string"
+      ? order.address
+      : order.address?.fullAddress || "Area Kampus UTM Kamal, Bangkalan";
+
+    const isCanceled = order.status.toLowerCase().includes("batal");
+
+    const invoiceData: InvoiceData = {
+      id: order.id,
+      invoiceNumber: `INV/20260909/RNG-${formattedId}`,
+      date: order.date || "09 Sep 2026",
+      time: raw.time || "14:45 WIB",
+      status: order.status,
+      orderType: order.type,
+      storeName: raw.storeName || raw.store || (order.type.toLowerCase().includes("cater") ? "Dapur Barokah Catering" : "Mitra Toko The Ranger"),
+      storeAddress: raw.storeAddress || "Jl. Raya Telang No. 45, Kamal, Bangkalan",
+      customerName: authAccount?.name || raw.customer || "Customer The Ranger",
+      customerPhone: authAccount?.phone || raw.customerPhone || "0812-3456-7890",
+      customerAddress: customerAddressStr,
+      driverName: raw.driverName || (raw.driver?.name ? raw.driver.name : "Wuwu (Kurir The Ranger)"),
+      driverVehicle: raw.driverVehicle || (raw.driver?.vehicle ? raw.driver.vehicle : "Motor"),
+      driverPlate: raw.driverPlate || (raw.driver?.plateNumber ? raw.driver.plateNumber : "M 4128 AA"),
+      items: parsedItems,
+      subtotal: raw.subtotal || (order.total - (order.deliveryFee || 5000) - (order.serviceFee || 1000) + (order.discount || 0)),
+      deliveryFee: order.deliveryFee ?? 5000,
+      serviceFee: order.serviceFee ?? 1000,
+      discount: order.discount || 0,
+      total: order.total,
+      paymentMethod: order.paymentMethod || "QRIS / Transfer Bank BCA",
+      paymentStatus: isCanceled ? "Dibatalkan" : "Lunas",
+    };
+
+    setSelectedInvoice(invoiceData);
+    setInvoiceModalVisible(true);
+  };
+
   const currentList = getFilteredOrders();
 
   return (
@@ -202,7 +273,11 @@ export const Pesanan: React.FC<PesananProps> = ({
           );
 
           return (
-            <View style={styles.orderCard}>
+            <TouchableOpacity
+              style={styles.orderCard}
+              activeOpacity={0.92}
+              onPress={() => handleOpenInvoice(item)}
+            >
               <View style={styles.cardHeader}>
                 <View style={[styles.serviceIconBg, { backgroundColor: config.bg }]}>
                   <IconComp size={20} color={config.fg} />
@@ -220,10 +295,20 @@ export const Pesanan: React.FC<PesananProps> = ({
                   </Text>
                 </View>
 
-                <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                  <Text style={[styles.statusBadgeText, { color: statusStyle.fg }]}>
-                    {item.status}
-                  </Text>
+                <View style={styles.cardHeaderRight}>
+                  <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                    <Text style={[styles.statusBadgeText, { color: statusStyle.fg }]}>
+                      {item.status}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.invoiceHintPill}
+                    onPress={() => handleOpenInvoice(item)}
+                    activeOpacity={0.7}
+                  >
+                    <FileText size={10} color="#0D7A53" />
+                    <Text style={styles.invoiceHintText}>Lihat Faktur</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -261,6 +346,15 @@ export const Pesanan: React.FC<PesananProps> = ({
                     // === TAB SELESAI (Completed Orders) ===
                     <>
                       <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnInvoice]}
+                        onPress={() => handleOpenInvoice(item)}
+                        activeOpacity={0.8}
+                      >
+                        <FileText size={13} color="#0D7A53" />
+                        <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
                         style={[styles.actionBtn, styles.actionBtnOutlineGray]}
                         onPress={() => handleOpenChat(item, "merchant")}
                       >
@@ -285,16 +379,36 @@ export const Pesanan: React.FC<PesananProps> = ({
                     </>
                   ) : item.status.toLowerCase().includes("batal") ? (
                     // === TAB DIBATALKAN (Cancelled Orders) ===
-                    <TouchableOpacity
-                      style={[styles.actionBtn, styles.actionBtnOutlineGray]}
-                      onPress={() => handleOpenChat(item, "merchant")}
-                    >
-                      <Store size={13} color="#4B5563" />
-                      <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnInvoice]}
+                        onPress={() => handleOpenInvoice(item)}
+                        activeOpacity={0.8}
+                      >
+                        <FileText size={13} color="#0D7A53" />
+                        <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnOutlineGray]}
+                        onPress={() => handleOpenChat(item, "merchant")}
+                      >
+                        <Store size={13} color="#4B5563" />
+                        <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
+                      </TouchableOpacity>
+                    </>
                   ) : (
                     // === TAB AKTIF (Active Orders in Progress) ===
                     <>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnInvoice]}
+                        onPress={() => handleOpenInvoice(item)}
+                        activeOpacity={0.8}
+                      >
+                        <FileText size={13} color="#0D7A53" />
+                        <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
+                      </TouchableOpacity>
+
                       {hasDriver ? (
                         <TouchableOpacity
                           style={[styles.actionBtn, styles.actionBtnDriver]}
@@ -324,7 +438,7 @@ export const Pesanan: React.FC<PesananProps> = ({
                   )}
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           );
         }}
         ListEmptyComponent={
@@ -704,6 +818,12 @@ export const Pesanan: React.FC<PesananProps> = ({
           }
         />
       )}
+
+      <FormalInvoiceModal
+        visible={invoiceModalVisible}
+        onClose={() => setInvoiceModalVisible(false)}
+        data={selectedInvoice}
+      />
     </SafeAreaView>
   );
 };
@@ -793,6 +913,26 @@ const styles = StyleSheet.create({
   itemDetail: {
     fontSize: 11,
     color: "#6B7280",
+  },
+  cardHeaderRight: {
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  invoiceHintPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  invoiceHintText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0D7A53",
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -970,6 +1110,21 @@ const styles = StyleSheet.create({
     color: "#16A34A",
     fontSize: 11,
     fontWeight: "700",
+  },
+  actionBtnInvoice: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  actionBtnInvoiceOutline: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#0D7A53",
+  },
+  actionBtnTextInvoice: {
+    color: "#0D7A53",
+    fontSize: 11,
+    fontWeight: "800",
   },
   emptyContainer: {
     alignItems: "center",

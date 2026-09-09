@@ -44,6 +44,8 @@ import {
   deleteCateringProduct,
   updateCateringStatus,
   getCateringOrdersForOwner,
+  getDrivers,
+  assignCateringDriver,
 } from "../../services/api";
 import { updateCachedAccount } from "../auth/authService";
 
@@ -52,6 +54,7 @@ import { Order, OrderData } from "./Order";
 import { Riwayat } from "./Riwayat";
 import { Pendapatan } from "./Pendapatan";
 import { Profile } from "./Profile";
+import { FullPageProductForm, ProductFormData } from "../../components/FullPageProductForm";
 
 interface ProductItem {
   id: number | string;
@@ -61,6 +64,7 @@ interface ProductItem {
   rating: number;
   sold: number;
   img: string;
+  images?: string[];
   cat: string;
   description: string;
   stock: number;
@@ -138,6 +142,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           rating: p.rating || 4.8,
           sold: p.sold || 0,
           img: p.img,
+          images: Array.isArray(p.images) && p.images.length > 0 ? p.images : (p.img ? [p.img] : []),
           cat: p.cat,
           description: p.description,
           stock: p.stock,
@@ -151,6 +156,21 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
 
   // 3. Global Orders State
   const [orders, setOrders] = useState<OrderData[]>([]);
+  const [drivers, setDrivers] = useState<{ id: string; name: string; phone: string; vehicleType?: string; plateNumber?: string }[]>([]);
+
+  useEffect(() => {
+    void getDrivers().then((result) => {
+      if (result.success && Array.isArray(result.data)) {
+        setDrivers(result.data.map((driver: any) => ({
+          id: driver._id,
+          name: driver.name,
+          phone: driver.phone || "",
+          vehicleType: driver.roleData?.vehicleType || "Motor",
+          plateNumber: driver.roleData?.plateNumber || "",
+        })));
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!authAccount) return;
@@ -176,6 +196,9 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             deliveryFee: o.deliveryFee || 0,
             time: new Date(o.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
             status: frontendStatus,
+            address: o.address || "Jl. Telang Indah, Kamal",
+            storeName: o.storeName || storeInfo.storeName || "Dapur Catering",
+            storeAddress: o.storeAddress || storeInfo.address || "Kamal, Bangkalan, Madura",
             driver: hasDriver ? {
               name: o.driverName || "Driver Rangers",
               vehicle: "Motor",
@@ -213,117 +236,27 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [productFormVisible, setProductFormVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
-
-  // Form states for product
-  const [prodName, setProdName] = useState("");
-  const [prodDesc, setProdDesc] = useState("");
-  const [prodCat, setProdCat] = useState("Catering Harian");
-  const [prodPrice, setProdPrice] = useState("");
-  const [prodStock, setProdStock] = useState("");
-  const [prodActive, setProdActive] = useState(true);
-  const [prodImg, setProdImg] = useState("");
+  const [showAllProducts, setShowAllProducts] = useState(false);
 
   const handleOpenProductForm = (product: ProductItem | null = null) => {
-    if (product) {
-      setEditingProduct(product);
-      setProdName(product.name);
-      setProdDesc(product.description);
-      setProdCat(product.cat);
-      setProdPrice(product.price.toString());
-      setProdStock(product.stock.toString());
-      setProdActive(product.isActive);
-      setProdImg(product.img);
-    } else {
-      setEditingProduct(null);
-      setProdName("");
-      setProdDesc("");
-      setProdCat("Catering Harian");
-      setProdPrice("");
-      setProdStock("");
-      setProdActive(true);
-      setProdImg("");
-    }
+    setEditingProduct(product);
     setProductFormVisible(true);
   };
 
-  const handlePickProductImage = async () => {
-    try {
-      if (Platform.OS !== "web") {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Izin Ditolak", "Mohon izinkan akses galeri untuk memilih foto menu catering.");
-          return;
-        }
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 0.8,
-        allowsEditing: true,
-        aspect: [4, 3],
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        setProdImg(result.assets[0].uri);
-      }
-    } catch (err) {
-      console.log("Pick product image err:", err);
-    }
-  };
-
-  const handleTakePhoto = async () => {
-    try {
-      if (Platform.OS !== "web") {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Izin Ditolak", "Mohon izinkan akses kamera untuk mengambil foto menu catering.");
-          return;
-        }
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ["images"],
-        quality: 0.8,
-        allowsEditing: true,
-        aspect: [4, 3],
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        setProdImg(result.assets[0].uri);
-      }
-    } catch (err) {
-      console.log("Camera product image err:", err);
-    }
-  };
-
-  const handleSaveProduct = async () => {
-    if (prodName.trim() === "" || prodPrice.trim() === "" || prodStock.trim() === "") {
-      showAlert("Error", "Mohon isi semua field wajib");
-      return;
-    }
-
-    const priceNum = parseInt(prodPrice);
-    const stockNum = parseInt(prodStock);
-
-    if (isNaN(priceNum) || priceNum <= 0) {
-      showAlert("Error", "Harga produk harus lebih dari 0.");
-      return;
-    }
-    if (isNaN(stockNum) || stockNum < 0) {
-      showAlert("Error", "Stok produk tidak boleh negatif.");
-      return;
-    }
-
+  const handleSaveProduct = async (formData: ProductFormData) => {
     if (!authAccount) return;
 
     if (editingProduct) {
       // Edit mode
       const updatedData = {
-        name: prodName.trim(),
-        description: prodDesc.trim(),
-        cat: prodCat,
-        price: priceNum,
-        stock: stockNum,
-        isActive: prodActive,
-        img: prodImg || editingProduct.img,
+        name: formData.name,
+        description: formData.description,
+        cat: formData.cat,
+        price: formData.price,
+        stock: formData.stock,
+        isActive: formData.isActive,
+        img: formData.img || (formData.images.length > 0 ? formData.images[0] : editingProduct.img),
+        images: formData.images,
       };
 
       const res = await updateCateringProduct(editingProduct.id, updatedData);
@@ -339,26 +272,36 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
               stock: res.data.stock,
               isActive: res.data.isActive,
               img: res.data.img,
+              images: res.data.images || updatedData.images,
             };
           }
           return p;
         });
         setProducts(updated);
         showAlert("Sukses", "Menu berhasil diperbarui");
+        setProductFormVisible(false);
+        setEditingProduct(null);
       } else {
         showAlert("Gagal", res.message || "Gagal memperbarui menu");
       }
     } else {
       // Add mode
+      const primaryImg =
+        formData.img ||
+        (formData.images.length > 0
+          ? formData.images[0]
+          : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop&q=80");
+
       const newProductData = {
         ownerId: authAccount.id,
-        name: prodName.trim(),
-        price: priceNum,
-        img: prodImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop&q=80",
-        cat: prodCat,
-        description: prodDesc.trim(),
-        stock: stockNum,
-        isActive: prodActive,
+        name: formData.name,
+        price: formData.price,
+        img: primaryImg,
+        images: formData.images.length > 0 ? formData.images : [primaryImg],
+        cat: formData.cat,
+        description: formData.description,
+        stock: formData.stock,
+        isActive: formData.isActive,
       };
 
       const res = await createCateringProduct(newProductData);
@@ -371,6 +314,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           rating: 0,
           sold: 0,
           img: res.data.img,
+          images: res.data.images || newProductData.images,
           cat: res.data.cat,
           description: res.data.description,
           stock: res.data.stock,
@@ -378,12 +322,12 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
         };
         setProducts([newProduct, ...products]);
         showAlert("Sukses", "Menu baru berhasil ditambahkan");
+        setProductFormVisible(false);
+        setEditingProduct(null);
       } else {
         showAlert("Gagal", res.message || "Gagal menambahkan menu");
       }
     }
-
-    setProductFormVisible(false);
   };
 
   const handleDeleteProduct = (productId: string | number) => {
@@ -471,7 +415,23 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
       case 0:
         return renderBerandaContent();
       case 1:
-        return <Order orders={orders} setOrders={setOrders} ownerId={authAccount?.id} />;
+        return (
+          <Order
+            orders={orders}
+            setOrders={setOrders}
+            ownerId={authAccount?.id}
+            drivers={drivers}
+            onAssignDriver={async (orderId, driverId) => {
+              const result = await assignCateringDriver(orderId, driverId);
+              if (!result.success) {
+                showAlert("Gagal", result.message || "Driver gagal ditugaskan");
+                return false;
+              }
+              showAlert("Sukses", "Driver berhasil ditugaskan untuk pesanan catering ini!");
+              return true;
+            }}
+          />
+        );
       case 2:
         return <Riwayat orders={orders} />;
       case 3:
@@ -617,11 +577,11 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
 
           <TouchableOpacity 
             style={styles.quickActionCard} 
-            onPress={() => Alert.alert("Kelola Produk", "Gunakan kartu produk di bawah untuk edit, stok, dan status.")}
+            onPress={() => setShowAllProducts((prev) => !prev)}
             activeOpacity={0.8}
           >
             <StoreIcon size={20} color="#1B7A4E" />
-            <Text style={styles.quickActionLabel}>Kelola Menu</Text>
+            <Text style={styles.quickActionLabel}>{showAllProducts ? "Ringkas Menu" : "Kelola Menu"}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -687,14 +647,27 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             <Text style={styles.sectionTitle}>Menu Catering</Text>
             <Text style={styles.sectionSubtitle}>{products.length} menu terdaftar</Text>
           </View>
-          <TouchableOpacity 
-            style={styles.addMenuBtn} 
-            onPress={() => handleOpenProductForm(null)}
-            activeOpacity={0.8}
-          >
-            <Plus size={16} color="#FFFFFF" />
-            <Text style={styles.addMenuBtnText}>Tambah Menu</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {products.length > 3 && (
+              <TouchableOpacity
+                style={styles.toggleAllBtn}
+                onPress={() => setShowAllProducts((prev) => !prev)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.toggleAllBtnText}>
+                  {showAllProducts ? "Tampilkan 3" : `Lihat Semua (${products.length})`}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={styles.addMenuBtn} 
+              onPress={() => handleOpenProductForm(null)}
+              activeOpacity={0.8}
+            >
+              <Plus size={16} color="#FFFFFF" />
+              <Text style={styles.addMenuBtnText}>Tambah Menu</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.productList}>
@@ -705,7 +678,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
               <Text style={styles.emptyProductsDesc}>Tambahkan menu pertama agar tampil di halaman customer.</Text>
             </View>
           ) : (
-            products.slice(0, 3).map((product) => {
+            (showAllProducts ? products : products.slice(0, 3)).map((product) => {
               const status = !product.isActive || product.stock === 0 
                 ? "Habis" 
                 : product.stock <= 5 
@@ -732,6 +705,12 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
                         <Text style={[styles.statusBadgeText, { color: statusColor }]}>{status}</Text>
                       </View>
                       <Text style={styles.productStock}>Stok {product.stock}</Text>
+                      {Array.isArray(product.images) && product.images.length > 1 && (
+                        <View style={styles.multiPhotoBadge}>
+                          <ImageIcon size={10} color="#6B7280" />
+                          <Text style={styles.multiPhotoText}>{product.images.length} foto</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -813,6 +792,60 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
       </ScrollView>
     );
   };
+
+  if (productFormVisible) {
+    return (
+      <FullPageProductForm
+        title={editingProduct ? "Edit Menu Catering" : "Tambah Menu Catering"}
+        subtitle={
+          editingProduct
+            ? "Perbarui informasi dan foto menu catering Anda"
+            : "Lengkapi detail menu dan tambahkan foto produk"
+        }
+        isEdit={Boolean(editingProduct)}
+        initialData={
+          editingProduct
+            ? {
+                id: editingProduct.id,
+                name: editingProduct.name,
+                description: editingProduct.description,
+                cat: editingProduct.cat,
+                price: editingProduct.price,
+                stock: editingProduct.stock,
+                isActive: editingProduct.isActive,
+                img: editingProduct.img,
+                images:
+                  Array.isArray(editingProduct.images) && editingProduct.images.length > 0
+                    ? editingProduct.images
+                    : editingProduct.img
+                    ? [editingProduct.img]
+                    : [],
+              }
+            : undefined
+        }
+        categories={["Catering Harian", "Nasi Box", "Prasmanan", "Kue & Snack", "Catering Acara"]}
+        priceLabel="Harga per Porsi (Rp)"
+        pricePlaceholder="Contoh: 25000"
+        stockLabel="Stok / Porsi Tersedia"
+        stockPlaceholder="Contoh: 20"
+        themeColor="#1B7A4E"
+        onCancel={() => {
+          setProductFormVisible(false);
+          setEditingProduct(null);
+        }}
+        onSave={handleSaveProduct}
+        onDelete={
+          editingProduct
+            ? () => {
+                handleDeleteProduct(editingProduct.id);
+                setProductFormVisible(false);
+                setEditingProduct(null);
+              }
+            : undefined
+        }
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -900,185 +933,6 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             >
               <Text style={styles.sheetBtnCloseText}>Tutup</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 2. Modal Add/Edit Product Form Sheet */}
-      <Modal visible={productFormVisible} transparent animationType="slide">
-        <View style={styles.modalBgBottom}>
-          <View style={styles.sheetContainer}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>{editingProduct ? "Edit Menu" : "Tambah Menu"}</Text>
-              <TouchableOpacity onPress={() => setProductFormVisible(false)}>
-                <X size={20} color="#111827" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Foto Menu Catering</Text>
-              
-              {prodImg ? (
-                <View style={styles.imagePreviewWrapper}>
-                  <Image source={{ uri: prodImg }} style={styles.imagePreview} resizeMode="cover" />
-                  <View style={styles.imagePreviewActions}>
-                    <TouchableOpacity 
-                      style={styles.changeImageBtn}
-                      onPress={handlePickProductImage}
-                      activeOpacity={0.8}
-                    >
-                      <ImageIcon size={14} color="#EA580C" />
-                      <Text style={styles.changeImageText}>Pilih dari Galeri</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                      style={styles.changeImageBtn}
-                      onPress={handleTakePhoto}
-                      activeOpacity={0.8}
-                    >
-                      <Camera size={14} color="#EA580C" />
-                      <Text style={styles.changeImageText}>Kamera</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                      style={styles.removeImageBtn}
-                      onPress={() => setProdImg("")}
-                      activeOpacity={0.8}
-                    >
-                      <Trash2 size={15} color="#DC2626" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.uploadOptionsCard}>
-                  <View style={styles.uploadPrompt}>
-                    <View style={[styles.uploadIconCircle, { backgroundColor: "#FFEDD5" }]}>
-                      <ImageIcon size={22} color="#EA580C" />
-                    </View>
-                    <Text style={styles.uploadPromptTitle}>Tambahkan Foto Menu Catering</Text>
-                    <Text style={styles.uploadPromptSub}>Bisa langsung ambil dari galeri HP atau kamera</Text>
-                  </View>
-                  
-                  <View style={styles.uploadButtonsRow}>
-                    <TouchableOpacity 
-                      style={[styles.pickGalleryBtn, { backgroundColor: "#EA580C" }]}
-                      onPress={handlePickProductImage}
-                      activeOpacity={0.8}
-                    >
-                      <ImageIcon size={16} color="#FFFFFF" />
-                      <Text style={styles.pickGalleryBtnText}>Buka Galeri Foto</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                      style={[styles.pickCameraBtn, { borderColor: "#EA580C" }]}
-                      onPress={handleTakePhoto}
-                      activeOpacity={0.8}
-                    >
-                      <Camera size={16} color="#EA580C" />
-                      <Text style={[styles.pickCameraBtnText, { color: "#EA580C" }]}>Kamera</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              <Text style={styles.urlInputHint}>Atau masukkan link gambar (URL):</Text>
-              <TextInput
-                style={[styles.textInput, styles.urlInput]}
-                value={prodImg}
-                onChangeText={setProdImg}
-                placeholder="https://images.unsplash.com/..."
-              />
-
-              <Text style={styles.inputLabel}>Nama Menu</Text>
-              <TextInput
-                style={styles.textInput}
-                value={prodName}
-                onChangeText={setProdName}
-                placeholder="Nama Menu Catering"
-              />
-
-              <Text style={styles.inputLabel}>Deskripsi</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                value={prodDesc}
-                onChangeText={setProdDesc}
-                placeholder="Tulis deskripsi menu..."
-                multiline
-                numberOfLines={2}
-              />
-
-              <Text style={styles.inputLabel}>Kategori</Text>
-              <View style={styles.categoriesRow}>
-                {["Catering Harian", "Nasi Box", "Prasmanan", "Kue & Snack", "Catering Acara"].map((cat) => {
-                  const selected = prodCat === cat;
-                  return (
-                    <TouchableOpacity
-                      key={cat}
-                      style={[
-                        styles.catBtn,
-                        selected ? styles.catBtnSelected : styles.catBtnUnselected,
-                      ]}
-                      onPress={() => setProdCat(cat)}
-                    >
-                      <Text
-                        style={[
-                          styles.catBtnText,
-                          selected ? styles.catBtnTextSelected : styles.catBtnTextUnselected,
-                        ]}
-                      >
-                        {cat}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.inputLabel}>Harga per Porsi (Rp)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={prodPrice}
-                onChangeText={setProdPrice}
-                placeholder="Contoh: 25000"
-                keyboardType="numeric"
-              />
-
-              <Text style={styles.inputLabel}>Stok / Porsi</Text>
-              <TextInput
-                style={styles.textInput}
-                value={prodStock}
-                onChangeText={setProdStock}
-                placeholder="Contoh: 15"
-                keyboardType="numeric"
-              />
-
-              <View style={styles.switchRow}>
-                <View style={styles.switchTextCol}>
-                  <Text style={styles.switchLabel}>Menu Tersedia</Text>
-                  <Text style={styles.switchSub}>Menu nonaktif atau stok 0 tidak dapat dipesan customer.</Text>
-                </View>
-                <Switch
-                  value={prodActive}
-                  onValueChange={setProdActive}
-                  trackColor={{ false: "#D1D5DB", true: "#E8F5EE" }}
-                  thumbColor={prodActive ? "#1B7A4E" : "#9CA3AF"}
-                />
-              </View>
-
-              <View style={styles.sheetActions}>
-                <TouchableOpacity
-                  style={[styles.sheetBtn, styles.sheetBtnOutline]}
-                  onPress={() => setProductFormVisible(false)}
-                >
-                  <Text style={styles.sheetBtnTextOutline}>Batal</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.sheetBtn, styles.sheetBtnSolid]}
-                  onPress={handleSaveProduct}
-                >
-                  <Text style={styles.sheetBtnTextSolid}>Simpan Menu</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1352,6 +1206,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 14,
   },
+  toggleAllBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  toggleAllBtnText: {
+    color: "#1B7A4E",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   addMenuBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1425,6 +1292,20 @@ const styles = StyleSheet.create({
   productStock: {
     fontSize: 12,
     color: "#6B7280",
+  },
+  multiPhotoBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 3,
+  },
+  multiPhotoText: {
+    fontSize: 10,
+    color: "#4B5563",
+    fontWeight: "600",
   },
   moreBtn: {
     padding: 6,

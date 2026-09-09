@@ -152,13 +152,17 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         phone: order.customerPhone || "",
         type: "Marketplace" as const,
         time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-        from: order.storeAddress || order.storeName || `Toko marketplace ${order.storeId || order.ownerId}`,
+        from: order.storeAddress || order.storeName || `Toko marketplace ${order.storeId || order.ownerId || "Bangkalan"}`,
         to: order.address,
         dist: "1.5 km",
         pay: order.totalAmount,
         driverShare: order.driverTip || order.deliveryFee || 5000,
         status: normalizeStatus(order.status),
         items: order.items,
+        storeName: order.storeName || "Toko Marketplace",
+        storeAddress: order.storeAddress || order.storeName || "Kuningan, Bangkalan",
+        storePhone: order.storePhone || order.merchantPhone || "",
+        ownerId: order.ownerId,
       })) : [];
 
       const catOrders: DriverOrder[] = (catRes.success && Array.isArray(catRes.data)) ? catRes.data.map((order: any) => ({
@@ -174,6 +178,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         driverShare: order.driverTip || order.deliveryFee || 8000,
         status: normalizeStatus(order.status),
         items: [{ name: `${order.menuName} (${order.portions} pax)`, quantity: order.portions, price: order.price }],
+        storeName: order.storeName || "Dapur Catering",
+        storeAddress: order.storeAddress || order.storeName || "Jl. Raya Telang No. 12, Kamal",
+        storePhone: order.storePhone || order.merchantPhone || "",
+        ownerId: order.ownerId,
       })) : [];
 
       setOrders([...mktOrders, ...catOrders]);

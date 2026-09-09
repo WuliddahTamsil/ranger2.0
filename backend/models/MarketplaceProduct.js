@@ -14,6 +14,7 @@ const marketplaceProductSchema = new mongoose.Schema(
     stock: { type: Number, required: true, min: 0, default: 0 },
     isActive: { type: Boolean, default: true },
     img: { type: String, default: "" },
+    images: { type: [String], default: [] },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     sold: { type: Number, default: 0, min: 0 },
   },

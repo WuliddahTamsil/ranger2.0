@@ -7,7 +7,7 @@ const Notification = require("../models/Notification");
 // Create product (by Pemilik Catering)
 const createProduct = async (req, res) => {
   try {
-    const { ownerId, name, description, cat, price, stock, isActive, img } = req.body;
+    const { ownerId, name, description, cat, price, stock, isActive, img, images } = req.body;
 
     if (!ownerId || !name || price === undefined) {
       return res.status(400).json({
@@ -31,6 +31,9 @@ const createProduct = async (req, res) => {
       });
     }
 
+    const imageList = Array.isArray(images) && images.length > 0 ? images : (img ? [img] : []);
+    const primaryImg = (imageList.length > 0 ? imageList[0] : img) || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop&q=80";
+
     const newProduct = await CateringProduct.create({
       ownerId,
       name: name.trim(),
@@ -39,7 +42,8 @@ const createProduct = async (req, res) => {
       price: Number(price),
       stock: stock ? Number(stock) : 0,
       isActive: isActive !== undefined ? isActive : true,
-      img: img || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop&q=80",
+      img: primaryImg,
+      images: imageList.length > 0 ? imageList : [primaryImg],
     });
 
     return res.status(201).json({
@@ -86,7 +90,16 @@ const updateProduct = async (req, res) => {
       return res.status(404).json({ success: false, message: "Menu tidak ditemukan" });
     }
 
-    const updatedProduct = await CateringProduct.findByIdAndUpdate(id, req.body, {
+    const updatePayload = { ...req.body };
+    if (Array.isArray(updatePayload.images) && updatePayload.images.length > 0) {
+      if (!updatePayload.img) {
+        updatePayload.img = updatePayload.images[0];
+      }
+    } else if (updatePayload.img && (!updatePayload.images || updatePayload.images.length === 0)) {
+      updatePayload.images = [updatePayload.img];
+    }
+
+    const updatedProduct = await CateringProduct.findByIdAndUpdate(id, updatePayload, {
       new: true,
       runValidators: true,
     });
@@ -325,14 +338,95 @@ const updateCateringOrderStatus = async (req, res) => {
     order.status = status;
     await order.save();
 
-    if (mongoose.Types.ObjectId.isValid(order.customerId)) {
-      await Notification.create({
-        userId: order.customerId,
-        title: "Status pesanan catering diperbarui",
-        message: `Pesanan ${order.orderCode} sekarang ${order.status}.`,
-        type: "order_status",
-        relatedId: order._id,
-      });
+    // Multi-role notifications based on driver journey stage
+    const driverName = order.driverName || "Kurir The Ranger";
+    const orderCode = order.orderCode || `#${String(order._id).slice(-8)}`;
+
+    if (status === "Menuju Pickup") {
+      // Notify Owner that driver is on the way to pick up
+      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
+        await Notification.create({
+          userId: order.ownerId,
+          title: "Driver Menuju Dapur",
+          message: `Driver ${driverName} sedang dalam perjalanan ke dapur Anda untuk mengambil pesanan ${orderCode}.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+      // Notify Customer that driver is heading to store
+      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+        await Notification.create({
+          userId: order.customerId,
+          title: "Driver Menuju Toko",
+          message: `Driver ${driverName} sedang menuju dapur catering untuk mengambil pesanan Anda (${orderCode}).`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+    } else if (status === "Sampai Pickup") {
+      // Notify Owner that driver arrived
+      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
+        await Notification.create({
+          userId: order.ownerId,
+          title: "Driver Telah Tiba",
+          message: `Driver ${driverName} telah sampai di lokasi dapur Anda untuk mengambil pesanan ${orderCode}.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+    } else if (status === "Mengantar") {
+      // Notify Customer that driver is on the way to delivery address
+      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+        await Notification.create({
+          userId: order.customerId,
+          title: "Pesanan Sedang Diantar!",
+          message: `Driver ${driverName} sedang dalam perjalanan mengantarkan pesanan ${orderCode} ke alamat Anda.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+      // Notify Owner that order left for delivery
+      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
+        await Notification.create({
+          userId: order.ownerId,
+          title: "Pesanan Berangkat ke Customer",
+          message: `Driver ${driverName} telah membawa pesanan ${orderCode} dan sedang mengantar ke customer.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+    } else if (status === "Selesai") {
+      // Notify Customer that order is complete
+      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+        await Notification.create({
+          userId: order.customerId,
+          title: "Pesanan Selesai Diantar",
+          message: `Pesanan catering ${orderCode} telah berhasil diantarkan oleh ${driverName}. Terima kasih!`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+      // Notify Owner that delivery is complete
+      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
+        await Notification.create({
+          userId: order.ownerId,
+          title: "Pengantaran Selesai",
+          message: `Pesanan ${orderCode} telah sukses diselesaikan oleh driver ${driverName}.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+    } else {
+      // General status notification
+      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+        await Notification.create({
+          userId: order.customerId,
+          title: "Status pesanan catering diperbarui",
+          message: `Pesanan ${orderCode} sekarang ${order.status}.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
     }
 
     req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
@@ -399,7 +493,7 @@ const assignDriver = async (req, res) => {
       {
         _id: req.params.id,
         $or: [
-          { driverId: { $in: ["", null] }, status: "Siap" },
+          { driverId: { $in: ["", null] }, status: { $in: ["Menunggu", "Diproses", "Siap"] } },
           { driverId: String(driver._id) },
         ],
       },

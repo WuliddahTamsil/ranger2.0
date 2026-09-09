@@ -40,6 +40,10 @@ const cateringProductSchema = new mongoose.Schema(
       type: String,
       default: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop&q=80",
     },
+    images: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,

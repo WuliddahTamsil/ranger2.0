@@ -97,15 +97,96 @@ const updateOrderStatus = async (req, res) => {
   try {
     const order = await MarketplaceOrder.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true, runValidators: true });
     if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
-    if (mongoose.Types.ObjectId.isValid(order.customerId)) {
-      await Notification.create({
-        userId: order.customerId,
-        title: "Status pesanan diperbarui",
-        message: `Pesanan ${order.orderCode} sekarang ${order.status}.`,
-        type: "order_status",
-        relatedId: order._id,
-      });
+    // Multi-role notifications based on driver journey stage
+    const driverName = order.driverName || "Kurir The Ranger";
+    const orderCode = order.orderCode || `#${String(order._id).slice(-8)}`;
+
+    if (order.status === "Menuju Pickup") {
+      // Notify Owner that driver is on the way to pick up
+      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
+        await Notification.create({
+          userId: order.ownerId,
+          title: "Driver Menuju Toko",
+          message: `Driver ${driverName} sedang dalam perjalanan ke toko Anda untuk mengambil pesanan ${orderCode}.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+      // Notify Customer that driver is heading to store
+      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+        await Notification.create({
+          userId: order.customerId,
+          title: "Driver Menuju Toko",
+          message: `Driver ${driverName} sedang menuju toko untuk mengambil pesanan Anda (${orderCode}).`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+    } else if (order.status === "Sampai Pickup") {
+      // Notify Owner that driver arrived
+      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
+        await Notification.create({
+          userId: order.ownerId,
+          title: "Driver Telah Tiba di Toko",
+          message: `Driver ${driverName} telah sampai di toko Anda untuk mengambil pesanan ${orderCode}.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+    } else if (order.status === "Mengantar") {
+      // Notify Customer that driver is on the way to delivery address
+      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+        await Notification.create({
+          userId: order.customerId,
+          title: "Pesanan Sedang Diantar!",
+          message: `Driver ${driverName} sedang dalam perjalanan mengantarkan pesanan ${orderCode} ke alamat Anda.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+      // Notify Owner that order left for delivery
+      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
+        await Notification.create({
+          userId: order.ownerId,
+          title: "Pesanan Berangkat ke Customer",
+          message: `Driver ${driverName} telah membawa pesanan ${orderCode} dan sedang mengantar ke customer.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+    } else if (order.status === "Selesai") {
+      // Notify Customer that order is complete
+      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+        await Notification.create({
+          userId: order.customerId,
+          title: "Pesanan Selesai Diantar",
+          message: `Pesanan marketplace ${orderCode} telah berhasil diantarkan oleh ${driverName}. Terima kasih!`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+      // Notify Owner that delivery is complete
+      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
+        await Notification.create({
+          userId: order.ownerId,
+          title: "Pengantaran Selesai",
+          message: `Pesanan ${orderCode} telah sukses diselesaikan oleh driver ${driverName}.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+    } else {
+      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+        await Notification.create({
+          userId: order.customerId,
+          title: "Status pesanan diperbarui",
+          message: `Pesanan ${orderCode} sekarang ${order.status}.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
     }
+
     req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
     req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);
     if (order.driverId) req.io?.to(`driver:${order.driverId}`).emit("order_status_updated", order);
@@ -159,7 +240,7 @@ const assignDriver = async (req, res) => {
       {
         _id: req.params.id,
         $or: [
-          { driverId: { $in: ["", null] }, status: "Siap" },
+          { driverId: { $in: ["", null] }, status: { $in: ["Menunggu", "Diproses", "Siap"] } },
           { driverId: String(driver._id) },
         ],
       },

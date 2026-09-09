@@ -56,8 +56,12 @@ export interface Product {
   rating: number;
   sold: number;
   img: string;
+  images?: string[];
   liked: boolean;
   cat: string;
+  description?: string;
+  stock?: number;
+  isActive?: boolean;
   ownerId?: string;
 }
 
