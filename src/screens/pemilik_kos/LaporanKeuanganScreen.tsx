@@ -255,6 +255,13 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
     0
   );
 
+  // Kalkulasi Piutang Sisa Perpanjangan Sewa
+  const unsettledExtensionRooms = rooms.filter(r => r.currentTenant && Number(r.currentTenant.extensionRemaining || 0) > 0);
+  const totalPiutangPerpanjangan = unsettledExtensionRooms.reduce(
+    (sum, r) => sum + Number(r.currentTenant.extensionRemaining || 0),
+    0
+  );
+
   // Kamar Terisi (okupansi)
   const occupiedRooms = rooms.filter(r => r.status === "terisi" || r.isAvailable === false);
 
@@ -523,6 +530,24 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
                 </View>
                 <Text style={[styles.breakdownItemAmount, { color: "#DC2626" }]} numberOfLines={1}>
                   Rp {totalPiutangBelumLunas.toLocaleString("id-ID")}
+                </Text>
+              </View>
+            )}
+
+            {/* Item 4: Sisa Piutang Perpanjangan Sewa */}
+            {totalPiutangPerpanjangan > 0 && (
+              <View style={styles.breakdownItemRow}>
+                <View style={styles.breakdownItemLeft}>
+                  <View style={[styles.statIconBgSmall, { backgroundColor: "#FEF3C7" }]}>
+                    <AlertTriangle size={16} color="#D97706" />
+                  </View>
+                  <View style={styles.breakdownTextCol}>
+                    <Text style={styles.breakdownItemTitle} numberOfLines={1}>Sisa Piutang Perpanjangan</Text>
+                    <Text style={styles.breakdownItemSub}>{unsettledExtensionRooms.length} penghuni kurang bayar</Text>
+                  </View>
+                </View>
+                <Text style={[styles.breakdownItemAmount, { color: "#D97706" }]} numberOfLines={1}>
+                  Rp {totalPiutangPerpanjangan.toLocaleString("id-ID")}
                 </Text>
               </View>
             )}
@@ -1178,7 +1203,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
               {(txType === "expense"
                 ? ["Listrik", "Air", "Kebersihan", "Perbaikan", "Operasional", "Lainnya"]
-                : ["Sewa Kamar", "DP Booking", "Denda", "Lainnya"]
+                : ["Sewa Kamar", "Perpanjangan Sewa", "DP Booking", "Denda", "Lainnya"]
               ).map((cat) => (
                 <TouchableOpacity
                   key={cat}

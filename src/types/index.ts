@@ -23,6 +23,7 @@ export type Screen =
   | "pemilik_kos_profil"
   | "pemilik_kos_verifikasi_dp"
   | "pemilik_kos_kirim_pengingat"
+  | "waiting_approval"
   | "admin_home";
 
 export type Role =

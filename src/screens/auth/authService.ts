@@ -50,6 +50,7 @@ export const loginWithPassword = async (email: string, password: string) => {
         address: result.data.address || "",
         profilePhoto: result.data.profilePhoto,
         status: result.data.status,
+        rejectionReason: result.data.rejectionReason,
         roleData: result.data.roleData || {},
         documents: result.data.documents || {},
         createdAt: result.data.createdAt || new Date().toISOString(),
@@ -78,48 +79,6 @@ export const loginWithPassword = async (email: string, password: string) => {
   if (!account.passwordHash) return { account: null, error: "Akun ini dibuat dengan Google. Gunakan tombol Login Google." };
   if (account.passwordHash !== await hashSecret(password)) return { account: null, error: "Password salah. Coba lagi atau gunakan Lupa Password." };
   if (account.status === "rejected") return { account: null, error: account.rejectionReason || "Pendaftaran akun ditolak. Hubungi admin." };
-
-  // Migrate an account created while the backend was offline once the API is available again.
-  if (!backendWasUnavailable) {
-    try {
-      const res = await fetch(getApiUrl("/auth/register"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: account.role,
-          name: account.name,
-          email: account.email,
-          phone: account.phone,
-          address: account.address,
-          profilePhoto: account.profilePhoto || "",
-          password,
-          roleData: account.roleData || {},
-          documents: account.documents || {},
-        }),
-      });
-      const result = await res.json();
-      if (result.success && result.data) {
-        const dbAccount: AuthAccount = {
-          id: result.data.id || result.data._id,
-          role: result.data.role,
-          name: result.data.name,
-          email: result.data.email,
-          phone: result.data.phone || "",
-          address: result.data.address || "",
-          profilePhoto: result.data.profilePhoto,
-          status: result.data.status,
-          roleData: result.data.roleData || {},
-          documents: result.data.documents || {},
-          createdAt: result.data.createdAt || account.createdAt,
-          updatedAt: result.data.updatedAt || new Date().toISOString(),
-        };
-        await saveAccounts([...accounts.filter((item) => item.email !== normalized), dbAccount]);
-        return { account: dbAccount, error: undefined };
-      }
-    } catch (migrationError) {
-      console.warn("Local account migration failed:", migrationError);
-    }
-  }
 
   return { account, error: undefined };
 };
@@ -157,40 +116,39 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
 
     const result = await res.json();
     if (!result.success && result.message) {
-      // If email already registered in MongoDB
-      if (res.status === 400) {
+      if (result.message.includes("sudah terdaftar")) {
         return { account: null, error: result.message };
       }
     }
 
     if (result.success && result.data) {
-      console.log("✅ User registered successfully to MongoDB Atlas:", result.data.email);
       const dbAccount: AuthAccount = {
         id: result.data.id || result.data._id,
         role: result.data.role,
         name: result.data.name,
         email: result.data.email,
-        phone: result.data.phone,
-        address: result.data.address,
+        phone: result.data.phone || "",
+        address: result.data.address || "",
         profilePhoto: result.data.profilePhoto,
         status: result.data.status,
+        rejectionReason: result.data.rejectionReason,
         roleData: result.data.roleData || {},
         documents: result.data.documents || {},
-        createdAt: now,
-        updatedAt: now,
+        createdAt: result.data.createdAt || now,
+        updatedAt: result.data.updatedAt || now,
       };
-
       const accounts = await loadAccounts();
-      await saveAccounts([...accounts.filter(a => a.email !== email), dbAccount]);
+      await saveAccounts([...accounts.filter((item) => item.email !== email), dbAccount]);
       return { account: dbAccount, error: undefined };
     }
   } catch (apiErr) {
-    console.warn("Backend register API error, falling back to local:", apiErr);
+    console.warn("Backend register error, fallback to local storage:", apiErr);
   }
 
   // 2. Fallback to Local Storage
   const accounts = await loadAccounts();
-  if (accounts.some((item) => item.email === email)) return { account: null, error: "Email sudah digunakan. Silakan masuk atau gunakan email lain." };
+  const exists = accounts.some((item) => item.email === email);
+  if (exists) return { account: null, error: "Email sudah terdaftar. Silakan login." };
 
   const account: AuthAccount = {
     id: `acc_${Date.now()}`,
@@ -235,6 +193,7 @@ export const loadMitraAccounts = async () => {
         address: item.address,
         profilePhoto: item.profilePhoto,
         status: item.status,
+        rejectionReason: item.rejectionReason,
         roleData: item.roleData || {},
         documents: item.documents || {},
         createdAt: item.createdAt,
@@ -284,4 +243,24 @@ export const updateAccountStatus = async (accountId: string, status: AuthAccount
     : account);
   await saveAccounts(updatedAccounts);
   return updatedAccounts.find((account) => account.id === accountId) || null;
+};
+
+export const fetchAdminStats = async () => {
+  try {
+    const res = await fetch(getApiUrl("/auth/admin/stats"));
+    return await res.json();
+  } catch (err) {
+    console.error("fetchAdminStats error:", err);
+    return { success: false, data: null };
+  }
+};
+
+export const fetchAdminTransactions = async () => {
+  try {
+    const res = await fetch(getApiUrl("/auth/admin/transactions"));
+    return await res.json();
+  } catch (err) {
+    console.error("fetchAdminTransactions error:", err);
+    return { success: false, data: [] };
+  }
 };

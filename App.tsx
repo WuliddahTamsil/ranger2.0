@@ -15,6 +15,7 @@ import { ForgotPasswordScreen } from "./src/screens/auth/ForgotPasswordScreen";
 import { DaftarMitraStep1Screen } from "./src/screens/auth/DaftarMitraStep1Screen";
 import { DaftarMitraStep2Screen } from "./src/screens/auth/DaftarMitraStep2Screen";
 import { DaftarMitraStep3Screen } from "./src/screens/auth/DaftarMitraStep3Screen";
+import { WaitingApprovalScreen } from "./src/screens/auth/WaitingApprovalScreen";
 
 // Role Screens (7 Roles)
 import { Beranda as CustomerDashboardScreen } from "./src/screens/customer/Beranda";
@@ -68,7 +69,7 @@ export default function App() {
     void restoreStoredAccount().then(({ account }) => {
       if (!active || !account) return;
       setCurrentAuthAccount(account);
-      setCurrentScreen(roleToScreen(account.role));
+      setCurrentScreen(roleToScreen(account.role, account.status));
     });
     return () => {
       active = false;
@@ -90,7 +91,7 @@ export default function App() {
     if (!result.account) return { ok: false, error: result.error };
     setCurrentAuthAccount(result.account);
     await createAuthSession(result.account);
-    navigate(roleToScreen(result.account.role));
+    navigate(roleToScreen(result.account.role, result.account.status));
     return { ok: true };
   };
 
@@ -99,7 +100,7 @@ export default function App() {
     if (result.account) {
       setCurrentAuthAccount(result.account);
       await createAuthSession(result.account);
-      navigate(roleToScreen(result.account.role));
+      navigate(roleToScreen(result.account.role, result.account.status));
       return;
     }
     setGoogleDraft(result.profile);
@@ -126,7 +127,7 @@ export default function App() {
   const startSession = async (account: AuthAccount) => {
     setCurrentAuthAccount(account);
     await createAuthSession(account);
-    navigate(roleToScreen(account.role));
+    navigate(roleToScreen(account.role, account.status));
   };
 
   const renderScreen = () => {
@@ -167,6 +168,14 @@ export default function App() {
         return <DaftarMitraStep2Screen navigate={navigate} />;
       case "daftar_mitra_step3":
         return <DaftarMitraStep3Screen navigate={navigate} />;
+      case "waiting_approval":
+        return (
+          <WaitingApprovalScreen
+            navigate={navigate}
+            authAccount={currentAuthAccount}
+            onRefreshAccount={handleUpdateAccount}
+          />
+        );
 
       // 1. Customer
       case "c_home":

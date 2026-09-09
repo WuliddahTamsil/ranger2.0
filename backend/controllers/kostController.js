@@ -502,6 +502,10 @@ const getTenantsByOwner = async (req, res) => {
           dpVerifiedAt: matchBooking?.verifiedAt || matchBooking?.updatedAt,
           customerEmail: matchBooking?.customerEmail,
           durationMonths: r.currentTenant.durationMonths || matchBooking?.durationMonths || 1,
+          extensionTotal: r.currentTenant.extensionTotal || 0,
+          extensionPaid: r.currentTenant.extensionPaid || 0,
+          extensionRemaining: r.currentTenant.extensionRemaining || 0,
+          extensionStatus: r.currentTenant.extensionStatus || "none",
         });
       }
     });
@@ -548,6 +552,10 @@ const addTenant = async (req, res) => {
       entryDate: startDate,
       dueDate: dueDate,
       durationMonths: months,
+      extensionTotal: 0,
+      extensionPaid: 0,
+      extensionRemaining: 0,
+      extensionStatus: "none",
     };
 
     await kost.save();
@@ -563,11 +571,23 @@ const addTenant = async (req, res) => {
   }
 };
 
-// Update tenant details / extend duration
+// Update tenant details / extend duration / record partial payment
 const updateTenant = async (req, res) => {
   try {
     const { ownerId, tenantId } = req.params;
-    const { name, phone, roomNumber, roomType, entryDate, priceMonthly, durationMonths } = req.body;
+    const {
+      name,
+      phone,
+      roomNumber,
+      roomType,
+      entryDate,
+      priceMonthly,
+      durationMonths,
+      extensionTotal,
+      extensionPaid,
+      extensionRemaining,
+      extensionStatus,
+    } = req.body;
 
     const kost = await findKostByOwnerOrEmail(ownerId);
     if (!kost) return res.status(404).json({ success: false, message: "Kost tidak ditemukan" });
@@ -596,6 +616,18 @@ const updateTenant = async (req, res) => {
     }
     if (roomType !== undefined) {
       room.roomType = roomType;
+    }
+    if (extensionTotal !== undefined) {
+      room.currentTenant.extensionTotal = Number(extensionTotal);
+    }
+    if (extensionPaid !== undefined) {
+      room.currentTenant.extensionPaid = Number(extensionPaid);
+    }
+    if (extensionRemaining !== undefined) {
+      room.currentTenant.extensionRemaining = Number(extensionRemaining);
+    }
+    if (extensionStatus !== undefined) {
+      room.currentTenant.extensionStatus = extensionStatus;
     }
 
     // Also sync corresponding Booking if exists

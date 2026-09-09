@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { sendMitraApprovalEmail, sendMitraRejectionEmail } = require("../services/emailService");
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || "rangers_app_secret", {
@@ -98,15 +99,12 @@ const registerUser = async (req, res) => {
           user.profilePhoto || "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80",
           "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80",
         ],
-        rooms: [],
-        bankAccount: {
-          bankName: "BCA",
-          accountNumber: "8830192831",
-          accountHolder: user.name,
-        },
-        rating: 4.9,
-        reviewCount: 12,
-        isActive: true,
+        rooms: [
+          { roomNumber: "101", type: "AC", price: 1200000, isAvailable: true, status: "tersedia" },
+          { roomNumber: "102", type: "AC", price: 1200000, isAvailable: true, status: "tersedia" },
+          { roomNumber: "103", type: "Non-AC", price: 800000, isAvailable: true, status: "tersedia" },
+          { roomNumber: "104", type: "Non-AC", price: 800000, isAvailable: true, status: "tersedia" },
+        ],
       }).catch(err => console.warn("Auto Kost creation note:", err.message));
     }
 
@@ -144,13 +142,6 @@ const loginUser = async (req, res) => {
       return res.status(404).json({ success: false, message: "Akun dengan email tersebut tidak ditemukan." });
     }
 
-    if (user.status === "rejected") {
-      return res.status(403).json({
-        success: false,
-        message: user.rejectionReason || "Pendaftaran akun Anda ditolak oleh Admin.",
-      });
-    }
-
     // Google Login check
     if (googleProfile) {
       return res.status(200).json({
@@ -165,6 +156,7 @@ const loginUser = async (req, res) => {
           address: user.address,
           profilePhoto: user.profilePhoto,
           status: user.status,
+          rejectionReason: user.rejectionReason,
           roleData: user.roleData,
           documents: user.documents,
           token: generateToken(user._id),
@@ -194,6 +186,7 @@ const loginUser = async (req, res) => {
         address: user.address,
         profilePhoto: user.profilePhoto,
         status: user.status,
+        rejectionReason: user.rejectionReason,
         roleData: user.roleData,
         documents: user.documents,
         token: generateToken(user._id),
@@ -211,8 +204,8 @@ const getMitraAccounts = async (req, res) => {
     const { role, status } = req.query;
     const filter = { role: { $ne: "customer" } };
 
-    if (role) filter.role = role;
-    if (status) filter.status = status;
+    if (role && role !== "semua") filter.role = role;
+    if (status && status !== "semua") filter.status = status;
 
     const mitras = await User.find(filter).sort({ createdAt: -1 });
     return res.status(200).json({ success: true, count: mitras.length, data: mitras });
@@ -222,7 +215,7 @@ const getMitraAccounts = async (req, res) => {
   }
 };
 
-// Admin: Update mitra status (verified/rejected)
+// Admin: Update mitra status (verified/rejected) & trigger email notification
 const updateMitraStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -235,16 +228,32 @@ const updateMitraStatus = async (req, res) => {
 
     user.status = status;
     if (status === "rejected") {
-      user.rejectionReason = rejectionReason || "Dokumen tidak memenuhi persyaratan.";
+      user.rejectionReason = rejectionReason || "Dokumen belum memenuhi persyaratan verifikasi.";
     } else {
       user.rejectionReason = undefined;
     }
 
     await user.save();
 
+    // Trigger email notification automatically in the background
+    if (status === "verified") {
+      sendMitraApprovalEmail({
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      }).catch(err => console.warn("Email approval background error:", err));
+    } else if (status === "rejected") {
+      sendMitraRejectionEmail({
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        reason: user.rejectionReason,
+      }).catch(err => console.warn("Email rejection background error:", err));
+    }
+
     return res.status(200).json({
       success: true,
-      message: `Status mitra berhasil diubah menjadi ${status}`,
+      message: `Status mitra berhasil diubah menjadi ${status}. Notifikasi email telah dikirimkan ke ${user.email}.`,
       data: user,
     });
   } catch (error) {
@@ -276,7 +285,7 @@ const updateUserProfile = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ 
         success: false, 
-        message: "Gagal: Akun ini disimpan secara lokal di browser Anda. Silakan Log Out dan Masuk menggunakan akun database (catering@test.com) untuk menguji Buka/Tutup Toko." 
+        message: "Gagal: Akun ini disimpan secara lokal di browser Anda." 
       });
     }
     const { name, phone, address, profilePhoto, roleData } = req.body;
@@ -310,19 +319,25 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
-// Admin System Stats
+// Admin System Stats (100% Real-time Live from MongoDB)
 const getSystemStats = async (req, res) => {
   try {
     const MarketplaceOrder = require("../models/MarketplaceOrder");
     const CateringOrder = require("../models/CateringOrder");
     const LaundryOrder = require("../models/LaundryOrder");
     const Booking = require("../models/Booking");
+    const Kost = require("../models/Kost");
+    const LaundryStore = require("../models/LaundryStore");
 
     const [
       totalMitra,
       totalDrivers,
       totalCustomers,
       pendingMitra,
+      approvedMitra,
+      rejectedMitra,
+      totalKostProps,
+      totalLaundryStores,
       marketplaceOrders,
       cateringOrders,
       laundryOrders,
@@ -331,11 +346,15 @@ const getSystemStats = async (req, res) => {
       User.countDocuments({ role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_laundry", "pemilik_kos"] } }),
       User.countDocuments({ role: "driver" }),
       User.countDocuments({ role: "customer" }),
-      User.countDocuments({ status: "pending", role: { $ne: "customer" } }),
-      MarketplaceOrder.find({ status: { $ne: "Dibatalkan" } }).select("totalAmount"),
-      CateringOrder.find({ status: { $ne: "Dibatalkan" } }).select("totalAmount"),
-      LaundryOrder.find({ status: { $ne: "DIBATALKAN" } }).select("totalAmount"),
-      Booking.find({ status: { $nin: ["rejected", "cancelled"] } }).select("totalAmount"),
+      User.countDocuments({ status: "pending", role: { $ne: "customer", $ne: "admin" } }),
+      User.countDocuments({ status: "verified", role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_laundry", "pemilik_kos", "driver"] } }),
+      User.countDocuments({ status: "rejected", role: { $ne: "customer", $ne: "admin" } }),
+      Kost.countDocuments(),
+      LaundryStore.countDocuments(),
+      MarketplaceOrder.find({ status: { $ne: "Dibatalkan" } }).select("totalAmount createdAt orderNumber customerName storeName"),
+      CateringOrder.find({ status: { $ne: "Dibatalkan" } }).select("totalAmount createdAt orderNumber customerName restaurantName"),
+      LaundryOrder.find({ status: { $ne: "DIBATALKAN" } }).select("totalAmount createdAt orderCode customerName storeName serviceName"),
+      Booking.find({ status: { $nin: ["rejected", "cancelled"] } }).select("totalAmount dpAmount createdAt bookingCode customerName kostName roomNumber status verifiedAt"),
     ]);
 
     const sumAmounts = (list) => list.reduce((acc, curr) => acc + (Number(curr.totalAmount) || 0), 0);
@@ -354,13 +373,99 @@ const getSystemStats = async (req, res) => {
         totalDrivers,
         totalCustomers,
         pendingMitra,
+        approvedMitra,
+        rejectedMitra,
+        totalKostProps,
+        totalLaundryStores,
         totalTransactionsAmount,
         totalOrdersCount,
+        breakdown: {
+          kost: { count: bookings.length, total: sumAmounts(bookings) },
+          laundry: { count: laundryOrders.length, total: sumAmounts(laundryOrders) },
+          catering: { count: cateringOrders.length, total: sumAmounts(cateringOrders) },
+          marketplace: { count: marketplaceOrders.length, total: sumAmounts(marketplaceOrders) },
+        },
       },
     });
   } catch (error) {
     console.error("❌ Get system stats error:", error);
     return res.status(500).json({ success: false, message: "Gagal mengambil statistik sistem", error: error.message });
+  }
+};
+
+// Admin: Get all transactions across platform
+const getAllPlatformTransactions = async (req, res) => {
+  try {
+    const MarketplaceOrder = require("../models/MarketplaceOrder");
+    const CateringOrder = require("../models/CateringOrder");
+    const LaundryOrder = require("../models/LaundryOrder");
+    const Booking = require("../models/Booking");
+
+    const [marketplaceOrders, cateringOrders, laundryOrders, bookings] = await Promise.all([
+      MarketplaceOrder.find().sort({ createdAt: -1 }).limit(30),
+      CateringOrder.find().sort({ createdAt: -1 }).limit(30),
+      LaundryOrder.find().sort({ createdAt: -1 }).limit(30),
+      Booking.find().sort({ createdAt: -1 }).limit(30),
+    ]);
+
+    const allTx = [
+      ...bookings.map(b => ({
+        id: b._id,
+        code: b.bookingCode || "BOOK-KST",
+        service: "Kost",
+        title: `Sewa Kost - ${b.kostName || "Kost"} (Kmr ${b.roomNumber || "101"})`,
+        customer: b.customerName || "Customer",
+        amount: Number(b.totalAmount || 0),
+        status: b.status,
+        date: b.createdAt,
+        type: "booking",
+      })),
+      ...laundryOrders.map(l => ({
+        id: l._id,
+        code: l.orderCode || "LND-ORD",
+        service: "Laundry",
+        title: `Laundry - ${l.storeName || "Toko Laundry"} (${l.serviceName || "Cuci"})`,
+        customer: l.customerName || "Customer",
+        amount: Number(l.totalAmount || 0),
+        status: l.status,
+        date: l.createdAt,
+        type: "laundry",
+      })),
+      ...cateringOrders.map(c => ({
+        id: c._id,
+        code: c.orderNumber || "CTR-ORD",
+        service: "Catering",
+        title: `Catering - ${c.restaurantName || "Dapur Catering"}`,
+        customer: c.customerName || "Customer",
+        amount: Number(c.totalAmount || 0),
+        status: c.status,
+        date: c.createdAt,
+        type: "catering",
+      })),
+      ...marketplaceOrders.map(m => ({
+        id: m._id,
+        code: m.orderNumber || "MKT-ORD",
+        service: "Marketplace",
+        title: `Marketplace - ${m.storeName || "Toko Mitra"}`,
+        customer: m.customerName || "Customer",
+        amount: Number(m.totalAmount || 0),
+        status: m.status,
+        date: m.createdAt,
+        type: "marketplace",
+      })),
+    ];
+
+    // Sort newest first
+    allTx.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return res.status(200).json({
+      success: true,
+      count: allTx.length,
+      data: allTx,
+    });
+  } catch (error) {
+    console.error("❌ Get all transactions error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mengambil transaksi platform", error: error.message });
   }
 };
 
@@ -372,4 +477,5 @@ module.exports = {
   getUserProfile,
   updateUserProfile,
   getSystemStats,
+  getAllPlatformTransactions,
 };

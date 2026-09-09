@@ -21,6 +21,7 @@ import {
   updateTenantInKost,
   deleteTenantFromKost,
   settleKostBooking,
+  createOwnerTransaction,
 } from "../../services/kostService";
 import {
   Search,
@@ -85,6 +86,10 @@ interface TenantData {
   dpVerifiedAt?: string;
   customerEmail?: string;
   durationMonths?: number;
+  extensionTotal?: number;
+  extensionPaid?: number;
+  extensionRemaining?: number;
+  extensionStatus?: "lunas" | "belum_lunas" | "none";
 }
 
 interface ManajemenPenghuniProps extends Nav {
@@ -113,10 +118,19 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   const [settlementProofImage, setSettlementProofImage] = useState<string | null>(null);
   const [isSubmittingSettlement, setIsSubmittingSettlement] = useState(false);
 
+  // State for Extension Settlement Modal
+  const [isExtSettlementModalOpen, setIsExtSettlementModalOpen] = useState(false);
+  const [extSettlingTenant, setExtSettlingTenant] = useState<TenantData | null>(null);
+  const [extSettlementAmount, setExtSettlementAmount] = useState("");
+  const [extSettlementMethod, setExtSettlementMethod] = useState<"transfer" | "cash">("transfer");
+  const [extSettlementNotes, setExtSettlementNotes] = useState("");
+  const [isSubmittingExtSettlement, setIsSubmittingExtSettlement] = useState(false);
+
   // State for Receipt & Payment History Modal
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [viewingReceiptTenant, setViewingReceiptTenant] = useState<TenantData | null>(null);
   const [fullImagePreviewUrl, setFullImagePreviewUrl] = useState<string | null>(null);
+  const [receiptActiveTab, setReceiptActiveTab] = useState<"semua" | "bulan_1" | "perpanjangan">("semua");
 
   // State for Add/Edit Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -131,6 +145,12 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   const [tanggalMasuk, setTanggalMasuk] = useState("10/08/26");
   const [hargaSewa, setHargaSewa] = useState("1.200.000");
   const [durasiSewa, setDurasiSewa] = useState("1");
+  const [initialDurationMonths, setInitialDurationMonths] = useState(1);
+  const [recordExtensionIncome, setRecordExtensionIncome] = useState(true);
+  const [extensionPaymentStatus, setExtensionPaymentStatus] = useState<"lunas" | "belum_lunas">("lunas");
+  const [extensionIncomeAmount, setExtensionIncomeAmount] = useState("");
+  const [extensionPaymentMethod, setExtensionPaymentMethod] = useState<"transfer" | "cash">("transfer");
+  const [extensionNotes, setExtensionNotes] = useState("");
 
   // Dropdown Picker State
   const [isTipeKamarDropdownOpen, setIsTipeKamarDropdownOpen] = useState(false);
@@ -213,7 +233,6 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
       setLoading(false);
     }
   };
-
   useEffect(() => {
     loadTenantsFromBackend();
   }, [authAccount]);
@@ -225,15 +244,18 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     const duration = tenant.durationMonths || 1;
 
     let msg = "";
-    if (duration > 1) {
+    if (tenant.extensionRemaining && tenant.extensionRemaining > 0) {
+      const kurangnya = `Rp ${tenant.extensionRemaining.toLocaleString("id-ID")}`;
+      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost* ingin menginformasikan pengingat sisa tagihan perpanjangan sewa kamar *${tenant.roomNumber}* Anda sebesar *${kurangnya}*.\n\nPembayaran dapat ditransfer ke rekening bank/QRIS pemilik kos. Jika sudah transfer, mohon kirimkan bukti pembayarannya ya Kak. Terima kasih! 🙏✨`;
+    } else if (duration > 1) {
       // Sewa > 1 bulan: Pengingat tagihan sewa bulanan / sisa periode berjalan
-      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost Exclusive* ingin menginformasikan tagihan sewa kamar *${tenant.roomNumber}* sebesar *${formattedPrice}*.\nSisa periode sewa Anda: *${tenant.daysLeft} hari lagi*.\n\nPembayaran dapat ditransfer ke rekening bank/QRIS pemilik kos. Jika sudah transfer, mohon kirimkan bukti pembayarannya ya Kak. Terima kasih! 🙏`;
+      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost* ingin menginformasikan tagihan sewa kamar *${tenant.roomNumber}* sebesar *${formattedPrice}*.\nSisa periode sewa Anda: *${tenant.daysLeft} hari lagi*.\n\nPembayaran dapat ditransfer ke rekening bank/QRIS pemilik kos. Jika sudah transfer, mohon kirimkan bukti pembayarannya ya Kak. Terima kasih! 🙏`;
     } else {
       // Sewa 1 bulan: Masa sewa akan habis, konfirmasi apakah mau memperpanjang atau checkout
-      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost Exclusive* ingin menginformasikan bahwa masa sewa kamar *${tenant.roomNumber}* Anda tersisa *${tenant.daysLeft} hari lagi*.\n\nApakah Kakak berencana untuk *memperpanjang sewa* untuk bulan berikutnya atau *selesai (checkout)* di akhir periode ini?\n\n• *Jika ingin memperpanjang*: Kakak dapat melakukan transfer sewa sebesar *${formattedPrice}* ke rekening pemilik kos dan kirim bukti transfernya ke sini.\n• *Jika selesai sewa*: Mohon konfirmasikan tanggal & jam rencana checkout Kakak agar kami dapat mempersiapkan proses serah terima kamar.\n\nTerima kasih banyak atas kerjasamanya! 🙏✨`;
+      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost* ingin menginformasikan bahwa masa sewa kamar *${tenant.roomNumber}* Anda tersisa *${tenant.daysLeft} hari lagi*.\n\nApakah Kakak berencana untuk *memperpanjang sewa* untuk bulan berikutnya atau *selesai (checkout)* di akhir periode ini?\n\n• *Jika ingin memperpanjang*: Kakak dapat melakukan transfer sewa sebesar *${formattedPrice}* ke rekening pemilik kos dan kirim bukti transfernya ke sini.\n• *Jika selesai sewa*: Mohon konfirmasikan tanggal & jam rencana checkout Kakak agar kami dapat mempersiapkan proses serah terima kamar.\n\nTerima kasih banyak atas kerjasamanya! 🙏✨`;
     }
 
-    Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
+    Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => { });
   };
 
   // Open Add Modal
@@ -247,11 +269,20 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     setTanggalMasuk("10/08/26");
     setHargaSewa("1.200.000");
     setDurasiSewa("1");
+    setInitialDurationMonths(1);
+    setRecordExtensionIncome(true);
+    setExtensionPaymentStatus("lunas");
+    setExtensionIncomeAmount("");
+    setExtensionPaymentMethod("transfer");
+    setExtensionNotes("");
     setIsAddModalOpen(true);
   };
 
   // Open Edit Modal
   const handleOpenEditModal = (t: TenantData) => {
+    const curMonths = t.durationMonths || 1;
+    const cleanPrice = (t.priceMonth || "700.000").replace("Rp ", "").replace(/\./g, "").trim();
+
     setModalMode("edit");
     setEditingTenantId(t.id);
     setNamaLengkap(t.name);
@@ -259,8 +290,14 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     setNomorKamar(t.roomNumber);
     setTipeKamar(t.roomType);
     setTanggalMasuk(t.entryDate);
-    setHargaSewa(t.priceMonth.replace("Rp ", "").replace(".", ""));
-    setDurasiSewa(String(t.durationMonths || 1));
+    setHargaSewa(cleanPrice);
+    setDurasiSewa(String(curMonths));
+    setInitialDurationMonths(curMonths);
+    setRecordExtensionIncome(true);
+    setExtensionPaymentStatus("lunas");
+    setExtensionIncomeAmount("");
+    setExtensionPaymentMethod("transfer");
+    setExtensionNotes(`Perpanjangan sewa kamar ${t.roomNumber} (${t.name})`);
     setSelectedTenantForOptions(null);
     setIsAddModalOpen(true);
   };
@@ -278,23 +315,62 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
         const now = new Date();
         const targetDueDate = new Date(now.getFullYear(), now.getMonth() + months, now.getDate());
         newDaysLeft = Math.max(0, Math.ceil((targetDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-      } catch {}
+      } catch { }
+
+      // Jika durasi diperpanjang dan pemilik memilih catat pemasukan otomatis ke keuangan
+      let extTotal = existingTenant?.extensionTotal || 0;
+      let extPaid = existingTenant?.extensionPaid || 0;
+      let extRemaining = existingTenant?.extensionRemaining || 0;
+      let extStatus: "lunas" | "belum_lunas" | "none" = existingTenant?.extensionStatus || "none";
+
+      if (months > initialDurationMonths) {
+        const monthlyNum = parseInt(hargaSewa.replace(/[^0-9]/g, "")) || 700000;
+        const diffMonths = months - initialDurationMonths;
+        extTotal = diffMonths * monthlyNum;
+
+        if (recordExtensionIncome) {
+          const rawPaid = parseInt(extensionIncomeAmount.replace(/[^0-9]/g, ""));
+          extPaid = !isNaN(rawPaid) ? rawPaid : (extensionPaymentStatus === "lunas" ? extTotal : 0);
+          extRemaining = extensionPaymentStatus === "lunas" ? 0 : Math.max(0, extTotal - extPaid);
+          extStatus = extRemaining > 0 || extensionPaymentStatus === "belum_lunas" ? "belum_lunas" : "lunas";
+
+          if (extPaid > 0) {
+            try {
+              await createOwnerTransaction({
+                title: `Perpanjangan Sewa (${extStatus === "lunas" ? "Lunas" : "Kurang Bayar"}) - ${namaLengkap} (Kmr ${nomorKamar || "1A"})`,
+                category: "Sewa Kost",
+                amount: extPaid,
+                type: "income",
+                notes: `Perpanjangan sewa +${diffMonths} bulan (${extensionPaymentMethod === "transfer" ? "Transfer" : "Tunai"})${extRemaining > 0 ? " • Kurang: Rp " + extRemaining.toLocaleString("id-ID") : ""}${extensionNotes ? " • " + extensionNotes : ""}`,
+                ownerEmail: ownerEmail,
+                date: new Date().toISOString(),
+              });
+            } catch (txErr) {
+              console.warn("Gagal simpan transaksi perpanjangan:", txErr);
+            }
+          }
+        }
+      }
 
       setTenants(
         tenants.map((t) =>
           t.id === editingTenantId
             ? {
-                ...t,
-                name: namaLengkap,
-                phone: noHp || t.phone,
-                roomNumber: nomorKamar || t.roomNumber,
-                roomType: tipeKamar,
-                entryDate: tanggalMasuk || t.entryDate,
-                priceMonth: cleanPrice,
-                durationMonths: months,
-                daysLeft: newDaysLeft,
-                status: newDaysLeft <= 10 ? "akan_keluar" : "aktif",
-              }
+              ...t,
+              name: namaLengkap,
+              phone: noHp || t.phone,
+              roomNumber: nomorKamar || t.roomNumber,
+              roomType: tipeKamar,
+              entryDate: tanggalMasuk || t.entryDate,
+              priceMonth: cleanPrice,
+              durationMonths: months,
+              daysLeft: newDaysLeft,
+              status: newDaysLeft <= 10 ? "akan_keluar" : "aktif",
+              extensionTotal: months > initialDurationMonths ? extTotal : t.extensionTotal,
+              extensionPaid: months > initialDurationMonths ? extPaid : t.extensionPaid,
+              extensionRemaining: months > initialDurationMonths ? extRemaining : t.extensionRemaining,
+              extensionStatus: months > initialDurationMonths ? extStatus : t.extensionStatus,
+            }
             : t
         )
       );
@@ -308,6 +384,10 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
           entryDate: tanggalMasuk,
           priceMonthly: hargaSewa,
           durationMonths: months,
+          extensionTotal: extTotal,
+          extensionPaid: extPaid,
+          extensionRemaining: extRemaining,
+          extensionStatus: extStatus,
         });
       } catch (e) {
         console.log("Offline update tenant:", e);
@@ -325,6 +405,10 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
         daysLeft: months * 30,
         priceMonth: cleanPrice,
         durationMonths: months,
+        extensionTotal: 0,
+        extensionPaid: 0,
+        extensionRemaining: 0,
+        extensionStatus: "none",
       };
       setTenants([newTenant, ...tenants]);
       try {
@@ -340,6 +424,69 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
       }
     }
     setIsAddModalOpen(false);
+  };
+
+  // Extension Settlement Handlers
+  const handleOpenExtSettlementModal = (tenant: TenantData) => {
+    setSelectedTenantForOptions(null);
+    setExtSettlingTenant(tenant);
+    setExtSettlementAmount(String(tenant.extensionRemaining || 0));
+    setExtSettlementMethod("transfer");
+    setExtSettlementNotes(`Pelunasan sisa sewa perpanjangan kamar ${tenant.roomNumber} (${tenant.name})`);
+    setIsExtSettlementModalOpen(true);
+  };
+
+  const handleConfirmExtSettlement = async () => {
+    if (!extSettlingTenant) return;
+    setIsSubmittingExtSettlement(true);
+    const amountNum = parseInt(extSettlementAmount.replace(/[^0-9]/g, "")) || extSettlingTenant.extensionRemaining || 0;
+
+    try {
+      if (amountNum > 0) {
+        await createOwnerTransaction({
+          title: `Pelunasan Sisa Perpanjangan - ${extSettlingTenant.name} (Kmr ${extSettlingTenant.roomNumber})`,
+          category: "Sewa Kost",
+          amount: amountNum,
+          type: "income",
+          notes: `Pelunasan sisa sewa perpanjangan (${extSettlementMethod === "transfer" ? "Transfer" : "Tunai"})${extSettlementNotes ? " • " + extSettlementNotes : ""}`,
+          ownerEmail: ownerEmail,
+          date: new Date().toISOString(),
+        });
+      }
+
+      const prevPaid = extSettlingTenant.extensionPaid || 0;
+      const prevRemaining = extSettlingTenant.extensionRemaining || 0;
+      const newPaid = prevPaid + amountNum;
+      const newRemaining = Math.max(0, prevRemaining - amountNum);
+      const newStatus = newRemaining === 0 ? "lunas" : "belum_lunas";
+
+      setTenants((prev) =>
+        prev.map((t) =>
+          t.id === extSettlingTenant.id
+            ? {
+              ...t,
+              extensionPaid: newPaid,
+              extensionRemaining: newRemaining,
+              extensionStatus: newStatus,
+            }
+            : t
+        )
+      );
+
+      await updateTenantInKost(ownerEmail, extSettlingTenant.id, {
+        extensionPaid: newPaid,
+        extensionRemaining: newRemaining,
+        extensionStatus: newStatus,
+      });
+
+      setIsExtSettlementModalOpen(false);
+      await loadTenantsFromBackend();
+    } catch (err) {
+      console.error("Extension settlement error:", err);
+      setIsExtSettlementModalOpen(false);
+    } finally {
+      setIsSubmittingExtSettlement(false);
+    }
   };
 
   // Delete Tenant
@@ -404,14 +551,14 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
         prev.map((t) =>
           t.id === settlingTenant.id
             ? {
-                ...t,
-                isSettled: true,
-                settledAmount: amountNum,
-                remainingAmount: 0,
-                settlementMethod: settlementMethod,
-                settledAt: new Date().toISOString(),
-                settlementProofImage: settlementProofImage || undefined,
-              }
+              ...t,
+              isSettled: true,
+              settledAmount: amountNum,
+              remainingAmount: 0,
+              settlementMethod: settlementMethod,
+              settledAt: new Date().toISOString(),
+              settlementProofImage: settlementProofImage || undefined,
+            }
             : t
         )
       );
@@ -423,12 +570,12 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
         prev.map((t) =>
           t.id === settlingTenant.id
             ? {
-                ...t,
-                isSettled: true,
-                remainingAmount: 0,
-                settlementMethod: settlementMethod,
-                settlementProofImage: settlementProofImage || undefined,
-              }
+              ...t,
+              isSettled: true,
+              remainingAmount: 0,
+              settlementMethod: settlementMethod,
+              settlementProofImage: settlementProofImage || undefined,
+            }
             : t
         )
       );
@@ -445,22 +592,21 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   const aktifPercentage = totalPenghuni > 0 ? Math.round((aktifCount / totalPenghuni) * 100) : 0;
   const akanKeluarPercentage = totalPenghuni > 0 ? Math.round((akanKeluarCount / totalPenghuni) * 100) : 0;
 
-  // Real Cash In & Pending Check-in Settlement
+  // Real Cash In & Pending Settlement (Termasuk Check-in & Perpanjangan)
   const totalReceivedCash = tenants.reduce((acc, t) => {
     const total = t.totalAmount || parseInt((t.priceMonth || "").replace(/[^0-9]/g, "")) || 0;
     const dp = t.dpAmount !== undefined ? t.dpAmount : Math.round(total * 0.2);
-    if (t.isSettled) {
-      return acc + (t.settledAmount ? (dp + t.settledAmount) : total);
-    }
-    return acc + dp;
+    const checkInPaid = t.isSettled ? (t.settledAmount ? (dp + t.settledAmount) : total) : dp;
+    const extPaid = Number(t.extensionPaid || 0);
+    return acc + checkInPaid + extPaid;
   }, 0);
 
   const totalPendingSettlement = tenants.reduce((acc, t) => {
-    if (t.isSettled) return acc;
     const total = t.totalAmount || parseInt((t.priceMonth || "").replace(/[^0-9]/g, "")) || 0;
     const dp = t.dpAmount !== undefined ? t.dpAmount : Math.round(total * 0.2);
-    const rem = t.remainingAmount !== undefined ? t.remainingAmount : (total - dp);
-    return acc + rem;
+    const checkInRemaining = t.isSettled ? 0 : (t.remainingAmount !== undefined ? t.remainingAmount : (total - dp));
+    const extRemaining = Number(t.extensionRemaining || 0);
+    return acc + checkInRemaining + extRemaining;
   }, 0);
 
   // Filtered Tenant List
@@ -654,12 +800,77 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
                   </View>
                 </View>
 
-                {/* Settlement Status Banner / Action */}
-                {t.isSettled ? (
+                {/* Status Banner Dinamis Ter-update: Hanya tampilkan 1 status paling relevan & mutakhir */}
+                {t.extensionRemaining && t.extensionRemaining > 0 ? (
+                  // 1. Kasus Perpanjangan Belum Lunas (Prioritas Utama: Hanya status belum lunas perpanjangan yang muncul)
+                  <View style={styles.extDebtBanner}>
+                    <View style={styles.extDebtTopRow}>
+                      <View style={styles.extDebtBadge}>
+                        <AlertCircle size={13} color="#D97706" />
+                        <Text style={styles.extDebtBadgeText}>Belum Lunas Perpanjangan</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.extViewProofLink}
+                        onPress={() => {
+                          setViewingReceiptTenant(t);
+                          setReceiptActiveTab("perpanjangan");
+                          setIsReceiptModalOpen(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.extViewProofLinkText}>Lihat Bukti</Text>
+                        <ChevronRight size={12} color="#D97706" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.extDebtAmountRow}>
+                      <Text style={styles.extDebtPaidSub}>
+                        Dibayar: Rp {(t.extensionPaid || 0).toLocaleString("id-ID")}
+                      </Text>
+                      <Text style={styles.extDebtBreakdownText}>
+                        Kurang: Rp {t.extensionRemaining.toLocaleString("id-ID")}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.btnPayExtDebt}
+                      onPress={() => handleOpenExtSettlementModal(t)}
+                      activeOpacity={0.85}
+                    >
+                      <Banknote size={14} color="#FFFFFF" />
+                      <Text style={styles.btnPayExtDebtText}>Input Pelunasan Sisa Perpanjangan</Text>
+                      <ChevronRight size={14} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (t.durationMonths || 1) > 1 && (t.extensionStatus === "lunas" || t.isSettled) ? (
+                  // 2. Kasus Perpanjangan Lunas
                   <TouchableOpacity
                     style={styles.settlementBannerSuccess}
                     onPress={() => {
                       setViewingReceiptTenant(t);
+                      setReceiptActiveTab("semua");
+                      setIsReceiptModalOpen(true);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.settlementBannerLeft}>
+                      <CheckCircle2 size={15} color="#0D7A53" />
+                      <Text style={styles.settlementBannerSuccessText}>
+                        Lunas Perpanjangan ({t.durationMonths} Bln) • {t.settlementMethod === "cash" ? "Tunai (Cash)" : "Transfer Bank"}
+                      </Text>
+                    </View>
+                    <View style={styles.settlementBannerRightLink}>
+                      <Text style={styles.settlementBannerSuccessDate}>
+                        Lihat Bukti
+                      </Text>
+                      <ChevronRight size={13} color="#0D7A53" />
+                    </View>
+                  </TouchableOpacity>
+                ) : t.isSettled ? (
+                  // 3. Kasus Check-in Lunas (Bulan ke-1)
+                  <TouchableOpacity
+                    style={styles.settlementBannerSuccess}
+                    onPress={() => {
+                      setViewingReceiptTenant(t);
+                      setReceiptActiveTab("semua");
                       setIsReceiptModalOpen(true);
                     }}
                     activeOpacity={0.75}
@@ -678,6 +889,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
                     </View>
                   </TouchableOpacity>
                 ) : (
+                  // 4. Kasus Check-in Belum Lunas (Sisa DP)
                   <View style={styles.settlementBannerPending}>
                     <View style={styles.settlementBannerTopRow}>
                       <View style={styles.settlementPendingBadge}>
@@ -990,6 +1202,165 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
                 </View>
               </View>
 
+              {/* Extension Finance Section when duration is extended */}
+              {modalMode === "edit" && (parseInt(durasiSewa) || 1) > initialDurationMonths && (() => {
+                const diffMonths = (parseInt(durasiSewa) || 1) - initialDurationMonths;
+                const monthlyNum = parseInt(hargaSewa.replace(/[^0-9]/g, "")) || 700000;
+                const totalCost = diffMonths * monthlyNum;
+                const rawPaid = parseInt(extensionIncomeAmount.replace(/[^0-9]/g, ""));
+                const paidNum = !isNaN(rawPaid) ? rawPaid : (extensionPaymentStatus === "lunas" ? totalCost : 0);
+                const remainingDebt = Math.max(0, totalCost - paidNum);
+
+                return (
+                  <View style={styles.extensionFinanceCard}>
+                    <View style={styles.extensionFinanceHeader}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <CheckCircle2 size={16} color="#0D7A53" />
+                        <Text style={styles.extensionFinanceTitle}>
+                          Perpanjangan Sewa (+{diffMonths} Bulan)
+                        </Text>
+                      </View>
+                      <Text style={styles.extensionFinanceBadge}>Keuangan</Text>
+                    </View>
+
+                    <View style={styles.extensionCalcRow}>
+                      <Text style={styles.extensionCalcLabel}>Total Biaya Perpanjangan:</Text>
+                      <Text style={styles.extensionCalcAmount}>
+                        Rp {totalCost.toLocaleString("id-ID")}
+                      </Text>
+                    </View>
+
+                    {/* Status Pembayaran Options: Lunas vs Belum Lunas */}
+                    <Text style={[styles.subLabel, { marginTop: 4 }]}>Status Pembayaran Perpanjangan</Text>
+                    <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+                      <TouchableOpacity
+                        style={[
+                          styles.extStatusBtn,
+                          extensionPaymentStatus === "lunas" && styles.extStatusBtnLunasActive,
+                        ]}
+                        onPress={() => {
+                          setExtensionPaymentStatus("lunas");
+                          setExtensionIncomeAmount(totalCost.toString());
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <CheckCircle2 size={14} color={extensionPaymentStatus === "lunas" ? "#0D7A53" : "#6B7280"} />
+                        <Text style={[styles.extStatusBtnText, extensionPaymentStatus === "lunas" && styles.extStatusBtnLunasTextActive]}>
+                          Lunas Penuh
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.extStatusBtn,
+                          extensionPaymentStatus === "belum_lunas" && styles.extStatusBtnDebtActive,
+                        ]}
+                        onPress={() => {
+                          setExtensionPaymentStatus("belum_lunas");
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <AlertCircle size={14} color={extensionPaymentStatus === "belum_lunas" ? "#D97706" : "#6B7280"} />
+                        <Text style={[styles.extStatusBtnText, extensionPaymentStatus === "belum_lunas" && styles.extStatusBtnDebtTextActive]}>
+                          Belum Lunas / Kurang
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.extensionCheckboxRow}
+                      onPress={() => setRecordExtensionIncome(!recordExtensionIncome)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.customCheckbox, recordExtensionIncome && styles.customCheckboxActive]}>
+                        {recordExtensionIncome && <CheckSquare size={14} color="#FFFFFF" />}
+                      </View>
+                      <Text style={styles.extensionCheckboxText}>
+                        Catat uang masuk ke Laporan Keuangan
+                      </Text>
+                    </TouchableOpacity>
+
+                    {recordExtensionIncome && (
+                      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#DCFCE7" }}>
+                        <Text style={styles.subLabel}>Nominal Uang Masuk yang Diterima (Rp)</Text>
+                        <TextInput
+                          style={styles.miniInput}
+                          value={extensionIncomeAmount}
+                          onChangeText={(val) => {
+                            const clean = val.replace(/[^0-9]/g, "");
+                            setExtensionIncomeAmount(clean);
+                            const num = parseInt(clean) || 0;
+                            if (num < totalCost) {
+                              setExtensionPaymentStatus("belum_lunas");
+                            } else {
+                              setExtensionPaymentStatus("lunas");
+                            }
+                          }}
+                          placeholder={`Cth: ${totalCost.toLocaleString("id-ID")}`}
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="numeric"
+                        />
+
+                        {/* Shortfall Debt Warning Box */}
+                        {remainingDebt > 0 && (
+                          <View style={styles.shortfallWarningBox}>
+                            <AlertCircle size={15} color="#D97706" />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.shortfallWarningTitle}>
+                                Sisa Kurang Bayar: Rp {remainingDebt.toLocaleString("id-ID")}
+                              </Text>
+                              <Text style={styles.shortfallWarningSub}>
+                                Kekurangan akan dicatat sebagai piutang perpanjangan penghuni & masuk di laporan keuangan.
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+
+                        <Text style={[styles.subLabel, { marginTop: 8 }]}>Metode Pembayaran</Text>
+                        <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+                          <TouchableOpacity
+                            style={[
+                              styles.methodChip,
+                              extensionPaymentMethod === "transfer" && styles.methodChipActive,
+                            ]}
+                            onPress={() => setExtensionPaymentMethod("transfer")}
+                            activeOpacity={0.7}
+                          >
+                            <CreditCard size={14} color={extensionPaymentMethod === "transfer" ? "#0D7A53" : "#6B7280"} />
+                            <Text style={[styles.methodChipText, extensionPaymentMethod === "transfer" && styles.methodChipTextActive]}>
+                              Transfer Bank / QRIS
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.methodChip,
+                              extensionPaymentMethod === "cash" && styles.methodChipActive,
+                            ]}
+                            onPress={() => setExtensionPaymentMethod("cash")}
+                            activeOpacity={0.7}
+                          >
+                            <Banknote size={14} color={extensionPaymentMethod === "cash" ? "#0D7A53" : "#6B7280"} />
+                            <Text style={[styles.methodChipText, extensionPaymentMethod === "cash" && styles.methodChipTextActive]}>
+                              Tunai / Cash
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <Text style={[styles.subLabel, { marginTop: 8 }]}>Catatan Pemasukan (Opsional)</Text>
+                        <TextInput
+                          style={[styles.miniInput, { height: 38 }]}
+                          value={extensionNotes}
+                          onChangeText={setExtensionNotes}
+                          placeholder="Cth: Diterima sebagian via m-banking"
+                          placeholderTextColor="#9CA3AF"
+                        />
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
+
               {/* Submit Button */}
               <TouchableOpacity
                 style={styles.btnPrimary}
@@ -1020,6 +1391,32 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
             </Text>
 
             <View style={styles.optionsList}>
+              {/* Option: Pelunasan Sisa Perpanjangan Sewa (jika ada piutang perpanjangan) */}
+              {selectedTenantForOptions?.extensionRemaining && selectedTenantForOptions.extensionRemaining > 0 ? (
+                <TouchableOpacity
+                  style={styles.optionRow}
+                  onPress={() => {
+                    if (selectedTenantForOptions) {
+                      handleOpenExtSettlementModal(selectedTenantForOptions);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.optionIconBg, { backgroundColor: "#FEF3C7" }]}>
+                    <Banknote size={18} color="#D97706" />
+                  </View>
+                  <View style={styles.optionTextCol}>
+                    <Text style={[styles.optionItemTitle, { color: "#D97706" }]}>
+                      Pelunasan Sisa Perpanjangan
+                    </Text>
+                    <Text style={styles.optionItemSub}>
+                      Kurang Rp {selectedTenantForOptions.extensionRemaining.toLocaleString("id-ID")} • Input pelunasan
+                    </Text>
+                  </View>
+                  <ChevronRight size={16} color="#9CA3AF" />
+                </TouchableOpacity>
+              ) : null}
+
               {selectedTenantForOptions?.isSettled ? (
                 <TouchableOpacity
                   style={styles.optionRow}
@@ -1111,8 +1508,8 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
                   <Trash2 size={18} color="#EF4444" />
                 </View>
                 <View style={styles.optionTextCol}>
-                  <Text style={styles.optionItemTitle}>Keluarkan Penghuni</Text>
-                  <Text style={styles.optionItemSub}>Hapus penghuni ini dari kos Anda</Text>
+                  <Text style={[styles.optionItemTitle, { color: "#EF4444" }]}>Hapus Penghuni</Text>
+                  <Text style={styles.optionItemSub}>Keluarkan penghuni & kosongkan kamar</Text>
                 </View>
                 <ChevronRight size={16} color="#9CA3AF" />
               </TouchableOpacity>
@@ -1453,6 +1850,168 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
         </View>
       </Modal>
 
+      {/* MODAL: Pelunasan Sisa Perpanjangan Sewa */}
+      <Modal visible={isExtSettlementModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.addModalCard}>
+            <View style={styles.dragHandle} />
+
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Pelunasan Sisa Perpanjangan</Text>
+                <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
+                  Input pelunasan kekurangan pembayaran sewa perpanjangan
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={() => setIsExtSettlementModalOpen(false)}
+                activeOpacity={0.7}
+              >
+                <X size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              {extSettlingTenant && (
+                <View style={[styles.settleTenantBanner, { borderColor: "#FDE68A", backgroundColor: "#FFFBEB" }]}>
+                  <View style={styles.settleTenantHeader}>
+                    <Image source={{ uri: extSettlingTenant.avatar }} style={styles.settleAvatar} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.settleTenantName}>{extSettlingTenant.name}</Text>
+                      <Text style={styles.settleTenantRoom}>
+                        {extSettlingTenant.roomNumber} • {extSettlingTenant.roomType}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.settlePriceDivider, { backgroundColor: "#FDE68A" }]} />
+
+                  <View style={styles.settlePriceRow}>
+                    <Text style={styles.settlePriceLabel}>Total Biaya Perpanjangan</Text>
+                    <Text style={styles.settlePriceVal}>
+                      Rp {(extSettlingTenant.extensionTotal || 0).toLocaleString("id-ID")}
+                    </Text>
+                  </View>
+
+                  <View style={styles.settlePriceRow}>
+                    <Text style={[styles.settlePriceLabel, { color: "#0D7A53" }]}>Sudah Dibayar Sebelumnya</Text>
+                    <Text style={[styles.settlePriceVal, { color: "#0D7A53" }]}>
+                      Rp {(extSettlingTenant.extensionPaid || 0).toLocaleString("id-ID")}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.settlePriceRow, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "#FDE68A" }]}>
+                    <Text style={[styles.settlePriceLabel, { fontWeight: "700", color: "#111827" }]}>
+                      Sisa Tagihan Kurang Bayar
+                    </Text>
+                    <Text style={[styles.settlePriceVal, { fontWeight: "800", color: "#DC2626", fontSize: 15 }]}>
+                      Rp {(extSettlingTenant.extensionRemaining || 0).toLocaleString("id-ID")}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Payment Method Selector (Transfer vs Cash) */}
+              <Text style={[styles.label, { marginTop: 14 }]}>Metode Pembayaran</Text>
+              <View style={styles.methodChoiceRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.methodChoiceCard,
+                    extSettlementMethod === "transfer" && styles.methodChoiceCardActive,
+                  ]}
+                  onPress={() => setExtSettlementMethod("transfer")}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.methodIconWrap, extSettlementMethod === "transfer" && styles.methodIconWrapActive]}>
+                    <CreditCard size={15} color={extSettlementMethod === "transfer" ? "#0D7A53" : "#6B7280"} />
+                  </View>
+                  <View style={styles.methodTextCol}>
+                    <Text style={[styles.methodChoiceTitle, extSettlementMethod === "transfer" && styles.methodChoiceTitleActive]}>
+                      Transfer Bank / QRIS
+                    </Text>
+                    <Text style={styles.methodChoiceSub}>Via m-banking / QRIS</Text>
+                  </View>
+                  {extSettlementMethod === "transfer" && (
+                    <View style={styles.methodSelectedCheck}>
+                      <Check size={9} color="#FFFFFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.methodChoiceCard,
+                    extSettlementMethod === "cash" && styles.methodChoiceCardActive,
+                  ]}
+                  onPress={() => setExtSettlementMethod("cash")}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.methodIconWrap, extSettlementMethod === "cash" && styles.methodIconWrapActive]}>
+                    <Banknote size={15} color={extSettlementMethod === "cash" ? "#0D7A53" : "#6B7280"} />
+                  </View>
+                  <View style={styles.methodTextCol}>
+                    <Text style={[styles.methodChoiceTitle, extSettlementMethod === "cash" && styles.methodChoiceTitleActive]}>
+                      Tunai / Cash Langsung
+                    </Text>
+                    <Text style={styles.methodChoiceSub}>Diterima tunai</Text>
+                  </View>
+                  {extSettlementMethod === "cash" && (
+                    <View style={styles.methodSelectedCheck}>
+                      <Check size={9} color="#FFFFFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Amount Input */}
+              <Text style={[styles.label, { marginTop: 12 }]}>Nominal Pembayaran Pelunasan (Rp)</Text>
+              <View style={styles.amountInputWrap}>
+                <Text style={styles.amountPrefix}>Rp</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={extSettlementAmount}
+                  onChangeText={(val) => setExtSettlementAmount(val.replace(/[^0-9]/g, ""))}
+                  placeholder={String(extSettlingTenant?.extensionRemaining || 0)}
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              {/* Notes */}
+              <Text style={[styles.label, { marginTop: 12 }]}>Catatan Pelunasan (Opsional)</Text>
+              <TextInput
+                style={[styles.input, { height: 52, textAlignVertical: "top", paddingTop: 8 }]}
+                value={extSettlementNotes}
+                onChangeText={setExtSettlementNotes}
+                placeholder="Cth: Pelunasan sisa sewa bulan ke-2 via transfer"
+                placeholderTextColor="#9CA3AF"
+                multiline
+              />
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={[styles.btnConfirmSettlement, { backgroundColor: "#D97706" }, isSubmittingExtSettlement && { opacity: 0.7 }]}
+                onPress={handleConfirmExtSettlement}
+                disabled={isSubmittingExtSettlement}
+                activeOpacity={0.85}
+              >
+                {isSubmittingExtSettlement ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <View style={styles.btnConfirmContent}>
+                    <CheckCircle2 size={16} color="#FFFFFF" />
+                    <Text style={styles.btnConfirmText} numberOfLines={1}>
+                      Simpan Pelunasan Perpanjangan
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* MODAL 5: Riwayat & Bukti Pembayaran Modal */}
       <Modal visible={isReceiptModalOpen} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -1463,7 +2022,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Riwayat & Bukti Pembayaran</Text>
                 <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
-                  Kwitansi resmi pelunasan sewa kamar
+                  Kwitansi resmi & pelacakan bukti per periode sewa
                 </Text>
               </View>
               <TouchableOpacity
@@ -1476,206 +2035,367 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              {viewingReceiptTenant && (
-                <>
-                  {/* Status Banner */}
-                  <View style={styles.receiptTopStatusCard}>
-                    <View style={styles.receiptStatusBadgeRow}>
-                      <View style={styles.receiptStatusBadgeGreen}>
-                        <CheckCircle2 size={13} color="#0D7A53" />
-                        <Text style={styles.receiptStatusBadgeGreenText}>LUNAS CHECK-IN (100%)</Text>
-                      </View>
-                      <Text style={styles.receiptBookingCode}>
-                        {viewingReceiptTenant.bookingCode ? `#${viewingReceiptTenant.bookingCode}` : "#BOOK-KST"}
-                      </Text>
-                    </View>
+              {viewingReceiptTenant && (() => {
+                const hasExtDebt = (viewingReceiptTenant.extensionRemaining || 0) > 0;
+                const durMonths = viewingReceiptTenant.durationMonths || 1;
+                const monthlyNum = parseInt((viewingReceiptTenant.priceMonth || "").replace(/[^0-9]/g, "")) || 700000;
+                const totalCostAll = durMonths * monthlyNum;
+                const hasExtension = durMonths > 1 || viewingReceiptTenant.extensionTotal;
 
-                    <Text style={styles.receiptTotalLabel}>Total Nilai Sewa</Text>
-                    <Text style={styles.receiptTotalAmount}>
-                      Rp {(viewingReceiptTenant.totalAmount || parseInt((viewingReceiptTenant.priceMonth || "").replace(/[^0-9]/g, "")) || 700000).toLocaleString("id-ID")}
-                    </Text>
-
-                    <View style={styles.receiptTenantInfoRow}>
-                      <Image source={{ uri: viewingReceiptTenant.avatar }} style={styles.receiptAvatar} />
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={styles.receiptTenantName}>{viewingReceiptTenant.name}</Text>
-                        <Text style={styles.receiptTenantSub}>
-                          Kamar {viewingReceiptTenant.roomNumber} • {viewingReceiptTenant.roomType}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: "flex-end" }}>
-                        <Text style={{ fontSize: 11, color: "#6B7280" }}>Tanggal Masuk</Text>
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#111827" }}>
-                          {viewingReceiptTenant.entryDate}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Section Title */}
-                  <Text style={[styles.label, { marginTop: 16, marginBottom: 8 }]}>Rincian Tahapan Pembayaran</Text>
-
-                  {/* Stage 1: DP 20% */}
-                  <View style={styles.paymentStageCard}>
-                    <View style={styles.paymentStageHeader}>
-                      <View style={[styles.paymentStageStepBg, { backgroundColor: "#FEF3C7" }]}>
-                        <Text style={[styles.paymentStageStepText, { color: "#D97706" }]}>1</Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                          <Text style={styles.paymentStageTitle}>Pembayaran DP (20%)</Text>
-                          <View style={styles.verifiedMiniPill}>
-                            <CheckCircle2 size={11} color="#0D7A53" />
-                            <Text style={styles.verifiedMiniPillText}>Terverifikasi</Text>
+                return (
+                  <>
+                    {/* Status Top Banner */}
+                    <View style={[styles.receiptTopStatusCard, hasExtDebt && { borderColor: "#FDE68A", backgroundColor: "#FFFBEB" }]}>
+                      <View style={styles.receiptStatusBadgeRow}>
+                        {hasExtDebt ? (
+                          <View style={styles.receiptStatusBadgeAmber}>
+                            <AlertCircle size={13} color="#D97706" />
+                            <Text style={styles.receiptStatusBadgeAmberText}>
+                              BELUM LUNAS PERPANJANGAN
+                            </Text>
                           </View>
-                        </View>
-                        <Text style={styles.paymentStageSub}>Dibayar customer saat pemesanan kamar</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.stageAmountRow}>
-                      <Text style={styles.stageAmountLabel}>Nominal DP</Text>
-                      <Text style={[styles.stageAmountVal, { color: "#D97706" }]}>
-                        Rp {(viewingReceiptTenant.dpAmount !== undefined ? viewingReceiptTenant.dpAmount : Math.round((viewingReceiptTenant.totalAmount || 700000) * 0.2)).toLocaleString("id-ID")}
-                      </Text>
-                    </View>
-
-                    <View style={styles.stageMetaRow}>
-                      <Text style={styles.stageMetaLabel}>Metode Transaksi</Text>
-                      <Text style={styles.stageMetaVal}>Transfer Bank (Online)</Text>
-                    </View>
-
-                    {viewingReceiptTenant.dpPaidAt && (
-                      <View style={styles.stageMetaRow}>
-                        <Text style={styles.stageMetaLabel}>Waktu Pembayaran</Text>
-                        <Text style={styles.stageMetaVal}>
-                          {new Date(viewingReceiptTenant.dpPaidAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                        ) : (
+                          <View style={styles.receiptStatusBadgeGreen}>
+                            <CheckCircle2 size={13} color="#0D7A53" />
+                            <Text style={styles.receiptStatusBadgeGreenText}>
+                              LUNAS TOTAL ({durMonths} BULAN)
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={styles.receiptBookingCode}>
+                          {viewingReceiptTenant.bookingCode ? `#${viewingReceiptTenant.bookingCode}` : "#BOOK-KST"}
                         </Text>
                       </View>
-                    )}
 
-                    {/* DP Proof Image Preview if available */}
-                    {viewingReceiptTenant.dpProofImage ? (
-                      <View style={styles.proofAttachmentCard}>
-                        <View style={styles.proofAttachmentLeft}>
-                          <Image source={{ uri: viewingReceiptTenant.dpProofImage }} style={styles.proofThumbImg} />
-                          <View style={{ marginLeft: 10, flex: 1 }}>
-                            <Text style={styles.proofAttachmentTitle}>Bukti Transfer DP</Text>
-                            <Text style={styles.proofAttachmentSub}>Klik untuk melihat gambar penuh</Text>
-                          </View>
+                      <Text style={styles.receiptTotalLabel}>Total Nilai Sewa ({durMonths} Bulan)</Text>
+                      <Text style={[styles.receiptTotalAmount, hasExtDebt && { color: "#B45309" }]}>
+                        Rp {totalCostAll.toLocaleString("id-ID")}
+                      </Text>
+
+                      {hasExtDebt && (
+                        <View style={styles.receiptDebtNoticeRow}>
+                          <Text style={styles.receiptDebtNoticeText}>
+                            Sisa Kurang Bayar Perpanjangan:
+                          </Text>
+                          <Text style={styles.receiptDebtNoticeVal}>
+                            Rp {(viewingReceiptTenant.extensionRemaining || 0).toLocaleString("id-ID")}
+                          </Text>
                         </View>
+                      )}
+
+                      <View style={styles.receiptTenantInfoRow}>
+                        <Image source={{ uri: viewingReceiptTenant.avatar }} style={styles.receiptAvatar} />
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={styles.receiptTenantName}>{viewingReceiptTenant.name}</Text>
+                          <Text style={styles.receiptTenantSub}>
+                            Kamar {viewingReceiptTenant.roomNumber} • {viewingReceiptTenant.roomType}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Text style={{ fontSize: 11, color: "#6B7280" }}>Tanggal Masuk</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#111827" }}>
+                            {viewingReceiptTenant.entryDate}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Filter Tabs Periode Pembayaran (Memudahkan Pemilik Filter Bukti per Bulan) */}
+                    <View style={styles.receiptTabsContainer}>
+                      <Text style={styles.receiptTabsLabel}>Filter Periode Pembayaran:</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.receiptTabsRow}>
                         <TouchableOpacity
-                          style={styles.btnViewFullProof}
-                          onPress={() => viewingReceiptTenant.dpProofImage && setFullImagePreviewUrl(viewingReceiptTenant.dpProofImage)}
+                          style={[styles.receiptTabChip, receiptActiveTab === "semua" && styles.receiptTabChipActive]}
+                          onPress={() => setReceiptActiveTab("semua")}
                           activeOpacity={0.7}
                         >
-                          <Eye size={14} color="#0D7A53" />
-                          <Text style={styles.btnViewFullProofText}>Lihat</Text>
+                          <Text style={[styles.receiptTabChipText, receiptActiveTab === "semua" && styles.receiptTabChipTextActive]}>
+                            Semua Periode
+                          </Text>
                         </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View style={styles.noProofInfoBox}>
-                        <FileText size={14} color="#9CA3AF" />
-                        <Text style={styles.noProofInfoText}>Bukti transfer DP diverifikasi melalui sistem</Text>
-                      </View>
-                    )}
-                  </View>
 
-                  {/* Stage 2: Pelunasan Check-in 80% */}
-                  <View style={[styles.paymentStageCard, { marginTop: 12, borderColor: "#DCFCE7" }]}>
-                    <View style={styles.paymentStageHeader}>
-                      <View style={[styles.paymentStageStepBg, { backgroundColor: "#DCFCE7" }]}>
-                        <Text style={[styles.paymentStageStepText, { color: "#0D7A53" }]}>2</Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                          <Text style={styles.paymentStageTitle}>Pelunasan Check-in (80%)</Text>
-                          <View style={styles.verifiedMiniPill}>
-                            <CheckCircle2 size={11} color="#0D7A53" />
-                            <Text style={styles.verifiedMiniPillText}>Diterima</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.paymentStageSub}>Diserahkan saat hari pertama masuk kost</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.stageAmountRow}>
-                      <Text style={styles.stageAmountLabel}>Nominal Pelunasan</Text>
-                      <Text style={[styles.stageAmountVal, { color: "#0D7A53" }]}>
-                        Rp {(viewingReceiptTenant.settledAmount || (viewingReceiptTenant.totalAmount || 700000) - (viewingReceiptTenant.dpAmount || 140000)).toLocaleString("id-ID")}
-                      </Text>
-                    </View>
-
-                    <View style={styles.stageMetaRow}>
-                      <Text style={styles.stageMetaLabel}>Metode Pelunasan</Text>
-                      <Text style={[styles.stageMetaVal, { fontWeight: "700", color: "#111827" }]}>
-                        {viewingReceiptTenant.settlementMethod === "cash" ? "💵 Tunai / Cash Langsung" : "💳 Transfer Bank / QRIS"}
-                      </Text>
-                    </View>
-
-                    <View style={styles.stageMetaRow}>
-                      <Text style={styles.stageMetaLabel}>Waktu Pelunasan</Text>
-                      <Text style={styles.stageMetaVal}>
-                        {viewingReceiptTenant.settledAt
-                          ? new Date(viewingReceiptTenant.settledAt).toLocaleDateString("id-ID", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "Hari Pertama Check-in"}
-                      </Text>
-                    </View>
-
-                    {viewingReceiptTenant.settlementNotes ? (
-                      <View style={styles.stageNotesBox}>
-                        <Text style={styles.stageNotesLabel}>Catatan:</Text>
-                        <Text style={styles.stageNotesVal}>{viewingReceiptTenant.settlementNotes}</Text>
-                      </View>
-                    ) : null}
-
-                    {/* Settlement Proof Image Preview if available */}
-                    {viewingReceiptTenant.settlementProofImage ? (
-                      <View style={[styles.proofAttachmentCard, { backgroundColor: "#FFFFFF" }]}>
-                        <View style={styles.proofAttachmentLeft}>
-                          <Image source={{ uri: viewingReceiptTenant.settlementProofImage }} style={styles.proofThumbImg} />
-                          <View style={{ marginLeft: 10, flex: 1 }}>
-                            <Text style={styles.proofAttachmentTitle}>Bukti Foto / Kwitansi</Text>
-                            <Text style={styles.proofAttachmentSub}>Klik untuk memperbesar gambar</Text>
-                          </View>
-                        </View>
                         <TouchableOpacity
-                          style={styles.btnViewFullProof}
-                          onPress={() => viewingReceiptTenant.settlementProofImage && setFullImagePreviewUrl(viewingReceiptTenant.settlementProofImage)}
+                          style={[styles.receiptTabChip, receiptActiveTab === "bulan_1" && styles.receiptTabChipActive]}
+                          onPress={() => setReceiptActiveTab("bulan_1")}
                           activeOpacity={0.7}
                         >
-                          <Eye size={14} color="#0D7A53" />
-                          <Text style={styles.btnViewFullProofText}>Lihat</Text>
+                          <Text style={[styles.receiptTabChipText, receiptActiveTab === "bulan_1" && styles.receiptTabChipTextActive]}>
+                            Bulan 1 (Check-in)
+                          </Text>
                         </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View style={styles.noProofInfoBox}>
-                        <CheckCircle2 size={14} color="#0D7A53" />
-                        <Text style={styles.noProofInfoText}>
-                          {viewingReceiptTenant.settlementMethod === "cash"
-                            ? "Pelunasan tunai telah dikonfirmasi langsung oleh pemilik kos"
-                            : "Pelunasan transfer telah dikonfirmasi oleh pemilik kos"}
-                        </Text>
+
+                        {hasExtension ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.receiptTabChip,
+                              receiptActiveTab === "perpanjangan" && styles.receiptTabChipActive,
+                              hasExtDebt && styles.receiptTabChipDebt,
+                            ]}
+                            onPress={() => setReceiptActiveTab("perpanjangan")}
+                            activeOpacity={0.7}
+                          >
+                            <Text
+                              style={[
+                                styles.receiptTabChipText,
+                                receiptActiveTab === "perpanjangan" && styles.receiptTabChipTextActive,
+                                hasExtDebt && { color: receiptActiveTab === "perpanjangan" ? "#FFFFFF" : "#D97706" },
+                              ]}
+                            >
+                              Perpanjangan Sewa {hasExtDebt ? "⚠️ (Kurang)" : "✓"}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </ScrollView>
+                    </View>
+
+                    {/* Stage 1: DP 20% (Bulan 1) */}
+                    {(receiptActiveTab === "semua" || receiptActiveTab === "bulan_1") && (
+                      <View style={styles.paymentStageCard}>
+                        <View style={styles.paymentStageHeader}>
+                          <View style={[styles.paymentStageStepBg, { backgroundColor: "#FEF3C7" }]}>
+                            <Text style={[styles.paymentStageStepText, { color: "#D97706" }]}>1</Text>
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 10 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                              <Text style={styles.paymentStageTitle}>Pembayaran DP (20%)</Text>
+                              <View style={styles.verifiedMiniPill}>
+                                <CheckCircle2 size={11} color="#0D7A53" />
+                                <Text style={styles.verifiedMiniPillText}>Terverifikasi</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.paymentStageSub}>Bulan ke-1 • Dibayar saat booking kamar</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.stageAmountRow}>
+                          <Text style={styles.stageAmountLabel}>Nominal DP</Text>
+                          <Text style={[styles.stageAmountVal, { color: "#D97706" }]}>
+                            Rp {(viewingReceiptTenant.dpAmount !== undefined ? viewingReceiptTenant.dpAmount : Math.round(monthlyNum * 0.2)).toLocaleString("id-ID")}
+                          </Text>
+                        </View>
+
+                        <View style={styles.stageMetaRow}>
+                          <Text style={styles.stageMetaLabel}>Metode Transaksi</Text>
+                          <Text style={styles.stageMetaVal}>Transfer Bank (Online)</Text>
+                        </View>
+
+                        {viewingReceiptTenant.dpPaidAt && (
+                          <View style={styles.stageMetaRow}>
+                            <Text style={styles.stageMetaLabel}>Waktu Pembayaran</Text>
+                            <Text style={styles.stageMetaVal}>
+                              {new Date(viewingReceiptTenant.dpPaidAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* DP Proof Image Preview if available */}
+                        {viewingReceiptTenant.dpProofImage ? (
+                          <View style={styles.proofAttachmentCard}>
+                            <View style={styles.proofAttachmentLeft}>
+                              <Image source={{ uri: viewingReceiptTenant.dpProofImage }} style={styles.proofThumbImg} />
+                              <View style={{ marginLeft: 10, flex: 1 }}>
+                                <Text style={styles.proofAttachmentTitle}>Bukti Transfer DP</Text>
+                                <Text style={styles.proofAttachmentSub}>Klik untuk melihat gambar penuh</Text>
+                              </View>
+                            </View>
+                            <TouchableOpacity
+                              style={styles.btnViewFullProof}
+                              onPress={() => viewingReceiptTenant.dpProofImage && setFullImagePreviewUrl(viewingReceiptTenant.dpProofImage)}
+                              activeOpacity={0.7}
+                            >
+                              <Eye size={14} color="#0D7A53" />
+                              <Text style={styles.btnViewFullProofText}>Lihat</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <View style={styles.noProofInfoBox}>
+                            <FileText size={14} color="#9CA3AF" />
+                            <Text style={styles.noProofInfoText}>Bukti transfer DP diverifikasi melalui sistem booking</Text>
+                          </View>
+                        )}
                       </View>
                     )}
-                  </View>
 
-                  {/* Close Action */}
-                  <TouchableOpacity
-                    style={[styles.btnConfirmSettlement, { marginTop: 20 }]}
-                    onPress={() => setIsReceiptModalOpen(false)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.btnConfirmText}>Tutup Rincian Kwitansi</Text>
-                  </TouchableOpacity>
-                </>
-              )}
+                    {/* Stage 2: Pelunasan Check-in 80% (Bulan 1) */}
+                    {(receiptActiveTab === "semua" || receiptActiveTab === "bulan_1") && (
+                      <View style={[styles.paymentStageCard, { marginTop: 12, borderColor: "#DCFCE7" }]}>
+                        <View style={styles.paymentStageHeader}>
+                          <View style={[styles.paymentStageStepBg, { backgroundColor: "#DCFCE7" }]}>
+                            <Text style={[styles.paymentStageStepText, { color: "#0D7A53" }]}>2</Text>
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 10 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                              <Text style={styles.paymentStageTitle}>Pelunasan Check-in (80%)</Text>
+                              <View style={styles.verifiedMiniPill}>
+                                <CheckCircle2 size={11} color="#0D7A53" />
+                                <Text style={styles.verifiedMiniPillText}>Lunas</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.paymentStageSub}>Bulan ke-1 • Diserahkan saat hari pertama masuk</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.stageAmountRow}>
+                          <Text style={styles.stageAmountLabel}>Nominal Pelunasan</Text>
+                          <Text style={[styles.stageAmountVal, { color: "#0D7A53" }]}>
+                            Rp {(viewingReceiptTenant.settledAmount || (monthlyNum - (viewingReceiptTenant.dpAmount || Math.round(monthlyNum * 0.2)))).toLocaleString("id-ID")}
+                          </Text>
+                        </View>
+
+                        <View style={styles.stageMetaRow}>
+                          <Text style={styles.stageMetaLabel}>Metode Pelunasan</Text>
+                          <Text style={[styles.stageMetaVal, { fontWeight: "700", color: "#111827" }]}>
+                            {viewingReceiptTenant.settlementMethod === "cash" ? "💵 Tunai / Cash Langsung" : "💳 Transfer Bank / QRIS"}
+                          </Text>
+                        </View>
+
+                        <View style={styles.stageMetaRow}>
+                          <Text style={styles.stageMetaLabel}>Waktu Pelunasan</Text>
+                          <Text style={styles.stageMetaVal}>
+                            {viewingReceiptTenant.settledAt
+                              ? new Date(viewingReceiptTenant.settledAt).toLocaleDateString("id-ID", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                              : "Hari Pertama Check-in"}
+                          </Text>
+                        </View>
+
+                        {viewingReceiptTenant.settlementNotes ? (
+                          <View style={styles.stageNotesBox}>
+                            <Text style={styles.stageNotesLabel}>Catatan:</Text>
+                            <Text style={styles.stageNotesVal}>{viewingReceiptTenant.settlementNotes}</Text>
+                          </View>
+                        ) : null}
+
+                        {/* Settlement Proof Image Preview if available */}
+                        {viewingReceiptTenant.settlementProofImage ? (
+                          <View style={[styles.proofAttachmentCard, { backgroundColor: "#FFFFFF" }]}>
+                            <View style={styles.proofAttachmentLeft}>
+                              <Image source={{ uri: viewingReceiptTenant.settlementProofImage }} style={styles.proofThumbImg} />
+                              <View style={{ marginLeft: 10, flex: 1 }}>
+                                <Text style={styles.proofAttachmentTitle}>Bukti Foto / Kwitansi Check-in</Text>
+                                <Text style={styles.proofAttachmentSub}>Klik untuk memperbesar gambar</Text>
+                              </View>
+                            </View>
+                            <TouchableOpacity
+                              style={styles.btnViewFullProof}
+                              onPress={() => viewingReceiptTenant.settlementProofImage && setFullImagePreviewUrl(viewingReceiptTenant.settlementProofImage)}
+                              activeOpacity={0.7}
+                            >
+                              <Eye size={14} color="#0D7A53" />
+                              <Text style={styles.btnViewFullProofText}>Lihat</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <View style={styles.noProofInfoBox}>
+                            <CheckCircle2 size={14} color="#0D7A53" />
+                            <Text style={styles.noProofInfoText}>
+                              {viewingReceiptTenant.settlementMethod === "cash"
+                                ? "Pelunasan tunai telah dikonfirmasi langsung oleh pemilik kos"
+                                : "Pelunasan transfer telah dikonfirmasi oleh pemilik kos"}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Stage 3: Perpanjangan Sewa (Bulan ke-2 dst) */}
+                    {(receiptActiveTab === "semua" || receiptActiveTab === "perpanjangan") && hasExtension && (
+                      <View style={[styles.paymentStageCard, { marginTop: 12, borderColor: hasExtDebt ? "#FDE68A" : "#BBF7D0", backgroundColor: hasExtDebt ? "#FFFDF5" : "#FFFFFF" }]}>
+                        <View style={styles.paymentStageHeader}>
+                          <View style={[styles.paymentStageStepBg, { backgroundColor: hasExtDebt ? "#FEF3C7" : "#DCFCE7" }]}>
+                            <Text style={[styles.paymentStageStepText, { color: hasExtDebt ? "#D97706" : "#0D7A53" }]}>3</Text>
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 10 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                              <Text style={styles.paymentStageTitle}>Perpanjangan Sewa (+{durMonths - 1} Bulan)</Text>
+                              {hasExtDebt ? (
+                                <View style={[styles.verifiedMiniPill, { backgroundColor: "#FEF3C7" }]}>
+                                  <AlertCircle size={11} color="#D97706" />
+                                  <Text style={[styles.verifiedMiniPillText, { color: "#D97706" }]}>Belum Lunas</Text>
+                                </View>
+                              ) : (
+                                <View style={styles.verifiedMiniPill}>
+                                  <CheckCircle2 size={11} color="#0D7A53" />
+                                  <Text style={styles.verifiedMiniPillText}>Lunas</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={styles.paymentStageSub}>Perpanjangan durasi sewa hingga {durMonths} bulan</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.stageAmountRow}>
+                          <Text style={styles.stageAmountLabel}>Total Biaya Perpanjangan</Text>
+                          <Text style={[styles.stageAmountVal, { color: "#111827" }]}>
+                            Rp {(viewingReceiptTenant.extensionTotal || (durMonths - 1) * monthlyNum).toLocaleString("id-ID")}
+                          </Text>
+                        </View>
+
+                        <View style={styles.stageAmountRow}>
+                          <Text style={styles.stageAmountLabel}>Nominal Telah Diterima</Text>
+                          <Text style={[styles.stageAmountVal, { color: "#0D7A53" }]}>
+                            Rp {(viewingReceiptTenant.extensionPaid || 0).toLocaleString("id-ID")}
+                          </Text>
+                        </View>
+
+                        {hasExtDebt && (
+                          <View style={[styles.stageAmountRow, { paddingTop: 6, borderTopWidth: 1, borderTopColor: "#FDE68A" }]}>
+                            <Text style={[styles.stageAmountLabel, { color: "#DC2626", fontWeight: "800" }]}>
+                              Sisa Kurang Bayar
+                            </Text>
+                            <Text style={[styles.stageAmountVal, { color: "#DC2626", fontWeight: "900", fontSize: 15 }]}>
+                              Rp {(viewingReceiptTenant.extensionRemaining || 0).toLocaleString("id-ID")}
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={styles.stageMetaRow}>
+                          <Text style={styles.stageMetaLabel}>Status Pembayaran</Text>
+                          <Text style={[styles.stageMetaVal, { fontWeight: "700", color: hasExtDebt ? "#D97706" : "#0D7A53" }]}>
+                            {hasExtDebt ? "Kurang Bayar (Piutang Tercatat)" : "Lunas Penuh"}
+                          </Text>
+                        </View>
+
+                        {hasExtDebt ? (
+                          <TouchableOpacity
+                            style={[styles.btnPayExtDebt, { marginTop: 12 }]}
+                            onPress={() => {
+                              setIsReceiptModalOpen(false);
+                              handleOpenExtSettlementModal(viewingReceiptTenant);
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Banknote size={14} color="#FFFFFF" />
+                            <Text style={styles.btnPayExtDebtText}>Input Pelunasan Sisa Kurang Bayar</Text>
+                            <ChevronRight size={14} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={[styles.noProofInfoBox, { marginTop: 8 }]}>
+                            <CheckCircle2 size={14} color="#0D7A53" />
+                            <Text style={styles.noProofInfoText}>
+                              Pemasukan perpanjangan telah dicatat ke Laporan Keuangan
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Close Action */}
+                    <TouchableOpacity
+                      style={[styles.btnConfirmSettlement, { marginTop: 20 }]}
+                      onPress={() => setIsReceiptModalOpen(false)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.btnConfirmText}>Tutup Rincian Kwitansi</Text>
+                    </TouchableOpacity>
+                  </>
+                );
+              })()}
             </ScrollView>
           </View>
         </View>
@@ -3009,4 +3729,325 @@ const styles = StyleSheet.create({
   quickDurationChipTextActive: {
     color: "#FFFFFF",
   },
+
+  // Extension Finance Card Styles
+  extensionFinanceCard: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    padding: 12,
+    marginBottom: 16,
+  },
+  extensionFinanceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  extensionFinanceTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  extensionFinanceBadge: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0D7A53",
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  extensionCalcRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    marginBottom: 8,
+  },
+  extensionCalcLabel: {
+    fontSize: 11.5,
+    color: "#4B5563",
+    fontWeight: "600",
+  },
+  extensionCalcAmount: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#0D7A53",
+  },
+  extensionCheckboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 4,
+  },
+  customCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: "#9CA3AF",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customCheckboxActive: {
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
+  },
+  extensionCheckboxText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#1F2937",
+    flex: 1,
+  },
+  subLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 4,
+  },
+  miniInput: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+    color: "#111827",
+    fontWeight: "600",
+  },
+  methodChip: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+  },
+  methodChipActive: {
+    borderColor: "#0D7A53",
+    backgroundColor: "#E8F5EE",
+  },
+  methodChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#4B5563",
+  },
+  methodChipTextActive: {
+    color: "#0D7A53",
+  },
+  // Extension Debt & Pelunasan Styles
+  extDebtBanner: {
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 8,
+  },
+  extDebtTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  extDebtBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  extDebtBadgeText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#D97706",
+  },
+  extDebtBreakdownText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  btnPayExtDebt: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#D97706",
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  btnPayExtDebtText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  extStatusBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    paddingVertical: 8,
+  },
+  extStatusBtnLunasActive: {
+    borderColor: "#0D7A53",
+    backgroundColor: "#E8F5EE",
+  },
+  extStatusBtnDebtActive: {
+    borderColor: "#D97706",
+    backgroundColor: "#FEF3C7",
+  },
+  extStatusBtnText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#4B5563",
+  },
+  extStatusBtnLunasTextActive: {
+    color: "#0D7A53",
+  },
+  extStatusBtnDebtTextActive: {
+    color: "#D97706",
+  },
+  shortfallWarningBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  shortfallWarningTitle: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#B45309",
+  },
+  shortfallWarningSub: {
+    fontSize: 10,
+    color: "#92400E",
+    marginTop: 1,
+  },
+  // Receipt Tabs & Extension Link Styles
+  extViewProofLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  extViewProofLinkText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#D97706",
+  },
+  extDebtAmountRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  extDebtPaidSub: {
+    fontSize: 11,
+    color: "#92400E",
+    fontWeight: "600",
+  },
+  receiptStatusBadgeAmber: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  receiptStatusBadgeAmberText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#D97706",
+  },
+  receiptDebtNoticeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  receiptDebtNoticeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#92400E",
+  },
+  receiptDebtNoticeVal: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#DC2626",
+  },
+  receiptTabsContainer: {
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  receiptTabsLabel: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  receiptTabsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  receiptTabChip: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  receiptTabChipActive: {
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
+  },
+  receiptTabChipDebt: {
+    borderColor: "#FDE68A",
+  },
+  receiptTabChipText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#4B5563",
+  },
+  receiptTabChipTextActive: {
+    color: "#FFFFFF",
+  },
+
 });
+

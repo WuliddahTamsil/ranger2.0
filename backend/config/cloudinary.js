@@ -55,11 +55,16 @@ const uploadToCloudinary = async (fileBuffer, originalName, mimeType, hostUrl = 
 
     console.log(`✅ File successfully uploaded to Cloudinary: ${uploadResult.secure_url}`);
 
+    // If PDF, convert viewUrl to .jpg so Cloudinary delivers page 1 as high-res preview image without 401
+    const viewUrl = uploadResult.secure_url && (mimeType === "application/pdf" || originalName?.toLowerCase().endsWith(".pdf"))
+      ? uploadResult.secure_url.replace(/\.pdf(\?.*)?$/i, ".jpg$1")
+      : uploadResult.secure_url;
+
     return {
       fileId: uploadResult.public_id,
       name: fileName,
-      viewUrl: uploadResult.secure_url,
-      webViewLink: uploadResult.secure_url,
+      viewUrl: viewUrl,
+      webViewLink: viewUrl,
       downloadUrl: uploadResult.secure_url,
       storage: "cloudinary",
     };
