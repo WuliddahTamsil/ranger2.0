@@ -179,9 +179,12 @@ export const resetPassword = async (email: string, password: string) => {
   return { ok: true, error: undefined };
 };
 
-export const loadMitraAccounts = async () => {
+export const loadMitraAccounts = async (includeCustomers: boolean = true) => {
   try {
-    const res = await fetch(getApiUrl("/auth/mitra"));
+    const url = includeCustomers
+      ? getApiUrl("/auth/mitra?includeCustomers=true")
+      : getApiUrl("/auth/mitra");
+    const res = await fetch(url);
     const result = await res.json();
     if (result.success && Array.isArray(result.data)) {
       return result.data.map((item: any) => ({
@@ -201,11 +204,13 @@ export const loadMitraAccounts = async () => {
       }));
     }
   } catch (err) {
-    console.warn("Failed to load mitras from DB, using local storage");
+    console.warn("Failed to load accounts from DB, using local storage");
   }
 
   const accounts = await loadAccounts();
-  return accounts.filter((account) => account.role !== "customer");
+  return includeCustomers
+    ? accounts.filter((account) => account.role !== "admin")
+    : accounts.filter((account) => account.role !== "customer" && account.role !== "admin");
 };
 
 export const updateAccountStatus = async (accountId: string, status: AuthAccount["status"], rejectionReason?: string) => {

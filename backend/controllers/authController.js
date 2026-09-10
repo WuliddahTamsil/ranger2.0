@@ -198,13 +198,22 @@ const loginUser = async (req, res) => {
   }
 };
 
-// Admin: Get all mitra accounts
+// Admin: Get all mitra accounts (or include customer/user when requested)
 const getMitraAccounts = async (req, res) => {
   try {
-    const { role, status } = req.query;
-    const filter = { role: { $ne: "customer" } };
+    const { role, status, includeCustomers } = req.query;
+    let filter = {};
 
-    if (role && role !== "semua") filter.role = role;
+    if (role === "customer") {
+      filter.role = "customer";
+    } else if (includeCustomers === "true") {
+      filter.role = { $ne: "admin" };
+    } else if (role && role !== "semua") {
+      filter.role = role;
+    } else {
+      filter.role = { $ne: "customer" };
+    }
+
     if (status && status !== "semua") filter.status = status;
 
     const mitras = await User.find(filter).sort({ createdAt: -1 });
@@ -212,6 +221,20 @@ const getMitraAccounts = async (req, res) => {
   } catch (error) {
     console.error("❌ Get mitra error:", error);
     return res.status(500).json({ success: false, message: "Gagal mengambil data mitra", error: error.message });
+  }
+};
+
+// Admin: Get all platform users including customers & partners
+const getAllUsers = async (req, res) => {
+  try {
+    const { role } = req.query;
+    const filter = { role: { $ne: "admin" } };
+    if (role && role !== "semua") filter.role = role;
+    const users = await User.find(filter).sort({ createdAt: -1 });
+    return res.status(200).json({ success: true, count: users.length, data: users });
+  } catch (error) {
+    console.error("❌ Get all users error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mengambil data pengguna", error: error.message });
   }
 };
 
@@ -473,6 +496,7 @@ module.exports = {
   registerUser,
   loginUser,
   getMitraAccounts,
+  getAllUsers,
   updateMitraStatus,
   getUserProfile,
   updateUserProfile,

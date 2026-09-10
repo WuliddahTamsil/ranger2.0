@@ -1,9 +1,43 @@
-import { Platform } from "react-native";
+import { NativeModules, Platform } from "react-native";
 
-// Set EXPO_PUBLIC_API_URL to the computer's LAN address when using a physical device.
-const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
-const defaultApiUrl = Platform.OS === "android" ? "http://10.0.2.2:5000" : "http://localhost:5000";
-export const API_BASE_URL = `${configuredApiUrl || defaultApiUrl}/api`;
+// Detect developer machine host if running on physical device via Expo Go / dev client
+const getDevHost = (): string | null => {
+  const scriptURL = (NativeModules as any)?.SourceCode?.scriptURL;
+  if (typeof scriptURL === "string") {
+    const match = scriptURL.match(/^https?:\/\/([^:/]+)/);
+    if (match && match[1] && match[1] !== "localhost" && match[1] !== "127.0.0.1") {
+      return match[1];
+    }
+  }
+  return null;
+};
+
+const resolveApiBaseUrl = (): string => {
+  const configured = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
+
+  if (configured) {
+    if (Platform.OS !== "web" && (configured.includes("localhost") || configured.includes("127.0.0.1"))) {
+      const devHost = getDevHost();
+      if (devHost) {
+        return `${configured.replace(/localhost|127\.0\.0\.1/, devHost)}/api`;
+      }
+      if (Platform.OS === "android") {
+        return `${configured.replace(/localhost|127\.0\.0\.1/, "10.0.2.2")}/api`;
+      }
+    }
+    return `${configured}/api`;
+  }
+
+  const devHost = getDevHost();
+  if (devHost) {
+    return `http://${devHost}:5000/api`;
+  }
+
+  const defaultUrl = Platform.OS === "android" ? "http://10.0.2.2:5000" : "http://localhost:5000";
+  return `${defaultUrl}/api`;
+};
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export const getApiUrl = (endpoint: string) => {
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;

@@ -243,7 +243,7 @@ export default function App() {
 
       // 7. Admin
       case "admin_home":
-        return <AdminHomeScreen navigate={navigate} />;
+        return <AdminHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
 
       default:
         return <CustomerDashboardScreen navigate={navigate} authAccount={currentAuthAccount} />;
