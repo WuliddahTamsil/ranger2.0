@@ -53,6 +53,13 @@ export const WaitingApprovalScreen: React.FC<WaitingApprovalScreenProps> = ({
     authAccount?.rejectionReason
   );
 
+  const [checkFeedback, setCheckFeedback] = useState<{
+    status: "pending" | "verified" | "rejected";
+    title: string;
+    message: string;
+    time: string;
+  } | null>(null);
+
   // Pulse animation for pending badge
   const pulseAnim = useState(new Animated.Value(1))[0];
 
@@ -73,47 +80,83 @@ export const WaitingApprovalScreen: React.FC<WaitingApprovalScreenProps> = ({
     ).start();
   }, []);
 
-  const checkStatusLive = async () => {
-    if (!authAccount?.id) return;
+  const checkStatusLive = async (isManual = false) => {
+    if (!authAccount?.id && !authAccount?.email) return;
     setIsChecking(true);
+    const nowTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     try {
-      const res = await fetch(getApiUrl(`/auth/profile/${authAccount.id}`));
+      let url = authAccount.id ? `/auth/profile/${authAccount.id}` : `/auth/mitra`;
+      const res = await fetch(getApiUrl(url));
       const result = await res.json();
-      if (result.success && result.data) {
-        const newStatus = result.data.status;
+      
+      let userObj = result.data;
+      if (Array.isArray(userObj)) {
+        userObj = userObj.find((u: any) => u.email?.toLowerCase() === authAccount.email?.toLowerCase());
+      }
+
+      if (userObj) {
+        const newStatus = userObj.status || "pending";
         setCurrentStatus(newStatus);
-        setRejectionReason(result.data.rejectionReason);
+        setRejectionReason(userObj.rejectionReason);
 
         const updatedAccount: AuthAccount = {
           ...authAccount,
           status: newStatus,
-          rejectionReason: result.data.rejectionReason,
+          rejectionReason: userObj.rejectionReason,
         };
         await updateCachedAccount(updatedAccount);
         if (onRefreshAccount) onRefreshAccount(updatedAccount);
 
         if (newStatus === "verified") {
-          // Immediately redirect to approved dashboard
-          navigate(roleToScreen(authAccount.role));
+          setCheckFeedback({
+            status: "verified",
+            title: "🎉 Selamat! Akun Anda Telah Disetujui",
+            message: "Seluruh berkas pendaftaran Anda telah di-ACC oleh Super Admin. Anda sekarang dapat mengakses dan mengelola dashboard usaha Anda.",
+            time: nowTime,
+          });
+        } else if (newStatus === "rejected") {
+          setCheckFeedback({
+            status: "rejected",
+            title: "❌ Pendaftaran Perlu Revisi / Ditolak",
+            message: userObj.rejectionReason || "Dokumen belum memenuhi syarat standar. Silakan ajukan registrasi ulang dengan berkas yang sesuai.",
+            time: nowTime,
+          });
+        } else {
+          if (isManual) {
+            setCheckFeedback({
+              status: "pending",
+              title: "⏳ Berkas Masih Dalam Peninjauan",
+              message: "Pendaftaran Anda sedang dalam antrean verifikasi Super Admin. Harap tunggu atau hubungi admin via WhatsApp.",
+              time: nowTime,
+            });
+          }
         }
       }
     } catch (err) {
       console.warn("Check status error:", err);
+      if (isManual) {
+        setCheckFeedback({
+          status: currentStatus,
+          title: "Status: " + (currentStatus === "verified" ? "Disetujui" : currentStatus === "rejected" ? "Ditolak" : "Sedang Ditinjau"),
+          message: "Pengecekan server selesai. Status akun Anda saat ini: " + currentStatus.toUpperCase(),
+          time: nowTime,
+        });
+      }
     } finally {
       setIsChecking(false);
     }
   };
 
-  // Auto-poll status every 10 seconds
+  // Auto-poll status every 10 seconds silently
   useEffect(() => {
     const timer = setInterval(() => {
-      checkStatusLive();
+      checkStatusLive(false);
     }, 10000);
     return () => clearInterval(timer);
-  }, [authAccount?.id]);
+  }, [authAccount?.id, authAccount?.email]);
 
   const handleContactAdmin = () => {
-    const phone = "6281122334455";
+    const phone = "6281511226089";
     const roleText = (authAccount?.role && ROLE_LABELS[authAccount.role as keyof typeof ROLE_LABELS]) || "Mitra";
     const text = `Halo Admin GEOVERSE, saya ${authAccount?.name || "Mitra"} (${roleText}). Ingin menanyakan status verifikasi pendaftaran akun saya dengan email: ${authAccount?.email}. Terima kasih!`;
     Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`).catch(() => {});
@@ -313,11 +356,94 @@ export const WaitingApprovalScreen: React.FC<WaitingApprovalScreenProps> = ({
           </View>
         </View>
 
+        {/* Dynamic Status Feedback Card upon clicking Cek Status */}
+        {checkFeedback && (
+          <View
+            style={[
+              styles.feedbackCard,
+              checkFeedback.status === "verified"
+                ? styles.feedbackCardSuccess
+                : checkFeedback.status === "rejected"
+                ? styles.feedbackCardDanger
+                : styles.feedbackCardWarning,
+            ]}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              {checkFeedback.status === "verified" ? (
+                <CheckCircle2 size={18} color="#0D7A53" />
+              ) : checkFeedback.status === "rejected" ? (
+                <XCircle size={18} color="#DC2626" />
+              ) : (
+                <Clock size={18} color="#D97706" />
+              )}
+              <Text
+                style={[
+                  styles.feedbackTitle,
+                  checkFeedback.status === "verified"
+                    ? { color: "#0D7A53" }
+                    : checkFeedback.status === "rejected"
+                    ? { color: "#DC2626" }
+                    : { color: "#B45309" },
+                ]}
+              >
+                {checkFeedback.title}
+              </Text>
+            </View>
+            <Text style={styles.feedbackMessage}>{checkFeedback.message}</Text>
+            <Text style={styles.feedbackTime}>Dicek pada pukul {checkFeedback.time}</Text>
+
+            {/* Direct Instant Action Button */}
+            {checkFeedback.status === "verified" && (
+              <TouchableOpacity
+                style={[styles.btnPrimary, { backgroundColor: "#0D7A53", marginTop: 12 }]}
+                onPress={() => navigate(roleToScreen(authAccount?.role || "customer"))}
+                activeOpacity={0.85}
+              >
+                <CheckCircle2 size={16} color="#FFFFFF" />
+                <Text style={styles.btnPrimaryText}>Masuk ke Dashboard Sekarang ➜</Text>
+              </TouchableOpacity>
+            )}
+
+            {checkFeedback.status === "rejected" && (
+              <TouchableOpacity
+                style={[styles.btnPrimary, { backgroundColor: "#DC2626", marginTop: 12 }]}
+                onPress={() => navigate("auth_register_role")}
+                activeOpacity={0.85}
+              >
+                <RefreshCw size={16} color="#FFFFFF" />
+                <Text style={styles.btnPrimaryText}>Daftar Ulang & Upload Berkas Baru ➜</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
+          {currentStatus === "verified" && !checkFeedback && (
+            <TouchableOpacity
+              style={[styles.btnPrimary, { backgroundColor: "#0D7A53", marginBottom: 10 }]}
+              onPress={() => navigate(roleToScreen(authAccount?.role || "customer"))}
+              activeOpacity={0.85}
+            >
+              <CheckCircle2 size={16} color="#FFFFFF" />
+              <Text style={styles.btnPrimaryText}>Akun Disetujui! Masuk ke Dashboard ➜</Text>
+            </TouchableOpacity>
+          )}
+
+          {currentStatus === "rejected" && !checkFeedback && (
+            <TouchableOpacity
+              style={[styles.btnPrimary, { backgroundColor: "#DC2626", marginBottom: 10 }]}
+              onPress={() => navigate("auth_register_role")}
+              activeOpacity={0.85}
+            >
+              <RefreshCw size={16} color="#FFFFFF" />
+              <Text style={styles.btnPrimaryText}>Daftar Ulang / Ajukan Berkas Baru</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.btnPrimary}
-            onPress={checkStatusLive}
+            onPress={() => checkStatusLive(true)}
             disabled={isChecking}
             activeOpacity={0.85}
           >
@@ -342,7 +468,11 @@ export const WaitingApprovalScreen: React.FC<WaitingApprovalScreenProps> = ({
         </View>
 
         <Text style={styles.footerNote}>
-          Sistem akan otomatis mengarahkan Anda ke Dashboard utama saat status disetujui.
+          {currentStatus === "verified"
+            ? "Akun Anda telah aktif dan diverifikasi oleh admin."
+            : currentStatus === "rejected"
+            ? "Pendaftaran ditolak. Silakan ajukan registrasi ulang dengan dokumen yang valid."
+            : "Selama menunggu persetujuan admin, akses ke dashboard dibatasi demi keamanan."}
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -353,6 +483,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
+    width: "100%",
   },
   topHeader: {
     flexDirection: "row",
@@ -363,6 +494,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
+    width: "100%",
   },
   brandRow: {
     flexDirection: "row",
@@ -405,6 +537,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 36,
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
   },
   statusCard: {
     backgroundColor: "#FFFFFF",
@@ -418,6 +553,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
+    width: "100%",
   },
   statusCardRejected: {
     borderColor: "#FEE2E2",
@@ -638,5 +774,40 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 16,
     lineHeight: 16,
+  },
+  feedbackCard: {
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1.5,
+  },
+  feedbackCardSuccess: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#86EFAC",
+  },
+  feedbackCardDanger: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  feedbackCardWarning: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  feedbackTitle: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    flex: 1,
+  },
+  feedbackMessage: {
+    fontSize: 12.5,
+    color: "#334155",
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  feedbackTime: {
+    fontSize: 10.5,
+    color: "#94A3B8",
+    marginTop: 6,
+    fontWeight: "600",
   },
 });

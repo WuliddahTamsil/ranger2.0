@@ -182,27 +182,19 @@ const updateKost = async (req, res) => {
 
 // Helper to find kost by ownerId or email
 const findKostByOwnerOrEmail = async (ownerIdentifier) => {
+  if (!ownerIdentifier) return null;
   let kost = null;
   // If valid ObjectId
-  if (ownerIdentifier && ownerIdentifier.match(/^[0-9a-fA-F]{24}$/)) {
+  if (ownerIdentifier.match(/^[0-9a-fA-F]{24}$/)) {
     kost = await Kost.findOne({ ownerId: ownerIdentifier });
   }
-  // If not found or identifier is email
+  // If not found or identifier is email/username
   if (!kost) {
-    const user = await User.findOne({
-      $or: [
-        { email: ownerIdentifier },
-        { email: "aisk@gmail.com" },
-        { name: new RegExp(ownerIdentifier || "ais", "i") },
-      ],
-    });
+    const cleanEmail = ownerIdentifier.toLowerCase().trim();
+    const user = await User.findOne({ email: cleanEmail });
     if (user) {
       kost = await Kost.findOne({ ownerId: user._id });
     }
-  }
-  // Fallback to Ais Kost Exclusive
-  if (!kost) {
-    kost = await Kost.findOne({ name: /Ais Kost/i });
   }
   return kost;
 };

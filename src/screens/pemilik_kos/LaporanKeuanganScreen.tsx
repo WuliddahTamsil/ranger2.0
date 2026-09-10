@@ -121,19 +121,20 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
 
   const loadFinancialData = async () => {
     try {
-      const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+      const ownerEmail = authAccount?.email || authAccount?.id;
+      if (!ownerEmail) {
+        setRooms([]);
+        setBookings([]);
+        return;
+      }
       const [roomsData, bookingsData, txData, propertyData] = await Promise.all([
         fetchRoomsByOwner(ownerEmail),
         fetchOwnerBookings(ownerEmail),
         fetchTransactionsByOwner(ownerEmail),
         fetchKostProperty(ownerEmail),
       ]);
-      if (roomsData && roomsData.length > 0) {
-        setRooms(roomsData);
-      }
-      if (bookingsData && bookingsData.length > 0) {
-        setBookings(bookingsData);
-      }
+      setRooms(Array.isArray(roomsData) ? roomsData : []);
+      setBookings(Array.isArray(bookingsData) ? bookingsData : []);
       if (propertyData) {
         setKostProperty(propertyData);
         if (propertyData.bankAccount) {
@@ -143,23 +144,30 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
           setAccountHolder(propertyData.bankAccount.accountHolder || "");
           setQrisImage(propertyData.bankAccount.qrisImage || "");
         }
+      } else {
+        setKostProperty(null);
       }
       if (txData && Array.isArray(txData)) {
-        const formattedTx: Transaction[] = txData.map((t: any) => ({
-          id: t._id ? t._id.toString() : (t.id || Date.now().toString()),
+        const formattedManual: Transaction[] = txData.map((t: any) => ({
+          id: t._id ? t._id.toString() : String(t.id),
           title: t.title || "Transaksi",
-          subtitle: `${t.category || "Operasional"} • ${t.date ? new Date(t.date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini"}`,
+          subtitle: `${t.category || "Umum"} • ${t.date ? new Date(t.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "Hari ini"}`,
           date: t.date ? new Date(t.date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini",
           amount: `${t.type === "income" ? "+" : "-"} Rp ${Number(t.amount || 0).toLocaleString("id-ID")}`,
-          type: t.type || "expense",
+          type: t.type === "income" ? "income" : "expense",
           rawAmount: Number(t.amount || 0),
-          rawCategory: t.category || "Operasional",
+          rawCategory: t.category || "Umum",
           isManual: true,
         }));
-        setManualTx(formattedTx);
+        setManualTx(formattedManual);
+      } else {
+        setManualTx([]);
       }
     } catch (err) {
-      console.warn("loadFinancialData error:", err);
+      console.error("Gagal memuat data keuangan kost:", err);
+      setRooms([]);
+      setBookings([]);
+      setManualTx([]);
     }
   };
 

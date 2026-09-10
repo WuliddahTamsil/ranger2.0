@@ -671,6 +671,19 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             <Text style={styles.masterFinStatLbl}>Driver GEOVERSE</Text>
           </View>
         </View>
+
+        {/* Catalog & Asset Global Strip */}
+        <View style={styles.masterCatalogStrip}>
+          <View style={styles.catalogStripItem}>
+            <Text style={styles.catalogStripVal}>{stats?.totalCatalogItems || 32}</Text>
+            <Text style={styles.catalogStripLbl}>📦 Total Produk & Layanan</Text>
+          </View>
+          <View style={styles.catalogStripDivider} />
+          <View style={styles.catalogStripItem}>
+            <Text style={styles.catalogStripVal}>{stats?.totalOrdersCount || 31}</Text>
+            <Text style={styles.catalogStripLbl}>⚡ Total Pesanan/Booking</Text>
+          </View>
+        </View>
       </View>
 
       {/* Service Breakdown */}
@@ -710,7 +723,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             {rp(stats?.breakdown?.kost?.total || 2800000)}
           </Text>
           <Text style={styles.serviceCardSub}>
-            {stats?.breakdown?.kost?.count || 2} Booking Terdata
+            {stats?.breakdown?.kost?.count || 2} Booking ({stats?.breakdown?.kost?.rooms || 5} Kamar)
           </Text>
           <View style={styles.serviceCardActionHint}>
             <Text style={styles.serviceCardActionHintText}>Pantau Detail ➜</Text>
@@ -747,7 +760,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             {rp(stats?.breakdown?.laundry?.total || 230900)}
           </Text>
           <Text style={styles.serviceCardSub}>
-            {stats?.breakdown?.laundry?.count || 5} Pesanan Selesai
+            {stats?.breakdown?.laundry?.count || 5} Order ({stats?.breakdown?.laundry?.services || 22} Paket)
           </Text>
           <View style={styles.serviceCardActionHint}>
             <Text style={[styles.serviceCardActionHintText, { color: "#2563EB" }]}>Pantau Detail ➜</Text>
@@ -784,7 +797,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             {rp(stats?.breakdown?.catering?.total || 5804000)}
           </Text>
           <Text style={styles.serviceCardSub}>
-            {stats?.breakdown?.catering?.count || 16} Pesanan Makanan
+            {stats?.breakdown?.catering?.count || 16} Order ({stats?.breakdown?.catering?.menus || 3} Menu)
           </Text>
           <View style={styles.serviceCardActionHint}>
             <Text style={[styles.serviceCardActionHintText, { color: "#D97706" }]}>Pantau Detail ➜</Text>
@@ -821,7 +834,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             {rp(stats?.breakdown?.marketplace?.total || 466000)}
           </Text>
           <Text style={styles.serviceCardSub}>
-            {stats?.breakdown?.marketplace?.count || 8} Order Terkirim
+            {stats?.breakdown?.marketplace?.count || 8} Order ({stats?.breakdown?.marketplace?.items || 2} Produk)
           </Text>
           <View style={styles.serviceCardActionHint}>
             <Text style={[styles.serviceCardActionHintText, { color: "#7C3AED" }]}>Pantau Detail ➜</Text>
@@ -2926,6 +2939,35 @@ const styles = StyleSheet.create({
   masterFinDivider: {
     width: 1,
     height: 28,
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  masterCatalogStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.12)",
+    borderRadius: 12,
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  catalogStripItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  catalogStripVal: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  catalogStripLbl: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.85)",
+    marginTop: 1,
+  },
+  catalogStripDivider: {
+    width: 1,
+    height: 20,
     backgroundColor: "rgba(255,255,255,0.2)",
   },
 

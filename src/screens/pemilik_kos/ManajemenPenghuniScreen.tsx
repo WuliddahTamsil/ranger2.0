@@ -219,15 +219,19 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   const [loading, setLoading] = useState(false);
   const [tenants, setTenants] = useState<TenantData[]>([]);
 
-  const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+  const ownerEmail = authAccount?.email || authAccount?.id || "";
 
   const loadTenantsFromBackend = async () => {
+    if (!ownerEmail) {
+      setTenants([]);
+      return;
+    }
     setLoading(true);
     try {
       const data = await fetchTenantsByOwner(ownerEmail);
-      setTenants(data || []);
+      setTenants(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.warn("Using offline tenants:", err);
+      console.warn("Gagal memuat data penghuni:", err);
       setTenants([]);
     } finally {
       setLoading(false);

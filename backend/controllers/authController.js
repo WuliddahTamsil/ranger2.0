@@ -20,9 +20,58 @@ const registerUser = async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const userExists = await User.findOne({ email: normalizedEmail });
-    if (userExists) {
-      return res.status(400).json({ success: false, message: "Email sudah terdaftar. Silakan login." });
+    let user = await User.findOne({ email: normalizedEmail });
+
+    if (user) {
+      if (user.status === "rejected") {
+        // User was previously rejected, permit re-registration and reset status to pending
+        user.name = name.trim();
+        user.role = role;
+        user.phone = phone ? phone.trim() : user.phone;
+        user.address = address ? address.trim() : user.address;
+        if (profilePhoto) user.profilePhoto = profilePhoto;
+        if (password) {
+          const salt = await bcrypt.genSalt(10);
+          user.passwordHash = await bcrypt.hash(password, salt);
+        }
+        user.status = "pending";
+        user.rejectionReason = undefined;
+
+        const finalRoleData = { ...roleData };
+        if (role === "pemilik_catering" && finalRoleData.isDapurOpen === undefined) {
+          finalRoleData.isDapurOpen = "true";
+        }
+        user.roleData = finalRoleData;
+        user.documents = documents || {};
+
+        await user.save();
+
+        return res.status(200).json({
+          success: true,
+          message: "Pendaftaran ulang berhasil dikirimkan dan menunggu verifikasi admin.",
+          data: {
+            id: user._id,
+            role: user.role,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            address: user.address,
+            profilePhoto: user.profilePhoto,
+            googleLinked: user.googleLinked,
+            status: user.status,
+            roleData: user.roleData,
+            documents: user.documents,
+            token: generateToken(user._id),
+          },
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: user.status === "pending"
+            ? "Pendaftaran dengan email ini sedang dalam proses peninjauan admin. Silakan login untuk mengecek status."
+            : "Email sudah terdaftar dan aktif. Silakan login.",
+        });
+      }
     }
 
     let passwordHash = undefined;
@@ -36,7 +85,7 @@ const registerUser = async (req, res) => {
       finalRoleData.isDapurOpen = "true";
     }
 
-    const user = await User.create({
+    user = await User.create({
       role,
       name: name.trim(),
       email: normalizedEmail,
@@ -366,6 +415,8 @@ const getSystemStats = async (req, res) => {
     const Booking = require("../models/Booking");
     const Kost = require("../models/Kost");
     const LaundryStore = require("../models/LaundryStore");
+    const MarketplaceProduct = require("../models/MarketplaceProduct");
+    const CateringProduct = require("../models/CateringProduct");
 
     const [
       totalMitra,
@@ -374,8 +425,10 @@ const getSystemStats = async (req, res) => {
       pendingMitra,
       approvedMitra,
       rejectedMitra,
-      totalKostProps,
-      totalLaundryStores,
+      kostList,
+      laundryStoreList,
+      marketplaceProductsCount,
+      cateringProductsCount,
       marketplaceOrders,
       cateringOrders,
       laundryOrders,
@@ -387,13 +440,19 @@ const getSystemStats = async (req, res) => {
       User.countDocuments({ status: "pending", role: { $ne: "customer", $ne: "admin" } }),
       User.countDocuments({ status: "verified", role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_laundry", "pemilik_kos", "driver"] } }),
       User.countDocuments({ status: "rejected", role: { $ne: "customer", $ne: "admin" } }),
-      Kost.countDocuments(),
-      LaundryStore.countDocuments(),
+      Kost.find().select("rooms"),
+      LaundryStore.find().select("services"),
+      MarketplaceProduct.countDocuments(),
+      CateringProduct.countDocuments(),
       MarketplaceOrder.find({ status: { $ne: "Dibatalkan" } }).select("totalAmount createdAt orderNumber customerName storeName"),
       CateringOrder.find({ status: { $ne: "Dibatalkan" } }).select("totalAmount createdAt orderNumber customerName restaurantName"),
       LaundryOrder.find({ status: { $ne: "DIBATALKAN" } }).select("totalAmount createdAt orderCode customerName storeName serviceName"),
       Booking.find({ status: { $nin: ["rejected", "cancelled"] } }).select("totalAmount dpAmount createdAt bookingCode customerName kostName roomNumber status verifiedAt"),
     ]);
+
+    const totalKostRooms = kostList.reduce((acc, curr) => acc + (curr.rooms ? curr.rooms.length : 0), 0);
+    const totalLaundryServices = laundryStoreList.reduce((acc, curr) => acc + (curr.services ? curr.services.length : 0), 0);
+    const totalCatalogItems = marketplaceProductsCount + cateringProductsCount + totalKostRooms + totalLaundryServices;
 
     const sumAmounts = (list) => list.reduce((acc, curr) => acc + (Number(curr.totalAmount) || 0), 0);
     const totalTransactionsAmount =
@@ -413,15 +472,20 @@ const getSystemStats = async (req, res) => {
         pendingMitra,
         approvedMitra,
         rejectedMitra,
-        totalKostProps,
-        totalLaundryStores,
+        totalKostProps: kostList.length,
+        totalKostRooms,
+        totalLaundryStores: laundryStoreList.length,
+        totalLaundryServices,
+        totalMarketplaceProducts: marketplaceProductsCount,
+        totalCateringProducts: cateringProductsCount,
+        totalCatalogItems,
         totalTransactionsAmount,
         totalOrdersCount,
         breakdown: {
-          kost: { count: bookings.length, total: sumAmounts(bookings) },
-          laundry: { count: laundryOrders.length, total: sumAmounts(laundryOrders) },
-          catering: { count: cateringOrders.length, total: sumAmounts(cateringOrders) },
-          marketplace: { count: marketplaceOrders.length, total: sumAmounts(marketplaceOrders) },
+          kost: { count: bookings.length, total: sumAmounts(bookings), props: kostList.length, rooms: totalKostRooms },
+          laundry: { count: laundryOrders.length, total: sumAmounts(laundryOrders), stores: laundryStoreList.length, services: totalLaundryServices },
+          catering: { count: cateringOrders.length, total: sumAmounts(cateringOrders), menus: cateringProductsCount },
+          marketplace: { count: marketplaceOrders.length, total: sumAmounts(marketplaceOrders), items: marketplaceProductsCount },
         },
       },
     });

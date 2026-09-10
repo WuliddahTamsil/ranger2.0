@@ -53,7 +53,7 @@ const createTransaction = async (req, res) => {
     }
 
     let finalOwnerId = undefined;
-    let finalOwnerEmail = ownerEmail ? ownerEmail.toLowerCase().trim() : "aisk@gmail.com";
+    let finalOwnerEmail = ownerEmail ? ownerEmail.toLowerCase().trim() : "";
 
     if (ownerId && ownerId.match(/^[0-9a-fA-F]{24}$/)) {
       finalOwnerId = ownerId;
@@ -72,7 +72,7 @@ const createTransaction = async (req, res) => {
 
     const newTx = await Transaction.create({
       ownerId: finalOwnerId,
-      ownerEmail: finalOwnerEmail || "aisk@gmail.com",
+      ownerEmail: finalOwnerEmail,
       title: title.trim(),
       category: category ? category.trim() : "Operasional",
       amount: Math.abs(Number(amount)),

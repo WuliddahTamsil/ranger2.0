@@ -8,7 +8,7 @@ const SEED_USERS = [
     role: "admin",
     name: "Super Admin Ranger",
     email: "ranger@gmail.com",
-    phone: "081122334455",
+    phone: "081511226089",
     address: "HQ Ranger Platform, Garut",
     password: "12345678",
     status: "verified",

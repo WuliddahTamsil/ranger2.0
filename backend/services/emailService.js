@@ -1,16 +1,19 @@
+require("dotenv").config();
 const nodemailer = require("nodemailer");
 
-const ADMIN_EMAIL = process.env.EMAIL_USER || process.env.SMTP_USER || "aisyahputriharmelia@gmail.com";
-const ADMIN_PASS = process.env.EMAIL_PASS || process.env.SMTP_PASS || "";
+const ADMIN_EMAIL = process.env.EMAIL_USER || process.env.SMTP_USER || "geoverse.pge@gmail.com";
 
-// Create reusable transporter for aisyahputriharmelia@gmail.com
+// Create reusable transporter for Gmail SMTP
 const createTransporter = () => {
-  if (ADMIN_EMAIL && ADMIN_PASS) {
+  const user = process.env.EMAIL_USER || process.env.SMTP_USER || ADMIN_EMAIL;
+  const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || "";
+
+  if (user && pass) {
     return nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: ADMIN_EMAIL,
-        pass: ADMIN_PASS,
+        user: user.trim(),
+        pass: pass.trim(),
       },
     });
   }
@@ -101,8 +104,11 @@ const sendMitraApprovalEmail = async ({ email, name, role }) => {
       await transporter.sendMail({
         from: `"Administrator GEOVERSE" <${ADMIN_EMAIL}>`,
         to: email,
+        replyTo: ADMIN_EMAIL,
         subject,
+        text: `Halo ${name}, pendaftaran akun ${roleLabel} Anda di GEOVERSE App telah disetujui oleh Super Admin. Anda kini dapat membuka aplikasi dan mulai menggunakan akun Anda.`,
         html,
+        priority: "high",
       });
       console.log(`📧 [EMAIL SENT] Approval email successfully sent from ${ADMIN_EMAIL} to ${email}`);
       return { success: true };
@@ -184,8 +190,11 @@ const sendMitraRejectionEmail = async ({ email, name, role, reason }) => {
       await transporter.sendMail({
         from: `"Administrator GEOVERSE" <${ADMIN_EMAIL}>`,
         to: email,
+        replyTo: ADMIN_EMAIL,
         subject,
+        text: `Halo ${name}, pendaftaran akun ${roleLabel} Anda di GEOVERSE App belum dapat disetujui dengan alasan: ${reason || "Dokumen belum memenuhi persyaratan."}. Silakan ajukan pendaftaran ulang di aplikasi.`,
         html,
+        priority: "high",
       });
       console.log(`📧 [EMAIL SENT] Rejection email successfully sent from ${ADMIN_EMAIL} to ${email}`);
       return { success: true };

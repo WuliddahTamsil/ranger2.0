@@ -55,7 +55,11 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
     setIsLoading(true);
     setImgError(false);
     try {
-      const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+      const ownerEmail = authAccount?.email || authAccount?.id || "";
+      if (!ownerEmail) {
+        setAllBookings([]);
+        return;
+      }
       const bookings = await fetchOwnerBookings(ownerEmail);
       if (bookings && bookings.length > 0) {
         setAllBookings(bookings);
@@ -64,7 +68,8 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
         setAllBookings([]);
       }
     } catch (err) {
-      console.log("Using default preview booking:", err);
+      console.log("Error loading bookings:", err);
+      setAllBookings([]);
     } finally {
       setIsLoading(false);
     }

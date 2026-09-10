@@ -213,11 +213,16 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
 
   // 2. Fallback to Local Storage
   const accounts = await loadAccounts();
-  const exists = accounts.some((item) => item.email === email);
-  if (exists) return { account: null, error: "Email sudah terdaftar. Silakan login." };
+  const existingIndex = accounts.findIndex((item) => item.email === email);
+  if (existingIndex >= 0) {
+    const existingAcc = accounts[existingIndex];
+    if (existingAcc.status !== "rejected") {
+      return { account: null, error: existingAcc.status === "pending" ? "Pendaftaran sedang ditinjau admin. Silakan login." : "Email sudah terdaftar. Silakan login." };
+    }
+  }
 
   const account: AuthAccount = {
-    id: `acc_${Date.now()}`,
+    id: existingIndex >= 0 ? accounts[existingIndex].id : `acc_${Date.now()}`,
     role,
     name: form.name.trim(),
     email,
@@ -232,7 +237,7 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
     createdAt: now,
     updatedAt: now,
   };
-  await saveAccounts([...accounts, account]);
+  await saveAccounts([...accounts.filter((item) => item.email !== email), account]);
   return { account, error: undefined };
 };
 

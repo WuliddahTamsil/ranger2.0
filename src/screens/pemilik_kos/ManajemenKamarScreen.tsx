@@ -185,15 +185,19 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   const [isSavingProperty, setIsSavingProperty] = useState(false);
   const [propertyActiveTab, setPropertyActiveTab] = useState<"fasilitas" | "peraturan" | "deskripsi">("fasilitas");
 
-  const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+  const ownerEmail = authAccount?.email || authAccount?.id || "";
 
   const loadRoomsFromBackend = async () => {
+    if (!ownerEmail) {
+      setRooms([]);
+      return;
+    }
     setLoading(true);
     try {
       const data = await fetchRoomsByOwner(ownerEmail);
-      setRooms(data || []);
+      setRooms(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.warn("Using offline rooms:", err);
+      console.warn("Gagal memuat kamar:", err);
       setRooms([]);
     } finally {
       setLoading(false);

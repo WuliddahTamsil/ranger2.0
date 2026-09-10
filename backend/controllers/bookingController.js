@@ -122,12 +122,14 @@ const getBookingsByOwner = async (req, res) => {
       if (ownerId.match(/^[0-9a-fA-F]{24}$/)) {
         filter.ownerId = ownerId;
       } else {
-        // Find owner user by email
-        const ownerUser = await User.findOne({
-          $or: [{ email: ownerId }, { email: "aisk@gmail.com" }, { email: "aisl@gmail.com" }],
-        });
+        // Find owner user by exact email
+        const cleanEmail = ownerId.toLowerCase().trim();
+        const ownerUser = await User.findOne({ email: cleanEmail });
         if (ownerUser) {
           filter.ownerId = ownerUser._id;
+        } else {
+          // Owner not found, return empty
+          return res.status(200).json({ success: true, count: 0, data: [] });
         }
       }
     }

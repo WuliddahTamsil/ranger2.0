@@ -6,7 +6,7 @@ const path = require("path");
 const { Server } = require("socket.io");
 const connectDB = require("./config/db");
 
-// Initialize Express & HTTP Server
+// Initialize Express & HTTP Server (GEOVERSE 2.0 Live)
 const app = express();
 const server = http.createServer(app);
 

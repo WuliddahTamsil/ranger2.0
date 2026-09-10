@@ -13,7 +13,7 @@ export const DEFAULT_ACCOUNTS: AuthAccount[] = [
     role: "admin",
     name: "Super Admin GEOVERSE",
     email: "ranger@gmail.com",
-    phone: "081122334455",
+    phone: "081511226089",
     address: "HQ GEOVERSE Platform, Garut",
     passwordHash: PW_12345678_HASH,
     status: "verified",

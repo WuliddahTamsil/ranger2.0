@@ -27,7 +27,7 @@ const seedAdmin = async () => {
       admin.status = "verified";
       admin.passwordHash = passwordHash;
       admin.name = "Super Admin Ranger";
-      admin.phone = "081122334455";
+      admin.phone = "081511226089";
       await admin.save();
       console.log(`✅ Admin account (${adminEmail}) updated successfully with password: ${targetPassword}`);
     } else {
@@ -35,7 +35,7 @@ const seedAdmin = async () => {
         role: "admin",
         name: "Super Admin Ranger",
         email: adminEmail,
-        phone: "081122334455",
+        phone: "081511226089",
         address: "HQ Ranger Platform, Garut",
         passwordHash,
         status: "verified",

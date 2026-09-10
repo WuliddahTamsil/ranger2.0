@@ -72,27 +72,34 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
 
   const load = async () => {
     try {
-      const ownerEmail = authAccount?.email || "aisk@gmail.com";
+      const ownerEmail = authAccount?.email || authAccount?.id;
+      if (!ownerEmail) {
+        setRooms([]);
+        setAllBookings([]);
+        setPendingBookings([]);
+        setTransactions([]);
+        return;
+      }
       const [roomsData, bookingsData, txData] = await Promise.all([
         fetchRoomsByOwner(ownerEmail),
         fetchOwnerBookings(ownerEmail),
         fetchTransactionsByOwner(ownerEmail),
       ]);
-      if (roomsData && roomsData.length > 0) {
-        setRooms(roomsData);
-      }
-      if (bookingsData && bookingsData.length > 0) {
+      setRooms(Array.isArray(roomsData) ? roomsData : []);
+      if (bookingsData && Array.isArray(bookingsData)) {
         setAllBookings(bookingsData);
         setPendingBookings(bookingsData.filter((b: any) => b.status === "dp_submitted"));
       } else {
         setAllBookings([]);
         setPendingBookings([]);
       }
-      if (txData && Array.isArray(txData)) {
-        setTransactions(txData);
-      }
+      setTransactions(Array.isArray(txData) ? txData : []);
     } catch (err) {
-      console.log("Using default overview stats:", err);
+      console.log("Error loading owner data:", err);
+      setRooms([]);
+      setAllBookings([]);
+      setPendingBookings([]);
+      setTransactions([]);
     }
   };
 
@@ -138,7 +145,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           <View style={styles.headerTopRow}>
             <View style={styles.headerLeft}>
               <Text style={styles.greetingText}>Halo, selamat pagi 🍃</Text>
-              <Text style={styles.nameText}>{authAccount?.name ? authAccount.name : "ais kost"}</Text>
+              <Text style={styles.nameText}>{authAccount?.name || "Pemilik Kos"}</Text>
             </View>
             <View style={styles.headerRight}>
               <TouchableOpacity
