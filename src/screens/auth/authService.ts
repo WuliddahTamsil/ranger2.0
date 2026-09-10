@@ -195,6 +195,7 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
         phone: result.data.phone || "",
         address: result.data.address || "",
         profilePhoto: result.data.profilePhoto,
+        googleLinked: Boolean(googleProfile || result.data.googleLinked),
         status: result.data.status,
         rejectionReason: result.data.rejectionReason,
         roleData: result.data.roleData || {},

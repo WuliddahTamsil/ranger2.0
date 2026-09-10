@@ -1,11 +1,14 @@
 import React, { useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
-import { ArrowRight, Eye, EyeOff, KeyRound, LockKeyhole, Mail, ShieldCheck, UserPlus } from "lucide-react-native";
+import { makeRedirectUri } from "expo-auth-session";
+import { ArrowRight, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserPlus } from "lucide-react-native";
 import { Nav } from "../../types";
 import { authColors, authStyles } from "./authStyles";
-import { googleClientIds, hasGoogleClientId } from "./googleAuth";
+import { googleClientIds, googleConfigMessage, hasGoogleClientId } from "./googleAuth";
+import { AuthBrand } from "./components/AuthBrand";
+import { GoogleLogo } from "./components/GoogleLogo";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -36,36 +39,48 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
   return (
     <SafeAreaViewWrapper>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={authStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={styles.hero}>
-            <View style={styles.logo}><Text style={styles.logoText}>G</Text></View>
-            <View><Text style={authStyles.brand}>GEOVERSE 2.0</Text><Text style={styles.heroTitle}>Selamat datang kembali</Text></View>
-          </View>
-          <Text style={authStyles.subtitle}>Masuk dengan akunmu untuk melanjutkan layanan komunitas PGE Kamojang.</Text>
+        <ScrollView contentContainerStyle={[authStyles.scroll, styles.viewport]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={styles.card}>
+            <AuthBrand />
+            <View style={styles.heading}>
+              <Text style={authStyles.title}>Selamat datang kembali</Text>
+              <Text style={authStyles.subtitle}>Masuk dengan akunmu untuk melanjutkan layanan komunitas PGE Kamojang.</Text>
+            </View>
 
-          <View style={authStyles.card}>
-            <View style={styles.secureRow}><ShieldCheck size={17} color={authColors.primary} /><Text style={styles.secureText}>Akses aman · Role mengikuti akun terdaftar</Text></View>
-            <Field label="Email" icon={<Mail size={18} color="#6B7280" />} value={email} onChangeText={setEmail} placeholder="nama@email.com" keyboardType="email-address" autoCapitalize="none" />
-            <Field label="Password" icon={<LockKeyhole size={18} color="#6B7280" />} value={password} onChangeText={setPassword} placeholder="Masukkan password" secureTextEntry={!showPassword} right={<TouchableOpacity onPress={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={18} color="#6B7280" /> : <Eye size={18} color="#6B7280" />}</TouchableOpacity>} />
-            {error ? <Text style={[authStyles.error, styles.errorSpacing]}>{error}</Text> : null}
-            <TouchableOpacity onPress={submit} disabled={loading || googleLoading} style={[authStyles.primaryButton, styles.submit]} activeOpacity={0.8}>
-              {loading ? <ActivityIndicator color="#FFFFFF" /> : <><Text style={authStyles.primaryButtonText}>Masuk ke akun</Text><ArrowRight size={18} color="#FFFFFF" /></>}
+            <View style={styles.form}>
+              <Field label="Email" icon={<Mail size={19} color="#718096" />} value={email} onChangeText={setEmail} placeholder="contoh@email.com" keyboardType="email-address" autoCapitalize="none" />
+              <Field label="Password" icon={<LockKeyhole size={19} color="#718096" />} value={password} onChangeText={setPassword} placeholder="Masukkan password" secureTextEntry={!showPassword} right={<TouchableOpacity onPress={() => setShowPassword((value) => !value)} hitSlop={8}>{showPassword ? <EyeOff size={19} color="#718096" /> : <Eye size={19} color="#718096" />}</TouchableOpacity>} />
+              {error ? <Text style={[authStyles.error, styles.errorSpacing]}>{error}</Text> : null}
+              <Pressable onPress={submit} disabled={loading || googleLoading} style={({ pressed }) => [authStyles.primaryButton, styles.submit, pressed && styles.pressed]}>
+                {loading ? <ActivityIndicator color="#FFFFFF" /> : <><Text style={authStyles.primaryButtonText}>Masuk ke akun</Text><ArrowRight size={18} color="#FFFFFF" /></>}
+              </Pressable>
+              <TouchableOpacity onPress={() => navigate("auth_forgot_password")} style={styles.forgot} activeOpacity={0.7}><KeyRound size={15} color={authColors.primary} /><Text style={styles.forgotText}>Lupa password?</Text></TouchableOpacity>
+            </View>
+
+            <View style={styles.divider}><View style={styles.dividerLine} /><Text style={styles.dividerText}>atau</Text><View style={styles.dividerLine} /></View>
+            <GoogleLoginButton disabled={loading} loading={googleLoading} onBusyChange={setGoogleLoading} onLogin={onGoogleLogin} onError={setError} />
+
+            <TouchableOpacity onPress={() => navigate("auth_register_role")} style={styles.registerButton} activeOpacity={0.7}>
+              <UserPlus size={17} color={authColors.primary} />
+              <Text style={styles.registerPrompt}>Belum punya akun?</Text>
+              <Text style={styles.registerText}>Daftar sekarang</Text>
+              <ArrowRight size={16} color={authColors.primary} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigate("auth_forgot_password")} style={styles.forgot}><KeyRound size={15} color={authColors.primary} /><Text style={styles.forgotText}>Lupa password?</Text></TouchableOpacity>
+            <Text style={styles.legal}>Dengan masuk, kamu menyetujui Ketentuan Layanan dan Kebijakan Privasi GEOVERSE 2.0.</Text>
           </View>
-
-          <View style={styles.divider}><View style={styles.dividerLine} /><Text style={styles.dividerText}>atau</Text><View style={styles.dividerLine} /></View>
-          <GoogleLoginButton disabled={loading} loading={googleLoading} onBusyChange={setGoogleLoading} onLogin={onGoogleLogin} onError={setError} />
-
-          <TouchableOpacity onPress={() => navigate("auth_register_role")} style={styles.registerButton}><UserPlus size={17} color={authColors.primary} /><Text style={styles.registerText}>Belum punya akun? Daftar sekarang</Text></TouchableOpacity>
-          <Text style={styles.legal}>Dengan masuk, kamu menyetujui Ketentuan Layanan dan Kebijakan Privasi GEOVERSE 2.0.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaViewWrapper>
   );
 };
 
-const SafeAreaViewWrapper: React.FC<React.PropsWithChildren> = ({ children }) => <View style={authStyles.container}>{children}</View>;
+const SafeAreaViewWrapper: React.FC<React.PropsWithChildren> = ({ children }) => (
+  <View style={authStyles.container}>
+    <View pointerEvents="none" style={styles.shapeTop} />
+    <View pointerEvents="none" style={styles.shapeBottom} />
+    {children}
+  </View>
+);
 
 interface GoogleLoginButtonProps {
   disabled: boolean;
@@ -75,31 +90,16 @@ interface GoogleLoginButtonProps {
   onError: (message: string) => void;
 }
 
-// Keep the OAuth hook out of the initial login render. Without a configured
-// Google Client ID, some Expo runtimes throw while creating the auth request.
 const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = (props) => {
   if (!hasGoogleClientId) {
-    return (
-      <TouchableOpacity
-        onPress={() => props.onError("Login Google belum aktif. Tambahkan Google Client ID di environment aplikasi.")}
-        disabled={props.disabled}
-        style={[authStyles.secondaryButton, styles.googleButton]}
-        activeOpacity={0.8}
-      >
-        <View style={styles.googleMark}><Text style={styles.googleMarkText}>G</Text></View>
-        <Text style={authStyles.secondaryButtonText}>Lanjutkan dengan Google</Text>
-      </TouchableOpacity>
-    );
+    return <TouchableOpacity onPress={() => props.onError(googleConfigMessage)} disabled={props.disabled} style={[authStyles.secondaryButton, styles.googleButton]} activeOpacity={0.8}><GoogleLogo /><Text style={authStyles.secondaryButtonText}>Lanjutkan dengan Google</Text></TouchableOpacity>;
   }
 
   return <ConfiguredGoogleLoginButton {...props} />;
 };
 
 const ConfiguredGoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ disabled, loading, onBusyChange, onLogin, onError }) => {
-  const [request, , promptAsync] = Google.useAuthRequest({
-    ...googleClientIds,
-    redirectUri: makeRedirectUri({ scheme: "geoverse" }),
-  });
+  const [request, , promptAsync] = Google.useAuthRequest({ ...googleClientIds, redirectUri: makeRedirectUri({ scheme: "geoverse" }) });
 
   const submit = async () => {
     onError("");
@@ -108,14 +108,14 @@ const ConfiguredGoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ disable
       if (!request) throw new Error("Konfigurasi Google belum siap. Coba lagi beberapa saat.");
       const result = await promptAsync();
       if (result.type === "success") {
-        const token =
-          result.authentication?.accessToken ||
-          result.params?.id_token ||
-          result.params?.access_token;
+        const token = result.authentication?.accessToken || result.params?.id_token || result.params?.access_token;
         if (!token) throw new Error("Google tidak mengembalikan token autentikasi.");
         await onLogin(token);
       } else if (result.type === "error") {
-        onError("Login Google ditolak atau dibatalkan. Coba lagi.");
+        const errorCode = result.params?.error;
+        onError(errorCode === "disabled_client"
+          ? "Google OAuth Client sedang dinonaktifkan. Aktifkan client tersebut di Google Cloud Console atau ganti Client ID aktif di file .env."
+          : "Login Google ditolak atau dibatalkan. Coba lagi.");
       }
     } catch (caught) {
       onError(caught instanceof Error ? caught.message : "Login Google belum dapat diproses.");
@@ -124,40 +124,35 @@ const ConfiguredGoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ disable
     }
   };
 
-  return (
-    <TouchableOpacity onPress={() => void submit()} disabled={disabled || loading} style={[authStyles.secondaryButton, styles.googleButton]} activeOpacity={0.8}>
-      {loading ? <ActivityIndicator color={authColors.primary} /> : <><View style={styles.googleMark}><Text style={styles.googleMarkText}>G</Text></View><Text style={authStyles.secondaryButtonText}>Lanjutkan dengan Google</Text></>}
-    </TouchableOpacity>
-  );
+  return <TouchableOpacity onPress={() => void submit()} disabled={disabled || loading} style={[authStyles.secondaryButton, styles.googleButton]} activeOpacity={0.8}>{loading ? <ActivityIndicator color={authColors.primary} /> : <><GoogleLogo /><Text style={authStyles.secondaryButtonText}>Lanjutkan dengan Google</Text></>}</TouchableOpacity>;
 };
 
 const Field: React.FC<React.ComponentProps<typeof TextInput> & { label: string; icon: React.ReactNode; right?: React.ReactNode }> = ({ label, icon, right, ...props }) => (
-  <View style={styles.fieldGroup}><Text style={authStyles.label}>{label}</Text><View style={styles.inputShell}>{icon}<TextInput {...props} style={[authStyles.input, styles.input]} placeholderTextColor="#9CA3AF" /></View>{right ? <View style={styles.inputRight}>{right}</View> : null}</View>
+  <View style={styles.fieldGroup}><Text style={authStyles.label}>{label}</Text><View style={styles.inputShell}>{icon}<TextInput {...props} style={[authStyles.input, styles.input]} placeholderTextColor="#718096" />{right ? <View>{right}</View> : null}</View></View>
 );
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  hero: { flexDirection: "row", alignItems: "center", marginTop: 10 },
-  logo: { width: 52, height: 52, borderRadius: 17, backgroundColor: authColors.primary, alignItems: "center", justifyContent: "center", marginRight: 13 },
-  logoText: { color: "#FFFFFF", fontSize: 29, fontWeight: "900" },
-  heroTitle: { color: authColors.ink, fontSize: 22, fontWeight: "800", marginTop: 3 },
-  secureRow: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: authColors.mint, borderRadius: 10, padding: 10, marginBottom: 18 },
-  secureText: { color: authColors.primaryDark, fontSize: 12, fontWeight: "700" },
-  fieldGroup: { marginBottom: 15 },
-  inputShell: { flexDirection: "row", alignItems: "center", position: "relative" },
-  input: { flex: 1, marginLeft: -28, paddingLeft: 42 },
-  inputRight: { position: "absolute", right: 14, bottom: 15 },
+  viewport: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 16, paddingTop: 28, paddingBottom: 38 },
+  card: { width: "100%", maxWidth: 560, backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: "#E5E9EE", paddingHorizontal: 38, paddingTop: 38, paddingBottom: 30, shadowColor: "#142238", shadowOpacity: 0.07, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
+  shapeTop: { position: "absolute", width: 280, height: 160, borderRadius: 140, borderWidth: 1, borderColor: "rgba(8, 122, 75, 0.06)", top: -80, right: -90, transform: [{ rotate: "-18deg" }] },
+  shapeBottom: { position: "absolute", width: 360, height: 190, borderRadius: 190, borderWidth: 1, borderColor: "rgba(20, 34, 56, 0.045)", bottom: -115, left: -140, transform: [{ rotate: "18deg" }] },
+  heading: { marginTop: 34 },
+  form: { marginTop: 30 },
+  fieldGroup: { marginBottom: 18 },
+  inputShell: { flexDirection: "row", alignItems: "center", gap: 11, backgroundColor: "#F7F9F8", borderWidth: 1, borderColor: "#D6DEE6", borderRadius: 12, minHeight: 54, paddingHorizontal: 15 },
+  input: { flex: 1, paddingHorizontal: 0, backgroundColor: "transparent", borderWidth: 0, minHeight: 52 },
   errorSpacing: { marginBottom: 12 },
   submit: { flexDirection: "row", gap: 9, marginTop: 4 },
-  forgot: { flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", marginTop: 17 },
-  forgotText: { color: authColors.primary, fontSize: 13, fontWeight: "800" },
-  divider: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 18 },
+  pressed: { opacity: 0.88, transform: [{ scale: 0.995 }] },
+  forgot: { flexDirection: "row", gap: 7, alignItems: "center", justifyContent: "center", marginTop: 19 },
+  forgotText: { color: authColors.primary, fontSize: 13, fontWeight: "700" },
+  divider: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 25 },
   dividerLine: { flex: 1, height: 1, backgroundColor: authColors.line },
-  dividerText: { color: "#9CA3AF", fontSize: 12 },
-  googleButton: { flexDirection: "row", gap: 10 },
-  googleMark: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: "#D1D5DB", alignItems: "center", justifyContent: "center" },
-  googleMarkText: { color: "#4285F4", fontWeight: "900", fontSize: 15 },
-  registerButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 24 },
+  dividerText: { color: authColors.muted, fontSize: 12, fontWeight: "600" },
+  googleButton: { flexDirection: "row", gap: 11 },
+  registerButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 28, paddingTop: 23, borderTopWidth: 1, borderTopColor: authColors.line },
+  registerPrompt: { color: authColors.muted, fontSize: 13 },
   registerText: { color: authColors.primary, fontSize: 13, fontWeight: "800" },
-  legal: { textAlign: "center", color: "#9CA3AF", fontSize: 11, lineHeight: 16, marginTop: 20, paddingHorizontal: 15 },
+  legal: { textAlign: "center", color: "#8A98A9", fontSize: 11, lineHeight: 16, marginTop: 20, paddingHorizontal: 15 },
 });

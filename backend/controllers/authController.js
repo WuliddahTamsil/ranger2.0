@@ -119,6 +119,7 @@ const registerUser = async (req, res) => {
         phone: user.phone,
         address: user.address,
         profilePhoto: user.profilePhoto,
+        googleLinked: user.googleLinked,
         status: user.status,
         roleData: user.roleData,
         documents: user.documents,

@@ -142,7 +142,7 @@ export default function App() {
       case "role":
         return <RoleScreen navigate={navigate} />;
       case "auth_register_role":
-        return <RegisterRoleScreen navigate={navigate} onSelect={(role) => { setRegistrationRole(role); navigate("auth_register"); }} />;
+        return <RegisterRoleScreen navigate={navigate} googleDraft={googleDraft} onGoogleConnect={handleGoogleLogin} onSelect={(role) => { setRegistrationRole(role); navigate("auth_register"); }} />;
       case "auth_register":
         return (
           <RegisterFlowScreen

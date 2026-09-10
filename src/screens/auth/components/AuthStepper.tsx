@@ -19,14 +19,14 @@ export const AuthStepper: React.FC<{ current: number; labels: string[] }> = ({ c
 );
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: "row", alignItems: "flex-start", marginTop: 22, marginBottom: 8 },
-  item: { alignItems: "center", width: 64 },
-  circle: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#F3F4F6", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#D1D5DB" },
+  wrap: { flexDirection: "row", alignItems: "flex-start", marginTop: 24, marginBottom: 7, paddingHorizontal: 2 },
+  item: { alignItems: "center", width: 66 },
+  circle: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#D5DEE9" },
   circleActive: { backgroundColor: authColors.primary, borderColor: authColors.primary },
   number: { color: "#6B7280", fontSize: 12, fontWeight: "800" },
   numberActive: { color: "#FFFFFF" },
-  label: { color: "#9CA3AF", fontSize: 10, marginTop: 6, textAlign: "center" },
+  label: { color: "#9AA7BA", fontSize: 10, marginTop: 6, textAlign: "center" },
   labelActive: { color: authColors.primary, fontWeight: "800" },
-  line: { flex: 1, height: 2, backgroundColor: "#E5E7EB", marginTop: 13 },
+  line: { flex: 1, height: 3, backgroundColor: "#E6ECF2", marginTop: 14, borderRadius: 2 },
   lineActive: { backgroundColor: authColors.primary },
 });

@@ -75,15 +75,17 @@ export const getMissingDocuments = (
   .filter((requirement) => requirement.required && !documents[requirement.key])
   .map((requirement) => requirement.label);
 
-export const validateBaseStep = (form: RegistrationForm, options?: { allowPasswordless?: boolean }) => {
+export const validateBaseStep = (form: RegistrationForm, options?: { allowPasswordless?: boolean; customer?: boolean }) => {
   if (!form.name.trim()) return "Nama lengkap wajib diisi.";
   if (!validateEmail(form.email)) return "Format email belum benar.";
-  if (normalizePhone(form.phone).length < 11) return "Nomor WhatsApp belum lengkap.";
+  if (normalizePhone(form.phone).length < 11) return "Nomor HP belum lengkap.";
   if (!options?.allowPasswordless || form.password || form.passwordConfirmation) {
     if (!validatePassword(form.password)) return "Password minimal 8 karakter dan harus berisi huruf serta angka.";
     if (form.password !== form.passwordConfirmation) return "Konfirmasi password belum sama.";
   }
-  if (!form.address.trim()) return "Alamat lengkap wajib diisi.";
+  if (!options?.customer) {
+    if (!form.address.trim()) return "Alamat lengkap wajib diisi.";
+  }
   return null;
 };
 

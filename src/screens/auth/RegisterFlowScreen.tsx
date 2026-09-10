@@ -7,6 +7,7 @@ import { getDocumentRequirements, getMissingDocuments, validateBaseStep, validat
 import { authColors, authStyles } from "./authStyles";
 import { AuthStepper } from "./components/AuthStepper";
 import { DocumentUploadCard } from "./components/DocumentUploadCard";
+import { AuthBrand } from "./components/AuthBrand";
 
 interface Props extends Nav {
   role: AuthRegistrationRole;
@@ -67,7 +68,8 @@ export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEma
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const requirements = useMemo(() => getDocumentRequirements(role), [role]);
-  const labels = ["Akun", role === "customer" ? "Profil" : "Data", "Dokumen", "Review"];
+  const isCustomer = role === "customer";
+  const labels = isCustomer ? ["Akun"] : ["Akun", "Data", "Dokumen", "Review"];
 
   const update = (key: keyof RegistrationForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const updateRoleData = (key: string, value: string) => setForm((current) => ({ ...current, roleData: { ...current.roleData, [key]: value } }));
@@ -75,7 +77,7 @@ export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEma
   const next = async () => {
     setError("");
     if (step === 0) {
-      const validation = validateBaseStep(form, { allowPasswordless: googleRegistration });
+      const validation = validateBaseStep(form, { allowPasswordless: googleRegistration, customer: isCustomer });
       if (validation) { setError(validation); return; }
     }
     if (step === 1) {
@@ -86,7 +88,7 @@ export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEma
       const missing = getMissingDocuments(role, form.documents);
       if (missing.length) { setError(`Dokumen wajib belum lengkap: ${missing.join(", ")}.`); return; }
     }
-    if (step < 3) { setStep((current) => current + 1); return; }
+    if (step < labels.length - 1) { setStep((current) => current + 1); return; }
     setLoading(true);
     try {
       const result = await onSubmit(form);
@@ -107,38 +109,40 @@ export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEma
     <SafeAreaView style={authStyles.container}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={authStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={styles.content}>
           <TouchableOpacity onPress={back} style={styles.back}><ArrowLeft size={17} color={authColors.primary} /><Text style={styles.backText}>Kembali</Text></TouchableOpacity>
-          <Text style={authStyles.brand}>Registrasi {ROLE_LABELS[role]}</Text>
+          <AuthBrand />
+          <Text style={styles.contextLabelClean}>REGISTRASI / {ROLE_LABELS[role].toUpperCase()}</Text>
+          <Text style={styles.contextLabel}>REGISTRASI · {ROLE_LABELS[role].toUpperCase()}</Text>
           <Text style={authStyles.title}>Lengkapi data akun</Text>
-          <Text style={authStyles.subtitle}>Data yang bertanda bintang wajib diisi. Kamu bisa mengganti dokumen sebelum mengirim pendaftaran.</Text>
+          <Text style={authStyles.subtitle}>{isCustomer ? "Buat akun Customer dengan cepat menggunakan email dan password, atau lanjutkan dengan Google." : "Data yang bertanda bintang wajib diisi. Kamu bisa mengganti dokumen sebelum mengirim pendaftaran."}</Text>
           <AuthStepper current={step} labels={labels} />
 
-          {step === 0 && <BaseStep form={form} update={update} googleRegistration={googleRegistration} setProfilePhoto={(document) => setForm((current) => ({ ...current, profilePhoto: document }))} />}
-          {step === 1 && <RoleStep role={role} roleData={form.roleData} updateRoleData={updateRoleData} />}
-          {step === 2 && <DocumentsStep role={role} requirements={requirements} documents={form.documents} setDocument={(key, document) => setForm((current) => { const documents = { ...current.documents }; if (document) documents[key] = document; else delete documents[key]; return { ...current, documents }; })} />}
-          {step === 3 && <ReviewStep form={form} role={role} requirements={requirements} />}
+          {step === 0 && <BaseStep form={form} update={update} customer={isCustomer} googleRegistration={googleRegistration} setProfilePhoto={(document) => setForm((current) => ({ ...current, profilePhoto: document }))} />}
+          {!isCustomer && step === 1 && <RoleStep role={role} roleData={form.roleData} updateRoleData={updateRoleData} />}
+          {!isCustomer && step === 2 && <DocumentsStep role={role} requirements={requirements} documents={form.documents} setDocument={(key, document) => setForm((current) => { const documents = { ...current.documents }; if (document) documents[key] = document; else delete documents[key]; return { ...current, documents }; })} />}
+          {!isCustomer && step === 3 && <ReviewStep form={form} role={role} requirements={requirements} />}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <TouchableOpacity onPress={() => void next()} disabled={loading} style={[authStyles.primaryButton, styles.next]} activeOpacity={0.8}>
-            {loading ? <ActivityIndicator color="#FFFFFF" /> : <><Text style={authStyles.primaryButtonText}>{step === 3 ? "Kirim pendaftaran" : "Lanjutkan"}</Text>{step === 3 ? <ShieldCheck size={18} color="#FFFFFF" /> : <ArrowRight size={18} color="#FFFFFF" />}</>}
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : <><Text style={authStyles.primaryButtonText}>{!isCustomer && step === 3 ? "Kirim pendaftaran" : isCustomer ? "Buat akun" : "Lanjutkan"}</Text>{!isCustomer && step === 3 ? <ShieldCheck size={18} color="#FFFFFF" /> : <ArrowRight size={18} color="#FFFFFF" />}</>}
           </TouchableOpacity>
-          {step === 3 && <Text style={styles.submitHint}>Dengan mengirim, kamu menyetujui verifikasi data dan dokumen oleh admin GEOVERSE 2.0.</Text>}
+          {!isCustomer && step === 3 && <Text style={styles.submitHint}>Dengan mengirim, kamu menyetujui verifikasi data dan dokumen oleh admin GEOVERSE 2.0.</Text>}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
-const BaseStep: React.FC<{ form: RegistrationForm; update: (key: keyof RegistrationForm, value: string) => void; googleRegistration?: boolean; setProfilePhoto: (document?: RegistrationForm["profilePhoto"]) => void }> = ({ form, update, googleRegistration, setProfilePhoto }) => (
+const BaseStep: React.FC<{ form: RegistrationForm; update: (key: keyof RegistrationForm, value: string) => void; customer: boolean; googleRegistration?: boolean; setProfilePhoto: (document?: RegistrationForm["profilePhoto"]) => void }> = ({ form, update, customer, googleRegistration, setProfilePhoto }) => (
   <View style={authStyles.card}>
-    <SectionHeading icon={<UserRound size={18} color={authColors.primary} />} title="Informasi dasar" text="Gunakan data yang sesuai dengan identitas resmi." />
+    <SectionHeading icon={<UserRound size={18} color={authColors.primary} />} title={customer ? "Buat akun Customer" : "Informasi dasar"} text={customer ? "Masukkan data utama untuk mulai menggunakan layanan GEOVERSE 2.0." : "Gunakan data yang sesuai dengan identitas resmi."} />
     <TextField label="Nama lengkap *" value={form.name} onChangeText={(value) => update("name", value)} placeholder="Nama sesuai identitas" />
     <TextField label="Email *" value={form.email} onChangeText={(value) => update("email", value)} placeholder="nama@email.com" keyboardType="email-address" autoCapitalize="none" />
-    <TextField label="Nomor WhatsApp *" value={form.phone} onChangeText={(value) => update("phone", value)} placeholder="08xx-xxxx-xxxx" keyboardType="phone-pad" />
+    <TextField label={customer ? "Nomor HP *" : "Nomor WhatsApp *"} value={form.phone} onChangeText={(value) => update("phone", value)} placeholder="08xx-xxxx-xxxx" keyboardType="phone-pad" />
     {googleRegistration ? <View style={styles.googleNotice}><ShieldCheck size={17} color={authColors.primary} /><Text style={styles.googleNoticeText}>Akun ini menggunakan keamanan Google. Password GEOVERSE 2.0 tidak perlu dibuat lagi.</Text></View> : <><TextField label="Password *" value={form.password} onChangeText={(value) => update("password", value)} placeholder="Minimal 8 karakter, huruf + angka" secureTextEntry /><TextField label="Konfirmasi password *" value={form.passwordConfirmation} onChangeText={(value) => update("passwordConfirmation", value)} placeholder="Ulangi password" secureTextEntry /></>}
-    <TextField label="Alamat lengkap *" value={form.address} onChangeText={(value) => update("address", value)} placeholder="Alamat rumah / domisili" multiline icon={<MapPin size={17} color="#6B7280" />} />
-    <Text style={styles.photoLabel}>Foto profil <Text style={styles.optional}>Opsional</Text></Text>
-    <DocumentUploadCard documentKey="profile_photo" label="Foto profil" description="Tambahkan foto agar mitra/customer lebih mudah dikenali." document={form.profilePhoto} onChange={setProfilePhoto} compact />
+    {!customer && <><TextField label="Alamat lengkap *" value={form.address} onChangeText={(value) => update("address", value)} placeholder="Alamat rumah / domisili" multiline icon={<MapPin size={17} color="#6B7280" />} /><Text style={styles.photoLabel}>Foto profil <Text style={styles.optional}>Opsional</Text></Text><DocumentUploadCard documentKey="profile_photo" label="Foto profil" description="Tambahkan foto agar mitra/customer lebih mudah dikenali." document={form.profilePhoto} onChange={setProfilePhoto} compact /></>}
   </View>
 );
 
@@ -174,8 +178,11 @@ const ReviewRow: React.FC<{ label: string; value: string }> = ({ label, value })
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, marginBottom: 20 },
+  content: { width: "100%", maxWidth: 560, alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: "#E5E9EE", padding: 36, shadowColor: "#142238", shadowOpacity: 0.07, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
+  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, marginBottom: 28 },
   backText: { color: authColors.primary, fontSize: 13, fontWeight: "800" },
+  contextLabel: { display: "none" },
+  contextLabelClean: { color: authColors.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.05, marginTop: 28 },
   field: { marginTop: 14 },
   textFieldShell: { flexDirection: "row", alignItems: "center", gap: 7 },
   textInput: { flex: 1 },

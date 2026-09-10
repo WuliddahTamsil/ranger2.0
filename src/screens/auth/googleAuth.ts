@@ -1,15 +1,27 @@
 import { GoogleProfile } from "./authTypes";
+import { Platform } from "react-native";
 
-const DEFAULT_GOOGLE_CLIENT_ID = "974612496910-735lisestvgucktp7f19nm1e426avcth.apps.googleusercontent.com";
-
-export const googleClientIds = {
-  expoClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
-  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
-  androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
+const readClientId = (key: string) => {
+  const value = process.env[key];
+  return typeof value === "string" ? value.trim() : "";
 };
 
-export const hasGoogleClientId = Object.values(googleClientIds).some(Boolean);
+export const googleClientIds = {
+  expoClientId: readClientId("EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID"),
+  iosClientId: readClientId("EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID"),
+  androidClientId: readClientId("EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID"),
+  webClientId: readClientId("EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID"),
+};
+
+const activeClientId = Platform.OS === "web"
+  ? googleClientIds.webClientId
+  : Platform.OS === "ios"
+    ? googleClientIds.iosClientId
+    : googleClientIds.androidClientId;
+
+export const hasGoogleClientId = Boolean(activeClientId);
+
+export const googleConfigMessage = "Login Google belum siap. Isi Google OAuth Client ID yang aktif di file .env, lalu restart Expo.";
 
 // Helper to decode JWT ID Token if Google returns id_token
 const parseIdToken = (token: string): Partial<GoogleProfile> | null => {
