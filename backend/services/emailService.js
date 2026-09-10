@@ -26,11 +26,11 @@ const sendMitraApprovalEmail = async ({ email, name, role }) => {
     pemilik_laundry: "Pemilik Laundry",
     pemilik_catering: "Pemilik Catering",
     pemilik_marketplace: "Pemilik Toko Marketplace",
-    driver: "Ranger Driver",
+    driver: "GEOVERSE Driver",
   };
-  const roleLabel = roleLabelMap[role] || "Mitra Ranger";
+  const roleLabel = roleLabelMap[role] || "Mitra GEOVERSE";
 
-  const subject = `🎉 Selamat! Pendaftaran Akun ${roleLabel} Anda Telah Disetujui - Ranger App`;
+  const subject = `🎉 Selamat! Pendaftaran Akun ${roleLabel} Anda Telah Disetujui - GEOVERSE App`;
   const html = `
     <!DOCTYPE html>
     <html>
@@ -58,13 +58,13 @@ const sendMitraApprovalEmail = async ({ email, name, role }) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>RANGER PLATFORM</h1>
+          <h1>GEOVERSE PLATFORM</h1>
           <p>Pemberitahuan Verifikasi Akun Mitra</p>
         </div>
         <div class="content">
           <div class="badge-success">✓ DOKUMEN & AKUN DISETUJUI</div>
           <div class="greeting">Halo, ${name}! 👋</div>
-          <p class="text">Kabar baik! Tim Administrator Ranger telah memeriksa dan menyetujui seluruh data serta berkas pendaftaran Anda. Akun Anda kini telah <strong>AKTIF</strong> dan siap digunakan.</p>
+          <p class="text">Kabar baik! Tim Administrator GEOVERSE telah memeriksa dan menyetujui seluruh data serta berkas pendaftaran Anda. Akun Anda kini telah <strong>AKTIF</strong> dan siap digunakan.</p>
           
           <div class="card-details">
             <div class="detail-row">
@@ -85,10 +85,10 @@ const sendMitraApprovalEmail = async ({ email, name, role }) => {
             </div>
           </div>
 
-          <p class="text">Sekarang Anda dapat membuka aplikasi Ranger dan langsung login untuk mulai mengelola operasional bisnis Anda.</p>
+          <p class="text">Sekarang Anda dapat membuka aplikasi GEOVERSE dan langsung login untuk mulai mengelola operasional bisnis Anda.</p>
         </div>
         <div class="footer">
-          &copy; ${new Date().getFullYear()} Ranger Ecosystem. Dikirim dari Administrator Ranger (${ADMIN_EMAIL}).
+          &copy; ${new Date().getFullYear()} GEOVERSE Ecosystem. Dikirim dari Administrator GEOVERSE (${ADMIN_EMAIL}).
         </div>
       </div>
     </body>
@@ -99,7 +99,7 @@ const sendMitraApprovalEmail = async ({ email, name, role }) => {
     const transporter = createTransporter();
     if (transporter) {
       await transporter.sendMail({
-        from: `"Administrator Ranger" <${ADMIN_EMAIL}>`,
+        from: `"Administrator GEOVERSE" <${ADMIN_EMAIL}>`,
         to: email,
         subject,
         html,
@@ -126,11 +126,11 @@ const sendMitraRejectionEmail = async ({ email, name, role, reason }) => {
     pemilik_laundry: "Pemilik Laundry",
     pemilik_catering: "Pemilik Catering",
     pemilik_marketplace: "Pemilik Toko Marketplace",
-    driver: "Ranger Driver",
+    driver: "GEOVERSE Driver",
   };
-  const roleLabel = roleLabelMap[role] || "Mitra Ranger";
+  const roleLabel = roleLabelMap[role] || "Mitra GEOVERSE";
 
-  const subject = `Pemberitahuan Pendaftaran Akun ${roleLabel} - Ranger App`;
+  const subject = `Pemberitahuan Pendaftaran Akun ${roleLabel} - GEOVERSE App`;
   const html = `
     <!DOCTYPE html>
     <html>
@@ -155,23 +155,23 @@ const sendMitraRejectionEmail = async ({ email, name, role, reason }) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>RANGER PLATFORM</h1>
+          <h1>GEOVERSE PLATFORM</h1>
           <p>Pemberitahuan Status Verifikasi Akun</p>
         </div>
         <div class="content">
           <div class="badge-reject">⚠️ PERLU REVISI DOKUMEN</div>
           <div class="greeting">Halo, ${name}</div>
-          <p class="text">Terima kasih atas pendaftaran Anda sebagai <strong>${roleLabel}</strong> di Ranger Platform. Setelah dilakukan peninjauan, dokumen pendaftaran Anda saat ini belum dapat disetujui dengan alasan berikut:</p>
+          <p class="text">Terima kasih atas pendaftaran Anda sebagai <strong>${roleLabel}</strong> di GEOVERSE Platform. Setelah dilakukan peninjauan, dokumen pendaftaran Anda saat ini belum dapat disetujui dengan alasan berikut:</p>
           
           <div class="reason-box">
             <div class="reason-title">Catatan Administrator:</div>
-            <p class="reason-text">${reason || "Dokumen atau data yang diunggah belum memenuhi persyaratan verifikasi standar Ranger."}</p>
+            <p class="reason-text">${reason || "Dokumen atau data yang diunggah belum memenuhi persyaratan verifikasi standar GEOVERSE."}</p>
           </div>
 
-          <p class="text">Silakan buka kembali aplikasi Ranger untuk memperbaiki berkas dokumen atau menghubungi admin bantuan kami.</p>
+          <p class="text">Silakan buka kembali aplikasi GEOVERSE untuk memperbaiki berkas dokumen atau menghubungi admin bantuan kami.</p>
         </div>
         <div class="footer">
-          &copy; ${new Date().getFullYear()} Ranger Ecosystem. Dikirim dari Administrator Ranger (${ADMIN_EMAIL}).
+          &copy; ${new Date().getFullYear()} GEOVERSE Ecosystem. Dikirim dari Administrator GEOVERSE (${ADMIN_EMAIL}).
         </div>
       </div>
     </body>
@@ -182,7 +182,7 @@ const sendMitraRejectionEmail = async ({ email, name, role, reason }) => {
     const transporter = createTransporter();
     if (transporter) {
       await transporter.sendMail({
-        from: `"Administrator Ranger" <${ADMIN_EMAIL}>`,
+        from: `"Administrator GEOVERSE" <${ADMIN_EMAIL}>`,
         to: email,
         subject,
         html,

@@ -77,7 +77,7 @@ export interface GoogleProfile {
 
 export const ROLE_LABELS: Record<AuthRegistrationRole, string> = {
   customer: "Customer",
-  driver: "Driver Rangers",
+  driver: "Driver GEOVERSE",
   pemilik_marketplace: "Pemilik Marketplace",
   pemilik_catering: "Pemilik Catering",
   pemilik_laundry: "Pemilik Laundry",

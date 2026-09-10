@@ -92,7 +92,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
         setProducts(result.data.map((product: any) => ({
           id: product._id,
           name: product.name,
-          store: product.ownerId?.roleData?.businessName || product.ownerId?.name || "The Ranger Marketplace",
+          store: product.ownerId?.roleData?.businessName || product.ownerId?.name || "GEOVERSE Marketplace",
           price: product.price,
           rating: product.rating || 0,
           sold: product.sold || 0,
@@ -225,7 +225,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
     if (view === "cart") return "Keranjang Belanja";
     if (view === "checkout") return "Checkout Marketplace";
     if (view === "success") return "Pesanan Berhasil";
-    return "The Ranger Marketplace";
+    return "GEOVERSE Marketplace";
   }, [view]);
 
   const renderMenu = () => (
@@ -286,7 +286,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
     <View style={styles.profileContent}>
       <View style={styles.profileHero}>
         <View style={styles.profileLogoLarge}><Store size={38} color="#1B7A4E" /></View>
-        <Text style={styles.profileStoreName}>The Ranger Marketplace</Text>
+        <Text style={styles.profileStoreName}>GEOVERSE Marketplace</Text>
         <Text style={styles.profileTagline}>Belanja produk lokal, dukung UMKM</Text>
         <View style={styles.profileRatingRow}>
           <Stars rating={4.8} />
@@ -302,7 +302,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
 
       <Text style={styles.contentTitle}>Tentang Toko</Text>
       <Text style={styles.descriptionText}>
-        The Ranger Marketplace menyediakan seluruh menu dan produk dari pemilik marketplace yang terdaftar.
+        GEOVERSE Marketplace menyediakan seluruh menu dan produk dari pemilik marketplace yang terdaftar.
       </Text>
       <View style={styles.ownerCard}>
         <View style={styles.ownerAvatar}><UserRound size={20} color="#1B7A4E" /></View>
@@ -347,7 +347,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
 
   const renderCart = () => (
     <ScrollView contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.storeMiniCard}><View style={styles.storeMiniIcon}><Store size={19} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.storeMiniName}>The Ranger Marketplace</Text><Text style={styles.storeMiniSub}>Pesanan dari marketplace The Ranger</Text></View><CheckCircle2 size={19} color="#1B7A4E" /></View>
+      <View style={styles.storeMiniCard}><View style={styles.storeMiniIcon}><Store size={19} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.storeMiniName}>GEOVERSE Marketplace</Text><Text style={styles.storeMiniSub}>Pesanan dari marketplace GEOVERSE</Text></View><CheckCircle2 size={19} color="#1B7A4E" /></View>
       {cart.map((line) => (
         <View key={line.product.id} style={styles.cartLine}>
           <Image source={{ uri: line.product.img }} style={styles.cartImage} />
@@ -385,7 +385,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
     <ScrollView contentContainerStyle={styles.successContent}>
       <View style={styles.successIcon}><Check size={36} color="#FFFFFF" strokeWidth={3} /></View>
       <Text style={styles.successTitle}>Pesanan Berhasil!</Text>
-      <Text style={styles.successSubtitle}>Pesanan kamu sedang diproses oleh The Ranger Marketplace.</Text>
+      <Text style={styles.successSubtitle}>Pesanan kamu sedang diproses oleh GEOVERSE Marketplace.</Text>
       <View style={styles.invoiceCard}><View style={styles.invoiceHeader}><View><Text style={styles.invoiceLabel}>NOMOR PESANAN</Text><Text style={styles.invoiceNumber}>{createdOrderCode || "Pesanan tersimpan"}</Text></View><ReceiptText size={24} color="#1B7A4E" /></View><View style={styles.summaryDivider} /><SummaryRow label="Status pembayaran" value={selectedPayment === "cod" ? "Bayar di tempat" : "Berhasil"} green /><SummaryRow label="Metode" value={selectedPaymentLabel} /><SummaryRow label="Total" value={rp(total)} strong /></View>
       <TouchableOpacity style={styles.primaryButton} onPress={() => { setCart([]); setView("catalog"); }}><Text style={styles.primaryButtonText}>Belanja Lagi</Text></TouchableOpacity>
       <TouchableOpacity style={styles.secondaryButton} onPress={() => navigate("c_home")}><Text style={styles.secondaryButtonText}>Kembali ke Beranda</Text></TouchableOpacity>
@@ -474,7 +474,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
       <Modal visible={paymentModalVisible} transparent animationType="slide" onRequestClose={() => setPaymentModalVisible(false)}>
         <View style={styles.modalOverlay}><View style={styles.paymentSheet}><View style={styles.sheetHandle} /><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Pilih Pembayaran</Text><TouchableOpacity onPress={() => setPaymentModalVisible(false)}><X size={20} color="#111827" /></TouchableOpacity></View>{paymentMethods.map((method) => { const selected = selectedPayment === method.id; return <TouchableOpacity key={method.id} style={[styles.paymentOption, selected && styles.paymentOptionSelected]} onPress={() => setSelectedPayment(method.id)}><View style={[styles.paymentIcon, { backgroundColor: `${method.color}15` }]}><WalletCards size={20} color={method.color} /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{method.name}</Text><Text style={styles.paymentSub}>{method.subtitle}</Text></View><View style={[styles.radio, selected && styles.radioSelected]}>{selected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}</View></TouchableOpacity>; })}<TouchableOpacity style={styles.primaryButton} onPress={completeMarketplaceOrder}><Text style={styles.primaryButtonText}>Konfirmasi Pembayaran</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity></View></View>
       </Modal>
-      <CustomerChatModal visible={chatVisible} onClose={() => setChatVisible(false)} orderId="MARKETPLACE" participantName="The Ranger Marketplace" participantType="merchant" initialMessage="Halo Kak, ada yang bisa kami bantu dari marketplace The Ranger?" />
+      <CustomerChatModal visible={chatVisible} onClose={() => setChatVisible(false)} orderId="MARKETPLACE" participantName="GEOVERSE Marketplace" participantType="merchant" initialMessage="Halo Kak, ada yang bisa kami bantu dari marketplace GEOVERSE?" />
     </SafeAreaView>
   );
 };

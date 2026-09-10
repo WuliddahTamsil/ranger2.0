@@ -136,12 +136,12 @@ export const Jelajah: React.FC<JelajahProps> = ({
           {/* Delivery */}
           <TouchableOpacity 
             style={styles.serviceCard}
-            onPress={() => Alert.alert("Rangers Delivery", "Layanan kurir pengiriman barang siap melayani Anda di kawasan Kamojang.")}
+            onPress={() => Alert.alert("GEOVERSE Delivery", "Layanan kurir pengiriman barang siap melayani Anda di kawasan Kamojang.")}
           >
             <View style={[styles.serviceIconBg, { backgroundColor: "#FFF4D8" }]}>
               <Truck size={22} color="#D97706" />
             </View>
-            <Text style={styles.serviceLabel}>Rangers Delivery</Text>
+            <Text style={styles.serviceLabel}>GEOVERSE Delivery</Text>
           </TouchableOpacity>
 
           {/* Voucher */}

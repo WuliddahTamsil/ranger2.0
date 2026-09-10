@@ -339,7 +339,7 @@ const updateCateringOrderStatus = async (req, res) => {
     await order.save();
 
     // Multi-role notifications based on driver journey stage
-    const driverName = order.driverName || "Kurir The Ranger";
+    const driverName = order.driverName || "Kurir GEOVERSE";
     const orderCode = order.orderCode || `#${String(order._id).slice(-8)}`;
 
     if (status === "Menuju Pickup") {

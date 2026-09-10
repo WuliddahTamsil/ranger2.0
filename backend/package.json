@@ -1,7 +1,7 @@
 {
   "name": "ranger-backend",
   "version": "1.0.0",
-  "description": "Backend API for Rangers App with MongoDB Atlas and Google Drive Integration",
+  "description": "Backend API for GEOVERSE with MongoDB Atlas and Google Drive Integration",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

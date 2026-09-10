@@ -50,7 +50,7 @@ const laundryStoreSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      default: "Mitra Laundry Resmi Rangers App",
+      default: "Mitra Laundry Resmi GEOVERSE",
     },
     address: {
       type: String,

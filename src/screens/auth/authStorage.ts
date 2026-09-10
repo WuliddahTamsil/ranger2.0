@@ -11,10 +11,10 @@ export const DEFAULT_ACCOUNTS: AuthAccount[] = [
   {
     id: "admin_seed_001",
     role: "admin",
-    name: "Super Admin Ranger",
+    name: "Super Admin GEOVERSE",
     email: "ranger@gmail.com",
     phone: "081122334455",
-    address: "HQ Ranger Platform, Garut",
+    address: "HQ GEOVERSE Platform, Garut",
     passwordHash: PW_12345678_HASH,
     status: "verified",
     roleData: {},

@@ -15,7 +15,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
     },
     {
       id: "d_home" as const,
-      title: "Driver Rangers",
+      title: "Driver GEOVERSE",
       desc: "Terima orderan antar makanan, barang, dan laundry.",
       icon: Bike,
       color: "#EA580C",

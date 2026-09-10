@@ -295,7 +295,7 @@ export const createLaundryOrder = async (orderPayload: Partial<LaundryOrder>): P
     _id: `lnd_local_${Date.now()}`,
     orderCode: `LND-${Math.floor(1000 + Math.random() * 9000)}`,
     customerId: orderPayload.customerId || "cust_1",
-    customerName: orderPayload.customerName || "Pelanggan Rangers",
+    customerName: orderPayload.customerName || "Pelanggan GEOVERSE",
     customerPhone: orderPayload.customerPhone || "08123456789",
     pickupAddress: orderPayload.pickupAddress || "Jl. Mawar No. 12, Kamojang",
     pickupCoords: orderPayload.pickupCoords || "-7.1432, 107.7845",

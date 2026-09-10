@@ -258,7 +258,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
           </View>
 
           <Text style={styles.merchantDescription}>
-            {store.description || "Mitra Laundry Resmi Rangers App dengan garansi bersih & wangi tahan lama."}
+            {store.description || "Mitra Laundry Resmi GEOVERSE dengan garansi bersih & wangi tahan lama."}
           </Text>
         </View>
 
@@ -662,7 +662,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
             <Text style={styles.dialogTitle}>Pesanan Berhasil Dibuat!</Text>
 
             <Text style={styles.dialogDesc}>
-              Driver Rangers sedang ditugaskan untuk menjemput pakaian Anda ke mitra{" "}
+              Driver GEOVERSE sedang ditugaskan untuk menjemput pakaian Anda ke mitra{" "}
               <Text style={{ fontWeight: "800", color: "#111827" }}>{store.storeName}</Text>. Setelah sampai, pemilik akan menimbang dan menerbitkan tagihan pembayaran.
             </Text>
 

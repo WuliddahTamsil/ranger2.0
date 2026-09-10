@@ -13,10 +13,10 @@ export const SplashScreen: React.FC<Nav> = ({ navigate }) => {
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
-        <Text style={styles.logoText}>R</Text>
+        <Text style={styles.logoText}>G</Text>
       </View>
       <View style={styles.textContainer}>
-        <Text style={styles.title}>Rangers App</Text>
+        <Text style={styles.title}>GEOVERSE</Text>
         <View style={styles.badgeRow}>
           <View style={styles.badge}>
             <Text style={styles.badgeText}>2.0</Text>

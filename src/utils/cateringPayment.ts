@@ -85,7 +85,7 @@ export const createCateringOrder = ({
     address: cateringPO.address || {
       id: "addr-po",
       label: "Rumah Utama",
-      receiverName: "Customer Rangers",
+      receiverName: "Customer GEOVERSE",
       phoneNumber: "081234567890",
       fullAddress: "Jl. Aster No. 7, Kamojang, Kab. Garut",
       isMain: true,

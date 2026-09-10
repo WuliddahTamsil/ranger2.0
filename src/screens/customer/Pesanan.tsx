@@ -141,7 +141,7 @@ export const Pesanan: React.FC<PesananProps> = ({
     if (resolvedType === "driver") {
       participantName = (order as any).driverName
         ? `${(order as any).driverName} (Kurir)`
-        : "Kurir Rangers";
+        : "Kurir GEOVERSE";
     } else {
       participantName = normalizedType.includes("kos")
         ? "Pemilik Kos"
@@ -179,7 +179,7 @@ export const Pesanan: React.FC<PesananProps> = ({
       
       parsedItems = [
         {
-          name: order.item || "Pesanan The Ranger",
+          name: order.item || "Pesanan GEOVERSE",
           quantity: qty,
           price: itemPrice > 0 ? itemPrice : order.total,
           total: itemPrice > 0 ? itemPrice * qty : order.total,
@@ -195,17 +195,17 @@ export const Pesanan: React.FC<PesananProps> = ({
 
     const invoiceData: InvoiceData = {
       id: order.id,
-      invoiceNumber: `INV/20260909/RNG-${formattedId}`,
+      invoiceNumber: `INV/20260909/GEO-${formattedId}`,
       date: order.date || "09 Sep 2026",
       time: raw.time || "14:45 WIB",
       status: order.status,
       orderType: order.type,
-      storeName: raw.storeName || raw.store || (order.type.toLowerCase().includes("cater") ? "Dapur Barokah Catering" : "Mitra Toko The Ranger"),
+      storeName: raw.storeName || raw.store || (order.type.toLowerCase().includes("cater") ? "Dapur Barokah Catering" : "Mitra Toko GEOVERSE"),
       storeAddress: raw.storeAddress || "Jl. Raya Telang No. 45, Kamal, Bangkalan",
-      customerName: authAccount?.name || raw.customer || "Customer The Ranger",
+      customerName: authAccount?.name || raw.customer || "Customer GEOVERSE",
       customerPhone: authAccount?.phone || raw.customerPhone || "0812-3456-7890",
       customerAddress: customerAddressStr,
-      driverName: raw.driverName || (raw.driver?.name ? raw.driver.name : "Wuwu (Kurir The Ranger)"),
+      driverName: raw.driverName || (raw.driver?.name ? raw.driver.name : "Wuwu (Kurir GEOVERSE)"),
       driverVehicle: raw.driverVehicle || (raw.driver?.vehicle ? raw.driver.vehicle : "Motor"),
       driverPlate: raw.driverPlate || (raw.driver?.plateNumber ? raw.driver.plateNumber : "M 4128 AA"),
       items: parsedItems,
@@ -512,7 +512,7 @@ export const Pesanan: React.FC<PesananProps> = ({
                   <View style={styles.driverInfoBody}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       <Text style={styles.driverHighlightName}>
-                        {(selectedOrder as any).driverName || "Kurir Rangers"}
+                        {(selectedOrder as any).driverName || "Kurir GEOVERSE"}
                       </Text>
                       <View style={styles.driverRoleTag}>
                         <Text style={styles.driverRoleTagText}>Kurir</Text>
@@ -581,7 +581,7 @@ export const Pesanan: React.FC<PesananProps> = ({
                       {selectedOrder.status === "Siap"
                         ? "Pesanan sudah siap di outlet! Menunggu kurir mengambil."
                         : ["Menuju Pickup", "Sampai Pickup"].includes(selectedOrder.status)
-                        ? `Kurir ${(selectedOrder as any).driverName || "Rangers"} sedang menuju toko penjemputan.`
+                        ? `Kurir ${(selectedOrder as any).driverName || "GEOVERSE"} sedang menuju toko penjemputan.`
                         : "Kurir telah ditugaskan."}
                     </Text>
                   </View>
@@ -600,7 +600,7 @@ export const Pesanan: React.FC<PesananProps> = ({
                     <Text style={styles.timelineTitle}>Sedang Diantar Kurir</Text>
                     <Text style={styles.timelineDesc}>
                       {["Diambil", "Mengantar", "Dikirim"].includes(selectedOrder.status)
-                        ? `Kurir ${(selectedOrder as any).driverName || "Rangers"} sedang dalam perjalanan membawa pesanan ke lokasimu.`
+                        ? `Kurir ${(selectedOrder as any).driverName || "GEOVERSE"} sedang dalam perjalanan membawa pesanan ke lokasimu.`
                         : selectedOrder.status === "Selesai"
                         ? "Pengantaran telah diselesaikan."
                         : "Menunggu kurir memulai perjalanan."}

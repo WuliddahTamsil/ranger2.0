@@ -551,7 +551,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                 <View style={styles.qrisContainer}>
                   <Text style={styles.qrisTitle}>Scan Barcode QRIS Mitra</Text>
                   <Image
-                    source={{ uri: "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=RANGERS-LAUNDRY-PAYMENT-AIS-LAUNDRY" }}
+                    source={{ uri: "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=GEOVERSE-LAUNDRY-PAYMENT-AIS-LAUNDRY" }}
                     style={styles.qrisImage}
                   />
                   <Text style={styles.qrisStoreName}>NMID: ID1020304050 • {storeName}</Text>

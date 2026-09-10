@@ -221,7 +221,7 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.versionText}>Rangers App 2.0 • Mitra Pemilik Laundry</Text>
+        <Text style={styles.versionText}>GEOVERSE 2.0 • Mitra Pemilik Laundry</Text>
         <View style={{ height: 80 }} />
       </ScrollView>
 

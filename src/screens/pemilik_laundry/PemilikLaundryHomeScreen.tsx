@@ -80,7 +80,7 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
           <View style={styles.summaryHeaderRow}>
             <View>
               <Text style={styles.summaryTitle}>Ringkasan Hari Ini</Text>
-              <Text style={styles.summarySubtitle}>Mitra Laundry Rangers App</Text>
+              <Text style={styles.summarySubtitle}>Mitra Laundry GEOVERSE</Text>
             </View>
 
             <TouchableOpacity

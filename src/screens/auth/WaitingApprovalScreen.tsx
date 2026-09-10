@@ -115,7 +115,7 @@ export const WaitingApprovalScreen: React.FC<WaitingApprovalScreenProps> = ({
   const handleContactAdmin = () => {
     const phone = "6281122334455";
     const roleText = (authAccount?.role && ROLE_LABELS[authAccount.role as keyof typeof ROLE_LABELS]) || "Mitra";
-    const text = `Halo Admin Ranger, saya ${authAccount?.name || "Mitra"} (${roleText}). Ingin menanyakan status verifikasi pendaftaran akun saya dengan email: ${authAccount?.email}. Terima kasih!`;
+    const text = `Halo Admin GEOVERSE, saya ${authAccount?.name || "Mitra"} (${roleText}). Ingin menanyakan status verifikasi pendaftaran akun saya dengan email: ${authAccount?.email}. Terima kasih!`;
     Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`).catch(() => {});
   };
 
@@ -134,7 +134,7 @@ export const WaitingApprovalScreen: React.FC<WaitingApprovalScreenProps> = ({
             <ShieldCheck size={18} color="#FFFFFF" />
           </View>
           <View>
-            <Text style={styles.brandTitle}>RANGER VERIFIKASI</Text>
+            <Text style={styles.brandTitle}>GEOVERSE VERIFIKASI</Text>
             <Text style={styles.brandSub}>Portal Pendaftaran Mitra</Text>
           </View>
         </View>
@@ -187,7 +187,7 @@ export const WaitingApprovalScreen: React.FC<WaitingApprovalScreenProps> = ({
 
             <Text style={styles.statusTitle}>Pendaftaran Anda Sedang Ditinjau</Text>
             <Text style={styles.statusSub}>
-              Tim Administrator Ranger sedang memeriksa kelengkapan identitas dan dokumen usaha Anda. Kami akan mengirimkan email konfirmasi saat akun Anda selesai di-ACC.
+              Tim Administrator GEOVERSE sedang memeriksa kelengkapan identitas dan dokumen usaha Anda. Kami akan mengirimkan email konfirmasi saat akun Anda selesai di-ACC.
             </Text>
 
             {/* Estimated Time Banner */}

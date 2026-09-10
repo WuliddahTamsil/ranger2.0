@@ -144,6 +144,20 @@ const loginUser = async (req, res) => {
 
     // Google Login check
     if (googleProfile) {
+      // Auto-link Google if not already linked
+      let updated = false;
+      if (!user.googleLinked) {
+        user.googleLinked = true;
+        updated = true;
+      }
+      if (!user.profilePhoto && googleProfile.photo) {
+        user.profilePhoto = googleProfile.photo;
+        updated = true;
+      }
+      if (updated) {
+        await user.save();
+      }
+
       return res.status(200).json({
         success: true,
         message: "Login berhasil dengan Google",

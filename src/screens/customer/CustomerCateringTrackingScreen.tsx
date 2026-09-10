@@ -108,7 +108,7 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
     {
       title: "Diantar ke alamat tujuan",
       text: isDelivering
-        ? `Kurir ${order?.driverName || "Rangers"} sedang membawa pesanan ke lokasimu`
+        ? `Kurir ${order?.driverName || "GEOVERSE"} sedang membawa pesanan ke lokasimu`
         : isFinished
         ? "Pesanan telah sampai di tujuan"
         : "Menunggu kurir mulai perjalanan",
@@ -153,9 +153,9 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
             {isFinished
               ? "Pesanan telah tiba di tujuan. Selamat menikmati hidangan Anda!"
               : isDelivering
-              ? `Kurir (${order?.driverName || "Rangers Delivery"}) sedang dalam perjalanan ke alamat Anda.`
+              ? `Kurir (${order?.driverName || "GEOVERSE Delivery"}) sedang dalam perjalanan ke alamat Anda.`
               : isDriverHeading
-              ? `Kurir (${order?.driverName || "Rangers"}) sedang menuju ${order?.storeName || "Dapur Catering"}.`
+              ? `Kurir (${order?.driverName || "GEOVERSE"}) sedang menuju ${order?.storeName || "Dapur Catering"}.`
               : isReady
               ? "Dapur telah selesai menyiapkan pesanan. Menunggu kurir mengambil pesanan."
               : isCooking
@@ -188,10 +188,10 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
               <Bike size={22} color="#FFFFFF" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.driverLabel}>KURIR PENGANTAR RANGERS</Text>
+              <Text style={styles.driverLabel}>KURIR PENGANTAR GEOVERSE</Text>
               <Text style={styles.driverName}>{order.driverName}</Text>
               <Text style={styles.driverPhone}>
-                {order.driverPhone || "Rangers Express"} {order.driverVehicle ? `• ${order.driverVehicle}` : ""}
+                {order.driverPhone || "GEOVERSE Express"} {order.driverVehicle ? `• ${order.driverVehicle}` : ""}
               </Text>
             </View>
             <View style={styles.driverActionBtns}>

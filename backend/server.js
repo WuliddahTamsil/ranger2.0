@@ -62,13 +62,13 @@ app.use("/api/transactions", transactionRoutes);
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "OK",
-    service: "Rangers App Backend API",
+    service: "GEOVERSE Backend API",
     timestamp: new Date().toISOString(),
   });
 });
 
 app.get("/", (req, res) => {
-  res.send("🚀 Rangers App Backend API is running smoothly!");
+  res.send("🚀 GEOVERSE Backend API is running smoothly!");
 });
 
 // Socket.io Realtime Connection
@@ -93,7 +93,7 @@ const startServer = async () => {
     await connectDB();
     server.listen(PORT, () => {
       console.log(`=========================================`);
-      console.log(`🚀 Rangers Backend Server running on port ${PORT}`);
+      console.log(`🚀 GEOVERSE Backend Server running on port ${PORT}`);
       console.log(`📡 Local API URL: http://localhost:${PORT}`);
       console.log(`=========================================`);
     });

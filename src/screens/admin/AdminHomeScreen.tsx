@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Linking,
   Platform,
+  RefreshControl,
 } from "react-native";
 import {
   ShieldCheck,
@@ -52,6 +53,10 @@ import {
   FileCheck,
   CheckCircle,
   Info,
+  Lock,
+  Shield,
+  HelpCircle,
+  Camera,
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { AuthAccount, ROLE_LABELS } from "../auth/authTypes";
@@ -82,7 +87,7 @@ const getRoleMeta = (role: string) => {
     case "pemilik_marketplace":
       return { label: "Pemilik Toko", icon: ShoppingBag, color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE" };
     case "driver":
-      return { label: "Driver Ranger", icon: Truck, color: "#0284C7", bg: "#F0F9FF", border: "#BAE6FD" };
+      return { label: "Driver GEOVERSE", icon: Truck, color: "#0284C7", bg: "#F0F9FF", border: "#BAE6FD" };
     case "customer":
       return { label: "User / Customer", icon: User, color: "#059669", bg: "#ECFDF5", border: "#A7F3D0" };
     default:
@@ -154,8 +159,61 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     title: "",
   });
 
+  // Admin Profile & Setting States (Matching Customer/Catering Profile Template)
+  const [adminName, setAdminName] = useState(authAccount?.name || "Super Admin GEOVERSE");
+  const [adminPhone, setAdminPhone] = useState(authAccount?.phone || "0812-3456-7890");
+  const [editAdminProfileModal, setEditAdminProfileModal] = useState(false);
+  const [editAdminPasswordModal, setEditAdminPasswordModal] = useState(false);
+  const [tempAdminName, setTempAdminName] = useState(adminName);
+  const [tempAdminPhone, setTempAdminPhone] = useState(adminPhone);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [infoModalData, setInfoModalData] = useState<{ visible: boolean; title: string; desc: string }>({
+    visible: false,
+    title: "",
+    desc: "",
+  });
+
+  // Logout Confirmation Modal State
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
+  const handleSaveAdminProfile = () => {
+    if (!tempAdminName.trim()) {
+      Alert.alert("Perhatian", "Nama administrator tidak boleh kosong.");
+      return;
+    }
+    setAdminName(tempAdminName.trim());
+    setAdminPhone(tempAdminPhone.trim());
+    setEditAdminProfileModal(false);
+    Alert.alert("Sukses", "Profil administrator berhasil diperbarui.");
+  };
+
+  const handleSaveAdminPassword = () => {
+    if (!newPasswordInput.trim() || newPasswordInput.length < 6) {
+      Alert.alert("Perhatian", "Password baru minimal harus 6 karakter.");
+      return;
+    }
+    setCurrentPasswordInput("");
+    setNewPasswordInput("");
+    setEditAdminPasswordModal(false);
+    Alert.alert("Sukses", "Password administrator berhasil diperbarui.");
+  };
+
   const greeting = useTimeGreeting();
   const formattedGreeting = greeting ? greeting.charAt(0).toUpperCase() + greeting.slice(1) : "Selamat Pagi";
+
+  // Clean display name for Admin
+  const getAdminDisplayName = () => {
+    if (!adminName) return "Super Admin";
+    const lower = adminName.toLowerCase();
+    if (lower === "super" || lower.includes("super admin")) return "Super Admin";
+    if (lower.startsWith("admin")) return "Administrator";
+    const parts = adminName.trim().split(/\s+/);
+    if (parts.length > 1) {
+      return `${parts[0]} ${parts[1][0]}.`;
+    }
+    return parts[0];
+  };
 
   // Fetch all live data
   const refreshData = async () => {
@@ -192,8 +250,8 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
       await refreshData();
       setSelectedMitraForDetail(null);
       Alert.alert(
-        "✅ Mitra Berhasil Disetujui (ACC)",
-        `Pendaftaran ${account.name} sebagai ${ROLE_LABELS[account.role as keyof typeof ROLE_LABELS] || "Mitra"} telah berhasil di-ACC.\n\nAkun kini dapat langsung digunakan untuk melayani warga.`
+        "Pendaftaran Mitra Disetujui",
+        `Pendaftaran ${account.name} sebagai ${ROLE_LABELS[account.role as keyof typeof ROLE_LABELS] || "Mitra"} telah berhasil disetujui (ACC).\n\nAkun kini aktif dan dapat langsung melayani warga.`
       );
     } catch (err) {
       Alert.alert("Gagal", "Terjadi kesalahan saat menyetujui akun.");
@@ -224,7 +282,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
       setIsRejectModalOpen(false);
       setSelectedMitraForDetail(null);
       Alert.alert(
-        "⚠️ Pendaftaran Ditolak",
+        "Pendaftaran Mitra Ditolak",
         `Pendaftaran ${rejectingMitra.name} telah ditolak dengan alasan:\n"${rejectionReasonInput.trim()}".`
       );
     } catch (err) {
@@ -236,14 +294,12 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 
   // Action: Logout confirmation
   const handleLogout = () => {
-    Alert.alert(
-      "Konfirmasi Keluar",
-      "Apakah Anda yakin ingin keluar dari panel administrator?",
-      [
-        { text: "Batal", style: "cancel" },
-        { text: "Keluar", style: "destructive", onPress: () => navigate("login") },
-      ]
-    );
+    setIsLogoutModalOpen(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setIsLogoutModalOpen(false);
+    navigate("login");
   };
 
   // WhatsApp trigger
@@ -310,7 +366,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     { label: "Monitoring", icon: TrendingUp },
     { label: "Transaksi", icon: Receipt },
     { label: "Mitra", icon: Store },
-    { label: "Pengaturan", icon: User },
+    { label: "Akun", icon: User },
   ];
 
   // ==========================================
@@ -612,7 +668,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           <View style={styles.masterFinDivider} />
           <View style={styles.masterFinStat}>
             <Text style={styles.masterFinStatVal}>{stats?.totalDrivers || 1}</Text>
-            <Text style={styles.masterFinStatLbl}>Driver Rangers</Text>
+            <Text style={styles.masterFinStatLbl}>Driver GEOVERSE</Text>
           </View>
         </View>
       </View>
@@ -772,13 +828,13 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           </View>
         </TouchableOpacity>
 
-        {/* Driver Rangers (Full Width 5th Card) */}
+        {/* Driver GEOVERSE (Full Width 5th Card) */}
         <TouchableOpacity
           style={styles.serviceCardFull}
           onPress={() =>
             setSelectedServiceForMonitoring({
               key: "driver",
-              title: "Driver Rangers",
+              title: "Driver GEOVERSE",
               role: "driver",
               serviceName: "Driver",
               icon: Truck,
@@ -796,7 +852,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               <Truck size={20} color="#0284C7" />
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.serviceCardTitle}>Driver Rangers (Armada Kurir)</Text>
+              <Text style={styles.serviceCardTitle}>Driver GEOVERSE (Armada Kurir)</Text>
               <Text style={styles.serviceCardSub}>
                 {mitraAccounts.filter((m) => m.role === "driver").length} Driver Siap Mengantar Pesanan
               </Text>
@@ -855,7 +911,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               <Text style={styles.txCodeText}>{tx.code || `#RGR-${1000 + idx}`}</Text>
             </View>
 
-            <Text style={styles.txTitleText}>{tx.title || "Pesanan Layanan Ranger"}</Text>
+            <Text style={styles.txTitleText}>{tx.title || "Pesanan Layanan GEOVERSE"}</Text>
             <Text style={styles.txCustomerText}>Customer: {tx.customer || "Warga PGE Kamojang"}</Text>
 
             <View style={styles.txCardBottom}>
@@ -932,7 +988,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
         <View style={styles.customerNoticeBoxTab}>
           <Info size={15} color="#059669" />
           <Text style={styles.customerNoticeBoxTabText}>
-            Daftar warga/pengguna yang telah terdaftar dan login di Rangers App. Akun customer otomatis aktif tanpa perlu diverifikasi atau di-ACC oleh admin.
+            Daftar warga/pengguna yang telah terdaftar dan login di GEOVERSE. Akun customer otomatis aktif tanpa perlu diverifikasi atau di-ACC oleh admin.
           </Text>
         </View>
       )}
@@ -1086,45 +1142,147 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     </View>
   );
 
-  // Tab 4: Akun & Pengaturan
+  // Tab 4: Akun (Mengikuti template resmi Customer, Catering, Driver)
   const renderPengaturanTab = () => (
     <View style={styles.tabContentWrap}>
-      {/* Profile Card */}
-      <View style={styles.profileCard}>
-        <View style={styles.profileAvatarLarge}>
-          <ShieldCheck size={36} color="#1B7A4E" />
+      {/* Profile Header Card */}
+      <View style={styles.profileHeader}>
+        <View style={styles.avatarWrapper}>
+          <View style={styles.avatarBg}>
+            <ShieldCheck size={38} color="#1B7A4E" />
+          </View>
+          <TouchableOpacity
+            style={styles.cameraBtn}
+            onPress={() =>
+              setInfoModalData({
+                visible: true,
+                title: "Foto Profil Administrator",
+                desc: "Identitas akun admin terhubung langsung dengan keamanan platform PGE Kamojang.",
+              })
+            }
+            activeOpacity={0.8}
+          >
+            <Camera size={14} color="#1B7A4E" />
+          </TouchableOpacity>
         </View>
-        <Text style={styles.profileNameLarge}>
-          {authAccount?.name || "Super Admin Ranger"}
+
+        <Text style={styles.adminCardNameText} numberOfLines={1}>
+          {adminName}
         </Text>
-        <Text style={styles.profileEmailSub}>
+        <Text style={styles.adminRoleSubtitle}>Administrator Platform PGE Kamojang</Text>
+        <Text style={styles.customerPhoneText}>
           {authAccount?.email || "ranger@gmail.com"}
         </Text>
-        <View style={styles.adminStatusPill}>
-          <Text style={styles.adminStatusPillText}>ADMINISTRATOR UTAMA PLATFORM</Text>
+
+        {/* 3-Column Stat Row (Exact template from other roles) */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCol}>
+            <Text style={styles.statVal}>{mitraAccounts.filter((m) => m.role !== "customer").length}</Text>
+            <Text style={styles.statLbl}>Mitra Terdaftar</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statVal}>{customerAccounts.length}</Text>
+            <Text style={styles.statLbl}>Customer</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statVal}>Aktif</Text>
+            <Text style={styles.statLbl}>Status Sistem</Text>
+          </View>
         </View>
       </View>
 
-      {/* System Infrastructure Status */}
-      <Text style={styles.sectionHeaderTitle}>Status Infrastruktur Server</Text>
-      <View style={styles.settingsGroupCard}>
-        <View style={styles.settingsRow}>
-          <View style={styles.settingsRowLeft}>
-            <Server size={18} color="#1B7A4E" />
-            <Text style={styles.settingsRowLabel}>Backend Express API</Text>
+      {/* Group 1: AKUN */}
+      <Text style={styles.sectionLabel}>AKUN</Text>
+      <View style={styles.menuGroup}>
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() => {
+            setTempAdminName(adminName);
+            setTempAdminPhone(adminPhone);
+            setEditAdminProfileModal(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#E8F5EE" }]}>
+            <User size={16} color="#1B7A4E" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Detail Profil</Text>
+            <Text style={styles.menuSubLabel}>{authAccount?.email || "ranger@gmail.com"}</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() => {
+            setCurrentPasswordInput("");
+            setNewPasswordInput("");
+            setEditAdminPasswordModal(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#EFF6FF" }]}>
+            <Lock size={16} color="#2563EB" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Ubah Password</Text>
+            <Text style={styles.menuSubLabel}>Perbarui kata sandi panel admin</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() => {
+            setTempAdminPhone(adminPhone);
+            setEditAdminProfileModal(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#FFFBEB" }]}>
+            <Phone size={16} color="#D97706" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Kontak WhatsApp PIC</Text>
+            <Text style={styles.menuSubLabel}>{adminPhone}</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Group 2: SISTEM & SERVER PLATFORM */}
+      <Text style={styles.sectionLabel}>SISTEM & SERVER PLATFORM</Text>
+      <View style={styles.menuGroup}>
+        <View style={styles.menuRow}>
+          <View style={[styles.menuIconBg, { backgroundColor: "#E8F5EE" }]}>
+            <Server size={16} color="#1B7A4E" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Backend Express API</Text>
+            <Text style={styles.menuSubLabel}>Port 5000 · Normal</Text>
           </View>
           <View style={styles.statusOnlineBadge}>
             <View style={styles.livePulseDot} />
-            <Text style={styles.statusOnlineText}>Online (Port 5000)</Text>
+            <Text style={styles.statusOnlineText}>Online</Text>
           </View>
         </View>
 
-        <View style={styles.settingsRowDivider} />
+        <View style={styles.divider} />
 
-        <View style={styles.settingsRow}>
-          <View style={styles.settingsRowLeft}>
-            <Database size={18} color="#1B7A4E" />
-            <Text style={styles.settingsRowLabel}>MongoDB Atlas Database</Text>
+        <View style={styles.menuRow}>
+          <View style={[styles.menuIconBg, { backgroundColor: "#E8F5EE" }]}>
+            <Database size={16} color="#1B7A4E" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>MongoDB Atlas Database</Text>
+            <Text style={styles.menuSubLabel}>Cluster PGE Kamojang</Text>
           </View>
           <View style={styles.statusOnlineBadge}>
             <View style={styles.livePulseDot} />
@@ -1132,77 +1290,130 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           </View>
         </View>
 
-        <View style={styles.settingsRowDivider} />
+        <View style={styles.divider} />
 
-        <View style={styles.settingsRow}>
-          <View style={styles.settingsRowLeft}>
-            <Radio size={18} color="#1B7A4E" />
-            <Text style={styles.settingsRowLabel}>Socket.io Realtime</Text>
-          </View>
-          <View style={styles.statusOnlineBadge}>
-            <View style={styles.livePulseDot} />
-            <Text style={styles.statusOnlineText}>Aktif</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Maintenance & Tools */}
-      <Text style={styles.sectionHeaderTitle}>Aksi & Pemeliharaan</Text>
-      <View style={styles.settingsGroupCard}>
         <TouchableOpacity
-          style={styles.settingsActionRow}
+          style={styles.menuRow}
           onPress={async () => {
             await refreshData();
-            Alert.alert("Sukses", "Data platform dan mitra berhasil diperbarui dari MongoDB Atlas.");
+            Alert.alert("Sinkronisasi Berhasil", "Seluruh data transaksi dan akun mitra telah diperbarui dari database.");
           }}
           activeOpacity={0.7}
         >
-          <View style={styles.settingsRowLeft}>
-            <RefreshCw size={18} color="#1B7A4E" />
-            <View>
-              <Text style={styles.settingsRowLabel}>Sinkronkan Data Live</Text>
-              <Text style={styles.settingsRowSub}>Muat ulang seluruh transaksi dan akun terbaru</Text>
-            </View>
+          <View style={[styles.menuIconBg, { backgroundColor: "#F0FDF4" }]}>
+            <RefreshCw size={16} color="#1B7A4E" />
           </View>
-          <ChevronRight size={18} color="#9CA3AF" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Sinkronkan Data Live</Text>
+            <Text style={styles.menuSubLabel}>Muat ulang data terbaru</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
         </TouchableOpacity>
 
-        <View style={styles.settingsRowDivider} />
+        <View style={styles.divider} />
 
         <TouchableOpacity
-          style={styles.settingsActionRow}
+          style={styles.menuRow}
           onPress={() => {
             Alert.alert(
-              "Healthcheck Server",
-              "Status Server: OK\nService: Rangers App Backend API\nTerhubung ke MongoDB Atlas Cluster0."
+              "Koneksi Server",
+              "Status Backend: Aktif & Terhubung\nDatabase: MongoDB Atlas Cluster0\nLatensi: < 50ms\nSemua servis komunitas beroperasi normal."
             );
           }}
           activeOpacity={0.7}
         >
-          <View style={styles.settingsRowLeft}>
-            <Activity size={18} color="#1B7A4E" />
-            <View>
-              <Text style={styles.settingsRowLabel}>Periksa Kesehatan Server</Text>
-              <Text style={styles.settingsRowSub}>Cek latensi koneksi API</Text>
-            </View>
+          <View style={[styles.menuIconBg, { backgroundColor: "#EFF6FF" }]}>
+            <Activity size={16} color="#2563EB" />
           </View>
-          <ChevronRight size={18} color="#9CA3AF" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Pemeriksaan Kesehatan Server</Text>
+            <Text style={styles.menuSubLabel}>Cek latensi dan status service</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
         </TouchableOpacity>
       </View>
 
-      {/* Logout Button */}
-      <TouchableOpacity
-        style={styles.logoutButton}
-        onPress={handleLogout}
-        activeOpacity={0.8}
-      >
-        <LogOut size={18} color="#DC2626" />
-        <Text style={styles.logoutButtonText}>Keluar dari Panel Admin</Text>
+      {/* Group 3: LAINNYA */}
+      <Text style={styles.sectionLabel}>LAINNYA</Text>
+      <View style={styles.menuGroup}>
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() =>
+            setInfoModalData({
+              visible: true,
+              title: "Panduan Administrator",
+              desc: "Panel Administrator GEOVERSE 2.0 dirancang untuk verifikasi legalitas berkas mitra baru, pemantauan transaksi realtime PGE Kamojang, serta pengawasan operasional komunitas.",
+            })
+          }
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#FFF5D8" }]}>
+            <HelpCircle size={16} color="#D97706" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Bantuan & Panduan Admin</Text>
+            <Text style={styles.menuSubLabel}>Petunjuk pengoperasian sistem</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() =>
+            setInfoModalData({
+              visible: true,
+              title: "Privasi & Keamanan Data",
+              desc: "Semua data pengguna, password, nomor WhatsApp, serta dokumen identitas mitra dienkripsi dengan standar keamanan tinggi pada server GEOVERSE 2.0.",
+            })
+          }
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#E9EEF0" }]}>
+            <Shield size={16} color="#475569" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Privasi & Keamanan Data</Text>
+            <Text style={styles.menuSubLabel}>Perlindungan privasi warga</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() =>
+            setInfoModalData({
+              visible: true,
+              title: "Kebijakan Platform PGE Kamojang",
+              desc: "Platform GEOVERSE 2.0 memfasilitasi pemberdayaan UMKM lokal Kamojang (Catering, Kost, Laundry, Toko) dan kurir antar-jemput demi kemudahan bersama.",
+            })
+          }
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#F0F2F3" }]}>
+            <Settings size={16} color="#64748B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuLabel}>Kebijakan Layanan Komunitas</Text>
+            <Text style={styles.menuSubLabel}>Aturan & ketentuan layanan</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Logout Button (Exact template as customer/mitra) */}
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+        <View style={styles.logoutIconBg}>
+          <LogOut size={16} color="#B91C1C" />
+        </View>
+        <Text style={styles.logoutText}>Keluar dari Panel Admin</Text>
       </TouchableOpacity>
 
-      <Text style={styles.appVersionText}>
-        Rangers App 2.0 • Komunitas PGE Kamojang • 2026
-      </Text>
+      {/* Footnote version */}
+      <Text style={styles.footerVersion}>GEOVERSE 2.0 · PGE Kamojang</Text>
     </View>
   );
 
@@ -1226,47 +1437,57 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F7FAF8" />
+      <StatusBar barStyle="light-content" backgroundColor="#1B7A4E" />
 
-      {/* Top Header Bar (Unified Green & White Style) */}
+      {/* Top Header Bar (Emerald Premium Style) */}
       <View style={styles.topHeader}>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.greetingText}>
-            {formattedGreeting}, {authAccount?.name?.split(" ")[0] || "Admin"} 🌿
-          </Text>
-          <Text style={styles.subGreetingText}>
-            Panel Kontrol & Verifikasi Komunitas PGE Kamojang
-          </Text>
-        </View>
-
-        <View style={styles.headerActionsRow}>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={refreshData}
-            activeOpacity={0.7}
-          >
-            <RefreshCw size={18} color="#1B7A4E" />
-          </TouchableOpacity>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greetingText}>Halo, {formattedGreeting.toLowerCase()} 🍃</Text>
+            <Text style={styles.nameText} numberOfLines={1}>
+              {getAdminDisplayName()}
+            </Text>
+          </View>
 
           <TouchableOpacity
-            style={styles.headerIconBtn}
+            style={styles.notifBtn}
             onPress={() => setNotifModalVisible(true)}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Buka notifikasi"
           >
-            <Bell size={18} color="#1B7A4E" />
+            <Bell size={20} color="#FFFFFF" strokeWidth={2} />
             {pendingCount > 0 && (
               <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>{pendingCount}</Text>
+                <Text style={styles.notifBadgeText}>
+                  {pendingCount > 99 ? "99+" : pendingCount}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
+        </View>
+
+        {/* Role Pill */}
+        <View style={styles.rolePill}>
+          <ShieldCheck size={14} color="#FFFFFF" strokeWidth={2.5} />
+          <Text style={styles.rolePillText}>Super Admin • PGE Kamojang</Text>
+          <View style={styles.roleLiveDot} />
         </View>
       </View>
 
       {/* Main Tab Scroll Content */}
       <ScrollView
         showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={refreshData}
+            colors={["#1B7A4E"]}
+            tintColor="#1B7A4E"
+          />
+        }
       >
         {renderTabContent()}
       </ScrollView>
@@ -1980,6 +2201,142 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           </View>
         </View>
       </Modal>
+
+      {/* ================= MODAL EDIT PROFIL ADMIN ================= */}
+      <Modal visible={editAdminProfileModal} transparent animationType="slide">
+        <View style={styles.modalBgBottom}>
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Edit Profil Administrator</Text>
+              <TouchableOpacity onPress={() => setEditAdminProfileModal(false)}>
+                <X size={20} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Nama Administrator</Text>
+              <TextInput
+                style={styles.textInput}
+                value={tempAdminName}
+                onChangeText={setTempAdminName}
+                placeholder="Masukkan nama administrator"
+                placeholderTextColor="#9CA3AF"
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: 14 }]}>Nomor WhatsApp / HP PIC</Text>
+              <TextInput
+                style={styles.textInput}
+                value={tempAdminPhone}
+                onChangeText={setTempAdminPhone}
+                placeholder="08xxxxxxxxxx"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="phone-pad"
+              />
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { marginTop: 24 }]}
+                onPress={handleSaveAdminProfile}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.saveBtnText}>Simpan Perubahan</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= MODAL UBAH PASSWORD ADMIN ================= */}
+      <Modal visible={editAdminPasswordModal} transparent animationType="slide">
+        <View style={styles.modalBgBottom}>
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Ubah Password Administrator</Text>
+              <TouchableOpacity onPress={() => setEditAdminPasswordModal(false)}>
+                <X size={20} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Password Baru</Text>
+              <TextInput
+                style={styles.textInput}
+                value={newPasswordInput}
+                onChangeText={setNewPasswordInput}
+                placeholder="Minimal 6 karakter"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry
+              />
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { marginTop: 24 }]}
+                onPress={handleSaveAdminPassword}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.saveBtnText}>Perbarui Password</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= MODAL INFO & PANDUAN SHEET ================= */}
+      <Modal visible={infoModalData.visible} transparent animationType="fade">
+        <View style={styles.modalBgCenter}>
+          <View style={styles.rejectSheet}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <Text style={styles.rejectTitle}>{infoModalData.title}</Text>
+              <TouchableOpacity onPress={() => setInfoModalData({ ...infoModalData, visible: false })}>
+                <X size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.rejectSub, { lineHeight: 20 }]}>{infoModalData.desc}</Text>
+            <TouchableOpacity
+              style={[styles.btnCloseCustomerModal, { marginTop: 16 }]}
+              onPress={() => setInfoModalData({ ...infoModalData, visible: false })}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.btnCloseCustomerModalText}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= MODAL LOGOUT CONFIRMATION ================= */}
+      <Modal visible={isLogoutModalOpen} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.modalBgCenter}
+          activeOpacity={1}
+          onPress={() => setIsLogoutModalOpen(false)}
+        >
+          <View style={styles.confirmCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.logoutModalIconBg}>
+              <LogOut size={26} color="#DC2626" />
+            </View>
+            <Text style={styles.confirmTitle}>Konfirmasi Keluar</Text>
+            <Text style={styles.confirmSub}>
+              Apakah Anda yakin ingin keluar dari panel administrator GEOVERSE?
+            </Text>
+
+            <View style={styles.confirmBtnRow}>
+              <TouchableOpacity
+                style={styles.btnCancel}
+                onPress={() => setIsLogoutModalOpen(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.btnCancelText}>Batal</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btnLogoutConfirm}
+                onPress={handleConfirmLogout}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.btnLogoutConfirmText}>Ya, Keluar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1987,73 +2344,105 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#1B7A4E",
+  },
+  scrollView: {
+    flex: 1,
     backgroundColor: "#F7FAF8",
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 24,
+    paddingTop: 16,
+    paddingBottom: 28,
   },
   tabContentWrap: {
     paddingBottom: 16,
   },
 
-  // Top Header (Unified with other roles)
+  // Top Header (Emerald Premium Style - Matching Mitra & Customer)
   topHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
+    backgroundColor: "#1B7A4E",
+    paddingHorizontal: 20,
     paddingTop: Platform.OS === "android" ? 14 : 10,
-    paddingBottom: 14,
-    backgroundColor: "#F7FAF8",
+    paddingBottom: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  headerTitleContainer: {
+  headerTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  headerLeft: {
     flex: 1,
-    paddingRight: 10,
+    paddingRight: 12,
   },
   greetingText: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
+    fontSize: 13,
+    color: "#D1FAE5",
+    fontWeight: "500",
+    marginBottom: 4,
   },
-  subGreetingText: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 2,
+  nameText: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
   },
-  headerActionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+  notifBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "rgba(255, 255, 255, 0.25)",
     position: "relative",
   },
   notifBadge: {
     position: "absolute",
-    top: 6,
-    right: 6,
-    backgroundColor: "#DC2626",
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    top: -2,
+    right: -2,
+    backgroundColor: "#EF4444",
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: "#1B7A4E",
   },
   notifBadgeText: {
     color: "#FFFFFF",
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: "800",
+  },
+  rolePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.25)",
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
+    gap: 6,
+  },
+  rolePillText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  roleLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#34D399",
   },
 
   // Hero Card (Emerald, matching outletCard from catering)
@@ -3053,128 +3442,223 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 
-  // Pengaturan Tab Styles
-  profileCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    padding: 22,
+  // Tab 4 (Akun & Pengaturan) Styles - Matching Customer/Catering Template
+  profileHeader: {
+    backgroundColor: "#1B7A4E",
+    paddingTop: 28,
+    paddingBottom: 22,
     alignItems: "center",
-    marginBottom: 20,
-  },
-  profileAvatarLarge: {
-    width: 72,
-    height: 72,
     borderRadius: 24,
-    backgroundColor: "#E8F5E9",
+    marginBottom: 16,
+  },
+  avatarWrapper: {
+    position: "relative",
+    marginBottom: 10,
+  },
+  avatarBg: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.45)",
   },
-  profileNameLarge: {
+  cameraBtn: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#FFFFFF",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  adminCardNameText: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#FFFFFF",
+    paddingHorizontal: 16,
+    textAlign: "center",
   },
-  profileEmailSub: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 3,
+  adminRoleSubtitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.85)",
+    marginTop: 2,
+    letterSpacing: 0.3,
   },
-  adminStatusPill: {
-    backgroundColor: "#1B7A4E",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 10,
+  customerPhoneText: {
+    fontSize: 12,
+    color: "#E8F5EE",
+    marginTop: 2,
   },
-  adminStatusPillText: {
-    fontSize: 10,
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    width: "100%",
+  },
+  statCol: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statVal: {
+    fontSize: 15,
     fontWeight: "800",
     color: "#FFFFFF",
-    letterSpacing: 0.5,
   },
-
-  settingsGroupCard: {
+  statLbl: {
+    fontSize: 10,
+    color: "#E8F5EE",
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  menuGroup: {
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 18,
+    overflow: "hidden",
+    marginBottom: 4,
   },
-  settingsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  settingsActionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  settingsRowLeft: {
+  menuRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    flex: 1,
+    padding: 13,
   },
-  settingsRowLabel: {
+  menuIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuLabel: {
     fontSize: 13,
     fontWeight: "700",
     color: "#111827",
   },
-  settingsRowSub: {
+  menuSubLabel: {
     fontSize: 11,
     color: "#6B7280",
-    marginTop: 2,
+    marginTop: 1,
   },
-  settingsRowDivider: {
+  divider: {
     height: 1,
     backgroundColor: "#F3F4F6",
+    marginLeft: 54,
   },
-  statusOnlineBadge: {
+  logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: "#E8F5E9",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+    borderRadius: 18,
+    padding: 12,
+    marginTop: 18,
   },
-  statusOnlineText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#1B7A4E",
-  },
-
-  logoutButton: {
-    flexDirection: "row",
+  logoutIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "#FFF0F0",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#FEF2F2",
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    borderRadius: 16,
-    paddingVertical: 14,
-    marginTop: 8,
   },
-  logoutButtonText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#DC2626",
+  logoutText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#B91C1C",
   },
-  appVersionText: {
+  footerVersion: {
     fontSize: 11,
     color: "#9CA3AF",
     textAlign: "center",
-    marginTop: 18,
+    marginTop: 20,
     marginBottom: 12,
+  },
+
+  // Edit Profile / Password Modals (Matching Customer Profile sheets)
+  modalBgBottom: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  sheetContainer: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 28,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  formScroll: {
+    paddingBottom: 8,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 6,
+  },
+  textInput: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: "#111827",
+  },
+  saveBtn: {
+    backgroundColor: "#1B7A4E",
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 
   // ==========================================
@@ -3576,5 +4060,85 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#6B7280",
     marginTop: 2,
+  },
+
+  // Logout Confirmation Modal Styles
+  confirmCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 22,
+    alignItems: "center",
+  },
+  logoutModalIconBg: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  confirmTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  confirmSub: {
+    fontSize: 13,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  confirmBtnRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  btnCancel: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F9FAFB",
+  },
+  btnCancelText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  btnLogoutConfirm: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#DC2626",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnLogoutConfirmText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  statusOnlineBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  statusOnlineText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1B7A4E",
   },
 });

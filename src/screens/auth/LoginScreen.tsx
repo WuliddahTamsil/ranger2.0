@@ -38,8 +38,8 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={authStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.hero}>
-            <View style={styles.logo}><Text style={styles.logoText}>R</Text></View>
-            <View><Text style={authStyles.brand}>Rangers App 2.0</Text><Text style={styles.heroTitle}>Selamat datang kembali</Text></View>
+            <View style={styles.logo}><Text style={styles.logoText}>G</Text></View>
+            <View><Text style={authStyles.brand}>GEOVERSE 2.0</Text><Text style={styles.heroTitle}>Selamat datang kembali</Text></View>
           </View>
           <Text style={authStyles.subtitle}>Masuk dengan akunmu untuk melanjutkan layanan komunitas PGE Kamojang.</Text>
 
@@ -58,7 +58,7 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
           <GoogleLoginButton disabled={loading} loading={googleLoading} onBusyChange={setGoogleLoading} onLogin={onGoogleLogin} onError={setError} />
 
           <TouchableOpacity onPress={() => navigate("auth_register_role")} style={styles.registerButton}><UserPlus size={17} color={authColors.primary} /><Text style={styles.registerText}>Belum punya akun? Daftar sekarang</Text></TouchableOpacity>
-          <Text style={styles.legal}>Dengan masuk, kamu menyetujui Ketentuan Layanan dan Kebijakan Privasi Rangers App 2.0.</Text>
+          <Text style={styles.legal}>Dengan masuk, kamu menyetujui Ketentuan Layanan dan Kebijakan Privasi GEOVERSE 2.0.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaViewWrapper>
@@ -96,16 +96,27 @@ const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = (props) => {
 };
 
 const ConfiguredGoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ disabled, loading, onBusyChange, onLogin, onError }) => {
-  const [request, , promptAsync] = Google.useAuthRequest(googleClientIds);
+  const [request, , promptAsync] = Google.useAuthRequest({
+    ...googleClientIds,
+    redirectUri: makeRedirectUri({ scheme: "geoverse" }),
+  });
 
   const submit = async () => {
     onError("");
     onBusyChange(true);
     try {
-      if (!request) throw new Error("Konfigurasi Google belum siap. Coba lagi.");
+      if (!request) throw new Error("Konfigurasi Google belum siap. Coba lagi beberapa saat.");
       const result = await promptAsync();
-      if (result.type === "success") await onLogin(result.authentication?.accessToken);
-      else if (result.type === "error") onError("Login Google ditolak. Coba lagi atau gunakan email dan password.");
+      if (result.type === "success") {
+        const token =
+          result.authentication?.accessToken ||
+          result.params?.id_token ||
+          result.params?.access_token;
+        if (!token) throw new Error("Google tidak mengembalikan token autentikasi.");
+        await onLogin(token);
+      } else if (result.type === "error") {
+        onError("Login Google ditolak atau dibatalkan. Coba lagi.");
+      }
     } catch (caught) {
       onError(caught instanceof Error ? caught.message : "Login Google belum dapat diproses.");
     } finally {

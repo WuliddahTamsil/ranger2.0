@@ -97,7 +97,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
         deliveryFee: 12000,
         serviceFee: 3000,
         total: 840000,
-        paymentMethod: "Saldo Dompet Ranger",
+        paymentMethod: "Saldo Dompet GEOVERSE",
         paymentStatus: "Dibatalkan",
         time: "11:30 WIB",
       },
@@ -157,7 +157,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
 
     const invoiceData: InvoiceData = {
       id: item.id,
-      invoiceNumber: `INV/20260909/RNG-${formattedId}`,
+      invoiceNumber: `INV/20260909/GEO-${formattedId}`,
       date: item.time?.includes(",") ? item.time.split(",")[0].trim() : "09 Sep 2026",
       time: item.time?.includes(",") ? item.time.split(",")[1].trim() : "14:45 WIB",
       status: item.status,
@@ -167,7 +167,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
       customerName: item.customerName || raw.customer || "Pemesan",
       customerPhone: raw.customerPhone || "0812-3456-7890",
       customerAddress: raw.address || "Area Kampus UTM, Bangkalan",
-      driverName: raw.driver?.name || "Wuwu (Kurir The Ranger)",
+      driverName: raw.driver?.name || "Wuwu (Kurir GEOVERSE)",
       driverVehicle: raw.driver?.vehicle || "Motor",
       driverPlate: raw.driver?.plateNumber || "M 4128 AA",
       items: parsedItems,

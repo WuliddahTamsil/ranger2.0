@@ -88,7 +88,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
       const marketplaceProducts = marketplace.success ? marketplace.data.map((product: any) => ({
         id: product._id,
         name: product.name,
-        store: product.ownerId?.roleData?.businessName || product.ownerId?.name || "The Ranger Marketplace",
+        store: product.ownerId?.roleData?.businessName || product.ownerId?.name || "GEOVERSE Marketplace",
         price: product.price,
         rating: product.rating || 0,
         sold: product.sold || 0,
@@ -575,7 +575,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
           </TouchableOpacity>
 
           {/* Catering -> Kanyaah Catering */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => openServiceDetail({ id: "catering", name: "Catering", description: "Pesan makanan catering untuk kebutuhan harian, acara, atau keluarga.", price: "Harga sesuai menu", provider: "Pemilik Catering The Ranger", rating: 4.8, action: () => navigate("c_catering"), images: products.filter((p) => p.cat === "Makanan").slice(0, 3).map((p) => p.img) })} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem} onPress={() => openServiceDetail({ id: "catering", name: "Catering", description: "Pesan makanan catering untuk kebutuhan harian, acara, atau keluarga.", price: "Harga sesuai menu", provider: "Pemilik Catering GEOVERSE", rating: 4.8, action: () => navigate("c_catering"), images: products.filter((p) => p.cat === "Makanan").slice(0, 3).map((p) => p.img) })} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#FFEDD5" }]}>
               <Coffee size={22} color="#EA580C" />
             </View>
@@ -583,7 +583,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
           </TouchableOpacity>
 
           {/* Laundry -> Kanyaah Laundry */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => openServiceDetail({ id: "laundry", name: "Laundry", description: "Layanan laundry praktis dengan pilihan proses sesuai kebutuhanmu.", price: "Mulai dari harga layanan", provider: "Mitra Laundry The Ranger", rating: 4.8, action: () => navigate("c_laundry"), images: [] })} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem} onPress={() => openServiceDetail({ id: "laundry", name: "Laundry", description: "Layanan laundry praktis dengan pilihan proses sesuai kebutuhanmu.", price: "Mulai dari harga layanan", provider: "Mitra Laundry GEOVERSE", rating: 4.8, action: () => navigate("c_laundry"), images: [] })} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#E0F2FE" }]}>
               <Wind size={22} color="#0284C7" />
             </View>
@@ -591,7 +591,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
           </TouchableOpacity>
 
           {/* Kos -> Kanyaah Homestay */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => openServiceDetail({ id: "kos", name: "Homestay", description: "Temukan tempat tinggal yang nyaman dan sesuai kebutuhanmu.", price: "Harga sesuai kamar", provider: "Mitra Homestay The Ranger", rating: 4.8, action: () => navigate("c_kos"), images: [] })} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem} onPress={() => openServiceDetail({ id: "kos", name: "Homestay", description: "Temukan tempat tinggal yang nyaman dan sesuai kebutuhanmu.", price: "Harga sesuai kamar", provider: "Mitra Homestay GEOVERSE", rating: 4.8, action: () => navigate("c_kos"), images: [] })} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#F3E8FF" }]}>
               <Building size={22} color="#9333EA" />
             </View>
@@ -704,7 +704,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
         <View style={styles.modalBgBottom}>
           <View style={styles.sheetContainer}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>The Ranger Marketplace</Text>
+              <Text style={styles.sheetTitle}>GEOVERSE Marketplace</Text>
               <TouchableOpacity onPress={() => setMarketModalVisible(false)}>
                 <X size={20} color="#111827" />
               </TouchableOpacity>
@@ -895,7 +895,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
       <Modal visible={Boolean(selectedService)} transparent animationType="slide" onRequestClose={() => setSelectedService(null)}>
         <View style={styles.modalBgBottom}>
           <View style={styles.detailSheet}>
-            {selectedService && <><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>{selectedService.name}</Text><TouchableOpacity onPress={() => setSelectedService(null)}><X size={20} color="#111827" /></TouchableOpacity></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}><ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>{(selectedService.images.length ? selectedService.images : [products[0]?.img]).filter(Boolean).map((image: string, index: number) => <View key={index} style={styles.carouselSlide}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{selectedService.images.length || 1}</Text></View>)}</ScrollView><Text style={styles.detailProductName}>{selectedService.name}</Text><Text style={styles.detailDescription}>{selectedService.description}</Text><View style={styles.storeInfoCard}><Store size={20} color="#1B7A4E" /><View style={{ flex: 1 }}><Text style={styles.storeInfoName}>{selectedService.provider}</Text><Text style={styles.mutedText}>{selectedService.price}</Text></View></View><View style={styles.detailRatingRow}><Text style={styles.ratingStars}>★ {selectedService.rating}</Text><Text style={styles.mutedText}>Layanan The Ranger</Text></View><Text style={styles.detailSectionTitle}>Ulasan Pengguna</Text><Text style={styles.mutedText}>Ulasan akan tampil setelah customer menyelesaikan pesanan.</Text></ScrollView><TouchableOpacity style={styles.detailAddButton} onPress={() => { const action = selectedService.action; setSelectedService(null); action(); }}><Text style={styles.checkoutBtnText}>Lihat Layanan</Text><ChevronRight size={17} color="#FFFFFF" /></TouchableOpacity></>}
+            {selectedService && <><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>{selectedService.name}</Text><TouchableOpacity onPress={() => setSelectedService(null)}><X size={20} color="#111827" /></TouchableOpacity></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}><ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>{(selectedService.images.length ? selectedService.images : [products[0]?.img]).filter(Boolean).map((image: string, index: number) => <View key={index} style={styles.carouselSlide}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{selectedService.images.length || 1}</Text></View>)}</ScrollView><Text style={styles.detailProductName}>{selectedService.name}</Text><Text style={styles.detailDescription}>{selectedService.description}</Text><View style={styles.storeInfoCard}><Store size={20} color="#1B7A4E" /><View style={{ flex: 1 }}><Text style={styles.storeInfoName}>{selectedService.provider}</Text><Text style={styles.mutedText}>{selectedService.price}</Text></View></View><View style={styles.detailRatingRow}><Text style={styles.ratingStars}>★ {selectedService.rating}</Text><Text style={styles.mutedText}>Layanan GEOVERSE</Text></View><Text style={styles.detailSectionTitle}>Ulasan Pengguna</Text><Text style={styles.mutedText}>Ulasan akan tampil setelah customer menyelesaikan pesanan.</Text></ScrollView><TouchableOpacity style={styles.detailAddButton} onPress={() => { const action = selectedService.action; setSelectedService(null); action(); }}><Text style={styles.checkoutBtnText}>Lihat Layanan</Text><ChevronRight size={17} color="#FFFFFF" /></TouchableOpacity></>}
           </View>
         </View>
       </Modal>

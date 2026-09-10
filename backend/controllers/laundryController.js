@@ -171,7 +171,7 @@ exports.createOrder = async (req, res) => {
     const newOrder = await LaundryOrder.create({
       orderCode,
       customerId: customerId || "cust-unknown",
-      customerName: customerName || "Pelanggan Rangers",
+      customerName: customerName || "Pelanggan GEOVERSE",
       customerPhone: customerPhone || "08123456789",
       pickupAddress: pickupAddress || "Jl. Mawar No. 12, Kamojang",
       pickupCoords: pickupCoords || "",

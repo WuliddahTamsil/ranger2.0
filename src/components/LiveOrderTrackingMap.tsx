@@ -216,7 +216,7 @@ export const LiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
         {Platform.OS === "web" ? (
           <iframe
             key={`${activeMode}-${refreshKey}`}
-            title="Google Maps Navigasi The Ranger"
+            title="Google Maps Navigasi GEOVERSE"
             src={googleMapsUrl}
             style={{
               width: "100%",

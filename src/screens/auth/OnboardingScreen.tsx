@@ -15,7 +15,7 @@ const SLIDES = [
   },
   {
     title: "Bergabung &\nBerpenghasilan",
-    desc: "Daftar sebagai driver atau mitra Rangers App 2.0 dan mulai berpenghasilan dari komunitas Anda sendiri.",
+    desc: "Daftar sebagai driver atau mitra GEOVERSE 2.0 dan mulai berpenghasilan dari komunitas Anda sendiri.",
     icon: "🚴",
   },
 ];

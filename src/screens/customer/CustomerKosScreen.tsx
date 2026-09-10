@@ -232,7 +232,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
   const handleOpenWhatsAppOwner = (phone?: string, kostName?: string, roomNumber?: string) => {
     const cleanPhone = (phone || "087805987309").replace(/[^0-9]/g, "").replace(/^0/, "62");
-    const msg = `Halo Pemilik ${kostName || "Kost"}, saya ingin konfirmasi perihal booking kamar No. ${roomNumber || ""} saya di aplikasi The Ranger.`;
+    const msg = `Halo Pemilik ${kostName || "Kost"}, saya ingin konfirmasi perihal booking kamar No. ${roomNumber || ""} saya di aplikasi GEOVERSE.`;
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
   };
 
@@ -241,7 +241,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
     const cleanPhone = (activeBooking.ownerPhone || "087805987309").replace(/[^0-9]/g, "").replace(/^0/, "62");
     const sisaBayar = Number(activeBooking.totalAmount || 700000) - Number(activeBooking.dpAmount || 140000);
     const msg = `*BUKTI NOTA KONFIRMASI PEMESANAN KOST*\n` +
-      `*The Ranger App*\n\n` +
+      `*GEOVERSE App*\n\n` +
       `📄 No. Nota / Booking: *${activeBooking.bookingCode}*\n` +
       `🏠 Nama Kos: *${activeBooking.kostName}*\n` +
       `🚪 Kamar: *${activeBooking.roomNumber}* (${activeBooking.roomType || "AC"})\n` +
@@ -270,7 +270,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Nota Konfirmasi Pemesanan - ${activeBooking.bookingCode || "THE-RANGER"}</title>
+  <title>Nota Konfirmasi Pemesanan - ${activeBooking.bookingCode || "GEOVERSE"}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     * { box-sizing: border-box; }
@@ -407,7 +407,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 <body>
   <div class="ticket">
     <div class="header">
-      <h1>THE RANGER</h1>
+      <h1>GEOVERSE</h1>
       <p>Bukti Resmi Konfirmasi Pemesanan & Pembayaran DP Kos</p>
       <div class="badge">✓ RESMI TERVERIFIKASI & KAMAR TERKUNCI</div>
     </div>
@@ -483,7 +483,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
       </div>
     </div>
     <div class="footer">
-      Diterbitkan secara otomatis oleh Sistem The Ranger App • Terverifikasi Real-Time
+      Diterbitkan secara otomatis oleh Sistem GEOVERSE App • Terverifikasi Real-Time
     </div>
   </div>
   <script>
@@ -1057,7 +1057,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               <View style={styles.receiptCard}>
                 {/* Top Green Banner */}
                 <View style={styles.receiptTopBanner}>
-                  <Text style={styles.receiptBrand}>THE RANGER</Text>
+                  <Text style={styles.receiptBrand}>GEOVERSE</Text>
                   <Text style={styles.receiptSubBrand}>E-Receipt & Konfirmasi Sewa Kos</Text>
                   <View style={styles.receiptVerifiedBadge}>
                     <Check size={13} color="#0D7A53" strokeWidth={3} />

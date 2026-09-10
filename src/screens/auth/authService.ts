@@ -85,10 +85,75 @@ export const loginWithPassword = async (email: string, password: string) => {
 
 export const loginWithGoogle = async (accessToken?: string) => {
   const profile = await fetchGoogleProfile(accessToken);
+  const normalized = normalizeEmail(profile.email);
+
+  // 1. Check backend MongoDB Atlas
+  try {
+    const res = await fetch(getApiUrl("/auth/login"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalized, googleProfile: profile }),
+    });
+    const result = await res.json();
+
+    if (result.success && result.data) {
+      const dbUser: AuthAccount = {
+        id: result.data.id || result.data._id,
+        role: result.data.role,
+        name: result.data.name,
+        email: result.data.email,
+        phone: result.data.phone || "",
+        address: result.data.address || "",
+        profilePhoto: result.data.profilePhoto || profile.photo,
+        googleLinked: true,
+        status: result.data.status,
+        rejectionReason: result.data.rejectionReason,
+        roleData: result.data.roleData || {},
+        documents: result.data.documents || {},
+        createdAt: result.data.createdAt || new Date().toISOString(),
+        updatedAt: result.data.updatedAt || new Date().toISOString(),
+      };
+
+      // Cache locally
+      const accounts = await loadAccounts();
+      const existingIdx = accounts.findIndex((a) => a.email === normalized);
+      if (existingIdx >= 0) accounts[existingIdx] = dbUser;
+      else accounts.push(dbUser);
+      await saveAccounts(accounts);
+
+      if (dbUser.status === "rejected") {
+        throw new Error(dbUser.rejectionReason || "Pendaftaran akun ini ditolak oleh administrator.");
+      }
+
+      return { profile, account: dbUser };
+    }
+  } catch (apiErr) {
+    if (apiErr instanceof Error && apiErr.message.includes("ditolak")) {
+      throw apiErr;
+    }
+    console.warn("Backend Google login check note:", apiErr);
+  }
+
+  // 2. Fallback check local storage
   const accounts = await loadAccounts();
-  const account = accounts.find((item) => item.email === normalizeEmail(profile.email) || (item.googleLinked && item.email === normalizeEmail(profile.email)));
-  if (account?.status === "rejected") throw new Error(account.rejectionReason || "Akun Google ini ditolak admin.");
-  return { profile, account: account || null };
+  const account = accounts.find(
+    (item) => item.email === normalized || (item.googleLinked && item.email === normalized)
+  );
+
+  if (account) {
+    if (account.status === "rejected") {
+      throw new Error(account.rejectionReason || "Akun Google ini ditolak admin.");
+    }
+    if (!account.googleLinked) {
+      account.googleLinked = true;
+      if (!account.profilePhoto && profile.photo) account.profilePhoto = profile.photo;
+      await saveAccounts(accounts);
+    }
+    return { profile, account };
+  }
+
+  // Account does not exist yet -> return profile with null account so user can pick role and register!
+  return { profile, account: null };
 };
 
 export const registerAccount = async (role: AuthRegistrationRole, form: RegistrationForm, googleProfile?: GoogleProfile) => {
@@ -173,7 +238,7 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
 export const resetPassword = async (email: string, password: string) => {
   const accounts = await loadAccounts();
   const index = accounts.findIndex((item) => item.email === normalizeEmail(email));
-  if (index < 0) return { ok: false, error: "Email belum terdaftar di Rangers App 2.0." };
+  if (index < 0) return { ok: false, error: "Email belum terdaftar di GEOVERSE 2.0." };
   const updated = { ...accounts[index], passwordHash: await hashSecret(password), updatedAt: new Date().toISOString() };
   await saveAccounts(accounts.map((item, itemIndex) => itemIndex === index ? updated : item));
   return { ok: true, error: undefined };

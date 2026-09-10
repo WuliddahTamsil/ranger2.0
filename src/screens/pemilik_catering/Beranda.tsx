@@ -200,9 +200,9 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             storeName: o.storeName || storeInfo.storeName || "Dapur Catering",
             storeAddress: o.storeAddress || storeInfo.address || "Kamal, Bangkalan, Madura",
             driver: hasDriver ? {
-              name: o.driverName || "Driver Rangers",
+              name: o.driverName || "Driver GEOVERSE",
               vehicle: "Motor",
-              plateNumber: o.driverPhone ? `HP: ${o.driverPhone}` : "Rangers Express",
+              plateNumber: o.driverPhone ? `HP: ${o.driverPhone}` : "GEOVERSE Express",
               rating: 4.9,
               stage: o.status === "Selesai" ? "Pesanan selesai" : o.status === "Mengantar" || o.status === "Diambil" || o.status === "Dikirim" ? "Pesanan sedang dikirim" : "Driver menuju outlet catering",
               distance: "1.2 km",

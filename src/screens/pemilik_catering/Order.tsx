@@ -725,7 +725,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sectionCardTitle}>Tugaskan Kurir Penjemput</Text>
                   <Text style={styles.sectionCardSubtitle}>
-                    Pilih kurir The Ranger yang tersedia di sekitar dapur Anda
+                    Pilih kurir GEOVERSE yang tersedia di sekitar dapur Anda
                   </Text>
                 </View>
               </View>
@@ -888,7 +888,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                   <View style={{ flex: 1 }}>
                     <Text style={styles.driverProfileName}>{selectedOrder.driver.name}</Text>
                     <Text style={styles.driverProfileSub}>
-                      {selectedOrder.driver.vehicle || "Motor"} • {selectedOrder.driver.plateNumber || "Kurir The Ranger"}
+                      {selectedOrder.driver.vehicle || "Motor"} • {selectedOrder.driver.plateNumber || "Kurir GEOVERSE"}
                     </Text>
                   </View>
                   <View style={styles.driverQuickActionsRow}>

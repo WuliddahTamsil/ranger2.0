@@ -7,7 +7,7 @@ const Notification = require("../models/Notification");
 const createOrder = async (req, res) => {
   try {
     const { ownerId, customerId, customerName, customerPhone, address, notes, items, deliveryFee, serviceFee, driverTip, voucherId, discount, paymentMethod, paymentStatus } = req.body;
-    if (!mongoose.Types.ObjectId.isValid(ownerId) || !customerId || !customerName || customerName === "Customer Rangers" || !address || !Array.isArray(items) || items.length === 0) {
+    if (!mongoose.Types.ObjectId.isValid(ownerId) || !customerId || !customerName || customerName === "Customer Rangers" || customerName === "Customer GEOVERSE" || !address || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: "Data pesanan marketplace belum lengkap" });
     }
 
@@ -74,7 +74,7 @@ const getOrdersByOwner = async (req, res) => {
     const orders = await MarketplaceOrder.find({
       ownerId: req.params.ownerId,
       customerId: { $nin: ["", null] },
-      customerName: { $ne: "Customer Rangers" },
+      customerName: { $nin: ["Customer Rangers", "Customer GEOVERSE"] },
     }).sort({ createdAt: -1 }).lean();
     return res.json({ success: true, data: orders });
   } catch (error) {
@@ -98,7 +98,7 @@ const updateOrderStatus = async (req, res) => {
     const order = await MarketplaceOrder.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true, runValidators: true });
     if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
     // Multi-role notifications based on driver journey stage
-    const driverName = order.driverName || "Kurir The Ranger";
+    const driverName = order.driverName || "Kurir GEOVERSE";
     const orderCode = order.orderCode || `#${String(order._id).slice(-8)}`;
 
     if (order.status === "Menuju Pickup") {
