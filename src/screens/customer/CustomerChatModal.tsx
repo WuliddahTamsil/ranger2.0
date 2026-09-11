@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   FlatList,
@@ -39,7 +40,8 @@ import {
   CustomerChatThread,
   upsertCustomerChatThread,
 } from "./customerInboxStore";
-import { getChatMessages, sendChatMessage } from "../../services/api";
+import { getChatConversation, getChatMessages, sendChatMessage, uploadFileToBackend } from "../../services/api";
+import { subscribeToChatRealtime } from "../../services/chatRealtime";
 
 interface CustomerChatModalProps {
   visible: boolean;
@@ -74,9 +76,13 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<AttachmentItem | null>(null);
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [canSend, setCanSend] = useState(true);
 
   useEffect(() => {
     if (!visible) return;
+    setConversationId(null);
+    setCanSend(true);
 
     const defaultGreeting = isDriver
       ? "Halo Pak Kurir, saya customer pesanan ini."
@@ -97,6 +103,10 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     setThread(existing);
 
     const loadMessages = async () => {
+      const conversation = await getChatConversation(orderId);
+      if (!conversation.success || !conversation.data) return;
+      setConversationId(String(conversation.data._id || conversation.data.id));
+      setCanSend(conversation.data.canSend !== false);
       const res = await getChatMessages(orderId, isDriver ? "driver" : "owner");
       if (res.success && Array.isArray(res.data)) {
         const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
@@ -122,6 +132,10 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
 
     void loadMessages();
     const interval = setInterval(loadMessages, 3000);
+    let unsubscribeRealtime: () => void = () => undefined;
+    void subscribeToChatRealtime(orderId, () => void loadMessages()).then((unsubscribe) => {
+      unsubscribeRealtime = unsubscribe;
+    });
 
     const unsubscribe = subscribeCustomerChatThreads((nextThreads) => {
       setThread(nextThreads.find((item) => item.id === threadId));
@@ -129,6 +143,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
 
     return () => {
       clearInterval(interval);
+      unsubscribeRealtime();
       unsubscribe();
     };
   }, [initialMessage, isDriver, orderId, participantName, participantType, threadId, visible]);
@@ -219,25 +234,46 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   };
 
   const handleSend = async () => {
+    if (!canSend) return;
     const text = typedMessage.trim();
     if (!text && !selectedAttachment) return;
 
+    let attachmentToSend = selectedAttachment;
     const message: CustomerChatMessage = {
       id: `${threadId}_${Date.now()}`,
       sender: "customer",
       text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : "📎 File terlampir"),
       time: "Baru saja",
-      attachment: selectedAttachment ? { ...selectedAttachment } : undefined,
+      attachment: attachmentToSend ? { ...attachmentToSend } : undefined,
     };
 
     // Save in database with explicit target channel
+    if (attachmentToSend && !/^https?:/i.test(attachmentToSend.uri)) {
+      try {
+        const uploaded = await uploadFileToBackend(
+          attachmentToSend.uri,
+          attachmentToSend.name,
+          attachmentToSend.type === "image" ? "image/jpeg" : "application/octet-stream"
+        );
+        if (uploaded?.success && uploaded.data?.url) {
+          attachmentToSend = { ...attachmentToSend, uri: uploaded.data.url };
+        }
+      } catch {
+        Alert.alert("Lampiran belum tersimpan", "Gagal mengunggah lampiran. Coba lagi.");
+        return;
+      }
+    }
+
+    message.attachment = attachmentToSend ? { ...attachmentToSend } : undefined;
     const result = await sendChatMessage(
       orderId,
       "customer",
       text,
-      selectedAttachment,
+      attachmentToSend,
       customerId,
-      isDriver ? "driver" : "owner"
+      isDriver ? "driver" : "owner",
+      undefined,
+      conversationId || undefined
     );
     if (!result.success) {
       Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
@@ -257,7 +293,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
 
   return (
     <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.fullContainer}>
+      <ResponsiveSafeAreaView style={styles.fullContainer}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -423,6 +459,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             <TouchableOpacity
               style={[styles.attachButton, isAttachMenuOpen && styles.attachButtonActive]}
               onPress={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
+              disabled={!canSend}
               activeOpacity={0.75}
             >
               <Paperclip size={18} color={isAttachMenuOpen ? "#FFFFFF" : "#0D7A53"} />
@@ -431,6 +468,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             <TextInput
               value={typedMessage}
               onChangeText={setTypedMessage}
+              editable={canSend}
               style={styles.input}
               placeholder={selectedAttachment ? "Tambah keterangan file..." : "Ketik pesan..."}
               placeholderTextColor="#9CA3AF"
@@ -441,10 +479,10 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (!typedMessage.trim() && !selectedAttachment) && styles.sendButtonDisabled,
+                (!canSend || (!typedMessage.trim() && !selectedAttachment)) && styles.sendButtonDisabled,
               ]}
               onPress={handleSend}
-              disabled={!typedMessage.trim() && !selectedAttachment}
+              disabled={!canSend || (!typedMessage.trim() && !selectedAttachment)}
               activeOpacity={0.8}
             >
               <Send size={16} color="#FFFFFF" />
@@ -514,7 +552,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           </Modal>
         )}
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </ResponsiveSafeAreaView>
     </Modal>
   );
 };

@@ -1,8 +1,8 @@
-import { AuthAccount, AuthRegistrationRole, GoogleProfile, RegistrationForm } from "./authTypes";
+import { AuthAccount, AuthRegistrationRole, GoogleCredential, GoogleProfile, RegistrationForm } from "./authTypes";
 import { clearSession, loadAccounts, loadSession, saveAccounts, saveSession } from "./authStorage";
 import { fetchGoogleProfile } from "./googleAuth";
 import { hashSecret, normalizeEmail, normalizePhone } from "./authValidation";
-import { getApiUrl } from "../../services/api";
+import { getApiUrl, updateUserProfile } from "../../services/api";
 
 export const restoreStoredAccount = async () => {
   const [accounts, session] = await Promise.all([loadAccounts(), loadSession()]);
@@ -27,6 +27,27 @@ export const updateCachedAccount = async (account: AuthAccount) => {
   await saveAccounts(accounts);
 };
 
+export const saveProfilePhoto = async (accountId: string, profilePhoto: string) => {
+  const backendResult = await updateUserProfile(accountId, { profilePhoto });
+  const accounts = await loadAccounts();
+  const localIndex = accounts.findIndex((account) => account.id === accountId);
+
+  if (localIndex >= 0) {
+    accounts[localIndex] = {
+      ...accounts[localIndex],
+      profilePhoto,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveAccounts(accounts);
+  }
+
+  return {
+    success: Boolean(backendResult?.success),
+    savedLocally: localIndex >= 0,
+    message: backendResult?.message,
+  };
+};
+
 export const loginWithPassword = async (email: string, password: string) => {
   const normalized = normalizeEmail(email);
   let backendWasUnavailable = false;
@@ -49,6 +70,7 @@ export const loginWithPassword = async (email: string, password: string) => {
         phone: result.data.phone || "",
         address: result.data.address || "",
         profilePhoto: result.data.profilePhoto,
+        token: result.data.token,
         status: result.data.status,
         rejectionReason: result.data.rejectionReason,
         roleData: result.data.roleData || {},
@@ -83,20 +105,32 @@ export const loginWithPassword = async (email: string, password: string) => {
   return { account, error: undefined };
 };
 
-export const loginWithGoogle = async (accessToken?: string) => {
-  const profile = await fetchGoogleProfile(accessToken);
-  const normalized = normalizeEmail(profile.email);
+export const loginWithGoogle = async (credential: GoogleCredential) => {
+  const tokenForFallback = credential.accessToken || credential.idToken;
+  if (!tokenForFallback) throw new Error("Google tidak mengembalikan token autentikasi.");
+  let profile: GoogleProfile | null = null;
 
   // 1. Check backend MongoDB Atlas
   try {
     const res = await fetch(getApiUrl("/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: normalized, googleProfile: profile }),
+      body: JSON.stringify({
+        googleAccessToken: credential.accessToken,
+        googleIdToken: credential.idToken,
+      }),
     });
     const result = await res.json();
 
     if (result.success && result.data) {
+      const resolvedProfile: GoogleProfile = result.googleProfile || {
+        id: result.data.googleId || result.data.id,
+        name: result.data.name,
+        email: result.data.email,
+        photo: result.data.profilePhoto,
+      };
+      profile = resolvedProfile;
+      const normalized = normalizeEmail(resolvedProfile.email);
       const dbUser: AuthAccount = {
         id: result.data.id || result.data._id,
         role: result.data.role,
@@ -104,7 +138,8 @@ export const loginWithGoogle = async (accessToken?: string) => {
         email: result.data.email,
         phone: result.data.phone || "",
         address: result.data.address || "",
-        profilePhoto: result.data.profilePhoto || profile.photo,
+        profilePhoto: result.data.profilePhoto || resolvedProfile.photo,
+        token: result.data.token,
         googleLinked: true,
         status: result.data.status,
         rejectionReason: result.data.rejectionReason,
@@ -125,14 +160,26 @@ export const loginWithGoogle = async (accessToken?: string) => {
         throw new Error(dbUser.rejectionReason || "Pendaftaran akun ini ditolak oleh administrator.");
       }
 
-      return { profile, account: dbUser };
+      return { profile: resolvedProfile, account: dbUser };
+    }
+
+    if (result.needsRegistration && result.googleProfile) {
+      profile = result.googleProfile as GoogleProfile;
+      return { profile, account: null, credential };
+    }
+
+    if (res.status === 400 || res.status === 401) {
+      throw new Error(result.message || "Token Google tidak valid. Silakan coba lagi.");
     }
   } catch (apiErr) {
-    if (apiErr instanceof Error && apiErr.message.includes("ditolak")) {
+    if (apiErr instanceof Error && (apiErr.message.includes("ditolak") || apiErr.message.includes("Token Google"))) {
       throw apiErr;
     }
     console.warn("Backend Google login check note:", apiErr);
   }
+
+  if (!profile) profile = await fetchGoogleProfile(tokenForFallback);
+  const normalized = normalizeEmail(profile.email);
 
   // 2. Fallback check local storage
   const accounts = await loadAccounts();
@@ -153,10 +200,10 @@ export const loginWithGoogle = async (accessToken?: string) => {
   }
 
   // Account does not exist yet -> return profile with null account so user can pick role and register!
-  return { profile, account: null };
+  return { profile, account: null, credential };
 };
 
-export const registerAccount = async (role: AuthRegistrationRole, form: RegistrationForm, googleProfile?: GoogleProfile) => {
+export const registerAccount = async (role: AuthRegistrationRole, form: RegistrationForm, googleProfile?: GoogleProfile, googleCredential?: GoogleCredential) => {
   const email = normalizeEmail(form.email);
   const now = new Date().toISOString();
 
@@ -174,6 +221,8 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
         profilePhoto: form.profilePhoto?.uri || googleProfile?.photo || "",
         password: form.password,
         googleProfile,
+        googleAccessToken: googleCredential?.accessToken,
+        googleIdToken: googleCredential?.idToken,
         roleData: form.roleData || {},
         documents: form.documents || {},
       }),
@@ -195,6 +244,7 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
         phone: result.data.phone || "",
         address: result.data.address || "",
         profilePhoto: result.data.profilePhoto,
+        token: result.data.token,
         googleLinked: Boolean(googleProfile || result.data.googleLinked),
         status: result.data.status,
         rejectionReason: result.data.rejectionReason,

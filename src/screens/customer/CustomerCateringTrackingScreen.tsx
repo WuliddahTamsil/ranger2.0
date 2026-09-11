@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   SafeAreaView,
@@ -128,7 +129,7 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <BackHeader title="Lacak Catering" onBack={() => navigate("c_home")} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Status Hero */}
@@ -299,9 +300,9 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
 
       {/* Customer Chat Modal */}
       <CustomerChatModal
-        visible={chatVisible}
+        visible={chatVisible && Boolean(order?.id)}
         onClose={() => setChatVisible(false)}
-        orderId={order?.id || "CATERING-TRACKING"}
+        orderId={order?.id || ""}
         customerId={authAccount?.id}
         participantName={
           chatRecipient === "driver"
@@ -315,7 +316,7 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
             : "Halo Dapur Catering, saya ingin menanyakan pesanan saya."
         }
       />
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

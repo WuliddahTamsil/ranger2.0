@@ -1,8 +1,10 @@
 const mongoose = require("mongoose");
 const CateringProduct = require("../models/CateringProduct");
+const Review = require("../models/Review");
 const User = require("../models/User");
 const CateringOrder = require("../models/CateringOrder");
 const Notification = require("../models/Notification");
+const { syncConversationForOrder } = require("../services/conversationService");
 
 // Create product (by Pemilik Catering)
 const createProduct = async (req, res) => {
@@ -176,8 +178,28 @@ const getAllActiveProducts = async (req, res) => {
   try {
     const products = await CateringProduct.find({ isActive: true, stock: { $gt: 0 } })
       .populate("ownerId", "name roleData")
-      .sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, count: products.length, data: products });
+      .sort({ createdAt: -1 })
+      .lean();
+    const productIds = products.map((product) => String(product._id));
+    const reviews = productIds.length > 0
+      ? await Review.find({ productIds: { $in: productIds } }).sort({ createdAt: -1 }).lean()
+      : [];
+    const reviewMap = new Map();
+    reviews.forEach((review) => {
+      (review.productIds || []).forEach((productId) => {
+        const current = reviewMap.get(String(productId)) || [];
+        current.push(review);
+        reviewMap.set(String(productId), current);
+      });
+    });
+    const enrichedProducts = products.map((product) => {
+      const productReviews = reviewMap.get(String(product._id)) || [];
+      const rating = productReviews.length > 0
+        ? Number((productReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / productReviews.length).toFixed(1))
+        : 0;
+      return { ...product, rating, totalReviews: productReviews.length, reviews: productReviews.slice(0, 20) };
+    });
+    return res.status(200).json({ success: true, count: enrichedProducts.length, data: enrichedProducts });
   } catch (error) {
     console.error("Get all active catering products error:", error);
     return res.status(500).json({ success: false, message: "Gagal mengambil menu catering" });
@@ -193,6 +215,7 @@ const createCateringOrder = async (req, res) => {
       customerName,
       customerPhone,
       address,
+      addressSnapshot,
       menuName,
       portions,
       price,
@@ -242,6 +265,7 @@ const createCateringOrder = async (req, res) => {
       customerName,
       customerPhone,
       address,
+      addressSnapshot: addressSnapshot || null,
       storeId: storeId || String(ownerId),
       storeName: ownerProfile?.roleData?.businessName || ownerProfile?.name || "Mitra Catering",
       storeAddress: ownerProfile?.roleData?.businessAddress || ownerProfile?.roleData?.address || ownerProfile?.address || "Dapur Catering",
@@ -265,6 +289,7 @@ const createCateringOrder = async (req, res) => {
       status: "Menunggu",
       notes: notes || "",
     });
+    await syncConversationForOrder(newOrder, "catering");
 
     req.io?.to(`owner:${ownerId}`).emit("order_created", newOrder);
     req.io?.to(`customer:${customerId}`).emit("order_created", newOrder);
@@ -509,6 +534,14 @@ const assignDriver = async (req, res) => {
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan catering tidak ditemukan atau sudah diambil driver lain" });
     }
+    await syncConversationForOrder(order, "catering");
+    await Notification.create({
+      userId: driver._id,
+      title: "Order catering ditugaskan",
+      message: `Pesanan ${order.orderCode} siap Anda proses.`,
+      type: "order_status",
+      relatedId: order._id,
+    });
 
     req.io?.to(`driver:${driver._id}`).emit("order_assigned", order);
     req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);

@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -45,6 +46,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { rp } from "../../utils/formatters";
 import { getChatMessages, sendChatMessage } from "../../services/api";
+import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { AnimatedOrderPreparation } from "../../components/AnimatedOrderPreparation";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 
@@ -52,6 +54,7 @@ interface OrderItemDetail {
   name: string;
   quantity: number;
   price: number;
+  notes?: string;
 }
 
 interface DriverProfile {
@@ -179,7 +182,14 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
     };
     void loadChat();
     const interval = setInterval(() => void loadChat(), 3000);
-    return () => clearInterval(interval);
+    let unsubscribeRealtime: () => void = () => undefined;
+    void subscribeToChatRealtime(selectedOrder.id, () => void loadChat()).then((unsubscribe) => {
+      unsubscribeRealtime = unsubscribe;
+    });
+    return () => {
+      clearInterval(interval);
+      unsubscribeRealtime();
+    };
   }, [chatModalVisible, chatTarget, selectedOrder]);
 
   const handlePickImage = async () => {
@@ -539,7 +549,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
         {previewImageUri && (
           <Modal visible={true} transparent animationType="fade">
             <View style={styles.imageViewerBg}>
-              <SafeAreaView style={styles.imageViewerHeader}>
+              <ResponsiveSafeAreaView style={styles.imageViewerHeader}>
                 <Text style={styles.imageViewerTitle}>Pratinjau Foto Lampiran</Text>
                 <TouchableOpacity
                   style={styles.imageViewerCloseBtn}
@@ -547,7 +557,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                 >
                   <X size={22} color="#FFFFFF" />
                 </TouchableOpacity>
-              </SafeAreaView>
+              </ResponsiveSafeAreaView>
               <View style={styles.imageViewerBody}>
                 <Image
                   source={{ uri: previewImageUri }}
@@ -565,7 +575,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
   // If an order is selected, render the FULL PAGE View (no popups!)
   if (selectedOrder) {
     return (
-      <SafeAreaView style={styles.fullPageContainer}>
+      <ResponsiveSafeAreaView style={styles.fullPageContainer}>
         {/* Sticky Header */}
         <View style={styles.fullPageHeader}>
           <TouchableOpacity
@@ -977,7 +987,10 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
               {selectedOrder.items.map((item, index) => (
                 <View key={index} style={styles.itemRow}>
                   <Text style={styles.itemQty}>{item.quantity}x</Text>
-                  <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                    {!!item.notes && <Text style={styles.itemNote} numberOfLines={2}>Catatan: {item.notes}</Text>}
+                  </View>
                   <Text style={styles.itemPrice}>{rp(item.price * item.quantity)}</Text>
                 </View>
               ))}
@@ -1128,12 +1141,12 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
 
         {/* Chat Modal */}
         {renderChatModal()}
-      </SafeAreaView>
+      </ResponsiveSafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Header Info */}
       <View style={styles.header}>
         <View style={styles.headerText}>
@@ -1321,7 +1334,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
 
       {/* Modal Chat (when opened from list) */}
       {renderChatModal()}
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 
@@ -1680,9 +1693,14 @@ const styles = StyleSheet.create({
     color: "#1B7A4E",
   },
   itemName: {
-    flex: 1,
     fontSize: 13,
     color: "#111827",
+  },
+  itemNote: {
+    fontSize: 10,
+    color: "#64748B",
+    marginTop: 3,
+    fontStyle: "italic",
   },
   itemPrice: {
     fontSize: 13,

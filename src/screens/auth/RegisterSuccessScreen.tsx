@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React from "react";
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { CheckCircle2, Clock3, ArrowRight, LogIn } from "lucide-react-native";
@@ -8,7 +9,7 @@ import { Nav } from "../../types";
 interface Props extends Nav { account: AuthAccount; onContinue: () => void; }
 
 export const RegisterSuccessScreen: React.FC<Props> = ({ navigate, account, onContinue }) => (
-  <SafeAreaView style={authStyles.container}>
+  <ResponsiveSafeAreaView style={authStyles.container}>
     <View style={styles.container}>
       <View style={styles.icon}><CheckCircle2 size={46} color={authColors.primary} /></View>
       <Text style={authStyles.brand}>Registrasi berhasil</Text>
@@ -18,7 +19,7 @@ export const RegisterSuccessScreen: React.FC<Props> = ({ navigate, account, onCo
       <TouchableOpacity onPress={onContinue} style={[authStyles.primaryButton, styles.button]}><Text style={authStyles.primaryButtonText}>{account.role === "customer" ? "Masuk ke dashboard" : "Lihat dashboard"}</Text><ArrowRight size={18} color="#FFFFFF" /></TouchableOpacity>
       <TouchableOpacity onPress={() => navigate("login")} style={[authStyles.secondaryButton, styles.button]}><LogIn size={17} color={authColors.primary} /><Text style={authStyles.secondaryButtonText}>Kembali ke login</Text></TouchableOpacity>
     </View>
-  </SafeAreaView>
+  </ResponsiveSafeAreaView>
 );
 
 const styles = StyleSheet.create({

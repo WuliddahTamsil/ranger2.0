@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -509,7 +510,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -1178,7 +1179,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

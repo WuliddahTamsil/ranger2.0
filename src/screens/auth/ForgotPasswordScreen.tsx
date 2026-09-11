@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { ArrowLeft, CheckCircle2, KeyRound, Mail, ShieldCheck } from "lucide-react-native";
@@ -35,7 +36,7 @@ export const ForgotPasswordScreen: React.FC<Props> = ({ navigate, onResetPasswor
   };
 
   return (
-    <SafeAreaView style={authStyles.container}>
+    <ResponsiveSafeAreaView style={authStyles.container}>
       <ScrollView contentContainerStyle={authStyles.scroll} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={() => navigate("login")} style={styles.back}><ArrowLeft size={17} color={authColors.primary} /><Text style={styles.backText}>Kembali ke login</Text></TouchableOpacity>
         <View style={styles.icon}><KeyRound size={25} color={authColors.primary} /></View>
@@ -48,7 +49,7 @@ export const ForgotPasswordScreen: React.FC<Props> = ({ navigate, onResetPasswor
           {error ? <Text style={[authStyles.error, styles.error]}>{error}</Text> : null}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

@@ -43,6 +43,7 @@ export interface RegistrationForm {
 
 export interface AuthAccount {
   id: string;
+  token?: string;
   role: Role;
   name: string;
   email: string;
@@ -73,6 +74,11 @@ export interface GoogleProfile {
   name: string;
   email: string;
   photo?: string;
+}
+
+export interface GoogleCredential {
+  accessToken?: string;
+  idToken?: string;
 }
 
 export const ROLE_LABELS: Record<AuthRegistrationRole, string> = {

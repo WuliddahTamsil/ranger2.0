@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -131,7 +132,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   const overdueRooms = rooms.filter(r => r.isOverdue === true);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0D7A53" />
 
       {/* Main Scroll Content */}
@@ -562,7 +563,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

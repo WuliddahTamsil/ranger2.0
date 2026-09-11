@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const MarketplaceProduct = require("../models/MarketplaceProduct");
 const User = require("../models/User");
+const Review = require("../models/Review");
 
 const validateOwner = async (ownerId) => {
   if (!mongoose.Types.ObjectId.isValid(ownerId)) return null;
@@ -23,8 +24,28 @@ const getAllProducts = async (req, res) => {
   try {
     const products = await MarketplaceProduct.find({ isActive: true, stock: { $gt: 0 } })
       .populate("ownerId", "name roleData")
-      .sort({ createdAt: -1 });
-    return res.json({ success: true, count: products.length, data: products });
+      .sort({ createdAt: -1 })
+      .lean();
+    const productIds = products.map((product) => String(product._id));
+    const reviews = productIds.length > 0
+      ? await Review.find({ productIds: { $in: productIds } }).sort({ createdAt: -1 }).lean()
+      : [];
+    const reviewMap = new Map();
+    reviews.forEach((review) => {
+      (review.productIds || []).forEach((productId) => {
+        const current = reviewMap.get(String(productId)) || [];
+        current.push(review);
+        reviewMap.set(String(productId), current);
+      });
+    });
+    const enrichedProducts = products.map((product) => {
+      const productReviews = reviewMap.get(String(product._id)) || [];
+      const rating = productReviews.length > 0
+        ? Number((productReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / productReviews.length).toFixed(1))
+        : product.rating || 0;
+      return { ...product, rating, totalReviews: productReviews.length, reviews: productReviews.slice(0, 20) };
+    });
+    return res.json({ success: true, count: enrichedProducts.length, data: enrichedProducts });
   } catch (error) {
     console.error("Get all marketplace products error:", error);
     return res.status(500).json({ success: false, message: "Gagal mengambil produk marketplace" });

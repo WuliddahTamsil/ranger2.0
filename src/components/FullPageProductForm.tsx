@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -318,7 +319,7 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
   const formattedPricePreview = !isNaN(priceNum) && priceNum > 0 ? rp(priceNum) : null;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Top Navigation Bar */}
       <View style={styles.headerBar}>
         <TouchableOpacity
@@ -678,7 +679,7 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
           )}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { ArrowRight, CalendarDays, ChefHat, MapPin } from "lucide-react-native";
@@ -44,7 +45,7 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <BackHeader title="Catering Lokal" onBack={() => navigate("c_home")} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
@@ -109,7 +110,7 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
           })
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

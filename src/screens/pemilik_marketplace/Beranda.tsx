@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -91,7 +92,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
     description: "Menyediakan sembako berkualitas dan kebutuhan sehari-hari warga Kamojang.",
     isOpen: true,
     isVerified: true,
-    profileImage: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop&q=80",
+    profileImage: authAccount?.profilePhoto || null,
   }));
 
   useEffect(() => {
@@ -104,6 +105,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
       storeName: authAccount.roleData.businessName || current.storeName,
       address: authAccount.roleData.businessAddress || authAccount.address,
       description: authAccount.roleData.businessDescription || current.description,
+      profileImage: authAccount.profilePhoto || null,
     }));
   }, [authAccount]);
 
@@ -404,7 +406,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           />
         );
       case 4:
-        return <Profile storeInfo={storeInfo} setStoreInfo={setStoreInfo} navigate={navigate} />;
+        return <Profile storeInfo={storeInfo} setStoreInfo={setStoreInfo} userId={authAccount?.id} navigate={navigate} />;
       default:
         return renderBerandaContent();
     }
@@ -808,7 +810,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Dynamic Tab Body */}
       <View style={styles.tabContentContainer}>{renderTabContent()}</View>
 
@@ -872,7 +874,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

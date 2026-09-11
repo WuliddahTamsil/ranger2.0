@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -228,7 +229,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const isRejected = order?.paymentStatus === "ditolak";
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -626,14 +627,14 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
       </Modal>
 
       <CustomerChatModal
-        visible={chatVisible}
+        visible={chatVisible && Boolean(order?.orderCode)}
         onClose={() => setChatVisible(false)}
-        orderId={order?.orderCode || "LND-2026"}
+        orderId={order?.orderCode || ""}
         participantName={storeName}
         participantType="merchant"
         initialMessage="Halo Kak, ada yang bisa kami bantu terkait pesanan laundry Anda?"
       />
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

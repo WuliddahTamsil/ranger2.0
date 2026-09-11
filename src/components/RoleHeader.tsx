@@ -2,6 +2,7 @@ import React from "react";
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Bell } from "lucide-react-native";
 import { useTimeGreeting } from "../utils/timeGreeting";
+import { useResponsiveLayout } from "../utils/responsive";
 
 type RoleIcon = React.ComponentType<{
   color?: string;
@@ -29,14 +30,15 @@ export const RoleHeader: React.FC<RoleHeaderProps> = ({
   onRolePress,
 }) => {
   const greeting = useTimeGreeting();
+  const { gutter, scale } = useResponsiveLayout();
 
   return (
-    <View style={fullBleed ? styles.fullBleed : undefined}>
+    <View style={fullBleed ? [styles.fullBleed, { marginHorizontal: -gutter }] : undefined}>
       <StatusBar barStyle="light-content" backgroundColor="#0E6641" />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingHorizontal: gutter, paddingTop: 18 * scale, paddingBottom: 18 * scale }]}>
         <View style={styles.titleContainer}>
           <Text style={styles.greetingText}>Halo, {greeting} 🌿</Text>
-          <Text style={styles.nameText} numberOfLines={1}>
+          <Text style={styles.nameText} numberOfLines={1} ellipsizeMode="tail">
             {name || "Nama Pengguna"}
           </Text>
         </View>
@@ -53,7 +55,7 @@ export const RoleHeader: React.FC<RoleHeaderProps> = ({
         </TouchableOpacity>
       </View>
 
-      <View style={styles.roleRow}>
+      <View style={[styles.roleRow, { paddingHorizontal: gutter }]}>
         <TouchableOpacity
           style={styles.roleButton}
           onPress={onRolePress}

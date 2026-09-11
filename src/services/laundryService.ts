@@ -1,4 +1,5 @@
 import { getApiUrl } from "./api";
+import { CustomerAddress } from "../types";
 
 export interface LaundryServiceItem {
   _id?: string;
@@ -55,6 +56,7 @@ export interface LaundryOrder {
   pickupCoords?: string;
   deliveryAddress: string;
   deliveryCoords?: string;
+  addressSnapshot?: CustomerAddress | null;
   storeId: string;
   storeName: string;
   ownerId: string;

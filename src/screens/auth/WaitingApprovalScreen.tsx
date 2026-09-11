@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -167,7 +168,7 @@ export const WaitingApprovalScreen: React.FC<WaitingApprovalScreenProps> = ({
     authAccount?.roleData?.businessName || authAccount?.name || "Usaha Mitra";
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Top Header */}
@@ -475,7 +476,7 @@ export const WaitingApprovalScreen: React.FC<WaitingApprovalScreenProps> = ({
             : "Selama menunggu persetujuan admin, akses ke dashboard dibatasi demi keamanan."}
         </Text>
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

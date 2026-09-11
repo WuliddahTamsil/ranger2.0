@@ -13,6 +13,7 @@
     "expo-dev-client": "~57.0.18",
     "expo-document-picker": "~57.0.1",
     "expo-image-picker": "~57.0.9",
+    "expo-location": "~57.0.16",
     "expo-print": "~57.0.1",
     "expo-sharing": "~57.0.18",
     "expo-status-bar": "~57.0.1",
@@ -21,10 +22,12 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.2",
+    "react-native-maps": "1.27.2",
     "react-native-safe-area-context": "^5.8.1",
     "react-native-screens": "^4.27.0",
     "react-native-svg": "^15.15.5",
     "react-native-web": "^0.21.2",
+    "socket.io-client": "^4.8.3",
     "toqr": "0.1.1"
   },
   "devDependencies": {

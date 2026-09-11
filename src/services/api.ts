@@ -1,4 +1,31 @@
 import { NativeModules, Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const AUTH_ACCOUNTS_KEY = "rangers.auth.accounts.v1";
+const AUTH_SESSION_KEY = "rangers.auth.session.v1";
+
+const getAuthHeaders = async (): Promise<Record<string, string>> => {
+  try {
+    const [accountsRaw, sessionRaw] = await Promise.all([
+      AsyncStorage.getItem(AUTH_ACCOUNTS_KEY),
+      AsyncStorage.getItem(AUTH_SESSION_KEY),
+    ]);
+    const session = sessionRaw ? JSON.parse(sessionRaw) : null;
+    const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
+    const account = Array.isArray(accounts)
+      ? accounts.find((item: any) => item.id === session?.accountId)
+      : null;
+    return account?.token ? { Authorization: `Bearer ${account.token}` } : {};
+  } catch {
+    return {};
+  }
+};
+
+export const getStoredAuthToken = async (): Promise<string | null> => {
+  const headers = await getAuthHeaders();
+  const authorization = headers.Authorization || "";
+  return authorization.startsWith("Bearer ") ? authorization.slice(7) : null;
+};
 
 // Detect developer machine host if running on physical device via Expo Go / dev client
 const getDevHost = (): string | null => {
@@ -42,6 +69,20 @@ export const API_BASE_URL = resolveApiBaseUrl();
 export const getApiUrl = (endpoint: string) => {
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   return `${API_BASE_URL}${cleanEndpoint}`;
+};
+
+export const updateUserProfile = async (userId: string, profileData: Record<string, unknown>) => {
+  try {
+    const res = await fetch(getApiUrl(`/auth/profile/${userId}`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profileData),
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("updateUserProfile error:", err);
+    return { success: false, message: "Gagal menyimpan profil ke server" };
+  }
 };
 
 const readApiJson = async (response: Response) => {
@@ -184,6 +225,30 @@ export const getMarketplaceProducts = async () => {
   } catch (err) {
     console.error("getMarketplaceProducts error:", err);
     return { success: false, data: [], message: "Gagal menyambung ke server" };
+  }
+};
+
+export const getCustomerReviews = async (customerId: string) => {
+  try {
+    const res = await fetch(getApiUrl(`/reviews/customer/${customerId}?t=${Date.now()}`), { cache: "no-store" });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("getCustomerReviews error:", err);
+    return { success: false, data: [] };
+  }
+};
+
+export const createCustomerReview = async (reviewData: Record<string, unknown>) => {
+  try {
+    const res = await fetch(getApiUrl("/reviews"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reviewData),
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("createCustomerReview error:", err);
+    return { success: false, message: "Gagal menyimpan ulasan" };
   }
 };
 
@@ -434,18 +499,44 @@ export const sendChatMessage = async (
   attachment?: any,
   senderId?: string,
   target?: "customer" | "driver" | "owner",
-  targetReceiverId?: string
+  targetReceiverId?: string,
+  conversationId?: string
 ) => {
   try {
+    const authHeaders = await getAuthHeaders();
+    const resolvedConversationId = conversationId || (await getChatConversation(orderId)).data?._id;
+    let persistedAttachment = attachment;
+    if (persistedAttachment?.uri && !/^https?:/i.test(String(persistedAttachment.uri))) {
+      const uploaded = await uploadFileToBackend(
+        persistedAttachment.uri,
+        persistedAttachment.name || `chat_${Date.now()}`,
+        persistedAttachment.type === "image" ? "image/jpeg" : "application/octet-stream"
+      );
+      if (!uploaded?.success || !uploaded.data?.url) throw new Error("Lampiran gagal diunggah");
+      persistedAttachment = { ...persistedAttachment, uri: uploaded.data.url };
+    }
     const res = await fetch(getApiUrl("/chat/send"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId, sender, senderId, text, attachment, target, targetReceiverId }),
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ orderId, text, attachment: persistedAttachment, target, conversationId: resolvedConversationId }),
     });
     return await readApiJson(res);
   } catch (err) {
     console.error("❌ sendChatMessage error:", err);
     return { success: false, message: "Gagal menyambung ke server" };
+  }
+};
+
+export const getChatConversation = async (orderId: string) => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/chat/conversation/${encodeURIComponent(orderId)}`), {
+      headers: authHeaders,
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("getChatConversation error:", err);
+    return { success: false, data: null, message: "Sesi login tidak valid atau order belum memiliki akses chat." };
   }
 };
 
@@ -455,6 +546,7 @@ export const getChatMessages = async (
   role?: "driver" | "owner" | "customer"
 ) => {
   try {
+    const authHeaders = await getAuthHeaders();
     const params = new URLSearchParams();
     if (target) params.append("target", target);
     if (role) params.append("role", role);
@@ -462,7 +554,7 @@ export const getChatMessages = async (
     const url = queryString
       ? getApiUrl(`/chat/messages/${orderId}?${queryString}`)
       : getApiUrl(`/chat/messages/${orderId}`);
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: authHeaders });
     return await readApiJson(res);
   } catch (err) {
     console.error("❌ getChatMessages error:", err);

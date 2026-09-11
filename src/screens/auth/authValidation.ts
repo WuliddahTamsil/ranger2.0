@@ -26,42 +26,34 @@ export const getDocumentRequirements = (role: AuthRegistrationRole): AuthDocumen
       { key: "ktp", label: "KTP", description: "Foto KTP yang jelas dan tidak terpotong.", required: true },
       { key: "sim", label: "SIM", description: "SIM aktif sesuai jenis kendaraan.", required: true },
       { key: "stnk", label: "STNK", description: "STNK kendaraan yang digunakan.", required: true },
-      { key: "vehicle_front", label: "Foto Kendaraan Depan", description: "Tampak depan kendaraan.", required: true },
-      { key: "vehicle_side", label: "Foto Kendaraan Samping", description: "Tampak samping kendaraan.", required: true },
-      { key: "vehicle_plate", label: "Foto Plat Nomor", description: "Plat nomor harus terbaca.", required: true },
     ];
   }
 
   if (role === "pemilik_marketplace") {
     return [
       { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik usaha.", required: true },
-      { key: "business_license", label: "NIB / Surat Usaha", description: "Dokumen legalitas usaha.", required: true },
-      { key: "store_photo", label: "Foto Toko / Produk", description: "Foto lokasi atau produk utama.", required: true },
+      { key: "store_photo", label: "Foto produk atau toko", description: "Satu foto yang mewakili usaha kamu.", required: true },
     ];
   }
 
   if (role === "pemilik_catering") {
     return [
       { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik catering.", required: true },
-      { key: "business_license", label: "NIB / Surat Usaha", description: "Dokumen legalitas usaha.", required: true },
-      { key: "halal_or_health", label: "Sertifikat Halal / PIRT", description: "Jika tersedia, unggah dokumen yang relevan.", required: false },
-      { key: "kitchen_photo", label: "Foto Dapur", description: "Foto area produksi catering.", required: true },
+      { key: "kitchen_photo", label: "Foto dapur atau menu", description: "Satu foto yang menunjukkan usaha catering kamu.", required: true },
     ];
   }
 
   if (role === "pemilik_laundry") {
     return [
       { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik laundry.", required: true },
-      { key: "business_license", label: "NIB / Surat Usaha", description: "Dokumen legalitas usaha.", required: true },
-      { key: "store_photo", label: "Foto Lokasi Laundry", description: "Foto tempat usaha laundry.", required: true },
+      { key: "store_photo", label: "Foto outlet laundry", description: "Satu foto yang menunjukkan lokasi usaha.", required: true },
     ];
   }
 
   if (role === "pemilik_kos") {
     return [
       { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik kos yang jelas dan tidak terpotong.", required: true },
-      { key: "property_document", label: "Bukti Kepemilikan / Izin", description: "Bukti kepemilikan, izin pengelolaan, atau surat usaha kos.", required: true },
-      { key: "property_photo", label: "Foto Properti Kos", description: "Foto tampak depan dan area utama kos.", required: true },
+      { key: "property_photo", label: "Foto properti kos", description: "Satu foto tampak depan atau area utama kos.", required: true },
     ];
   }
 
@@ -92,14 +84,14 @@ export const validateBaseStep = (form: RegistrationForm, options?: { allowPasswo
 export const validateRoleStep = (role: AuthRegistrationRole, roleData: Record<string, string>) => {
   if (role === "customer") return null;
   const requiredFields = role === "driver"
-    ? ["plateNumber", "vehicleType", "vehicleBrand", "vehicleYear"]
+    ? ["plateNumber", "vehicleType"]
     : role === "pemilik_marketplace"
-      ? ["businessName", "businessCategory", "businessAddress"]
+      ? ["businessName", "businessAddress"]
       : role === "pemilik_catering"
-        ? ["businessName", "businessAddress", "businessType"]
+        ? ["businessName", "businessAddress"]
         : role === "pemilik_kos"
-          ? ["businessName", "businessAddress", "propertyType", "roomCount"]
-        : ["businessName", "businessAddress", "serviceType"];
+          ? ["businessName", "businessAddress"]
+        : ["businessName", "businessAddress"];
 
   const missing = requiredFields.find((field) => !roleData[field]?.trim());
   if (missing) return "Lengkapi semua data usaha/kendaraan yang wajib.";

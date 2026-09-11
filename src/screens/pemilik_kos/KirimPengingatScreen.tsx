@@ -1,3 +1,5 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import React, { useState } from "react";
 import {
   View,
@@ -51,7 +53,7 @@ export const KirimPengingatScreen: React.FC<KirimPengingatScreenProps> = ({ navi
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -152,7 +154,7 @@ export const KirimPengingatScreen: React.FC<KirimPengingatScreenProps> = ({ navi
       </ScrollView>
 
       {/* Fixed Bottom Action Bar */}
-      <View style={styles.bottomBar}>
+      <SafeAreaBottomBar absolute style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.btnKirim}
           onPress={handleSendReminder}
@@ -161,7 +163,7 @@ export const KirimPengingatScreen: React.FC<KirimPengingatScreenProps> = ({ navi
           <MessageCircle size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
           <Text style={styles.btnKirimText}>Buka Chat & Kirim Tagihan</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaBottomBar>
 
       {/* Success Modal */}
       <Modal visible={isSuccessModalOpen} transparent animationType="fade">
@@ -190,7 +192,7 @@ export const KirimPengingatScreen: React.FC<KirimPengingatScreenProps> = ({ navi
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

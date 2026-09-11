@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -5,9 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Modal,
-  TextInput,
   Alert,
 } from "react-native";
 import {
@@ -20,9 +19,11 @@ import {
   Settings,
   LogOut,
   ChevronRight,
-  Camera,
   X,
 } from "lucide-react-native";
+import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
+import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
+import { AuthAccount } from "../auth/authTypes";
 
 interface ProfileProps {
   customerName: string;
@@ -36,6 +37,9 @@ interface ProfileProps {
   orderCount: number;
   wishlistCount: number;
   rating: string;
+  authAccount?: AuthAccount | null;
+  profilePhoto?: string;
+  setProfilePhoto?: (photoUri: string) => void;
   navigate: (screen: any) => void;
 }
 
@@ -51,19 +55,16 @@ export const Profile: React.FC<ProfileProps> = ({
   orderCount,
   wishlistCount,
   rating,
+  authAccount,
+  profilePhoto,
+  setProfilePhoto,
   navigate,
 }) => {
   // Dialog modal visibility states
-  const [editProfileVisible, setEditProfileVisible] = useState(false);
   const [infoModalVisible, setInfoModalVisible] = useState(false);
   const [infoTitle, setInfoTitle] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
-
-  // Edit fields temp states
-  const [tempName, setTempName] = useState(customerName);
-  const [tempAddress, setTempAddress] = useState(customerAddress);
-  const [tempLocation, setTempLocation] = useState(customerLocation);
-  const [tempPhone, setTempPhone] = useState(customerPhone);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   const triggerInfoSheet = (title: string, msg: string) => {
     setInfoTitle(title);
@@ -71,38 +72,23 @@ export const Profile: React.FC<ProfileProps> = ({
     setInfoModalVisible(true);
   };
 
-  const handleSaveProfile = () => {
-    if (tempName.trim() === "" || tempAddress.trim() === "" || tempLocation.trim() === "") {
-      Alert.alert("Error", "Semua kolom wajib diisi.");
-      return;
-    }
-    setCustomerName(tempName.trim());
-    setCustomerAddress(tempAddress.trim());
-    setCustomerLocation(tempLocation.trim());
-    setCustomerPhone(tempPhone.trim());
-    setEditProfileVisible(false);
-    Alert.alert("Sukses", "Profil customer berhasil diperbarui.");
+  const handleLogout = () => {
+    setLogoutModalVisible(false);
+    navigate("login");
   };
 
-  const handleLogout = () => navigate("login");
-
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Profile Green Header */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatarWrapper}>
-            <View style={styles.avatarBg}>
-              <User size={38} color="#1B7A4E" />
-            </View>
-            <TouchableOpacity 
-              style={styles.cameraBtn}
-              onPress={() => triggerInfoSheet("Foto Profil", "Fitur penggantian foto profil siap dihubungkan ke storage akun.")}
-              activeOpacity={0.8}
-            >
-              <Camera size={14} color="#1B7A4E" />
-            </TouchableOpacity>
-          </View>
+          <ProfilePhotoEditor
+            userId={authAccount?.id}
+            name={customerName}
+            photoUri={profilePhoto || authAccount?.profilePhoto}
+            size={96}
+            onSaved={(photoUri) => setProfilePhoto?.(photoUri)}
+          />
 
           <Text style={styles.customerNameText} numberOfLines={1}>{customerName}</Text>
           <Text style={styles.customerPhoneText}>{customerPhone || "Nomor belum diatur"}</Text>
@@ -131,13 +117,7 @@ export const Profile: React.FC<ProfileProps> = ({
         <View style={styles.menuGroup}>
           <TouchableOpacity 
             style={styles.menuRow}
-            onPress={() => {
-              setTempName(customerName);
-              setTempAddress(customerAddress);
-              setTempLocation(customerLocation);
-              setTempPhone(customerPhone);
-              setEditProfileVisible(true);
-            }}
+            onPress={() => navigate("c_addresses")}
           >
             <View style={[styles.menuIconBg, { backgroundColor: "#E8F5EE" }]}>
               <User size={16} color="#1B7A4E" />
@@ -150,18 +130,12 @@ export const Profile: React.FC<ProfileProps> = ({
 
           <TouchableOpacity 
             style={styles.menuRow}
-            onPress={() => {
-              setTempName(customerName);
-              setTempAddress(customerAddress);
-              setTempLocation(customerLocation);
-              setTempPhone(customerPhone);
-              setEditProfileVisible(true);
-            }}
+            onPress={() => navigate("c_addresses")}
           >
             <View style={[styles.menuIconBg, { backgroundColor: "#E3F2FF" }]}>
               <MapPin size={16} color="#1685E5" />
             </View>
-            <Text style={styles.menuLabel}>Alamat Tersimpan</Text>
+            <Text style={styles.menuLabel}>Alamat Saya</Text>
             <ChevronRight size={16} color="#9CA3AF" />
           </TouchableOpacity>
 
@@ -234,7 +208,7 @@ export const Profile: React.FC<ProfileProps> = ({
         </View>
 
         {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => setLogoutModalVisible(true)} activeOpacity={0.7}>
           <View style={styles.logoutIconBg}>
             <LogOut size={16} color="#B91C1C" />
           </View>
@@ -245,71 +219,14 @@ export const Profile: React.FC<ProfileProps> = ({
         <Text style={styles.footerVersion}>GEOVERSE 2.0 · PGE Kamojang</Text>
       </ScrollView>
 
-      {/* 1. Modal Edit Profil / Alamat */}
-      <Modal visible={editProfileVisible} transparent animationType="slide">
-        <View style={styles.modalBgBottom}>
-          <View style={styles.sheetContainer}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Perbarui Profil & Alamat</Text>
-              <TouchableOpacity onPress={() => setEditProfileVisible(false)}>
-                <X size={20} color="#111827" />
-              </TouchableOpacity>
-            </View>
+      <LogoutConfirmModal
+        visible={logoutModalVisible}
+        roleLabel="Customer"
+        onCancel={() => setLogoutModalVisible(false)}
+        onConfirm={handleLogout}
+      />
 
-            <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Nama Lengkap Customer</Text>
-              <TextInput
-                style={styles.textInput}
-                value={tempName}
-                onChangeText={setTempName}
-                placeholder="Nama Lengkap"
-              />
-
-              <Text style={styles.inputLabel}>Nomor Telepon</Text>
-              <TextInput
-                style={styles.textInput}
-                value={tempPhone}
-                onChangeText={setTempPhone}
-                placeholder="Nomor HP"
-                keyboardType="phone-pad"
-              />
-
-              <Text style={styles.inputLabel}>Alamat Pengiriman Lengkap</Text>
-              <TextInput
-                style={styles.textInput}
-                value={tempAddress}
-                onChangeText={setTempAddress}
-                placeholder="Nama Jalan, Rt/Rw, Kelurahan, Kecamatan"
-              />
-
-              <Text style={styles.inputLabel}>Lokasi Singkat (Sektor / Ring)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={tempLocation}
-                onChangeText={setTempLocation}
-                placeholder="Contoh: Ring 1 Kamojang"
-              />
-
-              <View style={styles.sheetActions}>
-                <TouchableOpacity 
-                  style={[styles.sheetBtn, styles.sheetBtnOutline]}
-                  onPress={() => setEditProfileVisible(false)}
-                >
-                  <Text style={styles.sheetBtnTextOutline}>Batal</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.sheetBtn, styles.sheetBtnSolid]}
-                  onPress={handleSaveProfile}
-                >
-                  <Text style={styles.sheetBtnTextSolid}>Simpan</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 2. Modal Info Bottom Sheet */}
+      {/* Modal Info Bottom Sheet */}
       <Modal visible={infoModalVisible} transparent animationType="slide">
         <View style={styles.modalBgBottom}>
           <View style={styles.sheetContainer}>
@@ -331,7 +248,7 @@ export const Profile: React.FC<ProfileProps> = ({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -25,12 +26,15 @@ import {
   CheckCircle2,
   Camera,
 } from "lucide-react-native";
+import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
+import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
 
 interface ProfileProps {
   driverInfo: {
     name: string;
     phone: string;
     email: string;
+    profilePhoto?: string;
     rating: number;
     avatarLetter: string;
     vehicle: {
@@ -40,12 +44,7 @@ interface ProfileProps {
       year: string;
       verified: boolean;
     };
-    documents: {
-      ktp: "Terverifikasi" | "Menunggu Verifikasi" | "Belum Lengkap";
-      sim: "Terverifikasi" | "Menunggu Verifikasi" | "Belum Lengkap";
-      stnk: "Terverifikasi" | "Menunggu Verifikasi" | "Belum Lengkap";
-      skck: "Terverifikasi" | "Menunggu Verifikasi" | "Belum Lengkap";
-    };
+    documents: Record<string, "Terverifikasi" | "Menunggu Verifikasi" | "Belum Lengkap">;
     payment: {
       bankName: string;
       accountNo: string;
@@ -54,16 +53,18 @@ interface ProfileProps {
     };
   };
   setDriverInfo: (info: any) => void;
+  userId?: string;
   navigate: (screen: any) => void;
 }
 
-export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, navigate }) => {
+export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, userId, navigate }) => {
   // Modal states
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [vehicleModalVisible, setVehicleModalVisible] = useState(false);
   const [docModalVisible, setDocModalVisible] = useState(false);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [prefModalVisible, setPrefModalVisible] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Edit form states
   const [editName, setEditName] = useState(driverInfo.name);
@@ -135,7 +136,10 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
     Alert.alert("Sukses", "Metode pencairan dana berhasil diperbarui");
   };
 
-  const handleLogout = () => navigate("login");
+  const handleLogout = () => {
+    setLogoutModalVisible(false);
+    navigate("login");
+  };
 
   const getDocStatusColor = (status: string) => {
     switch (status) {
@@ -158,22 +162,17 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Profile Header - mengikuti pola halaman profil customer */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatarWrapper}>
-            <View style={styles.avatarBg}>
-              <Text style={styles.avatarText}>{driverInfo.avatarLetter || "?"}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.cameraBtn}
-              onPress={() => setProfileModalVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Camera size={14} color="#1B7A4E" />
-            </TouchableOpacity>
-          </View>
+          <ProfilePhotoEditor
+            userId={userId}
+            name={driverInfo.name}
+            photoUri={driverInfo.profilePhoto}
+            size={96}
+            onSaved={(profilePhoto) => setDriverInfo({ ...driverInfo, profilePhoto })}
+          />
 
           <Text style={styles.driverName} numberOfLines={1}>{driverInfo.name || "Nama Driver"}</Text>
           <Text style={styles.vehicleInfo} numberOfLines={1}>
@@ -185,7 +184,7 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
 
           <View style={styles.statsRow}>
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{driverInfo.rating}</Text>
+              <Text style={styles.statVal}>{driverInfo.rating > 0 ? driverInfo.rating : "—"}</Text>
               <Text style={styles.statLbl}>Rating</Text>
             </View>
             <View style={styles.statDivider} />
@@ -196,7 +195,7 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
               <Text style={styles.statVal}>
-                {Object.values(driverInfo.documents).filter((status) => status === "Terverifikasi").length}/4
+                {Object.values(driverInfo.documents).filter((status) => status === "Terverifikasi").length}/{Object.keys(driverInfo.documents).length}
               </Text>
               <Text style={styles.statLbl}>Dokumen</Text>
             </View>
@@ -236,7 +235,7 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
             {renderMenuIcon(<FileText size={16} color="#1B7A4E" />, "#E8F5EE")}
             <View style={styles.menuItemBody}>
               <Text style={styles.menuItemTitle}>Dokumen Driver</Text>
-              <Text style={styles.menuItemSubtitle}>KTP, SIM C, STNK, SKCK</Text>
+              <Text style={styles.menuItemSubtitle}>KTP, SIM, STNK</Text>
             </View>
             <ChevronRight size={16} color="#9CA3AF" />
           </TouchableOpacity>
@@ -248,7 +247,7 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
             <View style={styles.menuItemBody}>
               <Text style={styles.menuItemTitle}>Rekening & E-Wallet</Text>
               <Text style={styles.menuItemSubtitle} numberOfLines={1}>
-                {driverInfo.payment.bankName} · {driverInfo.payment.accountNo}
+                {driverInfo.payment.bankName && driverInfo.payment.accountNo ? `${driverInfo.payment.bankName} · ${driverInfo.payment.accountNo}` : "Belum diatur"}
               </Text>
             </View>
             <ChevronRight size={16} color="#9CA3AF" />
@@ -296,7 +295,7 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
         </View>
 
         {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => setLogoutModalVisible(true)} activeOpacity={0.7}>
           <View style={styles.logoutIconBg}>
             <LogOut size={16} color="#B91C1C" />
           </View>
@@ -304,6 +303,13 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
         </TouchableOpacity>
         <Text style={styles.footerVersion}>GEOVERSE 2.0 - Driver</Text>
       </ScrollView>
+
+      <LogoutConfirmModal
+        visible={logoutModalVisible}
+        roleLabel="Driver"
+        onCancel={() => setLogoutModalVisible(false)}
+        onConfirm={handleLogout}
+      />
 
       {/* Modals Section */}
       {/* 1. Edit Profile Modal */}
@@ -574,7 +580,7 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, nav
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

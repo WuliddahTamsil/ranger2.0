@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -81,7 +82,7 @@ export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -309,7 +310,7 @@ export const CustomerLaundryScreen: React.FC<Nav> = ({ navigate }) => {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

@@ -131,8 +131,8 @@ export const DocumentUploadCard: React.FC<Props> = ({ documentKey, label, descri
         </View>
       ) : (
         <TouchableOpacity onPress={chooseSource} style={styles.uploadButton} disabled={uploading} activeOpacity={0.75}>
-          <View style={styles.uploadIcon}><ImagePlus size={20} color={authColors.primary} /></View>
-          <View style={styles.uploadText}><Text style={styles.uploadTitle}>{uploading ? "Mengunggah..." : "Pilih atau ambil dokumen"}</Text><Text style={styles.uploadHint}>JPG, JPEG, PNG, PDF · maks. 10 MB</Text></View>
+          <View style={styles.uploadIcon}><ImagePlus size={19} color={authColors.primary} /></View>
+          <View style={styles.uploadText}><Text style={styles.uploadTitle}>{uploading ? "Mengunggah..." : "Tambah berkas"}</Text><Text style={styles.uploadHint}>JPG, PNG, atau PDF (maks. 10 MB)</Text></View>
           <Camera size={18} color="#9CA3AF" />
         </TouchableOpacity>
       )}
@@ -164,7 +164,7 @@ export const DocumentUploadCard: React.FC<Props> = ({ documentKey, label, descri
 };
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: "#FFFFFF", borderRadius: 15, borderWidth: 1, borderColor: authColors.line, padding: 14, marginTop: 12 },
+  card: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: authColors.line, padding: 14, marginTop: 10 },
   compact: { marginTop: 8, padding: 12 },
   headingRow: { flexDirection: "row", alignItems: "flex-start" },
   icon: { width: 34, height: 34, borderRadius: 10, backgroundColor: authColors.mint, alignItems: "center", justifyContent: "center", marginRight: 10 },
@@ -173,8 +173,8 @@ const styles = StyleSheet.create({
   required: { color: authColors.danger },
   optional: { color: "#6B7280", fontSize: 11, fontWeight: "500" },
   description: { color: authColors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
-  uploadButton: { minHeight: 62, borderRadius: 12, borderWidth: 1, borderStyle: "dashed", borderColor: "#A7D8BE", backgroundColor: "#FAFFFC", marginTop: 12, padding: 10, flexDirection: "row", alignItems: "center" },
-  uploadIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: authColors.mint, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  uploadButton: { minHeight: 58, borderRadius: 11, borderWidth: 1, borderColor: "#CDE5D7", backgroundColor: "#FAFFFC", marginTop: 12, padding: 10, flexDirection: "row", alignItems: "center" },
+  uploadIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: authColors.mint, alignItems: "center", justifyContent: "center", marginRight: 10 },
   uploadText: { flex: 1 },
   uploadTitle: { color: authColors.primaryDark, fontSize: 13, fontWeight: "800" },
   uploadHint: { color: "#6B7280", fontSize: 11, marginTop: 3 },

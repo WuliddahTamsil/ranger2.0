@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import { Pressable, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Nav } from "../../types";
@@ -32,15 +33,11 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <View pointerEvents="none" style={styles.backgroundArcTop} />
       <View pointerEvents="none" style={styles.backgroundArcBottom} />
 
       <View style={styles.topBar}>
-        <View style={styles.miniBrand}>
-          <View style={styles.miniMark}><Text style={styles.miniMarkText}>G</Text></View>
-          <Text style={styles.miniBrandText}>GEOVERSE <Text style={styles.miniBrandVersion}>2.0</Text></Text>
-        </View>
         <TouchableOpacity onPress={() => navigate("login")} activeOpacity={0.7}>
           <Text style={styles.skipText}>Lewati</Text>
         </TouchableOpacity>
@@ -64,7 +61,7 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
           <Text style={styles.buttonText}>{isLast ? "Mulai sekarang" : "Lanjut"} {"\u2192"}</Text>
         </Pressable>
       </View>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 
@@ -72,12 +69,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F7F9F8", overflow: "hidden" },
   backgroundArcTop: { position: "absolute", width: 330, height: 180, borderRadius: 180, borderWidth: 1, borderColor: "rgba(8, 122, 75, 0.055)", top: -108, right: -128, transform: [{ rotate: "-18deg" }] },
   backgroundArcBottom: { position: "absolute", width: 420, height: 220, borderRadius: 220, borderWidth: 1, borderColor: "rgba(20, 34, 56, 0.04)", bottom: -150, left: -168, transform: [{ rotate: "16deg" }] },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 22, paddingTop: 12 },
-  miniBrand: { flexDirection: "row", alignItems: "center" },
-  miniMark: { width: 30, height: 30, borderRadius: 10, backgroundColor: "#087A4B", alignItems: "center", justifyContent: "center", marginRight: 8 },
-  miniMarkText: { color: "#FFFFFF", fontSize: 17, fontWeight: "900" },
-  miniBrandText: { color: "#142238", fontSize: 11, fontWeight: "800", letterSpacing: 1.05 },
-  miniBrandVersion: { color: "#718096", fontWeight: "600" },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 22, paddingTop: 12 },
   skipText: { color: "#667085", fontSize: 13, fontWeight: "600" },
   content: { flex: 1, justifyContent: "center", paddingHorizontal: 22 },
   visualFrame: { width: "100%", height: 218, maxWidth: 360, alignSelf: "center", justifyContent: "center", marginBottom: 34 },

@@ -3,10 +3,11 @@ const MarketplaceOrder = require("../models/MarketplaceOrder");
 const MarketplaceProduct = require("../models/MarketplaceProduct");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
+const { syncConversationForOrder } = require("../services/conversationService");
 
 const createOrder = async (req, res) => {
   try {
-    const { ownerId, customerId, customerName, customerPhone, address, notes, items, deliveryFee, serviceFee, driverTip, voucherId, discount, paymentMethod, paymentStatus } = req.body;
+    const { ownerId, customerId, customerName, customerPhone, address, addressSnapshot, notes, items, deliveryFee, serviceFee, driverTip, voucherId, discount, paymentMethod, paymentStatus } = req.body;
     if (!mongoose.Types.ObjectId.isValid(ownerId) || !customerId || !customerName || customerName === "Customer Rangers" || customerName === "Customer GEOVERSE" || !address || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: "Data pesanan marketplace belum lengkap" });
     }
@@ -17,7 +18,7 @@ const createOrder = async (req, res) => {
     const orderItems = items.map((item) => {
       const product = productMap.get(String(item.productId));
       if (!product || product.stock < Number(item.quantity)) throw new Error(`Produk ${item.name || item.productId} tidak tersedia`);
-      return { productId: product._id, name: product.name, quantity: Number(item.quantity), price: product.price };
+      return { productId: product._id, name: product.name, quantity: Number(item.quantity), price: product.price, notes: String(item.notes || "").trim().slice(0, 120) };
     });
     const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const safeDeliveryFee = Number(deliveryFee || 0);
@@ -28,7 +29,7 @@ const createOrder = async (req, res) => {
     const ownerProfile = await User.findById(ownerId).select("name address roleData");
     const order = await MarketplaceOrder.create({
       orderCode: `RNG-MKT-${Date.now().toString().slice(-8)}`,
-      ownerId, storeId: String(ownerId), customerId: customerId || "", customerName, customerPhone: customerPhone || "", address, notes: notes || "",
+      ownerId, storeId: String(ownerId), customerId: customerId || "", customerName, customerPhone: customerPhone || "", address, addressSnapshot: addressSnapshot || null, notes: notes || "",
       items: orderItems,
       storeName: ownerProfile?.roleData?.businessName || ownerProfile?.name || "",
       storeAddress: ownerProfile?.roleData?.businessAddress || ownerProfile?.roleData?.address || ownerProfile?.address || "",
@@ -37,6 +38,7 @@ const createOrder = async (req, res) => {
       totalAmount, paymentMethod: paymentMethod || "cod",
       paymentStatus: paymentStatus || (paymentMethod === "cod" ? "Menunggu pembayaran di tempat" : "Berhasil"),
     });
+    await syncConversationForOrder(order, "marketplace");
     await Promise.all(orderItems.map((item) => MarketplaceProduct.updateOne(
       { _id: item.productId, stock: { $gte: item.quantity } },
       { $inc: { stock: -item.quantity, sold: item.quantity } }
@@ -97,6 +99,14 @@ const updateOrderStatus = async (req, res) => {
   try {
     const order = await MarketplaceOrder.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true, runValidators: true });
     if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    await syncConversationForOrder(order, "marketplace");
+    await Notification.create({
+      userId: driver._id,
+      title: "Order baru ditugaskan",
+      message: `Pesanan ${order.orderCode} siap Anda proses.`,
+      type: "order_status",
+      relatedId: order._id,
+    });
     // Multi-role notifications based on driver journey stage
     const driverName = order.driverName || "Kurir GEOVERSE";
     const orderCode = order.orderCode || `#${String(order._id).slice(-8)}`;

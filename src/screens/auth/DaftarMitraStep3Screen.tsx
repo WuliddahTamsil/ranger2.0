@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React from "react";
 import {
   View,
@@ -12,7 +13,7 @@ import { Check } from "lucide-react-native";
 
 export const DaftarMitraStep3Screen: React.FC<Nav> = ({ navigate }) => {
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -52,7 +53,7 @@ export const DaftarMitraStep3Screen: React.FC<Nav> = ({ navigate }) => {
           <Text style={styles.btnPrimaryText}>MASUK DASHBOARD PEMILIK LAUNDRY</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

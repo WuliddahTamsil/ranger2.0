@@ -1,3 +1,5 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -63,7 +65,7 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
     .reduce((acc, curr) => acc + (curr.laundryCost || curr.totalAmount || 0), 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Main Scroll Content */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <RoleHeader
@@ -262,7 +264,7 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
       </ScrollView>
 
       {/* 5-Tab Navigation Footer Bar */}
-      <View style={styles.bottomNav}>
+      <SafeAreaBottomBar absolute style={styles.bottomNav}>
         <TouchableOpacity
           style={styles.navTab}
           onPress={() => {}}
@@ -307,8 +309,8 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
           <User size={22} color="#9CA3AF" />
           <Text style={styles.navText}>Profil</Text>
         </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      </SafeAreaBottomBar>
+    </ResponsiveSafeAreaView>
   );
 };
 

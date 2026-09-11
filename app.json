@@ -29,7 +29,20 @@
     },
     "plugins": [
       "expo-web-browser",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "GEOVERSE menggunakan lokasi untuk membantu menentukan titik rumah customer."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "GEOVERSE memerlukan akses foto untuk mengubah foto profil.",
+          "cameraPermission": "GEOVERSE memerlukan akses kamera untuk mengambil foto profil."
+        }
+      ]
     ],
     "extra": {
       "eas": {

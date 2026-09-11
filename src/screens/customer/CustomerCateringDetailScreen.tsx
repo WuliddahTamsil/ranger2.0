@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useMemo, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -8,7 +9,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   Platform,
@@ -33,10 +33,11 @@ import {
   X,
 } from "lucide-react-native";
 import { BackHeader } from "../../components/BackHeader";
-import { Nav, CateringPaymentOption, OrderItem } from "../../types";
+import { CustomerAddress, Nav, CateringPaymentOption, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { addCustomerOrder } from "./customerOrderStore";
-import { CustomerChatModal } from "./CustomerChatModal";
+import { getPrimaryCustomerAddress } from "../../services/customerAddressService";
+import { CustomerAddressSelector } from "../../components/CustomerAddressSelector";
 
 interface CustomerCateringDetailProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -83,7 +84,8 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
   const [portions, setPortions] = useState(20);
   const [poDate, setPoDate] = useState(() => createDateOptions()[2]);
   const [deliveryTime, setDeliveryTime] = useState("11:00");
-  const [address, setAddress] = useState("Rumah - Jl. Raya Kamojang No. 12");
+  const [address, setAddress] = useState("");
+  const [selectedAddress, setSelectedAddress] = useState<CustomerAddress | undefined>();
   const [paymentOption, setPaymentOption] = useState<CateringPaymentOption>("dp30");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("qris");
   const [dateModalVisible, setDateModalVisible] = useState(false);
@@ -116,6 +118,12 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
     void fetchMenus();
   }, [selectedCateringShop]);
 
+  useEffect(() => {
+    const primary = getPrimaryCustomerAddress(authAccount);
+    setSelectedAddress(primary);
+    setAddress(primary?.fullAddress || "");
+  }, [authAccount]);
+
   const dateOptions = useMemo(createDateOptions, []);
   const deliveryFee = 15000;
   const serviceFee = 5000;
@@ -129,6 +137,15 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
   const updatePortions = (delta: number) => setPortions((current) => Math.max(10, current + delta));
 
   const confirmPayment = async () => {
+    if (!address.trim()) {
+      if (Platform.OS === "web") {
+        alert("Tambahkan alamat utama di Profile > Alamat Saya sebelum checkout.");
+      } else {
+        Alert.alert("Alamat belum tersedia", "Tambahkan alamat utama di Profile > Alamat Saya sebelum checkout.");
+      }
+      navigate("c_addresses");
+      return;
+    }
     // Close payment modal first so UI doesn't look frozen
     setPaymentModalVisible(false);
 
@@ -161,6 +178,7 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
 
     const orderId = `RNG-CAT-${Date.now().toString().slice(-6)}`;
     const paymentLabel = paymentOption === "lunas" ? "Lunas" : `DP ${dpPercent}%`;
+    const addressSnapshot = selectedAddress || getPrimaryCustomerAddress(authAccount);
 
     const apiOrderData = {
       customerId,
@@ -168,6 +186,7 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
       customerName,
       customerPhone,
       address: address || "Jl. Raya Kamojang",
+      addressSnapshot: addressSnapshot || null,
       menuName: selectedMenu?.name || "Paket Nasi Box",
       portions: portions || 20,
       price: selectedMenu?.price || 25000,
@@ -242,7 +261,7 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
 
   if (step === "checkout") {
     return (
-      <SafeAreaView style={styles.container}>
+      <ResponsiveSafeAreaView style={styles.container}>
         <BackHeader title="Checkout Catering" onBack={() => setStep("form")} />
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.checkoutBanner}><ReceiptText size={22} color="#1B7A4E" /><View style={{ flex: 1 }}><Text style={styles.checkoutBannerTitle}>Pesanan catering terjadwal</Text><Text style={styles.checkoutBannerText}>Pastikan tanggal PO dan jumlah porsi sudah benar.</Text></View></View>
@@ -270,30 +289,30 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
           <TouchableOpacity style={styles.primaryButton} onPress={() => setPaymentModalVisible(true)}><Text style={styles.primaryButtonText}>Bayar {formatRupiah(paidAmount)}</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity>
         </ScrollView>
         {renderPaymentModal(paymentModalVisible, setPaymentModalVisible, paymentMethod, setPaymentMethod, confirmPayment)}
-      </SafeAreaView>
+      </ResponsiveSafeAreaView>
     );
   }
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <ResponsiveSafeAreaView style={styles.container}>
         <BackHeader title="Pesan Catering" onBack={() => navigate("c_catering")} />
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#1B7A4E" />
           <Text style={styles.loadingText}>Memuat menu...</Text>
         </View>
-      </SafeAreaView>
+      </ResponsiveSafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <BackHeader title="Pesan Catering" onBack={() => navigate("c_catering")} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Image source={{ uri: selectedCateringShop?.profilePhoto || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&h=500&fit=crop&q=85" }} style={styles.cover} />
         <Text style={styles.title}>{selectedCateringShop?.name || "Catering Lokal"}</Text>
         <Text style={styles.subtitle}>{selectedCateringShop?.description || "Nasi box, prasmanan, dan paket acara untuk kebutuhan komunitas."}</Text>
-        <TouchableOpacity style={styles.chatOwnerButton} onPress={() => setChatVisible(true)}><MessageCircle size={17} color="#1B7A4E" /><Text style={styles.chatOwnerText}>Chat Pemilik Catering</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.chatOwnerButton} onPress={() => Alert.alert("Chat setelah order", "Chat pemilik tersedia dari detail pesanan setelah checkout berhasil.")}><MessageCircle size={17} color="#1B7A4E" /><Text style={styles.chatOwnerText}>Chat Pemilik Catering</Text></TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Pilih Menu</Text>
         {menus.map((menu) => {
@@ -309,7 +328,12 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
         <View style={styles.timeRow}>{["11:00", "14:00", "18:00"].map((time) => <TouchableOpacity key={time} style={[styles.timeChip, deliveryTime === time && styles.timeChipSelected]} onPress={() => setDeliveryTime(time)}><Clock3 size={14} color={deliveryTime === time ? "#FFFFFF" : "#1B7A4E"} /><Text style={[styles.timeText, deliveryTime === time && styles.timeTextSelected]}>{time}</Text></TouchableOpacity>)}</View>
 
         <Text style={styles.sectionTitle}>Alamat Pengiriman</Text>
-        <View style={styles.addressCard}><MapPin size={19} color="#1B7A4E" /><TextInput value={address} onChangeText={setAddress} multiline style={styles.addressInput} placeholder="Masukkan alamat pengiriman" /></View>
+        <CustomerAddressSelector
+          authAccount={authAccount}
+          selectedAddress={selectedAddress}
+          onChange={(nextAddress) => { setSelectedAddress(nextAddress); setAddress(nextAddress.fullAddress); }}
+          onManageAddresses={() => navigate("c_addresses")}
+        />
 
         <Text style={styles.sectionTitle}>Pilih Pembayaran</Text>
         <View style={styles.dpGrid}>{(["dp30", "dp50", "lunas"] as CateringPaymentOption[]).map((option) => { const percent = option === "dp30" ? 30 : option === "dp50" ? 50 : 100; const selected = paymentOption === option; return <TouchableOpacity key={option} style={[styles.dpCard, selected && styles.dpCardSelected]} onPress={() => setPaymentOption(option)}><Text style={[styles.dpPercent, selected && styles.dpTextSelected]}>{percent}%</Text><Text style={[styles.dpLabel, selected && styles.dpTextSelected]}>{option === "lunas" ? "Lunas" : `DP ${percent}%`}</Text><Text style={[styles.dpAmount, selected && styles.dpTextSelected]}>{formatRupiah(Math.round((total * percent) / 100))}</Text></TouchableOpacity>; })}</View>
@@ -319,8 +343,7 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
       </ScrollView>
 
       <Modal visible={dateModalVisible} transparent animationType="slide" onRequestClose={() => setDateModalVisible(false)}><View style={styles.modalOverlay}><View style={styles.sheet}><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Pilih Tanggal PO</Text><TouchableOpacity onPress={() => setDateModalVisible(false)}><X size={20} color="#111827" /></TouchableOpacity></View><Text style={styles.mutedText}>Pilih tanggal acara minimal H+2 agar mitra dapat menyiapkan pesanan.</Text><ScrollView style={styles.dateList}>{dateOptions.map((date) => <TouchableOpacity key={date} style={[styles.dateOption, date === poDate && styles.dateOptionSelected]} onPress={() => { setPoDate(date); setDateModalVisible(false); }}><CalendarDays size={18} color={date === poDate ? "#FFFFFF" : "#1B7A4E"} /><Text style={[styles.dateOptionText, date === poDate && styles.dateOptionTextSelected]}>{date}</Text>{date === poDate && <Check size={17} color="#FFFFFF" />}</TouchableOpacity>)}</ScrollView></View></View></Modal>
-      <CustomerChatModal visible={chatVisible} onClose={() => setChatVisible(false)} orderId={selectedCateringShop?.ownerId || "CATERING-SHOP"} participantName={selectedCateringShop?.name || "Catering Lokal"} participantType="merchant" initialMessage="Halo Kak, silakan tanyakan menu atau jadwal catering di sini." />
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

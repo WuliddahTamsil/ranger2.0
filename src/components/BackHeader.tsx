@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { ArrowLeft } from "lucide-react-native";
+import { useResponsiveLayout } from "../utils/responsive";
 
 interface BackHeaderProps {
   title: string;
@@ -9,12 +10,14 @@ interface BackHeaderProps {
 }
 
 export const BackHeader: React.FC<BackHeaderProps> = ({ title, onBack, right }) => {
+  const { gutter } = useResponsiveLayout();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingHorizontal: gutter }]}>
       <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
         <ArrowLeft size={20} color="#111827" />
       </TouchableOpacity>
-      <Text style={styles.title} numberOfLines={1}>
+      <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
         {title}
       </Text>
       <View style={styles.rightContainer}>{right}</View>

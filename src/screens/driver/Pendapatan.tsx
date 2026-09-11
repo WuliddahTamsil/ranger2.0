@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -21,52 +22,76 @@ interface PendapatanProps {
   orders: any[];
 }
 
+const getCompletedDate = (order: any) => {
+  const value = order.completedAt || order.updatedAt || order.createdAt;
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const sumOrders = (orders: any[], predicate: (date: Date) => boolean) => orders.reduce((sum, order) => {
+  const date = getCompletedDate(order);
+  return date && predicate(date) ? sum + Number(order.driverShare || 0) : sum;
+}, 0);
+
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const startOfWeek = (date: Date) => {
+  const start = startOfDay(date);
+  const day = start.getDay();
+  start.setDate(start.getDate() + (day === 0 ? -6 : 1 - day));
+  return start;
+};
+
 export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
   const [period, setPeriod] = useState<"Hari" | "Minggu" | "Bulan">("Hari");
   const [periodDropdownVisible, setPeriodDropdownVisible] = useState(false);
 
   // Calculate order metrics
   const completedOrders = orders.filter((o) => o.status === "Selesai");
-  const totalRevenue = completedOrders.reduce((sum, o) => sum + o.driverShare, 0);
   const completedCount = completedOrders.length;
 
-  const todayRevenue = totalRevenue;
-  const weekRevenue = totalRevenue * 5;
-  const monthRevenue = totalRevenue * 22;
+  const now = new Date();
+  const todayStart = startOfDay(now).getTime();
+  const weekStart = startOfWeek(now).getTime();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const todayRevenue = sumOrders(completedOrders, (date) => startOfDay(date).getTime() === todayStart);
+  const weekRevenue = sumOrders(completedOrders, (date) => date.getTime() >= weekStart);
+  const monthRevenue = sumOrders(completedOrders, (date) => date.getTime() >= monthStart);
 
-  // Chart data based on selected filter
-  const chartData = {
-    "Hari": [
-      { label: "Sen", value: Math.round(totalRevenue * 0.4) },
-      { label: "Sel", value: Math.round(totalRevenue * 0.8) },
-      { label: "Rab", value: Math.round(totalRevenue * 0.5) },
-      { label: "Kam", value: Math.round(totalRevenue * 1.1) },
-      { label: "Jum", value: Math.round(totalRevenue * 0.7) },
-      { label: "Sab", value: Math.round(totalRevenue * 1.3) },
-      { label: "Min", value: Math.round(totalRevenue * 0.6) },
-    ],
-    "Minggu": [
-      { label: "Minggu 1", value: Math.round(totalRevenue * 3.5) },
-      { label: "Minggu 2", value: Math.round(totalRevenue * 4.2) },
-      { label: "Minggu 3", value: Math.round(totalRevenue * 5.0) },
-      { label: "Minggu 4", value: Math.round(totalRevenue * 4.8) },
-    ],
-    "Bulan": [
-      { label: "Mei", value: Math.round(totalRevenue * 18.0) },
-      { label: "Jun", value: Math.round(totalRevenue * 21.0) },
-      { label: "Jul", value: Math.round(totalRevenue * 24.0) },
-    ],
-  };
+  const dayLabels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+  const currentWeekStart = startOfWeek(now);
+  const dailyChart = dayLabels.map((label, index) => {
+    const day = new Date(currentWeekStart);
+    day.setDate(day.getDate() + index);
+    const dayTime = startOfDay(day).getTime();
+    return { label, value: sumOrders(completedOrders, (date) => startOfDay(date).getTime() === dayTime) };
+  });
+
+  const weeklyChart = Array.from({ length: 4 }, (_, index) => {
+    const periodStart = new Date(currentWeekStart);
+    periodStart.setDate(periodStart.getDate() - (3 - index) * 7);
+    const periodEnd = new Date(periodStart);
+    periodEnd.setDate(periodEnd.getDate() + 7);
+    return { label: `M${index + 1}`, value: sumOrders(completedOrders, (date) => date >= periodStart && date < periodEnd) };
+  });
+
+  const monthlyChart = Array.from({ length: 3 }, (_, index) => {
+    const periodStart = new Date(now.getFullYear(), now.getMonth() - (2 - index), 1);
+    const periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 1);
+    return { label: periodStart.toLocaleDateString("id-ID", { month: "short" }), value: sumOrders(completedOrders, (date) => date >= periodStart && date < periodEnd) };
+  });
+
+  const chartData = { "Hari": dailyChart, "Minggu": weeklyChart, "Bulan": monthlyChart };
 
   const currentChartPoints = chartData[period];
   const maxChartValue = Math.max(...currentChartPoints.map((p) => p.value), 1);
   const hasChartData = currentChartPoints.some((p) => p.value > 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Performa Pendapatan</Text>
-        <Text style={styles.subtitle}>Pantau performa penghasilan dan bonus Anda sebagai Driver.</Text>
+        <Text style={styles.subtitle}>Pantau penghasilan dari order yang sudah selesai.</Text>
 
         {/* Today Summary Banner */}
         <View style={styles.revenueBanner}>
@@ -85,21 +110,21 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
             <CalendarDays size={18} color="#1B7A4E" />
             <Text style={styles.gridLabel}>Hari Ini</Text>
             <Text style={styles.gridVal} numberOfLines={1}>
-              {todayRevenue > 0 ? rp(todayRevenue) : "—"}
+              {rp(todayRevenue)}
             </Text>
           </View>
           <View style={styles.gridCard}>
             <CalendarRange size={18} color="#1B7A4E" />
             <Text style={styles.gridLabel}>Minggu Ini</Text>
             <Text style={styles.gridVal} numberOfLines={1}>
-              {todayRevenue > 0 ? rp(weekRevenue) : "—"}
+              {rp(weekRevenue)}
             </Text>
           </View>
           <View style={styles.gridCard}>
             <Calendar size={18} color="#1B7A4E" />
             <Text style={styles.gridLabel}>Bulan Ini</Text>
             <Text style={styles.gridVal} numberOfLines={1}>
-              {todayRevenue > 0 ? rp(monthRevenue) : "—"}
+              {rp(monthRevenue)}
             </Text>
           </View>
           <View style={styles.gridCard}>
@@ -173,14 +198,14 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
         <View style={styles.insightCard}>
           <Text style={styles.insightTitle}>Performa & Bonus Driver</Text>
           <Text style={styles.insightText}>
-            Skema poin bonus harian saat ini aktif. Selesaikan minimal 5 order per hari dengan rating di atas 4.8 untuk mendapatkan bonus tambahan Rp50.000.
+            Data pendapatan di halaman ini hanya berasal dari order yang sudah berstatus selesai.
           </Text>
           <Text style={[styles.insightText, { color: "#6B7280", marginTop: 8 }]}>
-            Informasi bonus akan langsung dicairkan ke Dompet Keuangan Anda setelah masa perhitungan harian selesai.
+            Belum ada order selesai berarti belum ada pendapatan yang ditampilkan.
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

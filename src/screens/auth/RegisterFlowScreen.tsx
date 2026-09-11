@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useMemo, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { ArrowLeft, ArrowRight, CheckCircle2, MapPin, ShieldCheck, UserRound } from "lucide-react-native";
@@ -28,37 +29,32 @@ const emptyForm = (initialEmail?: string, initialName?: string): RegistrationFor
   documents: {},
 });
 
-const inputConfig: Record<AuthRegistrationRole, Array<{ key: string; label: string; placeholder: string; multiline?: boolean }>> = {
+const inputConfig: Record<AuthRegistrationRole, Array<{ key: string; label: string; placeholder: string; multiline?: boolean; required?: boolean }>> = {
   customer: [],
   driver: [
     { key: "plateNumber", label: "Plat nomor", placeholder: "Contoh: D 1234 RGR" },
     { key: "vehicleType", label: "Jenis kendaraan", placeholder: "Motor / Mobil" },
-    { key: "vehicleBrand", label: "Merek kendaraan", placeholder: "Contoh: Honda Beat" },
-    { key: "vehicleYear", label: "Tahun kendaraan", placeholder: "Contoh: 2022" },
+    { key: "vehicleBrand", label: "Merek kendaraan", placeholder: "Contoh: Honda Beat", required: false },
   ],
   pemilik_marketplace: [
     { key: "businessName", label: "Nama toko / usaha", placeholder: "Contoh: UMKM Kamojang" },
-    { key: "businessCategory", label: "Kategori usaha", placeholder: "Makanan, kerajinan, fashion..." },
     { key: "businessAddress", label: "Alamat toko / operasional", placeholder: "Alamat lengkap usaha", multiline: true },
-    { key: "businessDescription", label: "Deskripsi usaha", placeholder: "Ceritakan singkat usaha kamu", multiline: true },
+    { key: "businessCategory", label: "Kategori usaha", placeholder: "Makanan, kerajinan, fashion...", required: false },
   ],
   pemilik_catering: [
     { key: "businessName", label: "Nama catering", placeholder: "Contoh: Dapur Nani" },
     { key: "businessAddress", label: "Alamat dapur", placeholder: "Alamat lengkap dapur", multiline: true },
-    { key: "businessType", label: "Jenis catering", placeholder: "Nasi box / prasmanan / snack box" },
-    { key: "menuSpecialty", label: "Menu andalan", placeholder: "Contoh: masakan Sunda" },
+    { key: "businessType", label: "Jenis catering", placeholder: "Nasi box / prasmanan / snack box", required: false },
   ],
   pemilik_laundry: [
     { key: "businessName", label: "Nama laundry", placeholder: "Contoh: Bersih Laundry" },
     { key: "businessAddress", label: "Alamat outlet", placeholder: "Alamat lengkap outlet", multiline: true },
-    { key: "serviceType", label: "Jenis layanan", placeholder: "Kiloan / satuan / express" },
-    { key: "operatingHours", label: "Jam operasional", placeholder: "Contoh: 08.00 - 20.00" },
+    { key: "serviceType", label: "Jenis layanan", placeholder: "Kiloan / satuan / express", required: false },
   ],
   pemilik_kos: [
     { key: "businessName", label: "Nama kos", placeholder: "Contoh: Kos Putri Melati" },
     { key: "businessAddress", label: "Alamat properti kos", placeholder: "Alamat lengkap kos", multiline: true },
-    { key: "propertyType", label: "Tipe kos", placeholder: "Putri / Putra / Campur" },
-    { key: "roomCount", label: "Jumlah kamar", placeholder: "Contoh: 10 kamar" },
+    { key: "propertyType", label: "Tipe kos", placeholder: "Putri / Putra / Campur", required: false },
   ],
 };
 
@@ -69,7 +65,7 @@ export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEma
   const [loading, setLoading] = useState(false);
   const requirements = useMemo(() => getDocumentRequirements(role), [role]);
   const isCustomer = role === "customer";
-  const labels = isCustomer ? ["Akun"] : ["Akun", "Data", "Dokumen", "Review"];
+  const labels = isCustomer ? ["Akun"] : ["Akun", "Profil", "Dokumen"];
 
   const update = (key: keyof RegistrationForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const updateRoleData = (key: string, value: string) => setForm((current) => ({ ...current, roleData: { ...current.roleData, [key]: value } }));
@@ -106,90 +102,89 @@ export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEma
   };
 
   return (
-    <SafeAreaView style={authStyles.container}>
+    <ResponsiveSafeAreaView style={authStyles.container}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={authStyles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
           <TouchableOpacity onPress={back} style={styles.back}><ArrowLeft size={17} color={authColors.primary} /><Text style={styles.backText}>Kembali</Text></TouchableOpacity>
           <AuthBrand />
           <Text style={styles.contextLabelClean}>REGISTRASI / {ROLE_LABELS[role].toUpperCase()}</Text>
-          <Text style={styles.contextLabel}>REGISTRASI · {ROLE_LABELS[role].toUpperCase()}</Text>
-          <Text style={authStyles.title}>Lengkapi data akun</Text>
-          <Text style={authStyles.subtitle}>{isCustomer ? "Buat akun Customer dengan cepat menggunakan email dan password, atau lanjutkan dengan Google." : "Data yang bertanda bintang wajib diisi. Kamu bisa mengganti dokumen sebelum mengirim pendaftaran."}</Text>
+          <Text style={authStyles.title}>{isCustomer ? "Buat akun" : "Daftar sebagai mitra"}</Text>
+          <Text style={authStyles.subtitle}>{isCustomer ? "Isi data singkat untuk mulai menggunakan GEOVERSE." : "Tiga langkah singkat. Siapkan data utama dan dokumen dasar usaha kamu."}</Text>
           <AuthStepper current={step} labels={labels} />
 
-          {step === 0 && <BaseStep form={form} update={update} customer={isCustomer} googleRegistration={googleRegistration} setProfilePhoto={(document) => setForm((current) => ({ ...current, profilePhoto: document }))} />}
+          {step === 0 && <BaseStep form={form} update={update} customer={isCustomer} googleRegistration={googleRegistration} />}
           {!isCustomer && step === 1 && <RoleStep role={role} roleData={form.roleData} updateRoleData={updateRoleData} />}
           {!isCustomer && step === 2 && <DocumentsStep role={role} requirements={requirements} documents={form.documents} setDocument={(key, document) => setForm((current) => { const documents = { ...current.documents }; if (document) documents[key] = document; else delete documents[key]; return { ...current, documents }; })} />}
-          {!isCustomer && step === 3 && <ReviewStep form={form} role={role} requirements={requirements} />}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <TouchableOpacity onPress={() => void next()} disabled={loading} style={[authStyles.primaryButton, styles.next]} activeOpacity={0.8}>
-            {loading ? <ActivityIndicator color="#FFFFFF" /> : <><Text style={authStyles.primaryButtonText}>{!isCustomer && step === 3 ? "Kirim pendaftaran" : isCustomer ? "Buat akun" : "Lanjutkan"}</Text>{!isCustomer && step === 3 ? <ShieldCheck size={18} color="#FFFFFF" /> : <ArrowRight size={18} color="#FFFFFF" />}</>}
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : <><Text style={authStyles.primaryButtonText}>{!isCustomer && step === 2 ? "Kirim pendaftaran" : isCustomer ? "Buat akun" : "Lanjutkan"}</Text>{!isCustomer && step === 2 ? <ShieldCheck size={18} color="#FFFFFF" /> : <ArrowRight size={18} color="#FFFFFF" />}</>}
           </TouchableOpacity>
-          {!isCustomer && step === 3 && <Text style={styles.submitHint}>Dengan mengirim, kamu menyetujui verifikasi data dan dokumen oleh admin GEOVERSE 2.0.</Text>}
+          {!isCustomer && step === 2 && <Text style={styles.submitHint}>Setelah dikirim, admin akan memeriksa data kamu. Tidak perlu menyiapkan dokumen tambahan sekarang.</Text>}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 
-const BaseStep: React.FC<{ form: RegistrationForm; update: (key: keyof RegistrationForm, value: string) => void; customer: boolean; googleRegistration?: boolean; setProfilePhoto: (document?: RegistrationForm["profilePhoto"]) => void }> = ({ form, update, customer, googleRegistration, setProfilePhoto }) => (
+const BaseStep: React.FC<{ form: RegistrationForm; update: (key: keyof RegistrationForm, value: string) => void; customer: boolean; googleRegistration?: boolean }> = ({ form, update, customer, googleRegistration }) => (
   <View style={authStyles.card}>
-    <SectionHeading icon={<UserRound size={18} color={authColors.primary} />} title={customer ? "Buat akun Customer" : "Informasi dasar"} text={customer ? "Masukkan data utama untuk mulai menggunakan layanan GEOVERSE 2.0." : "Gunakan data yang sesuai dengan identitas resmi."} />
+    <SectionHeading icon={<UserRound size={18} color={authColors.primary} />} title={customer ? "Data akun" : "Data pribadi"} text={customer ? "Masukkan data utama untuk mulai menggunakan layanan GEOVERSE." : "Gunakan nama dan nomor yang mudah dihubungi."} />
     <TextField label="Nama lengkap *" value={form.name} onChangeText={(value) => update("name", value)} placeholder="Nama sesuai identitas" />
     <TextField label="Email *" value={form.email} onChangeText={(value) => update("email", value)} placeholder="nama@email.com" keyboardType="email-address" autoCapitalize="none" />
     <TextField label={customer ? "Nomor HP *" : "Nomor WhatsApp *"} value={form.phone} onChangeText={(value) => update("phone", value)} placeholder="08xx-xxxx-xxxx" keyboardType="phone-pad" />
     {googleRegistration ? <View style={styles.googleNotice}><ShieldCheck size={17} color={authColors.primary} /><Text style={styles.googleNoticeText}>Akun ini menggunakan keamanan Google. Password GEOVERSE 2.0 tidak perlu dibuat lagi.</Text></View> : <><TextField label="Password *" value={form.password} onChangeText={(value) => update("password", value)} placeholder="Minimal 8 karakter, huruf + angka" secureTextEntry /><TextField label="Konfirmasi password *" value={form.passwordConfirmation} onChangeText={(value) => update("passwordConfirmation", value)} placeholder="Ulangi password" secureTextEntry /></>}
-    {!customer && <><TextField label="Alamat lengkap *" value={form.address} onChangeText={(value) => update("address", value)} placeholder="Alamat rumah / domisili" multiline icon={<MapPin size={17} color="#6B7280" />} /><Text style={styles.photoLabel}>Foto profil <Text style={styles.optional}>Opsional</Text></Text><DocumentUploadCard documentKey="profile_photo" label="Foto profil" description="Tambahkan foto agar mitra/customer lebih mudah dikenali." document={form.profilePhoto} onChange={setProfilePhoto} compact /></>}
+    {!customer && <TextField label="Alamat domisili *" value={form.address} onChangeText={(value) => update("address", value)} placeholder="Alamat rumah / domisili" multiline icon={<MapPin size={17} color="#6B7280" />} />}
   </View>
 );
 
 const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, string>; updateRoleData: (key: string, value: string) => void }> = ({ role, roleData, updateRoleData }) => (
   <View style={authStyles.card}>
-    <SectionHeading icon={<ShieldCheck size={18} color={authColors.primary} />} title={role === "driver" ? "Data kendaraan" : role === "pemilik_kos" ? "Data properti kos" : "Data usaha"} text={role === "driver" ? "Pastikan data kendaraan sama dengan dokumen yang diunggah." : role === "pemilik_kos" ? "Data properti akan tampil setelah pendaftaran disetujui admin." : "Data ini akan tampil pada profil usaha setelah disetujui."} />
-    {inputConfig[role].map((field) => <TextField key={field.key} label={`${field.label}${["businessDescription", "menuSpecialty", "operatingHours"].includes(field.key) ? "" : " *"}`} value={roleData[field.key] || ""} onChangeText={(value) => updateRoleData(field.key, value)} placeholder={field.placeholder} multiline={field.multiline} />)}
+    <SectionHeading icon={<ShieldCheck size={18} color={authColors.primary} />} title={role === "driver" ? "Data kendaraan" : role === "pemilik_kos" ? "Data properti" : "Data usaha"} text={role === "driver" ? "Cukup isi data kendaraan yang digunakan." : "Isi informasi dasar yang akan tampil di profil usaha."} />
+    {inputConfig[role].map((field) => <TextField key={field.key} label={`${field.label}${field.required === false ? " (opsional)" : " *"}`} value={roleData[field.key] || ""} onChangeText={(value) => updateRoleData(field.key, value)} placeholder={field.placeholder} multiline={field.multiline} />)}
   </View>
 );
 
-const DocumentsStep: React.FC<{ role: AuthRegistrationRole; requirements: ReturnType<typeof getDocumentRequirements>; documents: RegistrationForm["documents"]; setDocument: (key: string, document?: RegistrationForm["documents"][string]) => void }> = ({ role, requirements, documents, setDocument }) => (
-  <View>
-    <View style={styles.documentIntro}><Text style={styles.documentTitle}>Verifikasi dokumen</Text><Text style={styles.documentText}>{role === "customer" ? "Customer tidak memerlukan dokumen verifikasi. Lanjutkan ke review." : "Unggah dokumen yang jelas dan tidak terpotong. Admin akan memeriksa satu per satu."}</Text></View>
-    {requirements.length === 0 ? <View style={styles.noDocument}><CheckCircle2 size={24} color={authColors.primary} /><Text style={styles.noDocumentText}>Tidak ada dokumen wajib untuk akun Customer.</Text></View> : requirements.map((requirement) => <DocumentUploadCard key={requirement.key} documentKey={requirement.key} label={requirement.label} description={requirement.description} required={requirement.required} document={documents[requirement.key]} onChange={(document) => setDocument(requirement.key, document)} />)}
-  </View>
-);
+const DocumentsStep: React.FC<{ role: AuthRegistrationRole; requirements: ReturnType<typeof getDocumentRequirements>; documents: RegistrationForm["documents"]; setDocument: (key: string, document?: RegistrationForm["documents"][string]) => void }> = ({ role, requirements, documents, setDocument }) => {
+  const requiredCount = requirements.filter((item) => item.required).length;
+  const uploadedCount = requirements.filter((item) => item.required && documents[item.key]).length;
 
-const ReviewStep: React.FC<{ form: RegistrationForm; role: AuthRegistrationRole; requirements: ReturnType<typeof getDocumentRequirements> }> = ({ form, role, requirements }) => (
-  <View>
-    <View style={styles.reviewBanner}><ShieldCheck size={20} color={authColors.primary} /><View style={styles.reviewBannerText}><Text style={styles.reviewBannerTitle}>Siap dikirim untuk verifikasi</Text><Text style={styles.reviewBannerDesc}>Periksa kembali data sebelum pendaftaran diproses.</Text></View></View>
-    <ReviewCard title="Akun utama"><ReviewRow label="Nama" value={form.name} /><ReviewRow label="Email" value={form.email} /><ReviewRow label="WhatsApp" value={form.phone} /><ReviewRow label="Alamat" value={form.address} /></ReviewCard>
-    {role !== "customer" && <ReviewCard title="Data peran">{Object.entries(form.roleData).filter(([, value]) => value).map(([key, value]) => <ReviewRow key={key} label={key.replace(/([A-Z])/g, " $1")} value={value} />)}</ReviewCard>}
-    <ReviewCard title="Dokumen"><ReviewRow label="Dokumen terunggah" value={`${Object.keys(form.documents).length} dari ${requirements.filter((item) => item.required).length} wajib`} /><ReviewRow label="Status awal" value={role === "customer" ? "Terverifikasi" : "Menunggu Verifikasi"} /></ReviewCard>
-  </View>
-);
+  return (
+    <View>
+      <View style={styles.documentIntro}>
+        <View style={styles.documentIntroTop}>
+          <View style={styles.documentIntroIcon}><ShieldCheck size={17} color={authColors.primary} /></View>
+          <View style={styles.documentIntroCopy}>
+            <Text style={styles.documentTitle}>Dokumen dasar</Text>
+            <Text style={styles.documentText}>Cukup unggah berkas yang tersedia. Pastikan foto terang dan seluruh bagian dokumen terlihat.</Text>
+          </View>
+        </View>
+        <Text style={styles.documentCount}>{uploadedCount} dari {requiredCount} dokumen siap</Text>
+      </View>
+      {requirements.length === 0 ? <View style={styles.noDocument}><CheckCircle2 size={24} color={authColors.primary} /><Text style={styles.noDocumentText}>Tidak ada dokumen wajib untuk akun Customer.</Text></View> : requirements.map((requirement) => <DocumentUploadCard key={requirement.key} documentKey={requirement.key} label={requirement.label} description={requirement.description} required={requirement.required} document={documents[requirement.key]} onChange={(document) => setDocument(requirement.key, document)} />)}
+      {role !== "customer" && <View style={styles.readyNote}><CheckCircle2 size={16} color={authColors.primary} /><Text style={styles.readyNoteText}>Setelah dikirim, pendaftaran akan masuk ke proses verifikasi admin.</Text></View>}
+    </View>
+  );
+};
 
 const SectionHeading: React.FC<{ icon: React.ReactNode; title: string; text: string }> = ({ icon, title, text }) => <View style={styles.sectionHeading}><View style={styles.sectionIcon}>{icon}</View><View style={styles.sectionText}><Text style={styles.sectionTitle}>{title}</Text><Text style={styles.sectionDescription}>{text}</Text></View></View>;
 
 const TextField: React.FC<React.ComponentProps<typeof TextInput> & { label: string; icon?: React.ReactNode }> = ({ label, icon, multiline, style, ...props }) => <View style={styles.field}><Text style={authStyles.label}>{label}</Text><View style={[styles.textFieldShell, multiline && styles.multilineShell]}>{icon}{<TextInput {...props} multiline={multiline} style={[authStyles.input, styles.textInput, multiline && styles.multiline, style]} placeholderTextColor="#9CA3AF" />}</View></View>;
 
-const ReviewCard: React.FC<React.PropsWithChildren<{ title: string }>> = ({ title, children }) => <View style={styles.reviewCard}><Text style={styles.reviewCardTitle}>{title}</Text>{children}</View>;
-const ReviewRow: React.FC<{ label: string; value: string }> = ({ label, value }) => <View style={styles.reviewRow}><Text style={styles.reviewLabel}>{label}</Text><Text style={styles.reviewValue}>{value || "-"}</Text></View>;
-
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { width: "100%", maxWidth: 560, alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: "#E5E9EE", padding: 36, shadowColor: "#142238", shadowOpacity: 0.07, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
-  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, marginBottom: 28 },
+  content: { width: "100%", maxWidth: 600, alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 20, borderWidth: 1, borderColor: "#E5E9EE", padding: 28, shadowColor: "#142238", shadowOpacity: 0.035, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, marginBottom: 20 },
   backText: { color: authColors.primary, fontSize: 13, fontWeight: "800" },
-  contextLabel: { display: "none" },
-  contextLabelClean: { color: authColors.primary, fontSize: 11, fontWeight: "800", letterSpacing: 1.05, marginTop: 28 },
+  contextLabelClean: { color: authColors.primary, fontSize: 10, fontWeight: "800", letterSpacing: 1.05, marginTop: 22 },
   field: { marginTop: 14 },
   textFieldShell: { flexDirection: "row", alignItems: "center", gap: 7 },
   textInput: { flex: 1 },
   multilineShell: { alignItems: "flex-start" },
   multiline: { minHeight: 82, paddingTop: 13, textAlignVertical: "top" },
   optional: { color: "#6B7280", fontWeight: "500", fontSize: 11 },
-  photoLabel: { color: "#374151", fontSize: 13, fontWeight: "700", marginTop: 18, marginBottom: -4 },
   sectionHeading: { flexDirection: "row", alignItems: "flex-start", marginBottom: 2 },
   sectionIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: authColors.mint, alignItems: "center", justifyContent: "center", marginRight: 10 },
   sectionText: { flex: 1 },
@@ -197,20 +192,17 @@ const styles = StyleSheet.create({
   sectionDescription: { color: authColors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   googleNotice: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: authColors.mint, padding: 11, borderRadius: 11, marginTop: 14 },
   googleNoticeText: { flex: 1, color: authColors.primaryDark, fontSize: 12, lineHeight: 17 },
-  documentIntro: { backgroundColor: authColors.mint, borderRadius: 14, padding: 14 },
+  documentIntro: { backgroundColor: "#F6FAF8", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#DDEEE4" },
+  documentIntroTop: { flexDirection: "row", alignItems: "flex-start" },
+  documentIntroIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: authColors.mint, alignItems: "center", justifyContent: "center", marginRight: 9 },
+  documentIntroCopy: { flex: 1 },
   documentTitle: { color: authColors.primaryDark, fontSize: 15, fontWeight: "800" },
   documentText: { color: authColors.primaryDark, fontSize: 12, lineHeight: 18, marginTop: 4 },
+  documentCount: { color: authColors.primary, fontSize: 11, fontWeight: "800", marginTop: 11 },
   noDocument: { alignItems: "center", gap: 10, backgroundColor: "#FFFFFF", borderRadius: 15, borderWidth: 1, borderColor: authColors.line, padding: 22, marginTop: 12 },
   noDocumentText: { color: authColors.primaryDark, fontSize: 13, fontWeight: "700", textAlign: "center" },
-  reviewBanner: { flexDirection: "row", alignItems: "flex-start", gap: 9, backgroundColor: authColors.mint, padding: 14, borderRadius: 14 },
-  reviewBannerText: { flex: 1 },
-  reviewBannerTitle: { color: authColors.primaryDark, fontWeight: "800", fontSize: 14 },
-  reviewBannerDesc: { color: authColors.primaryDark, fontSize: 12, marginTop: 3 },
-  reviewCard: { backgroundColor: "#FFFFFF", borderRadius: 15, borderWidth: 1, borderColor: authColors.line, padding: 14, marginTop: 12 },
-  reviewCardTitle: { color: authColors.ink, fontSize: 14, fontWeight: "800", marginBottom: 8 },
-  reviewRow: { flexDirection: "row", paddingVertical: 6, borderTopWidth: 1, borderTopColor: "#F3F4F6" },
-  reviewLabel: { width: 105, color: authColors.muted, fontSize: 12, textTransform: "capitalize" },
-  reviewValue: { flex: 1, color: authColors.ink, fontSize: 12, fontWeight: "700" },
+  readyNote: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 16, paddingHorizontal: 2 },
+  readyNoteText: { flex: 1, color: authColors.muted, fontSize: 11, lineHeight: 16 },
   error: { color: authColors.danger, backgroundColor: authColors.dangerBg, borderRadius: 10, padding: 11, marginTop: 14, fontSize: 13, lineHeight: 18 },
   next: { flexDirection: "row", gap: 8, marginTop: 18 },
   submitHint: { color: "#9CA3AF", fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 10 },

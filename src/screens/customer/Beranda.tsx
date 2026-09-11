@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -10,6 +11,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  Linking,
 } from "react-native";
 import {
   Home,
@@ -31,11 +33,13 @@ import {
   Minus,
   CheckCircle,
   Heart,
+  PlayCircle,
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
 import { PRODUCTS, RESTAURANTS, LAUNDRIES, KOS_LIST, NOTIFS } from "../../constants/mockData";
 import { Nav, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
+import { getPrimaryCustomerAddress } from "../../services/customerAddressService";
 
 // Import other customer screens
 import { Jelajah } from "./Jelajah";
@@ -43,7 +47,7 @@ import { Pesanan } from "./Pesanan";
 import { Inbox, CustomerNotification, CustomerChatThread } from "./Inbox";
 import { Profile } from "./Profile";
 import { hydrateCustomerChatThreads, subscribeCustomerChatThreads } from "./customerInboxStore";
-import { getAllActiveCateringProducts, getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer, getNotifications, markNotificationRead } from "../../services/api";
+import { getAllActiveCateringProducts, getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer, getNotifications, markNotificationRead, getCustomerReviews } from "../../services/api";
 
 interface CartItem {
   id: number | string;
@@ -57,9 +61,10 @@ interface CartItem {
 
 interface CustomerHomeProps extends Nav {
   authAccount?: AuthAccount | null;
+  onUpdateAccount?: (account: AuthAccount) => Promise<void>;
 }
 
-export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) => {
+export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, onUpdateAccount }) => {
   const [currentTab, setCurrentTab] = useState<number>(0);
 
   // Global customer profile states
@@ -67,13 +72,16 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
   const [customerPhone, setCustomerPhone] = useState(authAccount?.phone || "");
   const [customerAddress, setCustomerAddress] = useState(authAccount?.address || "");
   const [customerLocation, setCustomerLocation] = useState(authAccount?.address || "");
+  const [customerProfilePhoto, setCustomerProfilePhoto] = useState(authAccount?.profilePhoto || "");
 
   useEffect(() => {
     if (!authAccount) return;
+    const primaryAddress = getPrimaryCustomerAddress(authAccount);
     setCustomerName(authAccount.name);
     setCustomerPhone(authAccount.phone);
-    setCustomerAddress(authAccount.address);
-    setCustomerLocation(authAccount.address);
+    setCustomerAddress(primaryAddress?.fullAddress || authAccount.address);
+    setCustomerLocation(primaryAddress?.fullAddress || authAccount.address);
+    setCustomerProfilePhoto(authAccount.profilePhoto || "");
   }, [authAccount]);
 
   // Global Cart State
@@ -154,6 +162,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
         items: order.items,
         notes: order.notes,
         address: order.address,
+        addressSnapshot: order.addressSnapshot,
         driverId: order.driverId,
         driverName: order.driverName,
       })) : [];
@@ -181,6 +190,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
         cateringPortions: order.portions,
         notes: order.notes,
         address: order.address,
+        addressSnapshot: order.addressSnapshot,
         driverId: order.driverId,
         driverName: order.driverName,
         driverPhone: order.driverPhone,
@@ -306,9 +316,18 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
   }, []);
 
   // Global Reviews / Ratings State
-  const [reviews, setReviews] = useState<any[]>([
-    { id: "REV-101", orderId: "RNG002", rating: 5, comment: "Laundry sangat cepat dan wangi!" },
-  ]);
+  const [reviews, setReviews] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!authAccount?.id) return;
+    let active = true;
+    void getCustomerReviews(authAccount.id).then((result) => {
+      if (active && result.success && Array.isArray(result.data)) {
+        setReviews(result.data);
+      }
+    });
+    return () => { active = false; };
+  }, [authAccount?.id]);
 
   // Global Wishlist/Liked products State
   const [wishlist, setWishlist] = useState<number[]>([2, 5]); // IDs of liked products
@@ -488,6 +507,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
             orderCount={orders.length}
             wishlistCount={wishlist.length}
             rating={(4.8).toString()}
+            authAccount={authAccount}
+            profilePhoto={customerProfilePhoto}
+            setProfilePhoto={setCustomerProfilePhoto}
             navigate={navigate}
           />
         );
@@ -575,7 +597,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
           </TouchableOpacity>
 
           {/* Catering -> Kanyaah Catering */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => openServiceDetail({ id: "catering", name: "Catering", description: "Pesan makanan catering untuk kebutuhan harian, acara, atau keluarga.", price: "Harga sesuai menu", provider: "Pemilik Catering GEOVERSE", rating: 4.8, action: () => navigate("c_catering"), images: products.filter((p) => p.cat === "Makanan").slice(0, 3).map((p) => p.img) })} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_catering")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#FFEDD5" }]}>
               <Coffee size={22} color="#EA580C" />
             </View>
@@ -583,7 +605,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
           </TouchableOpacity>
 
           {/* Laundry -> Kanyaah Laundry */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => openServiceDetail({ id: "laundry", name: "Laundry", description: "Layanan laundry praktis dengan pilihan proses sesuai kebutuhanmu.", price: "Mulai dari harga layanan", provider: "Mitra Laundry GEOVERSE", rating: 4.8, action: () => navigate("c_laundry"), images: [] })} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_laundry")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#E0F2FE" }]}>
               <Wind size={22} color="#0284C7" />
             </View>
@@ -591,7 +613,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
           </TouchableOpacity>
 
           {/* Kos -> Kanyaah Homestay */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => openServiceDetail({ id: "kos", name: "Homestay", description: "Temukan tempat tinggal yang nyaman dan sesuai kebutuhanmu.", price: "Harga sesuai kamar", provider: "Mitra Homestay GEOVERSE", rating: 4.8, action: () => navigate("c_kos"), images: [] })} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_kos")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#F3E8FF" }]}>
               <Building size={22} color="#9333EA" />
             </View>
@@ -672,7 +694,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Active Tab Panel */}
       <View style={styles.tabContainer}>{renderTabContent()}</View>
 
@@ -882,6 +904,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
                     <Text style={styles.detailSectionTitle}>Deskripsi</Text><Text style={styles.detailDescription}>{selectedProduct.description || "Deskripsi produk belum tersedia."}</Text>
                     <View style={styles.storeInfoCard}><Store size={20} color="#1B7A4E" /><View style={{ flex: 1 }}><Text style={styles.storeInfoName}>{selectedProduct.store}</Text><Text style={styles.mutedText}>{selectedProduct.storeAddress || "Lokasi toko belum tersedia"}</Text></View></View>
                     <Text style={styles.detailSectionTitle}>Ulasan Pelanggan</Text>
+                    {productReviews.some((review: any) => Array.isArray(review.media) && review.media.length > 0) && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewMediaRow}>{productReviews.flatMap((review: any) => Array.isArray(review.media) ? review.media : []).slice(0, 10).map((media: any, mediaIndex: number) => <TouchableOpacity key={mediaIndex} style={styles.reviewMediaThumb} onPress={() => media.type === "video" && media.url ? void Linking.openURL(media.url) : undefined} activeOpacity={media.type === "video" ? 0.75 : 1}>{media.type === "video" ? <View style={styles.reviewMediaVideo}><PlayCircle size={23} color="#FFFFFF" /><Text style={styles.reviewMediaVideoText}>VIDEO</Text></View> : <Image source={{ uri: media.url }} style={styles.reviewMediaImage} />}</TouchableOpacity>)}</ScrollView>}
                     {productReviews.length > 0 ? productReviews.slice(0, 3).map((review: any, index: number) => <View key={index} style={styles.reviewRow}><Text style={styles.ratingStars}>★ {review.rating || selectedProduct.rating || 0}</Text><Text style={styles.detailDescription}>{review.comment || review.text}</Text></View>) : <Text style={styles.mutedText}>Belum ada ulasan untuk produk ini.</Text>}
                   </ScrollView>
                   <View style={styles.stickyActionRow}>{cartLine && <View style={styles.detailQty}><TouchableOpacity onPress={() => handleUpdateQty(selectedProduct.id, -1)}><Minus size={16} color="#1B7A4E" /></TouchableOpacity><Text style={styles.qtyText}>{cartLine.qty}</Text><TouchableOpacity onPress={() => handleUpdateQty(selectedProduct.id, 1)}><Plus size={16} color="#1B7A4E" /></TouchableOpacity></View>}<TouchableOpacity style={styles.detailAddButton} onPress={() => handleAddToCart(selectedProduct)}><Plus size={17} color="#FFFFFF" /><Text style={styles.checkoutBtnText}>Tambah ke Keranjang</Text></TouchableOpacity></View>
@@ -966,7 +989,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) 
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 
@@ -1375,6 +1398,11 @@ const styles = StyleSheet.create({
   storeInfoCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#F0FDF4", borderRadius: 14, padding: 12, marginTop: 14 },
   storeInfoName: { color: "#1E293B", fontSize: 14, fontWeight: "800", marginBottom: 3 },
   reviewRow: { borderBottomWidth: 1, borderBottomColor: "#E2E8F0", paddingVertical: 9 },
+  reviewMediaRow: { gap: 7, paddingVertical: 8, paddingRight: 8 },
+  reviewMediaThumb: { width: 64, height: 64, borderRadius: 10, overflow: "hidden", backgroundColor: "#E8F5EE" },
+  reviewMediaImage: { width: "100%", height: "100%" },
+  reviewMediaVideo: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#1B7A4E", gap: 2 },
+  reviewMediaVideoText: { color: "#FFFFFF", fontSize: 7, fontWeight: "900", letterSpacing: 0.5 },
   stickyActionRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#E2E8F0" },
   detailQty: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: "#BBF7D0" },
   detailAddButton: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: "#1B7A4E", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },

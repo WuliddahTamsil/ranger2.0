@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -162,7 +163,7 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Pendapatan</Text>
         <Text style={styles.subtitle}>Pantau performa penjualan dapur catering Anda.</Text>
@@ -519,7 +520,7 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

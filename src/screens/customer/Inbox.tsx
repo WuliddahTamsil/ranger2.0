@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -199,7 +200,7 @@ export const Inbox: React.FC<InboxProps> = ({
   const unreadNotifs = notifications.filter((n) => !n.read).length;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Header bar */}
       <View style={styles.header}>
         <Text style={styles.title}>Notifikasi & Inbox</Text>
@@ -377,7 +378,7 @@ export const Inbox: React.FC<InboxProps> = ({
           </View>
         </Modal>
       )}
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

@@ -27,6 +27,10 @@ const cateringOrderSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    addressSnapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     storeId: { type: String, default: "" },
     storeName: { type: String, default: "" },
     storeAddress: { type: String, default: "" },

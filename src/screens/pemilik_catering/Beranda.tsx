@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -109,7 +110,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
     description: "Menyediakan layanan catering prasmanan dan nasi box tumpeng berkualitas di Kamojang.",
     isOpen: authAccount?.roleData.isDapurOpen === "true",
     isVerified: true,
-    profileImage: "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&h=300&fit=crop&q=80",
+    profileImage: authAccount?.profilePhoto || null,
   }));
 
   useEffect(() => {
@@ -123,6 +124,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
       address: authAccount.roleData.businessAddress || authAccount.address,
       description: authAccount.roleData.menuSpecialty || current.description,
       isOpen: authAccount.roleData.isDapurOpen === "true",
+      profileImage: authAccount.profilePhoto || null,
     }));
   }, [authAccount]);
 
@@ -444,7 +446,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           />
         );
       case 4:
-        return <Profile storeInfo={storeInfo} setStoreInfo={setStoreInfo} navigate={navigate} />;
+        return <Profile storeInfo={storeInfo} setStoreInfo={setStoreInfo} userId={authAccount?.id} navigate={navigate} />;
       default:
         return renderBerandaContent();
     }
@@ -848,7 +850,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Dynamic Tab Body */}
       <View style={styles.tabContentContainer}>{renderTabContent()}</View>
 
@@ -936,7 +938,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

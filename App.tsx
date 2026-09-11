@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Screen } from "./src/types";
 
 // Auth Screens
@@ -28,6 +29,7 @@ import { CustomerLaundryDetailScreen } from "./src/screens/customer/CustomerLaun
 import { CustomerLaundryTrackingScreen } from "./src/screens/customer/CustomerLaundryTrackingScreen";
 import { CustomerKosScreen } from "./src/screens/customer/CustomerKosScreen";
 import { CustomerKosDetailScreen } from "./src/screens/customer/CustomerKosDetailScreen";
+import { CustomerAddressScreen } from "./src/screens/customer/CustomerAddressScreen";
 import { Beranda as DriverHomeScreen } from "./src/screens/driver/Beranda";
 import { Beranda as PemilikCateringHomeScreen } from "./src/screens/pemilik_catering/Beranda";
 import { Beranda as PemilikMarketplaceHomeScreen } from "./src/screens/pemilik_marketplace/Beranda";
@@ -55,7 +57,7 @@ import {
 } from "./src/screens/auth/authService";
 import { roleToScreen } from "./src/screens/auth/authNavigation";
 import { clearSession } from "./src/screens/auth/authStorage";
-import { AuthAccount, AuthRegistrationRole, GoogleProfile, RegistrationForm } from "./src/screens/auth/authTypes";
+import { AuthAccount, AuthRegistrationRole, GoogleCredential, GoogleProfile, RegistrationForm } from "./src/screens/auth/authTypes";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("splash");
@@ -63,6 +65,7 @@ export default function App() {
   const [registrationResult, setRegistrationResult] = useState<AuthAccount | null>(null);
   const [currentAuthAccount, setCurrentAuthAccount] = useState<AuthAccount | null>(null);
   const [googleDraft, setGoogleDraft] = useState<GoogleProfile | null>(null);
+  const [googleCredential, setGoogleCredential] = useState<GoogleCredential | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -81,6 +84,7 @@ export default function App() {
       setCurrentAuthAccount(null);
       setRegistrationResult(null);
       setGoogleDraft(null);
+      setGoogleCredential(null);
       void clearSession();
     }
     setCurrentScreen(screen);
@@ -95,8 +99,8 @@ export default function App() {
     return { ok: true };
   };
 
-  const handleGoogleLogin = async (accessToken?: string) => {
-    const result = await loginWithGoogle(accessToken);
+  const handleGoogleLogin = async (credential: GoogleCredential) => {
+    const result = await loginWithGoogle(credential);
     if (result.account) {
       setCurrentAuthAccount(result.account);
       await createAuthSession(result.account);
@@ -104,15 +108,17 @@ export default function App() {
       return;
     }
     setGoogleDraft(result.profile);
+    setGoogleCredential(result.credential);
     navigate("auth_register_role");
   };
 
   const handleRegistration = async (form: RegistrationForm) => {
-    const result = await registerAccount(registrationRole, form, googleDraft || undefined);
+    const result = await registerAccount(registrationRole, form, googleDraft || undefined, googleCredential || undefined);
     if (!result.account) return { ok: false, error: result.error };
     setRegistrationResult(result.account);
     setCurrentAuthAccount(result.account);
     setGoogleDraft(null);
+    setGoogleCredential(null);
     navigate("auth_register_success");
     return { ok: true };
   };
@@ -179,7 +185,9 @@ export default function App() {
 
       // 1. Customer
       case "c_home":
-        return <CustomerDashboardScreen navigate={navigate} authAccount={currentAuthAccount} />;
+        return <CustomerDashboardScreen navigate={navigate} authAccount={currentAuthAccount} onUpdateAccount={handleUpdateAccount} />;
+      case "c_addresses":
+        return <CustomerAddressScreen navigate={navigate} authAccount={currentAuthAccount} onUpdateAccount={handleUpdateAccount} />;
       case "c_marketplace":
         return <MarketplaceScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_catering":
@@ -251,10 +259,18 @@ export default function App() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="auto" />
-      {renderScreen()}
-    </View>
+    <SafeAreaProvider>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? (currentScreen === "login" || currentScreen === "auth_register" ? undefined : "padding") : "height"}
+        keyboardVerticalOffset={0}
+      >
+        <View style={styles.container}>
+          <StatusBar style="auto" />
+          {renderScreen()}
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaProvider>
   );
 }
 

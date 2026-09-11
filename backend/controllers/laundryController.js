@@ -1,6 +1,9 @@
+const mongoose = require("mongoose");
 const LaundryStore = require("../models/LaundryStore");
 const LaundryOrder = require("../models/LaundryOrder");
 const User = require("../models/User");
+const Notification = require("../models/Notification");
+const { syncConversationForOrder } = require("../services/conversationService");
 
 // 1. Ambil semua toko laundry (Explore Customer)
 exports.getStores = async (req, res) => {
@@ -156,6 +159,7 @@ exports.createOrder = async (req, res) => {
       pickupCoords,
       deliveryAddress,
       deliveryCoords,
+      addressSnapshot,
       storeId,
       storeName,
       ownerId,
@@ -177,6 +181,7 @@ exports.createOrder = async (req, res) => {
       pickupCoords: pickupCoords || "",
       deliveryAddress: deliveryAddress || pickupAddress || "Jl. Mawar No. 12, Kamojang",
       deliveryCoords: deliveryCoords || "",
+      addressSnapshot: addressSnapshot || null,
       storeId,
       storeName: storeName || "Mitra Laundry",
       ownerId: ownerId || "owner-unknown",
@@ -188,6 +193,7 @@ exports.createOrder = async (req, res) => {
       status: "MENUNGGU_DRIVER_JEMPUT",
       paymentStatus: "menunggu_timbangan",
     });
+    await syncConversationForOrder(newOrder, "laundry");
 
     // Realtime notification via Socket.io
     if (req.io) {
@@ -336,7 +342,6 @@ exports.weighAndBillOrder = async (req, res) => {
     order.paymentStatus = "menunggu_pembayaran";
 
     await order.save();
-
     // Broadcast Realtime via Socket.io
     if (req.io) {
       req.io.emit("laundry_order_updated", order);
@@ -477,6 +482,18 @@ exports.updateOrderStatus = async (req, res) => {
     if (driverDeliveryName) order.driverDeliveryName = driverDeliveryName;
 
     await order.save();
+    await syncConversationForOrder(order, "laundry");
+    for (const assignedDriverId of [order.driverPickupId, order.driverDeliveryId].filter(Boolean)) {
+      if (mongoose.Types.ObjectId.isValid(String(assignedDriverId))) {
+        await Notification.create({
+          userId: assignedDriverId,
+          title: "Order laundry ditugaskan",
+          message: `Pesanan ${order.orderCode} membutuhkan proses driver.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+    }
 
     if (req.io) {
       req.io.emit("laundry_order_updated", order);

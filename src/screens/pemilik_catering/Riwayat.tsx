@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView } from "react-native";
 import { FileText, ChevronRight, Receipt } from "lucide-react-native";
@@ -185,7 +186,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Riwayat Transaksi</Text>
         <Text style={styles.subtitle}>Temukan pesanan catering selesai dan dibatalkan.</Text>
@@ -272,7 +273,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
         onClose={() => setInvoiceModalVisible(false)}
         data={selectedInvoice}
       />
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

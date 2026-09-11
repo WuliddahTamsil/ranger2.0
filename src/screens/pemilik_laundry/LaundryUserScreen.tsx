@@ -1,3 +1,5 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -157,7 +159,7 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -482,7 +484,7 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
       </Modal>
 
       {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
+      <SafeAreaBottomBar absolute style={styles.bottomNav}>
         <TouchableOpacity
           style={styles.navTab}
           onPress={() => navigate("pemilik_laundry_home")}
@@ -527,8 +529,8 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
           <UserIcon size={22} color="#9CA3AF" />
           <Text style={styles.navText}>Profil</Text>
         </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      </SafeAreaBottomBar>
+    </ResponsiveSafeAreaView>
   );
 };
 

@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -10,6 +11,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Image,
 } from "react-native";
 import {
   ShoppingBag,
@@ -28,6 +30,8 @@ import {
   ArrowLeft,
   CheckCircle2,
   FileText,
+  PlayCircle,
+  Plus,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -35,6 +39,8 @@ import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 import { FormalInvoiceModal, InvoiceData, InvoiceItemDetail } from "../../components/FormalInvoiceModal";
+import * as ImagePicker from "expo-image-picker";
+import { createCustomerReview, uploadFileToBackend } from "../../services/api";
 
 interface PesananProps {
   orders: OrderItem[];
@@ -42,6 +48,13 @@ interface PesananProps {
   reviews: any[];
   setReviews: (reviews: any[]) => void;
   authAccount?: AuthAccount | null;
+}
+
+interface ReviewMediaDraft {
+  uri: string;
+  type: "image" | "video";
+  name: string;
+  mimeType?: string;
 }
 
 export const Pesanan: React.FC<PesananProps> = ({
@@ -62,6 +75,8 @@ export const Pesanan: React.FC<PesananProps> = ({
   // Review states
   const [ratingVal, setRatingVal] = useState(5);
   const [commentText, setCommentText] = useState("");
+  const [reviewMedia, setReviewMedia] = useState<ReviewMediaDraft[]>([]);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   const getFilteredOrders = () => {
     switch (activeTab) {
@@ -109,22 +124,71 @@ export const Pesanan: React.FC<PesananProps> = ({
     setSelectedOrder(order);
     setRatingVal(5);
     setCommentText("");
+    setReviewMedia([]);
     setReviewModalVisible(true);
   };
 
-  const handleSaveReview = () => {
-    if (!selectedOrder) return;
+  const pickReviewMedia = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Izin diperlukan", "Izinkan akses galeri untuk menambahkan foto atau video ke ulasan.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsMultipleSelection: true,
+      selectionLimit: 5,
+      quality: 0.8,
+      videoMaxDuration: 30,
+    });
+    if (result.canceled) return;
+    const selected = result.assets.map((asset, index) => ({
+      uri: asset.uri,
+      type: asset.type === "video" ? "video" as const : "image" as const,
+      name: asset.fileName || `review-${Date.now()}-${index}.${asset.type === "video" ? "mp4" : "jpg"}`,
+      mimeType: asset.mimeType || (asset.type === "video" ? "video/mp4" : "image/jpeg"),
+    }));
+    setReviewMedia((current) => [...current, ...selected].slice(0, 5));
+  };
 
-    const newReview = {
-      id: `REV-${Date.now().toString().slice(-4)}`,
-      orderId: selectedOrder.id,
-      rating: ratingVal,
-      comment: commentText.trim(),
-    };
+  const removeReviewMedia = (index: number) => {
+    setReviewMedia((current) => current.filter((_, mediaIndex) => mediaIndex !== index));
+  };
 
-    setReviews([newReview, ...reviews]);
-    setReviewModalVisible(false);
-    Alert.alert("Terima Kasih", "Ulasan Anda berhasil disimpan.");
+  const handleSaveReview = async () => {
+    if (!selectedOrder || !authAccount?.id || isSubmittingReview) return;
+    setIsSubmittingReview(true);
+    try {
+      const uploadedMedia: Array<{ url: string; type: "image" | "video"; name: string }> = [];
+      for (const [index, media] of reviewMedia.entries()) {
+        const uploadResult = await uploadFileToBackend(media.uri, media.name || `review-${Date.now()}-${index}`, media.mimeType || "image/jpeg");
+        if (!uploadResult.success || !uploadResult.data?.url) {
+          throw new Error(uploadResult.message || "Media ulasan gagal diunggah");
+        }
+        uploadedMedia.push({ url: uploadResult.data.url, type: media.type, name: media.name });
+      }
+
+      const result = await createCustomerReview({
+        orderId: selectedOrder.id,
+        orderType: selectedOrder.type,
+        customerId: authAccount.id,
+        customerName: authAccount.name,
+        rating: ratingVal,
+        comment: commentText.trim(),
+        media: uploadedMedia,
+        productIds: (selectedOrder.items || []).map((item: any) => item.productId).filter(Boolean),
+      });
+      if (!result.success) throw new Error(result.message || "Ulasan gagal disimpan");
+
+      const savedReview = { ...result.data, id: result.data?._id || result.data?.id || `REV-${Date.now()}` };
+      setReviews([savedReview, ...reviews]);
+      setReviewModalVisible(false);
+      Alert.alert("Terima Kasih", "Ulasan dan media berhasil disimpan secara permanen.");
+    } catch (error: any) {
+      Alert.alert("Ulasan belum tersimpan", error?.message || "Periksa koneksi internet lalu coba lagi.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
   };
 
   const handleOpenTracking = (order: OrderItem) => {
@@ -225,7 +289,7 @@ export const Pesanan: React.FC<PesananProps> = ({
   const currentList = getFilteredOrders();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Header title */}
       <View style={styles.header}>
         <Text style={styles.title}>Pesanan Saya</Text>
@@ -268,8 +332,7 @@ export const Pesanan: React.FC<PesananProps> = ({
           const hasReviewed = reviews.some((r) => r.orderId === item.id);
           const hasDriver = Boolean(
             (item as any).driverName ||
-            (item as any).driverId ||
-            ["Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim"].includes(item.status)
+            (item as any).driverId
           );
 
           return (
@@ -462,7 +525,7 @@ export const Pesanan: React.FC<PesananProps> = ({
           animationType="slide"
           onRequestClose={() => setTrackModalVisible(false)}
         >
-          <SafeAreaView style={styles.fullPageContainer}>
+          <ResponsiveSafeAreaView style={styles.fullPageContainer}>
             {/* Full Page Header */}
             <View style={styles.fullPageHeader}>
               <TouchableOpacity 
@@ -653,7 +716,7 @@ export const Pesanan: React.FC<PesananProps> = ({
                 </TouchableOpacity>
               </View>
             </ScrollView>
-          </SafeAreaView>
+          </ResponsiveSafeAreaView>
         </Modal>
       )}
 
@@ -665,7 +728,7 @@ export const Pesanan: React.FC<PesananProps> = ({
           animationType="slide" 
           onRequestClose={() => setReviewModalVisible(false)}
         >
-          <SafeAreaView style={styles.fullPageContainer}>
+          <ResponsiveSafeAreaView style={styles.fullPageContainer}>
             {/* Full Page Header */}
             <View style={styles.fullPageHeader}>
               <TouchableOpacity 
@@ -790,16 +853,39 @@ export const Pesanan: React.FC<PesananProps> = ({
                 />
               </View>
 
+              <View style={styles.reviewMediaCard}>
+                <Text style={styles.reviewSectionTitle}>Tambahkan foto atau video</Text>
+                <Text style={styles.reviewMediaHint}>Bantu pengguna lain melihat pengalamanmu secara lebih nyata.</Text>
+                {reviewMedia.length > 0 && (
+                  <View style={styles.reviewMediaGrid}>
+                    {reviewMedia.map((media, index) => (
+                      <View key={`${media.uri}-${index}`} style={styles.reviewMediaItem}>
+                        {media.type === "image" ? <Image source={{ uri: media.uri }} style={styles.reviewMediaPreview} /> : <View style={styles.reviewVideoPreview}><PlayCircle size={25} color="#FFFFFF" /><Text style={styles.reviewVideoLabel}>VIDEO</Text></View>}
+                        <TouchableOpacity style={styles.removeMediaButton} onPress={() => removeReviewMedia(index)}><X size={13} color="#FFFFFF" /></TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {reviewMedia.length < 5 && (
+                  <TouchableOpacity style={styles.addReviewMediaButton} onPress={pickReviewMedia} activeOpacity={0.8}>
+                    <Plus size={17} color="#1B7A4E" />
+                    <Text style={styles.addReviewMediaText}>{reviewMedia.length > 0 ? "Tambah media lagi" : "Pilih dari perangkat"}</Text>
+                  </TouchableOpacity>
+                )}
+                <Text style={styles.reviewMediaLimit}>Maksimal 5 foto/video · video maksimal 30 detik</Text>
+              </View>
+
               {/* Submit CTA */}
               <TouchableOpacity
-                style={styles.submitReviewBtn}
+                style={[styles.submitReviewBtn, isSubmittingReview && styles.submitReviewBtnDisabled]}
                 onPress={handleSaveReview}
+                disabled={isSubmittingReview}
                 activeOpacity={0.8}
               >
-                <Text style={styles.submitReviewBtnText}>Kirim Ulasan Sekarang</Text>
+                <Text style={styles.submitReviewBtnText}>{isSubmittingReview ? "Menyimpan Ulasan..." : "Kirim Ulasan Sekarang"}</Text>
               </TouchableOpacity>
             </ScrollView>
-          </SafeAreaView>
+          </ResponsiveSafeAreaView>
         </Modal>
       )}
 
@@ -824,7 +910,7 @@ export const Pesanan: React.FC<PesananProps> = ({
         onClose={() => setInvoiceModalVisible(false)}
         data={selectedInvoice}
       />
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 
@@ -1478,6 +1564,84 @@ const styles = StyleSheet.create({
     minHeight: 110,
     lineHeight: 18,
   },
+  reviewMediaCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  reviewMediaHint: {
+    fontSize: 11,
+    color: "#64748B",
+    lineHeight: 16,
+    marginTop: -5,
+    marginBottom: 12,
+  },
+  reviewMediaGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
+  reviewMediaItem: {
+    width: 76,
+    height: 76,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#E8F5EE",
+    position: "relative",
+  },
+  reviewMediaPreview: {
+    width: "100%",
+    height: "100%",
+  },
+  reviewVideoPreview: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1B7A4E",
+    gap: 3,
+  },
+  reviewVideoLabel: {
+    color: "#FFFFFF",
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  removeMediaButton: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.72)",
+  },
+  addReviewMediaButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: "#B9DEC5",
+    borderRadius: 12,
+    backgroundColor: "#F4FBF6",
+  },
+  addReviewMediaText: {
+    color: "#1B7A4E",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  reviewMediaLimit: {
+    color: "#94A3B8",
+    fontSize: 10,
+    textAlign: "center",
+    marginTop: 8,
+  },
   submitReviewBtn: {
     backgroundColor: "#1B7A4E",
     height: 50,
@@ -1495,5 +1659,8 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "800",
+  },
+  submitReviewBtnDisabled: {
+    opacity: 0.65,
   },
 });

@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -31,6 +32,8 @@ import {
   X,
 } from "lucide-react-native";
 import { Nav } from "../../types";
+import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
+import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
 
 interface ProfileProps {
   storeInfo: {
@@ -45,19 +48,20 @@ interface ProfileProps {
     profileImage: string | null;
   };
   setStoreInfo: (info: any) => void;
+  userId?: string;
   navigate: (screen: any) => void;
 }
 
-export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navigate }) => {
+export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userId, navigate }) => {
   // Modal states
   const [avatarPreviewVisible, setAvatarPreviewVisible] = useState(false);
-  const [avatarPickerVisible, setAvatarPickerVisible] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
   const [storeModalVisible, setStoreModalVisible] = useState(false);
   const [verifyModalVisible, setVerifyModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Edit form states
   const [editName, setEditName] = useState(storeInfo.ownerName);
@@ -83,14 +87,6 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navig
     storeInfo.address.trim() !== "" &&
     storeInfo.phone.trim() !== "" &&
     storeInfo.phone.toLowerCase() !== "belum diisi";
-
-  // Mock list of profile images
-  const mockImages = [
-    "https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=300&h=300&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1543007630-9710e4a00a20?w=300&h=300&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1495521821757-a1efb6729352?w=300&h=300&fit=crop&q=80",
-    null
-  ];
 
   // Helper for displaying values
   const displayVal = (val: string, fallback: string) => {
@@ -167,35 +163,27 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navig
     );
   };
 
-  const handleLogout = () => navigate("login");
+  const handleLogout = () => {
+    setLogoutModalVisible(false);
+    navigate("login");
+  };
 
   const renderMenuIcon = (icon: React.ReactNode, backgroundColor: string) => (
     <View style={[styles.menuIconBg, { backgroundColor }]}>{icon}</View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Profile Header - mengikuti pola halaman profil customer */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatarWrapper}>
-            <TouchableOpacity onPress={() => setAvatarPreviewVisible(true)} activeOpacity={0.9}>
-              <View style={styles.avatarBg}>
-              {storeInfo.profileImage ? (
-                  <Image source={{ uri: storeInfo.profileImage }} style={styles.avatarImage as any} />
-              ) : (
-                  <StoreIcon size={38} color="#1B7A4E" />
-              )}
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.cameraBtn}
-              onPress={() => setAvatarPickerVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Camera size={14} color="#1B7A4E" />
-              </TouchableOpacity>
-          </View>
+          <ProfilePhotoEditor
+            userId={userId}
+            name={storeInfo.ownerName}
+            photoUri={storeInfo.profileImage}
+            size={96}
+            onSaved={(profileImage) => setStoreInfo({ ...storeInfo, profileImage })}
+          />
 
           <Text style={styles.ownerName} numberOfLines={1}>
             {displayVal(storeInfo.ownerName, "Nama Pemilik")}
@@ -397,7 +385,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navig
         </View>
 
         {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => setLogoutModalVisible(true)} activeOpacity={0.7}>
           <View style={styles.logoutIconBg}>
             <LogOut size={16} color="#B91C1C" />
           </View>
@@ -405,6 +393,13 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navig
         </TouchableOpacity>
         <Text style={styles.footerVersion}>GEOVERSE 2.0 - PGE Kamojang</Text>
       </ScrollView>
+
+      <LogoutConfirmModal
+        visible={logoutModalVisible}
+        roleLabel="Pemilik Catering"
+        onCancel={() => setLogoutModalVisible(false)}
+        onConfirm={handleLogout}
+      />
 
       {/* 1. Modal Avatar Preview */}
       <Modal visible={avatarPreviewVisible} transparent animationType="fade">
@@ -427,45 +422,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navig
         </View>
       </Modal>
 
-      {/* 2. Modal Avatar Picker */}
-      <Modal visible={avatarPickerVisible} transparent animationType="slide">
-        <View style={styles.modalBgBottom}>
-          <View style={styles.sheetContainer}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Ubah Foto Profil</Text>
-              <TouchableOpacity onPress={() => setAvatarPickerVisible(false)}>
-                <X size={20} color="#111827" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.sheetDesc}>Pilih salah satu dari gallery mock kami:</Text>
-            
-            <View style={styles.mockImagesRow}>
-              {mockImages.map((imgUrl, idx) => (
-                <TouchableOpacity 
-                  key={idx} 
-                  style={styles.mockImageCard}
-                  onPress={() => {
-                    setStoreInfo({ ...storeInfo, profileImage: imgUrl });
-                    setAvatarPickerVisible(false);
-                    Alert.alert("Sukses", "Foto profil berhasil diperbarui");
-                  }}
-                >
-                  {imgUrl ? (
-                    <Image source={{ uri: imgUrl }} style={styles.mockImg as any} />
-                  ) : (
-                    <View style={styles.mockImgPlaceholder}>
-                      <StoreIcon size={20} color="#9CA3AF" />
-                      <Text style={styles.mockImgText}>Reset</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 3. Modal Edit Account */}
+      {/* Modal Edit Account */}
       <Modal visible={accountModalVisible} transparent animationType="slide">
         <View style={styles.modalBgBottom}>
           <View style={styles.sheetContainer}>
@@ -800,7 +757,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, navig
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

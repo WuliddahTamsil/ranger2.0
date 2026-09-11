@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { google } = require("googleapis");
 const { sendMitraApprovalEmail, sendMitraRejectionEmail } = require("../services/emailService");
 
 const generateToken = (id) => {
@@ -10,10 +11,75 @@ const generateToken = (id) => {
   });
 };
 
+const getGoogleClientIds = () => [
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_WEB_CLIENT_ID,
+  process.env.GOOGLE_ANDROID_CLIENT_ID,
+  process.env.GOOGLE_IOS_CLIENT_ID,
+].filter(Boolean);
+
+const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
+  if (!accessToken && !idToken) {
+    throw new Error("Token Google wajib dikirim.");
+  }
+
+  const oauth2Client = new google.auth.OAuth2();
+  const allowedClientIds = getGoogleClientIds();
+
+  if (idToken) {
+    const ticket = await oauth2Client.verifyIdToken({
+      idToken,
+      ...(allowedClientIds.length ? { audience: allowedClientIds } : {}),
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.sub || !payload.email) throw new Error("Profil Google tidak lengkap.");
+    return {
+      id: payload.sub,
+      name: payload.name || payload.email.split("@")[0],
+      email: payload.email.toLowerCase().trim(),
+      photo: payload.picture || "",
+    };
+  }
+
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+  const { data } = await oauth2.userinfo.get();
+  if (!data?.id || !data.email) throw new Error("Profil Google tidak lengkap.");
+
+  if (allowedClientIds.length) {
+    const { data: tokenInfo } = await oauth2.tokeninfo({ access_token: accessToken });
+    if (tokenInfo?.audience && !allowedClientIds.includes(tokenInfo.audience)) {
+      throw new Error("Token Google bukan milik aplikasi GEOVERSE.");
+    }
+  }
+
+  return {
+    id: data.id,
+    name: data.name || data.email.split("@")[0],
+    email: data.email.toLowerCase().trim(),
+    photo: data.picture || "",
+  };
+};
+
 // Register
 const registerUser = async (req, res) => {
   try {
-    const { role, name, email, phone, address, profilePhoto, password, googleProfile, roleData, documents } = req.body;
+    let { role, name, email, phone, address, profilePhoto, password, googleProfile, googleAccessToken, googleIdToken, roleData, documents } = req.body;
+
+    let verifiedGoogleProfile = null;
+    if (googleAccessToken || googleIdToken) {
+      try {
+        verifiedGoogleProfile = await verifyGoogleCredential({ accessToken: googleAccessToken, idToken: googleIdToken });
+      } catch (googleError) {
+        return res.status(401).json({ success: false, message: googleError.message || "Token Google tidak valid." });
+      }
+      googleProfile = verifiedGoogleProfile;
+      email = verifiedGoogleProfile.email;
+      name = name || verifiedGoogleProfile.name;
+      profilePhoto = profilePhoto || verifiedGoogleProfile.photo;
+    } else if (googleProfile) {
+      return res.status(401).json({ success: false, message: "Registrasi Google harus menyertakan token autentikasi." });
+    }
 
     if (!email || !name || !role) {
       return res.status(400).json({ success: false, message: "Nama, email, dan role wajib diisi" });
@@ -30,6 +96,10 @@ const registerUser = async (req, res) => {
         user.phone = phone ? phone.trim() : user.phone;
         user.address = address ? address.trim() : user.address;
         if (profilePhoto) user.profilePhoto = profilePhoto;
+        if (verifiedGoogleProfile) {
+          user.googleLinked = true;
+          user.googleId = verifiedGoogleProfile.id;
+        }
         if (password) {
           const salt = await bcrypt.genSalt(10);
           user.passwordHash = await bcrypt.hash(password, salt);
@@ -94,6 +164,7 @@ const registerUser = async (req, res) => {
       profilePhoto: profilePhoto || googleProfile?.photo || "",
       passwordHash,
       googleLinked: Boolean(googleProfile),
+      googleId: verifiedGoogleProfile?.id,
       status: role === "customer" || role === "admin" ? "verified" : "pending",
       roleData: finalRoleData,
       documents: documents || {},
@@ -184,33 +255,49 @@ const registerUser = async (req, res) => {
 // Login
 const loginUser = async (req, res) => {
   try {
-    const { email, password, googleProfile } = req.body;
-    const normalizedEmail = email?.toLowerCase().trim();
+    const { email, password, googleProfile, googleAccessToken, googleIdToken } = req.body;
 
-    const user = await User.findOne({ email: normalizedEmail });
-    if (!user) {
-      return res.status(404).json({ success: false, message: "Akun dengan email tersebut tidak ditemukan." });
-    }
+    if (googleAccessToken || googleIdToken) {
+      let verifiedGoogleProfile;
+      try {
+        verifiedGoogleProfile = await verifyGoogleCredential({ accessToken: googleAccessToken, idToken: googleIdToken });
+      } catch (googleError) {
+        return res.status(401).json({ success: false, message: googleError.message || "Token Google tidak valid." });
+      }
 
-    // Google Login check
-    if (googleProfile) {
-      // Auto-link Google if not already linked
+      const user = await User.findOne({ email: verifiedGoogleProfile.email });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          needsRegistration: true,
+          message: "Akun Google belum terdaftar. Pilih role untuk melanjutkan registrasi.",
+          googleProfile: verifiedGoogleProfile,
+        });
+      }
+
+      if (user.googleId && user.googleId !== verifiedGoogleProfile.id) {
+        return res.status(401).json({ success: false, message: "Akun Google tidak cocok dengan email akun GEOVERSE ini." });
+      }
+
       let updated = false;
       if (!user.googleLinked) {
         user.googleLinked = true;
         updated = true;
       }
-      if (!user.profilePhoto && googleProfile.photo) {
-        user.profilePhoto = googleProfile.photo;
+      if (!user.googleId) {
+        user.googleId = verifiedGoogleProfile.id;
         updated = true;
       }
-      if (updated) {
-        await user.save();
+      if (!user.profilePhoto && verifiedGoogleProfile.photo) {
+        user.profilePhoto = verifiedGoogleProfile.photo;
+        updated = true;
       }
+      if (updated) await user.save();
 
       return res.status(200).json({
         success: true,
         message: "Login berhasil dengan Google",
+        googleProfile: verifiedGoogleProfile,
         data: {
           id: user._id,
           role: user.role,
@@ -219,6 +306,8 @@ const loginUser = async (req, res) => {
           phone: user.phone,
           address: user.address,
           profilePhoto: user.profilePhoto,
+          googleId: user.googleId,
+          googleLinked: user.googleLinked,
           status: user.status,
           rejectionReason: user.rejectionReason,
           roleData: user.roleData,
@@ -226,6 +315,17 @@ const loginUser = async (req, res) => {
           token: generateToken(user._id),
         },
       });
+    }
+
+    if (googleProfile) {
+      return res.status(401).json({ success: false, message: "Login Google harus menyertakan token autentikasi." });
+    }
+
+    const normalizedEmail = email?.toLowerCase().trim();
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Akun dengan email tersebut tidak ditemukan." });
     }
 
     // Password check

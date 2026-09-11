@@ -1,3 +1,5 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -434,7 +436,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
   }, [roomsList, roomSearchQuery]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -949,7 +951,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
       </ScrollView>
 
         {/* Fixed Bottom Action Bar */}
-        <View style={styles.bottomBar}>
+        <SafeAreaBottomBar absolute style={styles.bottomBar}>
           <View>
             <Text style={styles.bottomPriceLabel}>
               Kamar {String(selectedRoom?.roomNumber || "Pilihan").replace(/^(Kamar\s*)+/gi, "")}
@@ -961,7 +963,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
           </View>
 
           <View style={styles.bottomActionsRight}>
-            <TouchableOpacity style={styles.btnChatSquare} onPress={() => setChatVisible(true)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.btnChatSquare} onPress={() => bookingResponse?.bookingCode ? setChatVisible(true) : Alert.alert("Chat setelah booking", "Chat pemilik tersedia setelah booking kos berhasil dibuat.")} activeOpacity={0.8}>
               <MessageCircle size={20} color="#0D7A53" />
             </TouchableOpacity>
 
@@ -988,7 +990,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaBottomBar>
 
       {/* Form Booking Kos Modal (Bottom Sheet) */}
       <Modal visible={isBookingModalOpen} transparent animationType="slide">
@@ -1360,7 +1362,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
 
             {/* Bottom Action Row */}
             <View style={styles.receiptBottomRow}>
-              <TouchableOpacity style={styles.btnChatPemilik} onPress={() => setChatVisible(true)} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.btnChatPemilik} onPress={() => bookingResponse?.bookingCode ? setChatVisible(true) : Alert.alert("Chat setelah booking", "Chat pemilik tersedia setelah booking kos berhasil dibuat.")} activeOpacity={0.8}>
                 <MessageCircle size={16} color="#374151" />
                 <Text style={styles.btnChatPemilikText}>Chat Pemilik</Text>
               </TouchableOpacity>
@@ -1565,14 +1567,14 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
       </Modal>
 
       <CustomerChatModal
-        visible={chatVisible}
+        visible={chatVisible && Boolean(bookingResponse?.bookingCode)}
         onClose={() => setChatVisible(false)}
-        orderId={bookingResponse?.bookingCode || "KOS-AIS-EXCLUSIVE"}
+        orderId={bookingResponse?.bookingCode || ""}
         participantName="Ais Kost (aisk@gmail.com)"
         participantType="merchant"
         initialMessage="Halo Kak Aisyah, bukti DP sudah diterima dan sedang diverifikasi ya."
       />
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

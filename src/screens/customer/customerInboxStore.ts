@@ -26,36 +26,9 @@ export interface CustomerChatThread {
   messages?: CustomerChatMessage[];
 }
 
-const STORAGE_KEY = "ranger_customer_inbox_threads_v1";
+const STORAGE_KEY = "ranger_customer_inbox_threads_v2";
 
-const defaultThreads: CustomerChatThread[] = [
-  {
-    id: "ch_001",
-    orderId: "RNG001",
-    participantType: "driver",
-    participantName: "Pak Asep (Driver)",
-    lastMessage: "Pak, saya sudah di depan pagar ya.",
-    updatedAt: "11:05",
-    unreadCount: 1,
-    messages: [
-      { id: "ch_001_1", sender: "other", text: "Halo Kak, saya driver yang antar pesanan Nasi Timbel Anda. Sudah dekat ya.", time: "11:02" },
-      { id: "ch_001_2", sender: "customer", text: "Baik Pak, ditunggu di depan teras.", time: "11:03" },
-      { id: "ch_001_3", sender: "other", text: "Pak, saya sudah di depan pagar ya.", time: "11:05" },
-    ],
-  },
-  {
-    id: "ch_002",
-    orderId: "RNG003",
-    participantType: "merchant",
-    participantName: "Catering Bu Haji Nani",
-    lastMessage: "Nasi Box 20 pax sedang disiapkan ya kak.",
-    updatedAt: "10:30",
-    unreadCount: 0,
-    messages: [
-      { id: "ch_002_1", sender: "other", text: "Nasi Box 20 pax sedang disiapkan ya kak.", time: "10:30" },
-    ],
-  },
-];
+const defaultThreads: CustomerChatThread[] = [];
 
 let threads: CustomerChatThread[] = [...defaultThreads];
 let hydrated = false;

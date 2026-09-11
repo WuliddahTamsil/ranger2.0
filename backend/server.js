@@ -5,6 +5,8 @@ const cors = require("cors");
 const path = require("path");
 const { Server } = require("socket.io");
 const connectDB = require("./config/db");
+const { verifyAccessToken } = require("./middleware/authMiddleware");
+const { findOrderByIdentifier, resolveParticipant } = require("./utils/chatAccess");
 
 // Initialize Express & HTTP Server (GEOVERSE 2.0 Live)
 const app = express();
@@ -45,6 +47,7 @@ const laundryRoutes = require("./routes/laundryRoutes");
 const marketplaceRoutes = require("./routes/marketplaceRoutes");
 const marketplaceOrderRoutes = require("./routes/marketplaceOrderRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
+const reviewRoutes = require("./routes/reviewRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -57,6 +60,7 @@ app.use("/api/laundry", laundryRoutes);
 app.use("/api/marketplace", marketplaceRoutes);
 app.use("/api/marketplace/orders", marketplaceOrderRoutes);
 app.use("/api/transactions", transactionRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {
@@ -75,8 +79,22 @@ app.get("/", (req, res) => {
 io.on("connection", (socket) => {
   console.log(`🔌 Client connected to Socket.io: ${socket.id}`);
 
-  socket.on("join_room", (roomName) => {
+  socket.on("join_conversation", async ({ orderId, token } = {}) => {
+    const user = await verifyAccessToken(token);
+    const record = user && orderId ? await findOrderByIdentifier(orderId) : null;
+    const participant = user && record ? await resolveParticipant(user._id, record) : null;
+    if (!participant || !record) {
+      socket.emit("chat:join_denied", { orderId, message: "Akses percakapan ditolak." });
+      return;
+    }
+    const roomName = `conversation:${String(record.order._id)}`;
     socket.join(roomName);
+    socket.emit("chat:joined", { orderId: String(record.order._id), roomName });
+    console.log(`Socket ${socket.id} joined authorized chat room: ${roomName}`);
+  });
+
+  socket.on("join_room_legacy_disabled", (roomName) => {
+    // Kept as a no-op for clients that still emit the old event.
     console.log(`📡 Socket ${socket.id} joined room: ${roomName}`);
   });
 

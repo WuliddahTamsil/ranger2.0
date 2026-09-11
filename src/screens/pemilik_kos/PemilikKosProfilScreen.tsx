@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -14,6 +15,7 @@ import {
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
+import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import {
   Pencil,
   MapPin,
@@ -44,7 +46,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
   const [name, setName] = useState(authAccount?.name || "");
   const [phone, setPhone] = useState(authAccount?.phone || "");
   const [badgeText, setBadgeText] = useState(authAccount?.roleData.businessName || "Usaha Kos");
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(authAccount?.profilePhoto || null);
 
   // Modals state
   const [activeModal, setActiveModal] = useState<"edit" | "alamat" | "pembayaran" | "bantuan" | "privasi" | "pengaturan" | "logout" | null>(null);
@@ -61,6 +63,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
     setPhone(authAccount.phone);
     setBadgeText(authAccount.roleData.businessName || "Usaha Kos");
     setAlamatKos(authAccount.roleData.businessAddress || authAccount.address);
+    setAvatarUri(authAccount.profilePhoto || null);
   }, [authAccount]);
 
   const handleSaveProfile = () => {
@@ -75,7 +78,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1B7A4E" />
 
       {/* Main Content */}
@@ -83,20 +86,13 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
         {/* Profile Header - mengikuti pola halaman profil customer */}
         <View style={styles.profileHeaderCard}>
           {/* Avatar Container */}
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatarCircle}>
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-              ) : (
-                <User size={48} color="#1B7A4E" />
-              )}
-            </View>
-
-            {/* Camera Edit Badge */}
-            <TouchableOpacity style={styles.cameraBadge} activeOpacity={0.8}>
-              <Camera size={14} color="#0D7A53" />
-            </TouchableOpacity>
-          </View>
+          <ProfilePhotoEditor
+            userId={authAccount?.id}
+            name={name}
+            photoUri={avatarUri}
+            size={104}
+            onSaved={setAvatarUri}
+          />
 
           {/* Name & Subtitle */}
           <Text style={styles.profileName}>{name || "Nama Pemilik"}</Text>
@@ -385,7 +381,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
                 onPress={() => setActiveModal(null)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.btnCancelText}>Batal</Text>
+                <Text style={styles.btnCancelText}>Tidak</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -393,13 +389,13 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
                 onPress={handleLogout}
                 activeOpacity={0.85}
               >
-                <Text style={styles.btnLogoutText}>Ya, Keluar</Text>
+                <Text style={styles.btnLogoutText}>Ya</Text>
               </TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

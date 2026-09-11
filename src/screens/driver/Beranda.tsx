@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -53,6 +54,15 @@ interface DriverHomeProps extends Nav {
   authAccount?: AuthAccount | null;
 }
 
+type DriverDocumentStatus = "Terverifikasi" | "Menunggu Verifikasi" | "Belum Lengkap";
+
+const getDriverDocumentStatus = (account: AuthAccount | null | undefined, key: string): DriverDocumentStatus => {
+  const document = account?.documents?.[key];
+  if (!document) return "Belum Lengkap";
+  if (account?.status === "verified" || document.status === "verified") return "Terverifikasi";
+  return "Menunggu Verifikasi";
+};
+
 export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) => {
   const [currentTab, setCurrentTab] = useState<number>(0);
   const [isOnline, setIsOnline] = useState<boolean>(true);
@@ -73,26 +83,26 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     name: authAccount?.name || "",
     phone: authAccount?.phone || "",
     email: authAccount?.email || "",
-    rating: 4.9,
-    avatarLetter: "A",
+    profilePhoto: authAccount?.profilePhoto,
+    rating: 0,
+    avatarLetter: authAccount?.name?.trim().charAt(0).toUpperCase() || "?",
     vehicle: {
       type: authAccount?.roleData.vehicleType || "Belum diisi",
       brand: authAccount?.roleData.vehicleBrand || "Belum diisi",
       plate: authAccount?.roleData.plateNumber || "Belum diisi",
       year: authAccount?.roleData.vehicleYear || "Belum diisi",
-      verified: Boolean(authAccount),
+      verified: authAccount?.status === "verified",
     },
     documents: {
-      ktp: "Terverifikasi" as const,
-      sim: "Terverifikasi" as const,
-      stnk: "Terverifikasi" as const,
-      skck: "Terverifikasi" as const,
+      ktp: getDriverDocumentStatus(authAccount, "ktp"),
+      sim: getDriverDocumentStatus(authAccount, "sim"),
+      stnk: getDriverDocumentStatus(authAccount, "stnk"),
     },
     payment: {
-      bankName: "BCA",
-      accountNo: "8870123456",
+      bankName: authAccount?.roleData.bankName || "",
+      accountNo: authAccount?.roleData.accountNo || "",
       holderName: authAccount?.name?.toUpperCase() || "",
-      gopayNo: authAccount?.phone || "",
+      gopayNo: authAccount?.roleData.gopayNo || "",
     }
   }));
 
@@ -103,6 +113,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       name: authAccount.name,
       phone: authAccount.phone,
       email: authAccount.email,
+      profilePhoto: authAccount.profilePhoto,
       avatarLetter: authAccount.name.trim().charAt(0).toUpperCase() || "?",
       vehicle: {
         ...current.vehicle,
@@ -112,16 +123,23 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         year: authAccount.roleData.vehicleYear || current.vehicle.year,
         verified: authAccount.status === "verified",
       },
+      documents: {
+        ktp: getDriverDocumentStatus(authAccount, "ktp"),
+        sim: getDriverDocumentStatus(authAccount, "sim"),
+        stnk: getDriverDocumentStatus(authAccount, "stnk"),
+      },
       payment: {
         ...current.payment,
+        bankName: authAccount.roleData.bankName || current.payment.bankName,
+        accountNo: authAccount.roleData.accountNo || current.payment.accountNo,
         holderName: authAccount.name.toUpperCase(),
-        gopayNo: authAccount.phone,
+        gopayNo: authAccount.roleData.gopayNo || current.payment.gopayNo,
       },
     }));
   }, [authAccount]);
 
   // 2. Global Balance State
-  const [balance, setBalance] = useState<number>(130000);
+  const [balance, setBalance] = useState<number>(0);
 
   // 3. Global Orders State
   const [orders, setOrders] = useState<DriverOrder[]>([]);
@@ -152,17 +170,20 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         phone: order.customerPhone || "",
         type: "Marketplace" as const,
         time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-        from: order.storeAddress || order.storeName || `Toko marketplace ${order.storeId || order.ownerId || "Bangkalan"}`,
-        to: order.address,
-        dist: "1.5 km",
-        pay: order.totalAmount,
-        driverShare: order.driverTip || order.deliveryFee || 5000,
+        from: order.storeAddress || order.storeName || "Lokasi pickup belum tersedia",
+        to: order.address || "Alamat tujuan belum tersedia",
+        dist: order.distance ? `${order.distance} km` : "Jarak belum tersedia",
+        distanceKm: Number(order.distanceKm ?? order.distance ?? 0),
+        pay: Number(order.totalAmount || 0),
+        driverShare: Number(order.driverEarnings ?? order.driverFee ?? order.driverTip ?? order.deliveryFee ?? 0),
+        completedAt: order.updatedAt || order.createdAt,
         status: normalizeStatus(order.status),
         items: order.items,
-        storeName: order.storeName || "Toko Marketplace",
-        storeAddress: order.storeAddress || order.storeName || "Kuningan, Bangkalan",
+        storeName: order.storeName || "Toko marketplace",
+        storeAddress: order.storeAddress || "Alamat toko belum tersedia",
         storePhone: order.storePhone || order.merchantPhone || "",
         ownerId: order.ownerId,
+        addressSnapshot: order.addressSnapshot || null,
       })) : [];
 
       const catOrders: DriverOrder[] = (catRes.success && Array.isArray(catRes.data)) ? catRes.data.map((order: any) => ({
@@ -171,17 +192,20 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         phone: order.customerPhone || "",
         type: "Catering" as const,
         time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-        from: order.storeAddress || order.storeName || "Dapur Catering",
-        to: order.address,
-        dist: "2.0 km",
-        pay: order.totalAmount,
-        driverShare: order.driverTip || order.deliveryFee || 8000,
+        from: order.storeAddress || order.storeName || "Lokasi pickup belum tersedia",
+        to: order.address || "Alamat tujuan belum tersedia",
+        dist: order.distance ? `${order.distance} km` : "Jarak belum tersedia",
+        distanceKm: Number(order.distanceKm ?? order.distance ?? 0),
+        pay: Number(order.totalAmount || 0),
+        driverShare: Number(order.driverEarnings ?? order.driverFee ?? order.driverTip ?? order.deliveryFee ?? 0),
+        completedAt: order.updatedAt || order.createdAt,
         status: normalizeStatus(order.status),
-        items: [{ name: `${order.menuName} (${order.portions} pax)`, quantity: order.portions, price: order.price }],
-        storeName: order.storeName || "Dapur Catering",
-        storeAddress: order.storeAddress || order.storeName || "Jl. Raya Telang No. 12, Kamal",
+        items: [{ name: `${order.menuName || "Pesanan catering"}${order.portions ? ` (${order.portions} pax)` : ""}`, quantity: Number(order.portions || 1), price: Number(order.price || 0) }],
+        storeName: order.storeName || "Dapur catering",
+        storeAddress: order.storeAddress || "Alamat dapur belum tersedia",
         storePhone: order.storePhone || order.merchantPhone || "",
         ownerId: order.ownerId,
+        addressSnapshot: order.addressSnapshot || null,
       })) : [];
 
       setOrders([...mktOrders, ...catOrders]);
@@ -192,32 +216,43 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   }, [authAccount?.id]);
 
   // 4. Global Transactions State
-  const [transactions, setTransactions] = useState<TransactionRecord[]>([
-    {
-      id: "TX-101",
-      type: "in",
-      title: "Pendapatan ORD-203",
-      description: "Penyelesaian order Laundry Delivery",
-      amount: 10000,
-      time: "Hari ini, 09:20",
-      status: "Sukses",
-    },
-    {
-      id: "TX-102",
-      type: "out",
-      title: "Tarik Saldo Driver",
-      description: "Pencairan ke rekening BCA",
-      amount: 50000,
-      time: "Kemarin, 15:30",
-      status: "Sukses",
-    },
-  ]);
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+
+  // Pendapatan dan riwayat order selalu dihitung dari order selesai yang dikirim API.
+  // Dengan begitu driver baru tetap mulai dari Rp0 tanpa transaksi contoh, sementara
+  // order yang benar-benar selesai akan tetap terlihat setelah aplikasi dibuka ulang.
+  useEffect(() => {
+    const completedTransactions: TransactionRecord[] = orders
+      .filter((order) => order.status === "Selesai")
+      .map((order) => {
+        const completedAt = order.completedAt || order.createdAt;
+        const date = completedAt ? new Date(completedAt) : new Date();
+        return {
+          id: `order-income-${order.id}`,
+          type: "in",
+          title: `Pendapatan order ${order.id}`,
+          description: `Pengantaran ${order.type} selesai`,
+          amount: Number(order.driverShare || 0),
+          time: Number.isNaN(date.getTime()) ? "Waktu belum tersedia" : date.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }),
+          status: "Sukses",
+        };
+      });
+
+    setTransactions((current) => {
+      const manualTransactions = current.filter((transaction) => !transaction.id.startsWith("order-income-"));
+      return [...completedTransactions, ...manualTransactions];
+    });
+
+    const earned = completedTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+    const manualNet = transactions
+      .filter((transaction) => !transaction.id.startsWith("order-income-"))
+      .reduce((sum, transaction) => sum + (transaction.type === "in" ? transaction.amount : -transaction.amount), 0);
+    setBalance(earned + manualNet);
+  }, [orders]);
 
   // Handler quick update status from Beranda active order card
   const handleUpdateStatus = async (orderId: string, nextStatus: DriverOrder["status"]) => {
     let alertMsg = "";
-    let isFinished = false;
-    let earnedAmount = 0;
 
     const targetOrder = orders.find((o) => o.id === orderId);
     if (targetOrder) {
@@ -230,36 +265,19 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 
     const updated = orders.map((o) => {
       if (o.id === orderId) {
-        earnedAmount = o.driverShare;
         if (nextStatus === "Menuju Pickup") {
           alertMsg = "Menuju lokasi merchant untuk mengambil pesanan.";
         } else if (nextStatus === "Selesai") {
           alertMsg = `Pengantaran selesai! Pendapatan ${rp(o.driverShare)} ditambahkan ke saldo.`;
-          isFinished = true;
         } else if (nextStatus === "Dibatalkan") {
           alertMsg = "Order berhasil ditolak.";
         }
-        return { ...o, status: nextStatus };
+        return { ...o, status: nextStatus, completedAt: nextStatus === "Selesai" ? new Date().toISOString() : o.completedAt };
       }
       return o;
     });
 
     setOrders(updated);
-
-    if (isFinished) {
-      setBalance(balance + earnedAmount);
-      // Log transaction
-      const newTx: TransactionRecord = {
-        id: `TX-${Date.now().toString().slice(-4)}`,
-        type: "in",
-        title: `Penyelesaian ${orderId}`,
-        description: "Pendapatan jasa kurir pengiriman",
-        amount: earnedAmount,
-        time: "Hari ini, Baru saja",
-        status: "Sukses",
-      };
-      setTransactions([newTx, ...transactions]);
-    }
 
     Alert.alert("Status Diperbarui", alertMsg);
   };
@@ -318,7 +336,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           />
         );
       case 4:
-        return <Profile driverInfo={driverInfo} setDriverInfo={setDriverInfo} navigate={navigate} />;
+        return <Profile driverInfo={driverInfo} setDriverInfo={setDriverInfo} userId={authAccount?.id} navigate={navigate} />;
       default:
         return renderBerandaContent();
     }
@@ -335,8 +353,16 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 
   // Dashboard content of Beranda Tab
   const renderBerandaContent = () => {
-    const todayOrders = orders.filter((o) => o.status === "Selesai").length;
-    const todayRevenue = orders.filter((o) => o.status === "Selesai").reduce((sum, o) => sum + o.driverShare, 0);
+    const today = new Date();
+    const isToday = (value?: string) => {
+      if (!value) return false;
+      const date = new Date(value);
+      return !Number.isNaN(date.getTime()) && date.toDateString() === today.toDateString();
+    };
+    const completedToday = orders.filter((order) => order.status === "Selesai" && isToday(order.completedAt || order.createdAt));
+    const todayOrders = completedToday.length;
+    const todayRevenue = completedToday.reduce((sum, order) => sum + Number(order.driverShare || 0), 0);
+    const todayDistance = completedToday.reduce((sum, order) => sum + Number(order.distanceKm || 0), 0);
 
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -344,7 +370,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           name={driverInfo.name || "Nama Driver"}
           role="Driver"
           icon={Truck}
-          notificationCount={2}
+          notificationCount={driverNotifs.filter((notification) => !notification.read).length}
           onNotificationPress={() => setNotifModalVisible(true)}
           onRolePress={() => navigate("role")}
         />
@@ -364,7 +390,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           >
             <Bell size={20} color="#1B7A4E" />
             <View style={styles.notifBadge}>
-              <Text style={styles.notifBadgeText}>2</Text>
+              <Text style={styles.notifBadgeText}>{driverNotifs.filter((notification) => !notification.read).length}</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -410,7 +436,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             <View style={[styles.summaryIconBg, { backgroundColor: "#FEF3C7" }]}>
               <Navigation size={18} color="#D97706" />
             </View>
-            <Text style={styles.summaryValue}>{todayOrders > 0 ? "5.4 km" : "—"}</Text>
+            <Text style={styles.summaryValue}>{todayDistance > 0 ? `${todayDistance.toFixed(1)} km` : "Belum ada"}</Text>
             <Text style={styles.summaryLabel}>Jarak Tempuh</Text>
           </View>
 
@@ -418,7 +444,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             <View style={[styles.summaryIconBg, { backgroundColor: "#F3E8FF" }]}>
               <CheckCircle2 size={18} color="#7E22CE" />
             </View>
-            <Text style={styles.summaryValue}>{driverInfo.rating} ★</Text>
+            <Text style={styles.summaryValue}>{driverInfo.rating > 0 ? `${driverInfo.rating} ★` : "Belum ada"}</Text>
             <Text style={styles.summaryLabel}>Rating Anda</Text>
           </View>
         </View>
@@ -546,7 +572,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Tab content view */}
       <View style={styles.tabContainer}>{renderTabContent()}</View>
 
@@ -621,7 +647,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

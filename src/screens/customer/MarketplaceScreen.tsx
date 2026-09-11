@@ -1,6 +1,8 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Image,
+  Linking,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -29,15 +31,18 @@ import {
   WalletCards,
   X,
   MessageCircle,
+  PlayCircle,
 } from "lucide-react-native";
 import { BackHeader } from "../../components/BackHeader";
 import { Stars } from "../../components/Stars";
 import { PRODUCTS } from "../../constants/mockData";
-import { Nav, Product } from "../../types";
+import { CustomerAddress, Nav, Product } from "../../types";
 import { rp } from "../../utils/formatters";
-import { CustomerChatModal } from "./CustomerChatModal";
 import { createMarketplaceOrder, getMarketplaceProducts } from "../../services/api";
 import { AuthAccount } from "../auth/authTypes";
+import { getPrimaryCustomerAddress } from "../../services/customerAddressService";
+import { CustomerAddressSelector } from "../../components/CustomerAddressSelector";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 
 type MarketplaceView = "catalog" | "cart" | "checkout" | "success";
 type MarketplaceTab = "menu" | "profile" | "reviews";
@@ -46,6 +51,15 @@ type PaymentMethod = "qris" | "gopay" | "bca_va" | "cod";
 interface CartLine {
   product: Product;
   qty: number;
+  note?: string;
+}
+
+interface MerchantCartGroup {
+  key: string;
+  name: string;
+  ownerId?: string;
+  lines: CartLine[];
+  subtotal: number;
 }
 
 const paymentMethods: Array<{
@@ -74,7 +88,8 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
   const [view, setView] = useState<MarketplaceView>("catalog");
   const [category, setCategory] = useState("Semua");
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [address, setAddress] = useState("Rumah - Jl. Raya Kamojang No. 12");
+  const [address, setAddress] = useState("");
+  const [selectedAddress, setSelectedAddress] = useState<CustomerAddress | undefined>();
   const [promo, setPromo] = useState("");
   const [promoApplied, setPromoApplied] = useState(false);
   const [driverTip, setDriverTip] = useState(0);
@@ -85,6 +100,14 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [selectedImage, setSelectedImage] = useState(0);
   const [createdOrderCode, setCreatedOrderCode] = useState("");
+  const [noteLineId, setNoteLineId] = useState<number | string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+
+  useEffect(() => {
+    const primary = getPrimaryCustomerAddress(authAccount);
+    setSelectedAddress(primary);
+    setAddress(primary?.fullAddress || "");
+  }, [authAccount]);
 
   useEffect(() => {
     void getMarketplaceProducts().then((result) => {
@@ -115,6 +138,26 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
   const filteredProducts = category === "Semua" ? products : products.filter((p) => p.cat === category);
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
   const subtotal = cart.reduce((sum, line) => sum + line.product.price * line.qty, 0);
+  const merchantGroups = useMemo<MerchantCartGroup[]>(() => {
+    const groups = new Map<string, MerchantCartGroup>();
+    cart.forEach((line) => {
+      const key = line.product.ownerId ? `owner:${line.product.ownerId}` : `store:${line.product.store}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.lines.push(line);
+        existing.subtotal += line.product.price * line.qty;
+        return;
+      }
+      groups.set(key, {
+        key,
+        name: line.product.store || "Merchant Marketplace",
+        ownerId: line.product.ownerId,
+        lines: [line],
+        subtotal: line.product.price * line.qty,
+      });
+    });
+    return Array.from(groups.values());
+  }, [cart]);
   const deliveryFee = cart.length > 0 ? 8000 : 0;
   const serviceFee = cart.length > 0 ? 2000 : 0;
   const discount = promoApplied ? 5000 : 0;
@@ -160,6 +203,20 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
     );
   };
 
+  const openNoteEditor = (line: CartLine) => {
+    setNoteLineId(line.product.id);
+    setNoteDraft(line.note || "");
+  };
+
+  const saveLineNote = () => {
+    if (noteLineId === null) return;
+    setCart((current) => current.map((line) => (
+      line.product.id === noteLineId ? { ...line, note: noteDraft.trim() } : line
+    )));
+    setNoteLineId(null);
+    setNoteDraft("");
+  };
+
   const applyPromo = () => {
     if (promo.trim().toUpperCase() === "LOKAL20") {
       setPromoApplied(true);
@@ -194,14 +251,22 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
       alert("Produk ini belum terhubung ke pemilik marketplace, sehingga pesanan tidak dapat disimpan.");
       return;
     }
+    if (!address.trim()) {
+      alert("Tambahkan alamat utama di Profile > Alamat Saya sebelum checkout.");
+      navigate("c_addresses");
+      return;
+    }
+    const selectedDeliveryAddress = selectedAddress || getPrimaryCustomerAddress(authAccount);
+    const deliveryAddress = selectedDeliveryAddress?.fullAddress || address;
     const results = await Promise.all([...ownerGroups.entries()].map(([ownerId, lines]) =>
       createMarketplaceOrder({
         ownerId,
         customerId: authAccount.id,
         customerName: authAccount.name,
         customerPhone: authAccount.phone || "",
-        address,
-        items: lines.map((line) => ({ productId: line.product.id, name: line.product.name, quantity: line.qty })),
+        address: deliveryAddress,
+        addressSnapshot: selectedDeliveryAddress || null,
+        items: lines.map((line) => ({ productId: line.product.id, name: line.product.name, quantity: line.qty, notes: line.note || "" })),
         deliveryFee: deliveryFee / ownerGroups.size,
         serviceFee: serviceFee / ownerGroups.size,
         driverTip: driverTip / ownerGroups.size,
@@ -345,41 +410,133 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
     </View>
   );
 
-  const renderCart = () => (
-    <ScrollView contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
-      <View style={styles.storeMiniCard}><View style={styles.storeMiniIcon}><Store size={19} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.storeMiniName}>GEOVERSE Marketplace</Text><Text style={styles.storeMiniSub}>Pesanan dari marketplace GEOVERSE</Text></View><CheckCircle2 size={19} color="#1B7A4E" /></View>
-      {cart.map((line) => (
-        <View key={line.product.id} style={styles.cartLine}>
-          <Image source={{ uri: line.product.img }} style={styles.cartImage} />
-          <View style={styles.cartLineBody}><Text style={styles.cartProductName} numberOfLines={2}>{line.product.name}</Text><Text style={styles.cartProductStore}>{line.product.store}</Text><Text style={styles.cartProductPrice}>{rp(line.product.price)}</Text></View>
-          <View style={styles.quantityControl}><TouchableOpacity onPress={() => updateQuantity(line.product.id, -1)} style={styles.quantityButton}><Minus size={14} color="#374151" /></TouchableOpacity><Text style={styles.quantityText}>{line.qty}</Text><TouchableOpacity onPress={() => updateQuantity(line.product.id, 1)} style={styles.quantityButton}><Plus size={14} color="#374151" /></TouchableOpacity></View>
+  const renderEmptyCart = () => (
+    <ScrollView contentContainerStyle={styles.emptyCartContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.emptyCartIcon}><ShoppingBag size={28} color="#1B7A4E" /></View>
+      <Text style={styles.emptyCartTitle}>Keranjang kamu masih kosong</Text>
+      <Text style={styles.emptyCartText}>Tambahkan produk dari marketplace untuk mulai memesan.</Text>
+      <TouchableOpacity style={styles.primaryButton} onPress={() => setView("catalog")}>
+        <Plus size={18} color="#FFFFFF" />
+        <Text style={styles.primaryButtonText}>Mulai Belanja</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+
+  const renderCartLine = (line: CartLine) => (
+    <View key={String(line.product.id)} style={styles.orderLine}>
+      <Image source={{ uri: line.product.img }} style={styles.orderLineImage} />
+      <View style={styles.orderLineBody}>
+        <Text style={styles.orderLineName} numberOfLines={2}>{line.product.name}</Text>
+        <Text style={styles.orderLinePrice}>{rp(line.product.price)} / item</Text>
+        <TouchableOpacity style={styles.noteButton} onPress={() => openNoteEditor(line)}>
+          {line.note ? <Text style={styles.noteText} numberOfLines={2}>Catatan: {line.note}</Text> : <><Plus size={13} color="#1B7A4E" /><Text style={styles.noteButtonText}>Tambahkan catatan</Text></>}
+        </TouchableOpacity>
+      </View>
+      <View style={styles.orderLineActions}>
+        <Text style={styles.orderLineSubtotal}>{rp(line.product.price * line.qty)}</Text>
+        <View style={styles.quantityControl}>
+          <TouchableOpacity onPress={() => updateQuantity(line.product.id, -1)} style={styles.quantityButton} accessibilityLabel={`Kurangi ${line.product.name}`}><Minus size={15} color="#374151" /></TouchableOpacity>
+          <Text style={styles.quantityText}>{line.qty}</Text>
+          <TouchableOpacity onPress={() => updateQuantity(line.product.id, 1)} style={styles.quantityButton} accessibilityLabel={`Tambah ${line.product.name}`}><Plus size={15} color="#374151" /></TouchableOpacity>
         </View>
-      ))}
-      <View style={styles.summaryCard}><Text style={styles.summaryTitle}>Ringkasan Belanja</Text><SummaryRow label="Subtotal produk" value={rp(subtotal)} /><SummaryRow label="Ongkir" value={rp(deliveryFee)} /><SummaryRow label="Biaya layanan" value={rp(serviceFee)} /><View style={styles.summaryDivider} /><SummaryRow label="Total" value={rp(total)} strong /></View>
-      <TouchableOpacity style={styles.primaryButton} onPress={() => setView("checkout")}><Text style={styles.primaryButtonText}>Lanjut ke Checkout</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity>
-    </ScrollView>
+      </View>
+    </View>
   );
 
-  const renderCheckout = () => (
-    <ScrollView contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
-      <Text style={styles.checkoutSectionTitle}>Alamat Pengiriman</Text>
-      <View style={styles.addressCard}><MapPin size={20} color="#1B7A4E" /><View style={{ flex: 1 }}><Text style={styles.addressLabel}>Alamat utama</Text><TextInput value={address} onChangeText={setAddress} style={styles.addressInput} multiline /></View><ChevronRight size={18} color="#9CA3AF" /></View>
-
-      <Text style={styles.checkoutSectionTitle}>Tips untuk Driver</Text>
-      <View style={styles.tipRow}>{[0, 2000, 5000, 10000].map((tip) => <TouchableOpacity key={tip} style={[styles.tipOption, driverTip === tip && styles.tipOptionSelected]} onPress={() => setDriverTip(tip)}><Text style={[styles.tipText, driverTip === tip && styles.tipTextSelected]}>{tip === 0 ? "Tidak ada" : rp(tip)}</Text></TouchableOpacity>)}</View>
-      <Text style={styles.checkoutSectionTitle}>Promo</Text>
-      <View style={styles.promoRow}><Tag size={18} color="#1B7A4E" /><TextInput placeholder="Masukkan kode promo" value={promo} onChangeText={setPromo} style={styles.promoInput} autoCapitalize="characters" /><TouchableOpacity onPress={applyPromo} style={styles.promoButton}><Text style={styles.promoButtonText}>{promoApplied ? "Terpasang" : "Pakai"}</Text></TouchableOpacity></View>
-      {promoApplied && <Text style={styles.promoSuccess}>Promo LOKAL20 berhasil digunakan, hemat Rp5.000.</Text>}
-
-      <Text style={styles.checkoutSectionTitle}>Metode Pembayaran</Text>
-      <TouchableOpacity style={styles.paymentSelectedCard} onPress={() => setPaymentModalVisible(true)}><View style={styles.paymentIcon}><WalletCards size={20} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{selectedPaymentLabel}</Text><Text style={styles.paymentSub}>Tap untuk mengganti metode pembayaran</Text></View><ChevronRight size={18} color="#6B7280" /></TouchableOpacity>
-
-      <Text style={styles.checkoutSectionTitle}>Detail Pesanan</Text>
-      <View style={styles.summaryCard}><SummaryRow label="Subtotal produk" value={rp(subtotal)} /><SummaryRow label="Ongkir" value={rp(deliveryFee)} /><SummaryRow label="Tips driver" value={rp(driverTip)} /><SummaryRow label="Biaya layanan" value={rp(serviceFee)} />{promoApplied && <SummaryRow label="Diskon promo" value={`- ${rp(discount)}`} green />}<View style={styles.summaryDivider} /><SummaryRow label="Total pembayaran" value={rp(total)} strong /></View>
-      <View style={styles.secureNote}><ShieldCheck size={17} color="#1B7A4E" /><Text style={styles.secureNoteText}>Pembayaran kamu dilindungi dan diproses secara aman.</Text></View>
-      <TouchableOpacity style={styles.primaryButton} onPress={() => setPaymentModalVisible(true)}><Text style={styles.primaryButtonText}>Bayar {rp(total)}</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity>
-    </ScrollView>
+  const renderMerchantGroup = (group: MerchantCartGroup) => (
+    <View key={group.key} style={styles.merchantOrderSection}>
+      <View style={styles.merchantOrderHeader}>
+        <View style={styles.merchantIcon}><Store size={17} color="#1B7A4E" /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.merchantOrderTitle}>{group.name}</Text>
+          <Text style={styles.merchantOrderMeta}>{group.lines.reduce((sum, line) => sum + line.qty, 0)} item</Text>
+        </View>
+      </View>
+      {group.lines.map(renderCartLine)}
+      <View style={styles.merchantSubtotalRow}><Text style={styles.merchantSubtotalLabel}>Subtotal merchant</Text><Text style={styles.merchantSubtotalValue}>{rp(group.subtotal)}</Text></View>
+    </View>
   );
+
+  const renderAddOrderButton = () => (
+    <TouchableOpacity style={styles.addOrderButton} onPress={() => setView("catalog")}>
+      <View style={styles.addOrderIcon}><Plus size={16} color="#1B7A4E" /></View>
+      <View style={{ flex: 1 }}><Text style={styles.addOrderTitle}>Tambah pesanan</Text><Text style={styles.addOrderSubtitle}>Cari produk dari merchant yang sama atau lainnya</Text></View>
+      <ChevronRight size={18} color="#1B7A4E" />
+    </TouchableOpacity>
+  );
+
+  const renderCart = () => {
+    if (cart.length === 0) return renderEmptyCart();
+    return (
+      <ScrollView contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.storeMiniCard}><View style={styles.storeMiniIcon}><Store size={19} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.storeMiniName}>Pesanan Marketplace</Text><Text style={styles.storeMiniSub}>{merchantGroups.length} merchant · {itemCount} item</Text></View><CheckCircle2 size={19} color="#1B7A4E" /></View>
+        {merchantGroups.map(renderMerchantGroup)}
+        {renderAddOrderButton()}
+        <View style={styles.summaryCard}><Text style={styles.summaryTitle}>Ringkasan Belanja</Text><SummaryRow label="Subtotal produk" value={rp(subtotal)} /><SummaryRow label="Ongkir" value={rp(deliveryFee)} /><SummaryRow label="Biaya layanan" value={rp(serviceFee)} /><View style={styles.summaryDivider} /><SummaryRow label="Total" value={rp(total)} strong /></View>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => setView("checkout")}><Text style={styles.primaryButtonText}>Lanjut ke Checkout</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity>
+      </ScrollView>
+    );
+  };
+
+  const renderCheckout = () => {
+    if (cart.length === 0) return renderEmptyCart();
+    return (
+    <View style={styles.checkoutLayout}>
+      <ScrollView contentContainerStyle={styles.checkoutContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.checkoutIntro}>
+          <View style={styles.checkoutIntroIcon}><ShoppingBag size={18} color="#1B7A4E" /></View>
+          <View style={styles.checkoutIntroCopy}>
+            <Text style={styles.checkoutIntroTitle}>Hampir selesai</Text>
+            <Text style={styles.checkoutIntroText}>Periksa pesanan, alamat, dan pembayaran sebelum diproses.</Text>
+          </View>
+        </View>
+
+        <View style={styles.checkoutSectionHeader}>
+          <View style={styles.sectionNumber}><Text style={styles.sectionNumberText}>1</Text></View>
+          <View><Text style={styles.checkoutSectionTitle}>Alamat Pengiriman</Text><Text style={styles.checkoutSectionHint}>Pilih alamat tujuan pesanan</Text></View>
+        </View>
+        <CustomerAddressSelector
+          authAccount={authAccount}
+          selectedAddress={selectedAddress}
+          onChange={(nextAddress) => { setSelectedAddress(nextAddress); setAddress(nextAddress.fullAddress); }}
+          onManageAddresses={() => navigate("c_addresses")}
+        />
+
+        <View style={styles.checkoutSectionHeader}>
+          <View style={styles.sectionNumber}><Text style={styles.sectionNumberText}>2</Text></View>
+          <View><Text style={styles.checkoutSectionTitle}>Pesanan Anda</Text><Text style={styles.checkoutSectionHint}>Cek item, jumlah, dan catatan pesanan</Text></View>
+        </View>
+        {merchantGroups.map(renderMerchantGroup)}
+        {renderAddOrderButton()}
+
+        <View style={styles.checkoutSectionHeader}>
+          <View style={styles.sectionNumber}><Text style={styles.sectionNumberText}>3</Text></View>
+          <View><Text style={styles.checkoutSectionTitle}>Tambahan Pesanan</Text><Text style={styles.checkoutSectionHint}>Opsional, sesuai kebutuhanmu</Text></View>
+        </View>
+        <View style={styles.optionCard}>
+          <Text style={styles.optionCardTitle}>Tips untuk driver</Text>
+          <View style={styles.tipRow}>{[0, 2000, 5000, 10000].map((tip) => <TouchableOpacity key={tip} style={[styles.tipOption, driverTip === tip && styles.tipOptionSelected]} onPress={() => setDriverTip(tip)}><Text style={[styles.tipText, driverTip === tip && styles.tipTextSelected]}>{tip === 0 ? "Tidak ada" : rp(tip)}</Text></TouchableOpacity>)}</View>
+        </View>
+        <View style={styles.promoRow}><View style={styles.promoIcon}><Tag size={17} color="#1B7A4E" /></View><TextInput placeholder="Punya kode promo?" placeholderTextColor="#94A3B8" value={promo} onChangeText={setPromo} style={styles.promoInput} autoCapitalize="characters" /><TouchableOpacity onPress={applyPromo} style={styles.promoButton}><Text style={styles.promoButtonText}>{promoApplied ? "Terpasang" : "Pakai"}</Text></TouchableOpacity></View>
+        {promoApplied && <Text style={styles.promoSuccess}>Promo berhasil digunakan · hemat {rp(discount)}</Text>}
+
+        <View style={styles.checkoutSectionHeader}>
+          <View style={styles.sectionNumber}><Text style={styles.sectionNumberText}>4</Text></View>
+          <View><Text style={styles.checkoutSectionTitle}>Metode Pembayaran</Text><Text style={styles.checkoutSectionHint}>Pilih metode pembayaran yang tersedia</Text></View>
+        </View>
+        <TouchableOpacity style={styles.paymentSelectedCard} onPress={() => setPaymentModalVisible(true)}><View style={styles.paymentIcon}><WalletCards size={20} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{selectedPaymentLabel}</Text><Text style={styles.paymentSub}>Ketuk untuk mengganti metode pembayaran</Text></View><ChevronRight size={18} color="#6B7280" /></TouchableOpacity>
+
+        <View style={styles.summaryCard}><Text style={styles.summaryTitle}>Ringkasan pembayaran</Text><SummaryRow label="Subtotal produk" value={rp(subtotal)} /><SummaryRow label="Ongkir" value={rp(deliveryFee)} /><SummaryRow label="Tips driver" value={rp(driverTip)} /><SummaryRow label="Biaya layanan" value={rp(serviceFee)} />{promoApplied && <SummaryRow label="Diskon promo" value={`- ${rp(discount)}`} green />}<View style={styles.summaryDivider} /><SummaryRow label="Total pembayaran" value={rp(total)} strong /></View>
+        <View style={styles.secureNote}><ShieldCheck size={16} color="#1B7A4E" /><Text style={styles.secureNoteText}>Pembayaran diproses dengan aman.</Text></View>
+      </ScrollView>
+
+      <SafeAreaBottomBar absolute style={styles.checkoutFooter}>
+        <View style={styles.footerTotal}><Text style={styles.footerTotalLabel}>Total pembayaran</Text><Text style={styles.footerTotalValue}>{rp(total)}</Text></View>
+        <TouchableOpacity style={styles.footerPayButton} onPress={() => setPaymentModalVisible(true)}><Text style={styles.footerPayText}>Bayar {rp(total)}</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity>
+      </SafeAreaBottomBar>
+    </View>
+    );
+  };
 
   const renderSuccess = () => (
     <ScrollView contentContainerStyle={styles.successContent}>
@@ -393,7 +550,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <BackHeader
         title={headerTitle}
         onBack={handleBack}
@@ -446,6 +603,15 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
                     <View key={index} style={styles.detailReview}>
                       <Text style={styles.detailRating}>★ {review.rating || selectedProduct.rating || 0}</Text>
                       <Text style={styles.detailDescription}>{review.comment || review.text}</Text>
+                      {Array.isArray(review.media) && review.media.length > 0 && (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewMediaRow}>
+                          {review.media.map((media: any, mediaIndex: number) => (
+                            <TouchableOpacity key={mediaIndex} style={styles.reviewMediaThumb} onPress={() => media.type === "video" && media.url ? void Linking.openURL(media.url) : undefined} activeOpacity={media.type === "video" ? 0.75 : 1}>
+                              {media.type === "video" ? <View style={styles.reviewMediaVideo}><PlayCircle size={23} color="#FFFFFF" /><Text style={styles.reviewMediaVideoText}>VIDEO</Text></View> : <Image source={{ uri: media.url }} style={styles.reviewMediaImage} />}
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      )}
                     </View>
                   )) : <Text style={styles.detailMuted}>Belum ada ulasan untuk produk ini.</Text>}
                 </ScrollView>
@@ -471,11 +637,33 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
         </View>
       </Modal>
 
+      <Modal visible={noteLineId !== null} transparent animationType="slide" onRequestClose={() => setNoteLineId(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.noteSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View><Text style={styles.sheetTitle}>Catatan Pesanan</Text><Text style={styles.noteSheetSubtitle}>Sampaikan detail kecil untuk merchant.</Text></View>
+              <TouchableOpacity onPress={() => setNoteLineId(null)}><X size={20} color="#111827" /></TouchableOpacity>
+            </View>
+            <TextInput
+              value={noteDraft}
+              onChangeText={setNoteDraft}
+              placeholder="Contoh: tidak pedas, sambal dipisah"
+              placeholderTextColor="#94A3B8"
+              multiline
+              maxLength={120}
+              textAlignVertical="top"
+              style={styles.noteInput}
+            />
+            <TouchableOpacity style={styles.primaryButton} onPress={saveLineNote}><Text style={styles.primaryButtonText}>Simpan Catatan</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={paymentModalVisible} transparent animationType="slide" onRequestClose={() => setPaymentModalVisible(false)}>
         <View style={styles.modalOverlay}><View style={styles.paymentSheet}><View style={styles.sheetHandle} /><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Pilih Pembayaran</Text><TouchableOpacity onPress={() => setPaymentModalVisible(false)}><X size={20} color="#111827" /></TouchableOpacity></View>{paymentMethods.map((method) => { const selected = selectedPayment === method.id; return <TouchableOpacity key={method.id} style={[styles.paymentOption, selected && styles.paymentOptionSelected]} onPress={() => setSelectedPayment(method.id)}><View style={[styles.paymentIcon, { backgroundColor: `${method.color}15` }]}><WalletCards size={20} color={method.color} /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{method.name}</Text><Text style={styles.paymentSub}>{method.subtitle}</Text></View><View style={[styles.radio, selected && styles.radioSelected]}>{selected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}</View></TouchableOpacity>; })}<TouchableOpacity style={styles.primaryButton} onPress={completeMarketplaceOrder}><Text style={styles.primaryButtonText}>Konfirmasi Pembayaran</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity></View></View>
       </Modal>
-      <CustomerChatModal visible={chatVisible} onClose={() => setChatVisible(false)} orderId="MARKETPLACE" participantName="GEOVERSE Marketplace" participantType="merchant" initialMessage="Halo Kak, ada yang bisa kami bantu dari marketplace GEOVERSE?" />
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 
@@ -542,6 +730,11 @@ const styles = StyleSheet.create({
   detailStoreCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#F0FDF4", borderRadius: 14, padding: 12, marginTop: 14 },
   detailStoreName: { color: "#1E293B", fontSize: 14, fontWeight: "800", marginBottom: 3 },
   detailReview: { borderBottomWidth: 1, borderBottomColor: "#E2E8F0", paddingVertical: 9 },
+  reviewMediaRow: { gap: 7, paddingTop: 8, paddingRight: 8 },
+  reviewMediaThumb: { width: 64, height: 64, borderRadius: 10, overflow: "hidden", backgroundColor: "#E8F5EE" },
+  reviewMediaImage: { width: "100%", height: "100%" },
+  reviewMediaVideo: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#1B7A4E", gap: 2 },
+  reviewMediaVideoText: { color: "#FFFFFF", fontSize: 7, fontWeight: "900", letterSpacing: 0.5 },
   detailActions: { flexDirection: "row", gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#E2E8F0" },
   detailCartButton: { flex: 1, minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: "#1B7A4E", backgroundColor: "#F0FDF4", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5, paddingHorizontal: 8 },
   detailCartButtonText: { color: "#1B7A4E", fontSize: 11, fontWeight: "800", textAlign: "center" },
@@ -605,7 +798,46 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   secondaryButton: { alignItems: "center", justifyContent: "center", minHeight: 46, marginTop: 8 },
   secondaryButtonText: { color: "#1B7A4E", fontSize: 13, fontWeight: "800" },
-  checkoutSectionTitle: { color: "#111827", fontSize: 14, fontWeight: "800", marginTop: 8, marginBottom: 9 },
+  emptyCartContent: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 28 },
+  emptyCartIcon: { width: 64, height: 64, borderRadius: 22, backgroundColor: "#EAF7EF", alignItems: "center", justifyContent: "center" },
+  emptyCartTitle: { color: "#10251B", fontSize: 18, fontWeight: "900", textAlign: "center", marginTop: 16 },
+  emptyCartText: { color: "#718096", fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 6, maxWidth: 260 },
+  merchantOrderSection: { backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E5EBEF", padding: 12, marginBottom: 10 },
+  merchantOrderHeader: { flexDirection: "row", alignItems: "center", gap: 9, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F0F3F4" },
+  merchantIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#EAF7EF", alignItems: "center", justifyContent: "center" },
+  merchantOrderTitle: { color: "#10251B", fontSize: 13, fontWeight: "900" },
+  merchantOrderMeta: { color: "#8A9A91", fontSize: 10, marginTop: 2 },
+  orderLine: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F0F3F4" },
+  orderLineImage: { width: 58, height: 58, borderRadius: 12, backgroundColor: "#F3F4F6" },
+  orderLineBody: { flex: 1, minWidth: 0 },
+  orderLineName: { color: "#1F2937", fontSize: 12, fontWeight: "800", lineHeight: 17 },
+  orderLinePrice: { color: "#718096", fontSize: 10, marginTop: 3 },
+  orderLineActions: { alignItems: "flex-end", gap: 8 },
+  orderLineSubtotal: { color: "#10251B", fontSize: 11, fontWeight: "900" },
+  noteButton: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", marginTop: 7, maxWidth: "100%" },
+  noteButtonText: { color: "#1B7A4E", fontSize: 10, fontWeight: "800" },
+  noteText: { color: "#64748B", fontSize: 10, lineHeight: 15, fontStyle: "italic" },
+  merchantSubtotalRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 11 },
+  merchantSubtotalLabel: { color: "#718096", fontSize: 11 },
+  merchantSubtotalValue: { color: "#1F2937", fontSize: 12, fontWeight: "900" },
+  addOrderButton: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D6ECDD", padding: 12, marginTop: 2, marginBottom: 8 },
+  addOrderIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: "#EAF7EF", alignItems: "center", justifyContent: "center" },
+  addOrderTitle: { color: "#1B7A4E", fontSize: 12, fontWeight: "900" },
+  addOrderSubtitle: { color: "#8A9A91", fontSize: 10, marginTop: 2 },
+  checkoutLayout: { flex: 1 },
+  checkoutContent: { padding: 16, paddingBottom: 130 },
+  checkoutIntro: { flexDirection: "row", alignItems: "center", gap: 10, padding: 13, backgroundColor: "#F0FAF4", borderWidth: 1, borderColor: "#D6ECDD", borderRadius: 16, marginBottom: 18 },
+  checkoutIntroIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  checkoutIntroCopy: { flex: 1 },
+  checkoutIntroTitle: { color: "#10251B", fontSize: 13, fontWeight: "900" },
+  checkoutIntroText: { color: "#557365", fontSize: 11, lineHeight: 16, marginTop: 3 },
+  checkoutSectionHeader: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 8, marginBottom: 9 },
+  sectionNumber: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#EAF7EF", alignItems: "center", justifyContent: "center" },
+  sectionNumberText: { color: "#1B7A4E", fontSize: 11, fontWeight: "900" },
+  checkoutSectionTitle: { color: "#10251B", fontSize: 14, fontWeight: "900", marginTop: 0, marginBottom: 1 },
+  checkoutSectionHint: { color: "#8A9A91", fontSize: 10 },
+  optionCard: { backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E5EBEF", padding: 14 },
+  optionCardTitle: { color: "#33473B", fontSize: 11, fontWeight: "900", marginBottom: 10 },
   tipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 6 },
   tipOption: { borderWidth: 1, borderColor: "#D1D5DB", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: "#FFFFFF" },
   tipOptionSelected: { borderColor: "#1B7A4E", backgroundColor: "#E8F5EE" },
@@ -614,15 +846,25 @@ const styles = StyleSheet.create({
   addressCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: "#FFFFFF", borderRadius: 15, padding: 13, borderWidth: 1, borderColor: "#E5E7EB" },
   addressLabel: { color: "#111827", fontSize: 12, fontWeight: "800" },
   addressInput: { color: "#4B5563", fontSize: 12, padding: 0, marginTop: 5, minHeight: 34 },
-  promoRow: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#FFFFFF", borderRadius: 13, paddingHorizontal: 12, borderWidth: 1, borderColor: "#E5E7EB" },
-  promoInput: { flex: 1, color: "#111827", fontSize: 12, minHeight: 45 },
-  promoButton: { paddingHorizontal: 10, paddingVertical: 8, backgroundColor: "#E8F5EE", borderRadius: 8 },
+  promoIcon: { width: 31, height: 31, borderRadius: 10, backgroundColor: "#EAF7EF", alignItems: "center", justifyContent: "center" },
+  promoRow: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#FFFFFF", borderRadius: 14, padding: 7, paddingRight: 8, borderWidth: 1, borderColor: "#E5EBEF", marginTop: 10 },
+  promoInput: { flex: 1, color: "#10251B", fontSize: 12, minHeight: 40, paddingHorizontal: 2 },
+  promoButton: { paddingHorizontal: 12, paddingVertical: 9, backgroundColor: "#EAF7EF", borderRadius: 9 },
   promoButtonText: { color: "#1B7A4E", fontSize: 11, fontWeight: "800" },
   promoSuccess: { color: "#1B7A4E", fontSize: 11, marginTop: 6 },
-  paymentSelectedCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FFFFFF", borderRadius: 15, padding: 13, borderWidth: 1, borderColor: "#E5E7EB" },
+  paymentSelectedCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FFFFFF", borderRadius: 16, padding: 14, borderWidth: 1, borderColor: "#E5EBEF" },
   paymentIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#E8F5EE", alignItems: "center", justifyContent: "center" },
   paymentName: { color: "#111827", fontSize: 13, fontWeight: "800" },
   paymentSub: { color: "#6B7280", fontSize: 10, marginTop: 3 },
+  noteSheet: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, paddingBottom: 28 },
+  noteSheetSubtitle: { color: "#8A9A91", fontSize: 10, marginTop: 3 },
+  noteInput: { minHeight: 92, borderWidth: 1, borderColor: "#DDE6E1", borderRadius: 13, padding: 12, color: "#1F2937", fontSize: 12, lineHeight: 18, backgroundColor: "#FBFDFC" },
+  checkoutFooter: { position: "absolute", left: 0, right: 0, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E5EBEF", paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 12 },
+  footerTotal: { flex: 1 },
+  footerTotalLabel: { color: "#718096", fontSize: 10 },
+  footerTotalValue: { color: "#10251B", fontSize: 17, fontWeight: "900", marginTop: 2 },
+  footerPayButton: { minHeight: 46, borderRadius: 13, backgroundColor: "#1B7A4E", paddingHorizontal: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  footerPayText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   secureNote: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 16 },
   secureNoteText: { color: "#6B7280", fontSize: 11 },
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15, 23, 42, 0.45)" },

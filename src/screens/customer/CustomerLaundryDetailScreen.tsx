@@ -1,3 +1,5 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -11,6 +13,7 @@ import {
   Image,
   Modal,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Nav, OrderItem } from "../../types";
 import {
@@ -36,8 +39,8 @@ import {
   Search,
 } from "lucide-react-native";
 import { addCustomerOrder } from "./customerOrderStore";
-import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
+import { getPrimaryCustomerAddress } from "../../services/customerAddressService";
 import {
   getSelectedStore,
   createLaundryOrder,
@@ -111,6 +114,19 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
     return unsub;
   }, []);
 
+  useEffect(() => {
+    const primary = getPrimaryCustomerAddress(authAccount);
+    setAddress(primary?.fullAddress || "");
+    if (primary?.latitude !== undefined && primary.longitude !== undefined) {
+      setSelectedMapPin({
+        title: primary.label,
+        address: primary.fullAddress,
+        coords: `${primary.latitude}, ${primary.longitude}`,
+        tag: primary.accessType || "Alamat utama",
+      });
+    }
+  }, [authAccount]);
+
   const storeServices: LaundryServiceItem[] =
     store.services && store.services.length > 0
       ? store.services
@@ -135,14 +151,16 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
     setIsSubmitting(true);
 
     try {
+      const addressSnapshot = getPrimaryCustomerAddress(authAccount);
       const payload = {
         customerId: authAccount?.id || authAccount?.email || "cust_demo",
         customerName: authAccount?.name || "aisyahphr",
         customerPhone: authAccount?.phone || "081234567890",
         pickupAddress: address,
-        pickupCoords: selectedMapPin?.coords || "-7.1432, 107.7845",
+        pickupCoords: selectedMapPin?.coords || "",
         deliveryAddress: address,
-        deliveryCoords: selectedMapPin?.coords || "-7.1432, 107.7845",
+        deliveryCoords: selectedMapPin?.coords || "",
+        addressSnapshot: addressSnapshot || null,
         storeId: (store._id || store.id) as any,
         storeName: store.storeName,
         ownerId: store.ownerId || "owner_dedi",
@@ -185,7 +203,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -375,8 +393,8 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
       </ScrollView>
 
       {/* Fixed Bottom Action Bar */}
-      <View style={styles.bottomActionBar}>
-        <TouchableOpacity style={styles.btnChatSquare} onPress={() => setChatVisible(true)} activeOpacity={0.8}>
+      <SafeAreaBottomBar absolute style={styles.bottomActionBar}>
+        <TouchableOpacity style={styles.btnChatSquare} onPress={() => Alert.alert("Chat setelah order", "Chat mitra tersedia dari detail pesanan setelah order laundry dibuat.")} activeOpacity={0.8}>
           <MessageCircle size={22} color="#0D7A53" />
           <Text style={styles.btnChatText}>Chat</Text>
         </TouchableOpacity>
@@ -397,7 +415,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
           </View>
           <ChevronRight size={20} color="#FFFFFF" />
         </TouchableOpacity>
-      </View>
+      </SafeAreaBottomBar>
 
       {/* Bottom Sheet Modal: Order Pickup */}
       <Modal visible={isBottomSheetOpen} transparent animationType="slide">
@@ -560,7 +578,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
       {/* Interactive Google Maps Location Picker Modal */}
       <Modal visible={isMapModalOpen} animationType="slide" transparent>
         <View style={styles.mapModalOverlay}>
-          <SafeAreaView style={styles.mapModalSafeArea}>
+          <ResponsiveSafeAreaView style={styles.mapModalSafeArea}>
             <View style={styles.mapModalHeader}>
               <TouchableOpacity
                 onPress={() => setIsMapModalOpen(false)}
@@ -647,7 +665,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
                 <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
               </TouchableOpacity>
             </View>
-          </SafeAreaView>
+          </ResponsiveSafeAreaView>
         </View>
       </Modal>
 
@@ -680,15 +698,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
         </View>
       </Modal>
 
-      <CustomerChatModal
-        visible={chatVisible}
-        onClose={() => setChatVisible(false)}
-        orderId={store.storeName}
-        participantName={store.storeName}
-        participantType="merchant"
-        initialMessage="Halo Kak, silakan tanyakan ketersediaan layanan atau status laundry di sini."
-      />
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

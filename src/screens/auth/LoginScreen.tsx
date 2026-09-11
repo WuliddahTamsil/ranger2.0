@@ -1,10 +1,12 @@
 import React, { useState } from "react";
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import { makeRedirectUri } from "expo-auth-session";
 import { ArrowRight, Eye, EyeOff, KeyRound, LockKeyhole, Mail, UserPlus } from "lucide-react-native";
 import { Nav } from "../../types";
+import { GoogleCredential } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
 import { googleClientIds, googleConfigMessage, hasGoogleClientId } from "./googleAuth";
 import { AuthBrand } from "./components/AuthBrand";
@@ -14,7 +16,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 interface Props extends Nav {
   onLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  onGoogleLogin: (accessToken?: string) => Promise<void>;
+  onGoogleLogin: (credential: GoogleCredential) => Promise<void>;
 }
 
 export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin }) => {
@@ -75,18 +77,18 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
 };
 
 const SafeAreaViewWrapper: React.FC<React.PropsWithChildren> = ({ children }) => (
-  <View style={authStyles.container}>
+  <ResponsiveSafeAreaView style={authStyles.container}>
     <View pointerEvents="none" style={styles.shapeTop} />
     <View pointerEvents="none" style={styles.shapeBottom} />
     {children}
-  </View>
+  </ResponsiveSafeAreaView>
 );
 
 interface GoogleLoginButtonProps {
   disabled: boolean;
   loading: boolean;
   onBusyChange: (busy: boolean) => void;
-  onLogin: (accessToken?: string) => Promise<void>;
+  onLogin: (credential: GoogleCredential) => Promise<void>;
   onError: (message: string) => void;
 }
 
@@ -99,7 +101,12 @@ const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = (props) => {
 };
 
 const ConfiguredGoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ disabled, loading, onBusyChange, onLogin, onError }) => {
-  const [request, , promptAsync] = Google.useAuthRequest({ ...googleClientIds, redirectUri: makeRedirectUri({ scheme: "geoverse" }) });
+  const [request, , promptAsync] = Google.useAuthRequest({
+    ...googleClientIds,
+    scopes: ["openid", "profile", "email"],
+    selectAccount: true,
+    redirectUri: makeRedirectUri({ scheme: "geoverse" }),
+  });
 
   const submit = async () => {
     onError("");
@@ -108,9 +115,12 @@ const ConfiguredGoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ disable
       if (!request) throw new Error("Konfigurasi Google belum siap. Coba lagi beberapa saat.");
       const result = await promptAsync();
       if (result.type === "success") {
-        const token = result.authentication?.accessToken || result.params?.id_token || result.params?.access_token;
-        if (!token) throw new Error("Google tidak mengembalikan token autentikasi.");
-        await onLogin(token);
+        const credential: GoogleCredential = {
+          accessToken: result.authentication?.accessToken || result.params?.access_token,
+          idToken: result.authentication?.idToken || result.params?.id_token,
+        };
+        if (!credential.accessToken && !credential.idToken) throw new Error("Google tidak mengembalikan token autentikasi.");
+        await onLogin(credential);
       } else if (result.type === "error") {
         const errorCode = result.params?.error;
         onError(errorCode === "disabled_client"

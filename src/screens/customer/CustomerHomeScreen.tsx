@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React from "react";
 import {
   View,
@@ -39,7 +40,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
   ] as const;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Top Bar */}
       <View style={styles.topBar}>
         <View style={styles.locationContainer}>
@@ -166,7 +167,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
           </TouchableOpacity>
         ))}
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

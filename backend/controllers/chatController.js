@@ -1,188 +1,135 @@
+const mongoose = require("mongoose");
 const ChatMessage = require("../models/ChatMessage");
-const MarketplaceOrder = require("../models/MarketplaceOrder");
-const CateringOrder = require("../models/CateringOrder");
-const LaundryOrder = require("../models/LaundryOrder");
+const Conversation = require("../models/Conversation");
 const Notification = require("../models/Notification");
+const {
+  findOrderByIdentifier,
+  getOrderParticipants,
+  resolveParticipant,
+  resolveReceiverId,
+  isArchivedStatus,
+} = require("../utils/chatAccess");
 
-// Send a chat message
+const roomForOrder = (orderId) => `conversation:${String(orderId)}`;
+
+const getAuthorizedConversation = async (req, orderId) => {
+  const record = await findOrderByIdentifier(orderId);
+  if (!record) return { error: "Order chat tidak ditemukan", status: 404 };
+  const participant = await resolveParticipant(req.authUser._id, record);
+  if (!participant) return { error: "Akun tidak terhubung dengan order ini", status: 403 };
+
+  const participants = getOrderParticipants(record);
+  const conversation = await Conversation.findOneAndUpdate(
+    { orderId: String(record.order._id) },
+    {
+      $set: {
+        orderType: record.orderType,
+        orderCode: participants.orderCode,
+        customerId: participants.customerId,
+        ownerId: participants.ownerId,
+        storeId: participants.storeId,
+        driverId: participants.driverId,
+        driverIds: participants.driverIds,
+        status: participants.status,
+        archived: isArchivedStatus(participants.status),
+      },
+      $setOnInsert: { lastMessageAt: null },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  return { record, participant, conversation };
+};
+
+const getConversation = async (req, res) => {
+  try {
+    const result = await getAuthorizedConversation(req, req.params.orderId);
+    if (result.error) return res.status(result.status).json({ success: false, message: result.error });
+    return res.json({
+      success: true,
+      data: {
+        ...result.conversation.toObject(),
+        participantRole: result.participant.role,
+        canSend: !isArchivedStatus(result.conversation.status),
+      },
+    });
+  } catch (error) {
+    console.error("Get chat conversation error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memuat percakapan" });
+  }
+};
+
 const sendChatMessage = async (req, res) => {
   try {
-    const { orderId, sender, senderId, text, attachment, target, targetReceiverId } = req.body;
+    const { orderId, text, attachment, target, conversationId } = req.body;
+    if (!orderId) return res.status(400).json({ success: false, message: "orderId wajib diisi" });
 
-    if (!orderId || !sender || !senderId) {
-      return res.status(400).json({ success: false, message: "orderId dan sender harus diisi" });
+    const result = await getAuthorizedConversation(req, orderId);
+    if (result.error) return res.status(result.status).json({ success: false, message: result.error });
+    const { record, participant, conversation } = result;
+
+    if (isArchivedStatus(conversation.status)) {
+      return res.status(409).json({ success: false, message: "Percakapan order ini sudah diarsipkan dan hanya dapat dibaca." });
     }
-    const order =
-      (await MarketplaceOrder.findById(orderId).lean().catch(() => null)) ||
-      (await CateringOrder.findById(orderId).lean().catch(() => null)) ||
-      (await LaundryOrder.findById(orderId).lean().catch(() => null));
-    if (!order) return res.status(404).json({ success: false, message: "Order chat tidak ditemukan" });
-
-    const customerId = String(order.customerId);
-    const ownerId = String(order.ownerId);
-    const driverId = String(order.driverId || order.driverPickupId || order.driverDeliveryId || "");
-
-    if (String(senderId) !== customerId && String(senderId) !== ownerId && String(senderId) !== driverId) {
-      return res.status(403).json({ success: false, message: "Akun tidak terhubung dengan order ini" });
-    }
-    const normalizedSender = sender === "owner" ? ownerId : sender === "driver" ? driverId : customerId;
-
-    let receiverId;
-    if (targetReceiverId) {
-      receiverId = String(targetReceiverId);
-    } else if (sender === "driver") {
-      receiverId = target === "owner" ? ownerId : customerId;
-    } else if (sender === "owner") {
-      receiverId = target === "driver" && driverId ? driverId : customerId;
-    } else {
-      // Customer sending
-      receiverId = target === "driver" && driverId ? driverId : ownerId;
+    if (conversationId && String(conversation._id) !== String(conversationId)) {
+      return res.status(403).json({ success: false, message: "Conversation tidak sesuai dengan order." });
     }
 
-    // Determine message channel target
-    const resolvedTarget = target || (sender === "driver" ? "driver" : sender === "owner" ? "owner" : "customer");
+    const receiverId = resolveReceiverId(participant, target);
+    if (!receiverId) return res.status(409).json({ success: false, message: "Penerima chat belum tersedia untuk order ini." });
 
     const message = await ChatMessage.create({
-      orderId,
-      sender,
-      senderId: normalizedSender,
+      conversationId: conversation._id,
+      orderId: String(record.order._id),
+      sender: participant.role,
+      senderId: String(req.authUser._id),
       receiverId,
-      customerId,
-      ownerId,
-      storeId: String(order.storeId || ownerId),
-      target: resolvedTarget,
-      text: text || "",
-      attachment,
+      customerId: participant.customerId,
+      ownerId: participant.ownerId,
+      storeId: participant.storeId,
+      target: target || (participant.role === "driver" ? "customer" : "owner"),
+      text: String(text || "").trim(),
+      attachment: attachment || undefined,
     });
-    if (require("mongoose").Types.ObjectId.isValid(receiverId)) {
+
+    conversation.lastMessageAt = new Date();
+    await conversation.save();
+    if (mongoose.Types.ObjectId.isValid(receiverId)) {
       await Notification.create({
         userId: receiverId,
         title: "Pesan baru",
-        message: `Ada pesan baru terkait pesanan ${order.orderCode}.`,
+        message: `Ada pesan baru terkait pesanan ${participant.orderCode || record.order._id}.`,
         type: "general",
-        relatedId: require("mongoose").Types.ObjectId.isValid(orderId) ? order._id : undefined,
+        relatedId: mongoose.Types.ObjectId.isValid(String(record.order._id)) ? record.order._id : undefined,
       });
     }
-
-    // Notify socket.io room if applicable
-    if (req.io) {
-      req.io.to(`room_${orderId}`).emit("new_message", message);
-    }
-
-    return res.status(201).json({
-      success: true,
-      data: message,
-    });
+    if (req.io) req.io.to(roomForOrder(record.order._id)).emit("chat:message", message);
+    return res.status(201).json({ success: true, data: message, conversationId: conversation._id });
   } catch (error) {
-    console.error("❌ Send chat message error:", error);
+    console.error("Send chat message error:", error);
     return res.status(500).json({ success: false, message: "Gagal mengirim pesan", error: error.message });
   }
 };
 
-// Get chat history by orderId
 const getChatMessages = async (req, res) => {
   try {
-    const { orderId } = req.params;
-    const { target, role } = req.query;
-
-    const order =
-      (await MarketplaceOrder.findById(orderId).lean().catch(() => null)) ||
-      (await CateringOrder.findById(orderId).lean().catch(() => null)) ||
-      (await LaundryOrder.findById(orderId).lean().catch(() => null));
-
-    const customerId = order ? String(order.customerId || "") : "";
-    const ownerId = order ? String(order.ownerId || "") : "";
-    const driverId = order ? String(order.driverId || order.driverPickupId || order.driverDeliveryId || "") : "";
-
-    let filter = { orderId };
-
-    if (role === "driver") {
-      if (target === "owner") {
-        filter = {
-          orderId,
-          $or: [
-            { sender: "driver", target: "owner" },
-            { sender: "owner", target: "driver" },
-            ...(ownerId ? [{ sender: "driver", receiverId: ownerId }] : []),
-            ...(driverId ? [{ sender: "owner", receiverId: driverId }] : []),
-          ],
-        };
-      } else {
-        filter = {
-          orderId,
-          $or: [
-            { sender: "driver", target: "customer" },
-            { sender: "customer", target: "driver" },
-            ...(customerId ? [{ sender: "driver", receiverId: customerId }] : []),
-            ...(driverId ? [{ sender: "customer", receiverId: driverId }] : []),
-          ],
-        };
-      }
-    } else if (role === "owner") {
-      if (target === "driver") {
-        filter = {
-          orderId,
-          $or: [
-            { sender: "owner", target: "driver" },
-            { sender: "driver", target: "owner" },
-            ...(driverId ? [{ sender: "owner", receiverId: driverId }] : []),
-            ...(ownerId ? [{ sender: "driver", receiverId: ownerId }] : []),
-          ],
-        };
-      } else {
-        filter = {
-          orderId,
-          $or: [
-            { sender: "owner", target: "customer" },
-            { sender: "customer", target: "owner" },
-            { sender: "owner", target: { $in: ["all", null, undefined] } },
-            { sender: "customer", target: { $in: ["all", null, undefined] } },
-            ...(customerId ? [{ sender: "owner", receiverId: customerId }] : []),
-            ...(ownerId ? [{ sender: "customer", receiverId: ownerId }] : []),
-          ],
-        };
-      }
-    } else if (target === "driver") {
-      filter = {
-        orderId,
-        $or: [
-          { sender: "driver" },
-          { target: "driver" },
-        ],
-      };
-    } else if (target === "owner") {
-      filter = {
-        orderId,
-        $or: [
-          { sender: "owner" },
-          { target: "owner" },
-          { target: { $exists: false }, sender: { $ne: "driver" } },
-        ],
-      };
-    } else if (target === "customer") {
-      filter = {
-        orderId,
-        $or: [
-          { sender: "customer" },
-          { target: "customer" },
-        ],
-      };
-    }
-
-    const messages = await ChatMessage.find(filter).sort({ createdAt: 1 });
-
-    return res.status(200).json({
+    const result = await getAuthorizedConversation(req, req.params.orderId);
+    if (result.error) return res.status(result.status).json({ success: false, message: result.error });
+    const messages = await ChatMessage.find({
+      $or: [
+        { conversationId: result.conversation._id },
+        { orderId: String(result.record.order._id), conversationId: { $exists: false } },
+      ],
+    }).sort({ createdAt: 1 });
+    return res.json({
       success: true,
       count: messages.length,
+      conversationId: result.conversation._id,
       data: messages,
     });
   } catch (error) {
-    console.error("❌ Get chat messages error:", error);
+    console.error("Get chat messages error:", error);
     return res.status(500).json({ success: false, message: "Gagal memuat pesan", error: error.message });
   }
 };
 
-module.exports = {
-  sendChatMessage,
-  getChatMessages,
-};
+module.exports = { getConversation, sendChatMessage, getChatMessages, roomForOrder };

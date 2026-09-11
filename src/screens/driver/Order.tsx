@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -46,6 +47,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { rp } from "../../utils/formatters";
 import { getChatMessages, sendChatMessage } from "../../services/api";
+import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 
 export interface DriverOrder {
@@ -54,17 +56,28 @@ export interface DriverOrder {
   phone: string;
   type: "Catering" | "Marketplace" | "Laundry";
   time: string;
+  createdAt?: string;
+  completedAt?: string;
+  distanceKm?: number;
   from: string;
   to: string;
   dist: string;
   pay: number;
   driverShare: number;
   status: "Menunggu" | "Menuju Pickup" | "Sampai Pickup" | "Mengantar" | "Selesai" | "Dibatalkan";
-  items?: { name: string; quantity: number; price: number }[];
+  items?: { name: string; quantity: number; price: number; notes?: string }[];
   storeName?: string;
   storeAddress?: string;
   storePhone?: string;
   ownerId?: string;
+  addressSnapshot?: {
+    label?: string;
+    fullAddress?: string;
+    accessType?: string;
+    notes?: string;
+    latitude?: number;
+    longitude?: number;
+  } | null;
 }
 
 interface OrderProps {
@@ -144,7 +157,14 @@ export const Order: React.FC<OrderProps> = ({
 
     void loadMessages();
     const interval = setInterval(() => void loadMessages(), 3000);
-    return () => clearInterval(interval);
+    let unsubscribeRealtime: () => void = () => undefined;
+    void subscribeToChatRealtime(selectedOrder.id, () => void loadMessages()).then((unsubscribe) => {
+      unsubscribeRealtime = unsubscribe;
+    });
+    return () => {
+      clearInterval(interval);
+      unsubscribeRealtime();
+    };
   }, [chatModalVisible, selectedOrder, chatTarget]);
 
   // 100% In-App Navigation helpers (NEVER redirect outside the app)
@@ -247,12 +267,9 @@ export const Order: React.FC<OrderProps> = ({
 
     let alertTitle = "Status Diperbarui";
     let alertMsg = "";
-    let isFinished = false;
-    let earnedAmount = 0;
 
     const updated = orders.map((o) => {
       if (o.id === orderId) {
-        earnedAmount = o.driverShare;
         if (nextStatus === "Menuju Pickup") {
           alertTitle = "Menuju Lokasi Toko";
           alertMsg = `Live tracking aktif! Perjalanan menuju toko (${o.storeName || o.from}) telah dimulai. Notifikasi telah dikirim ke pemilik toko.`;
@@ -265,12 +282,11 @@ export const Order: React.FC<OrderProps> = ({
         } else if (nextStatus === "Selesai") {
           alertTitle = "Pengantaran Selesai";
           alertMsg = `Pesanan berhasil diserahkan. Pendapatan ${rp(o.driverShare)} telah ditambahkan ke saldo Anda.`;
-          isFinished = true;
         } else if (nextStatus === "Dibatalkan") {
           alertTitle = "Pesanan Ditolak";
           alertMsg = "Pesanan telah ditolak.";
         }
-        return { ...o, status: nextStatus };
+        return { ...o, status: nextStatus, completedAt: nextStatus === "Selesai" ? new Date().toISOString() : o.completedAt };
       }
       return o;
     });
@@ -279,20 +295,6 @@ export const Order: React.FC<OrderProps> = ({
 
     if (selectedOrder && selectedOrder.id === orderId) {
       setSelectedOrder({ ...selectedOrder, status: nextStatus });
-    }
-
-    if (isFinished) {
-      setBalance(balance + earnedAmount);
-      const newTx = {
-        id: `TX-${Date.now().toString().slice(-4)}`,
-        type: "in" as const,
-        title: `Penyelesaian Order #${orderId.slice(-6)}`,
-        description: "Pendapatan jasa kurir pengiriman",
-        amount: earnedAmount,
-        time: "Hari ini, Baru saja",
-        status: "Sukses" as const,
-      };
-      setTransactions([newTx, ...transactions]);
     }
 
     Alert.alert(alertTitle, alertMsg);
@@ -459,7 +461,7 @@ export const Order: React.FC<OrderProps> = ({
         animationType="slide"
         onRequestClose={() => setSelectedOrder(null)}
       >
-        <SafeAreaView style={styles.fullPageContainer}>
+        <ResponsiveSafeAreaView style={styles.fullPageContainer}>
           {/* Sticky Top Bar */}
           <View style={styles.fullPageHeader}>
             <TouchableOpacity
@@ -747,7 +749,17 @@ export const Order: React.FC<OrderProps> = ({
               </View>
             </View>
 
-            <Text style={styles.infoCardAddress}>{selectedOrder.to}</Text>
+                <Text style={styles.infoCardAddress}>{selectedOrder.to}</Text>
+                {selectedOrder.addressSnapshot && (
+                  <View style={styles.addressDetailBox}>
+                    <Text style={styles.addressDetailTitle}>Detail pengantaran</Text>
+                    {!!selectedOrder.addressSnapshot.accessType && <Text style={styles.addressDetailText}>Akses: {selectedOrder.addressSnapshot.accessType}</Text>}
+                    {!!selectedOrder.addressSnapshot.notes && <Text style={styles.addressDetailText}>Catatan: {selectedOrder.addressSnapshot.notes}</Text>}
+                    {selectedOrder.addressSnapshot.latitude !== undefined && selectedOrder.addressSnapshot.longitude !== undefined && (
+                      <Text style={styles.addressDetailText}>Pin: {selectedOrder.addressSnapshot.latitude.toFixed(5)}, {selectedOrder.addressSnapshot.longitude.toFixed(5)}</Text>
+                    )}
+                  </View>
+                )}
 
             <View style={styles.infoCardActionsRow}>
               <TouchableOpacity
@@ -780,6 +792,7 @@ export const Order: React.FC<OrderProps> = ({
                     <View style={{ flex: 1 }}>
                       <Text style={styles.itemName}>{item.name}</Text>
                       <Text style={styles.itemQuantity}>{item.quantity} item</Text>
+                      {!!item.notes && <Text style={styles.itemNote} numberOfLines={2}>Catatan: {item.notes}</Text>}
                     </View>
                     <Text style={styles.itemPrice}>{rp(item.price * item.quantity)}</Text>
                   </View>
@@ -887,7 +900,7 @@ export const Order: React.FC<OrderProps> = ({
           animationType="slide"
           onRequestClose={() => setFullscreenMapVisible(false)}
         >
-          <SafeAreaView style={styles.fsGpsContainer}>
+          <ResponsiveSafeAreaView style={styles.fsGpsContainer}>
             <View style={styles.fsGpsHeader}>
               <TouchableOpacity
                 style={styles.fsGpsCircleBtn}
@@ -958,9 +971,9 @@ export const Order: React.FC<OrderProps> = ({
                 </TouchableOpacity>
               )}
             </View>
-          </SafeAreaView>
+          </ResponsiveSafeAreaView>
         </Modal>
-        </SafeAreaView>
+        </ResponsiveSafeAreaView>
       </Modal>
     );
   }
@@ -1177,7 +1190,7 @@ export const Order: React.FC<OrderProps> = ({
         {previewImageUri && (
           <Modal visible={true} transparent animationType="fade">
             <View style={styles.imageViewerBg}>
-              <SafeAreaView style={styles.imageViewerHeader}>
+              <ResponsiveSafeAreaView style={styles.imageViewerHeader}>
                 <Text style={styles.imageViewerTitle}>Pratinjau Foto</Text>
                 <TouchableOpacity
                   style={styles.imageViewerCloseBtn}
@@ -1185,7 +1198,7 @@ export const Order: React.FC<OrderProps> = ({
                 >
                   <X size={22} color="#FFFFFF" />
                 </TouchableOpacity>
-              </SafeAreaView>
+              </ResponsiveSafeAreaView>
               <View style={styles.imageViewerBody}>
                 <Image
                   source={{ uri: previewImageUri }}
@@ -1204,7 +1217,7 @@ export const Order: React.FC<OrderProps> = ({
   // RENDER: ORDER LIST VIEW (DEFAULT SCREEN)
   // =========================================================================
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -1597,7 +1610,7 @@ export const Order: React.FC<OrderProps> = ({
           </View>
         }
       />
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 
@@ -2333,6 +2346,23 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 10,
   },
+  addressDetailBox: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+  },
+  addressDetailTitle: {
+    color: "#166534",
+    fontSize: 11,
+    fontWeight: "900",
+    marginBottom: 3,
+  },
+  addressDetailText: {
+    color: "#4D7C5B",
+    fontSize: 10,
+    lineHeight: 16,
+  },
   infoCardActionsRow: {
     flexDirection: "row",
     gap: 8,
@@ -2388,6 +2418,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#64748B",
     marginTop: 2,
+  },
+  itemNote: {
+    fontSize: 10,
+    color: "#64748B",
+    marginTop: 3,
+    fontStyle: "italic",
   },
   itemPrice: {
     fontSize: 13,

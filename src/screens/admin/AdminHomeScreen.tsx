@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -1449,7 +1450,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1B7A4E" />
 
       {/* Top Header Bar (Emerald Premium Style) */}
@@ -2350,7 +2351,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

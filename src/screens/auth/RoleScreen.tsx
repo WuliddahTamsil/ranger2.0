@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from "react-native";
 import { Nav } from "../../types";
@@ -64,7 +65,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Pilih Peran Anda</Text>
         <Text style={styles.subtitle}>Pilih salah satu dari 7 modul akses pengguna:</Text>
@@ -91,7 +92,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
           })}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

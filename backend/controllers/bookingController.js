@@ -2,6 +2,7 @@ const Booking = require("../models/Booking");
 const Kost = require("../models/Kost");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
+const { syncConversationForOrder } = require("../services/conversationService");
 
 // Create new Kost Booking (Customer)
 const createBooking = async (req, res) => {
@@ -77,6 +78,7 @@ const createBooking = async (req, res) => {
       status: dpProofImage ? "dp_submitted" : "pending_dp",
       notes: notes || "",
     });
+    await syncConversationForOrder(booking, "kos");
 
     // Create Notification for Pemilik Kos
     const notif = await Notification.create({

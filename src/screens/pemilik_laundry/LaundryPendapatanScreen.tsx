@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -39,7 +40,7 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -223,7 +224,7 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
           <Text style={styles.navText}>Profil</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

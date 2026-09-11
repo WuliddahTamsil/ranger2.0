@@ -61,6 +61,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    googleId: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
     status: {
       type: String,
       enum: ["pending", "verified", "rejected"],

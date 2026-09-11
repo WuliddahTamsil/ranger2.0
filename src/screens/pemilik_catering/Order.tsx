@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -43,6 +44,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { rp } from "../../utils/formatters";
 import { updateCateringOrderStatus, getChatMessages, sendChatMessage } from "../../services/api";
+import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 import { AnimatedOrderPreparation } from "../../components/AnimatedOrderPreparation";
 
@@ -194,9 +196,14 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
 
     void loadMessages();
     const interval = setInterval(loadMessages, 3000);
+    let unsubscribeRealtime: () => void = () => undefined;
+    void subscribeToChatRealtime(selectedOrder.id, () => void loadMessages()).then((unsubscribe) => {
+      unsubscribeRealtime = unsubscribe;
+    });
 
     return () => {
       clearInterval(interval);
+      unsubscribeRealtime();
     };
   }, [chatModalVisible, selectedOrder, chatTarget]);
 
@@ -544,7 +551,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
         {previewImageUri && (
           <Modal visible={true} transparent animationType="fade">
             <View style={styles.imageViewerBg}>
-              <SafeAreaView style={styles.imageViewerHeader}>
+              <ResponsiveSafeAreaView style={styles.imageViewerHeader}>
                 <Text style={styles.imageViewerTitle}>Pratinjau Foto Lampiran</Text>
                 <TouchableOpacity
                   style={styles.imageViewerCloseBtn}
@@ -552,7 +559,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                 >
                   <X size={22} color="#FFFFFF" />
                 </TouchableOpacity>
-              </SafeAreaView>
+              </ResponsiveSafeAreaView>
               <View style={styles.imageViewerBody}>
                 <Image
                   source={{ uri: previewImageUri }}
@@ -570,7 +577,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
   // If an order is selected, render the FULL PAGE View (no popups!)
   if (selectedOrder) {
     return (
-      <SafeAreaView style={styles.fullPageContainer}>
+      <ResponsiveSafeAreaView style={styles.fullPageContainer}>
         {/* Sticky Header */}
         <View style={styles.fullPageHeader}>
           <TouchableOpacity
@@ -1132,7 +1139,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
 
         {/* Chat Modal */}
         {renderChatModal()}
-      </SafeAreaView>
+      </ResponsiveSafeAreaView>
     );
   }
 
@@ -1155,7 +1162,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
   const countNewOrders = orders.filter((o) => o.status === "Menunggu").length;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>
@@ -1345,7 +1352,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
 
       {/* Modal Chat (when opened from list) */}
       {renderChatModal()}
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

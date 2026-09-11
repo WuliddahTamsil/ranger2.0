@@ -2,7 +2,7 @@ export type Screen =
   | "splash" | "onboarding" | "login" | "role"
   | "daftar_mitra_step1" | "daftar_mitra_step2" | "daftar_mitra_step3"
   | "auth_register_role" | "auth_register" | "auth_register_success" | "auth_forgot_password"
-  | "c_home" | "c_marketplace" | "c_catering" | "c_laundry" | "c_laundry_detail" | "c_kos" | "c_product_detail"
+  | "c_home" | "c_addresses" | "c_marketplace" | "c_catering" | "c_laundry" | "c_laundry_detail" | "c_kos" | "c_product_detail"
   | "c_checkout" | "c_order_success" | "c_tracking"
   | "c_catering_detail" | "c_catering_payment" | "c_catering_qris"
   | "c_catering_tracking"
@@ -39,14 +39,37 @@ export type Nav = {
   navigate: (s: Screen) => void;
 };
 
+export type AddressLabel = "Rumah" | "Kos" | "Kantor" | "Lainnya";
+export type AddressAccessType =
+  | "Gang sempit"
+  | "Bisa dilalui mobil"
+  | "Hanya bisa dilalui motor"
+  | "Jalan utama"
+  | "Perlu masuk gang"
+  | "Hanya kendaraan tertentu";
+
 export interface CustomerAddress {
   id: string;
-  label: string;
+  label: AddressLabel;
   receiverName: string;
   phoneNumber: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  village?: string;
+  postalCode?: string;
+  street?: string;
+  houseNumber?: string;
+  rt?: string;
+  rw?: string;
   fullAddress: string;
   notes: string;
+  accessType?: AddressAccessType;
+  latitude?: number;
+  longitude?: number;
+  detectedAddress?: string;
   isMain: boolean;
+  updatedAt?: string;
 }
 
 export interface Product {

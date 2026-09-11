@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -17,7 +18,7 @@ export const DaftarMitraStep2Screen: React.FC<Nav> = ({ navigate }) => {
   const [alamatUsaha, setAlamatUsaha] = useState("");
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -116,7 +117,7 @@ export const DaftarMitraStep2Screen: React.FC<Nav> = ({ navigate }) => {
           <Text style={styles.btnPrimaryText}>DAFTAR SEKARANG</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

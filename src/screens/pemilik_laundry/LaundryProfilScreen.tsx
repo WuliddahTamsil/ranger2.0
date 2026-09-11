@@ -1,3 +1,5 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -13,6 +15,7 @@ import {
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
+import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import {
   Pencil,
   MapPin,
@@ -47,6 +50,7 @@ interface LaundryProfilProps extends Nav {
 export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, authAccount }) => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [store, setStore] = useState<LaundryStore>(getSelectedStore());
+  const [profilePhoto, setProfilePhoto] = useState(authAccount?.profilePhoto || "");
 
   // Edit Services Modal
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -61,6 +65,10 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
     setStore(currentStore);
     setServicesList(currentStore.services || []);
   }, []);
+
+  useEffect(() => {
+    setProfilePhoto(authAccount?.profilePhoto || "");
+  }, [authAccount?.profilePhoto]);
 
   const displayName = authAccount?.name || "Pak Dedi Kurniawan";
   const displayPhone = authAccount?.phone || "0812-3456-7001";
@@ -116,15 +124,19 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1B7A4E" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
         <View style={styles.profileHeader}>
-          <View style={styles.avatarCircle}>
-            <Shirt size={40} color="#0D7A53" />
-          </View>
+          <ProfilePhotoEditor
+            userId={authAccount?.id}
+            name={displayName}
+            photoUri={profilePhoto}
+            size={96}
+            onSaved={setProfilePhoto}
+          />
           <Text style={styles.ownerName}>{displayName}</Text>
           <Text style={styles.storeName}>{businessName}</Text>
           <Text style={styles.profilePhone}>{displayPhone}</Text>
@@ -226,7 +238,7 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
       </ScrollView>
 
       {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
+      <SafeAreaBottomBar absolute style={styles.bottomNav}>
         <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_laundry_home")}>
           <Home size={22} color="#9CA3AF" />
           <Text style={styles.navText}>Beranda</Text>
@@ -251,7 +263,7 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
           <User size={22} color="#0D7A53" />
           <Text style={[styles.navText, styles.navTextActive]}>Profil</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaBottomBar>
 
       {/* Modal: Kelola Layanan & Harga */}
       <Modal visible={isServiceModalOpen} transparent animationType="slide">
@@ -355,16 +367,16 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
 
             <View style={styles.confirmBtnRow}>
               <TouchableOpacity style={styles.btnCancel} onPress={() => setIsLogoutModalOpen(false)}>
-                <Text style={styles.btnCancelText}>Batal</Text>
+                <Text style={styles.btnCancelText}>Tidak</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.btnLogout} onPress={handleLogout}>
-                <Text style={styles.btnLogoutText}>Ya, Keluar</Text>
+                <Text style={styles.btnLogoutText}>Ya</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

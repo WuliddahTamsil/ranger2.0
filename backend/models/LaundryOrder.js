@@ -36,6 +36,10 @@ const laundryOrderSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    addressSnapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
 
     // Store & Service Info
     storeId: {

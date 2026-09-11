@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -77,7 +78,7 @@ export const Jelajah: React.FC<JelajahProps> = ({
       );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Jelajah Layanan</Text>
         <Text style={styles.subtitle}>Temukan semua yang Anda butuhkan di kawasan Kamojang.</Text>
@@ -258,7 +259,7 @@ export const Jelajah: React.FC<JelajahProps> = ({
           </View>
         </Modal>
       )}
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

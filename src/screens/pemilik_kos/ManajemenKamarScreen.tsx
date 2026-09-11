@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -534,7 +535,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Main Scroll Area */}
@@ -1528,7 +1529,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

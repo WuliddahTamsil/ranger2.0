@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -134,7 +135,7 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -501,7 +502,7 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
           />
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

@@ -1,16 +1,13 @@
 import { GoogleProfile } from "./authTypes";
 import { Platform } from "react-native";
 
-const readClientId = (key: string) => {
-  const value = process.env[key];
-  return typeof value === "string" ? value.trim() : "";
-};
+const readClientId = (value: unknown) => typeof value === "string" ? value.trim() : "";
 
 export const googleClientIds = {
-  expoClientId: readClientId("EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID"),
-  iosClientId: readClientId("EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID"),
-  androidClientId: readClientId("EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID"),
-  webClientId: readClientId("EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID"),
+  expoClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID),
+  iosClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID),
+  androidClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID),
+  webClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID),
 };
 
 const activeClientId = Platform.OS === "web"
@@ -21,7 +18,7 @@ const activeClientId = Platform.OS === "web"
 
 export const hasGoogleClientId = Boolean(activeClientId);
 
-export const googleConfigMessage = "Login Google belum siap. Isi Google OAuth Client ID yang aktif di file .env, lalu restart Expo.";
+export const googleConfigMessage = "Login Google belum siap. Isi EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (web) atau client ID platform di .env, lalu restart Expo.";
 
 // Helper to decode JWT ID Token if Google returns id_token
 const parseIdToken = (token: string): Partial<GoogleProfile> | null => {

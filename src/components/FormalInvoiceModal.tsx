@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -144,14 +145,14 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
     .invoice-wrapper {
       max-width: 760px;
       margin: 0 auto;
-      border: 1px solid #E2E8F0;
-      border-radius: 12px;
+      border: 1px solid #DDE9E1;
+      border-radius: 16px;
       overflow: hidden;
       box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     }
     .top-strip {
-      height: 6px;
-      background-color: ${isCanceled ? "#DC2626" : "#0D7A53"};
+      height: 4px;
+      background-color: ${isCanceled ? "#DC2626" : "#176B49"};
     }
     .content-padded {
       padding: 28px 32px;
@@ -167,7 +168,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
     .brand-title {
       font-size: 22px;
       font-weight: 900;
-      color: #0D7A53;
+      color: #176B49;
       letter-spacing: -0.5px;
       margin: 0 0 4px 0;
     }
@@ -189,8 +190,8 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
     }
     .inv-title-badge {
       display: inline-block;
-      background-color: #DCFCE7;
-      color: #0D7A53;
+      background-color: #EAF7EF;
+      color: #176B49;
       font-size: 11px;
       font-weight: 800;
       padding: 4px 12px;
@@ -220,10 +221,10 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
     }
     .stamp-box {
       display: inline-block;
-      border: 2px dashed ${isCanceled ? "#DC2626" : "#0D7A53"};
-      background-color: ${isCanceled ? "#FEF2F2" : "#F0FDF4"};
+      border: 1px solid ${isCanceled ? "#FCA5A5" : "#B9DEC5"};
+      background-color: ${isCanceled ? "#FEF2F2" : "#F4FBF6"};
       padding: 8px 24px;
-      border-radius: 8px;
+      border-radius: 10px;
     }
     .stamp-title {
       font-size: 13px;
@@ -288,8 +289,8 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
       margin-bottom: 24px;
     }
     .items-table th {
-      background-color: #F1F5F9;
-      color: #475569;
+      background-color: #F0F8F2;
+      color: #176B49;
       font-size: 10px;
       font-weight: 800;
       letter-spacing: 0.5px;
@@ -521,7 +522,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.modalBackdrop}>
+      <ResponsiveSafeAreaView style={styles.modalBackdrop}>
         <View style={styles.modalWindow}>
           {/* Top Actions Bar */}
           <View style={styles.topActionsBar}>
@@ -723,6 +724,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
                     <View>
                       <Text style={styles.grandTotalLabel}>TOTAL PEMBAYARAN</Text>
                       <Text style={styles.paymentMethodSub}>{paymentMethod}</Text>
+                      <Text style={styles.paymentStatusSub}>{data.paymentStatus || (isCanceled ? "Dibatalkan" : "Lunas")}</Text>
                     </View>
                     <Text style={styles.grandTotalVal}>{rp(finalTotal)}</Text>
                   </View>
@@ -774,7 +776,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
             </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
+      </ResponsiveSafeAreaView>
     </Modal>
   );
 };
@@ -782,33 +784,35 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
 const styles = StyleSheet.create({
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    backgroundColor: "rgba(15, 23, 42, 0.56)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 12,
+    padding: 10,
   },
   modalWindow: {
     width: "100%",
-    maxWidth: 540,
-    maxHeight: "92%",
-    backgroundColor: "#F1F5F9",
-    borderRadius: 20,
+    maxWidth: 580,
+    maxHeight: "94%",
+    backgroundColor: "#F6F9F7",
+    borderRadius: 24,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.7)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 8,
   },
   topActionsBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#E5EEE8",
   },
   topActionsLeft: {
     flexDirection: "row",
@@ -817,8 +821,8 @@ const styles = StyleSheet.create({
   },
   topActionsTitle: {
     fontSize: 14,
-    fontWeight: "800",
-    color: "#0F172A",
+    fontWeight: "900",
+    color: "#10251B",
   },
   topActionsRight: {
     flexDirection: "row",
@@ -828,16 +832,18 @@ const styles = StyleSheet.create({
   actionIconBtn: {
     width: 32,
     height: 32,
-    borderRadius: 8,
-    backgroundColor: "#DCFCE7",
+    borderRadius: 10,
+    backgroundColor: "#EAF7EF",
+    borderWidth: 1,
+    borderColor: "#D6ECDD",
     alignItems: "center",
     justifyContent: "center",
   },
   closeIconBtn: {
     width: 32,
     height: 32,
-    borderRadius: 8,
-    backgroundColor: "#F1F5F9",
+    borderRadius: 10,
+    backgroundColor: "#F4F7F5",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -845,14 +851,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   invoiceScrollContent: {
-    padding: 12,
+    padding: 14,
+    paddingBottom: 18,
   },
   invoicePaper: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DDE9E1",
     position: "relative",
     overflow: "hidden",
   },
@@ -861,7 +868,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 6,
+    height: 4,
     backgroundColor: "#0D7A53",
   },
   invoiceTopStripCanceled: {
@@ -871,7 +878,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginTop: 6,
+    marginTop: 5,
     gap: 12,
   },
   brandRow: {
@@ -880,20 +887,20 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   brandName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "900",
-    color: "#0D7A53",
+    color: "#176B49",
     letterSpacing: 0.5,
   },
   brandSubtitle: {
     fontSize: 10,
     fontWeight: "600",
-    color: "#334155",
+    color: "#476157",
     marginTop: 2,
   },
   brandAddress: {
     fontSize: 9,
-    color: "#64748B",
+    color: "#7A8C82",
     marginTop: 1,
   },
   invoiceCodeBlock: {
@@ -902,15 +909,15 @@ const styles = StyleSheet.create({
   invoiceTitleBadge: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#0D7A53",
-    backgroundColor: "#DCFCE7",
+    color: "#176B49",
+    backgroundColor: "#EAF7EF",
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
     marginBottom: 4,
   },
   invoiceNumText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
     color: "#0F172A",
   },
@@ -920,28 +927,27 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   stampContainer: {
-    alignItems: "flex-end",
-    marginTop: 8,
-    marginBottom: -4,
+    alignItems: "flex-start",
+    marginTop: 12,
+    marginBottom: 0,
   },
   stampBox: {
-    borderWidth: 2,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
     alignItems: "center",
-    transform: [{ rotate: "-4deg" }],
   },
   stampBoxPaid: {
-    borderColor: "#15803D",
-    backgroundColor: "rgba(220, 252, 231, 0.4)",
+    borderColor: "#B9DEC5",
+    backgroundColor: "#F4FBF6",
   },
   stampBoxCanceled: {
     borderColor: "#DC2626",
     backgroundColor: "rgba(254, 226, 226, 0.4)",
   },
   stampTextMain: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
     letterSpacing: 0.8,
   },
@@ -959,8 +965,8 @@ const styles = StyleSheet.create({
   },
   formalDivider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
-    marginVertical: 12,
+    backgroundColor: "#E5EEE8",
+    marginVertical: 15,
   },
   partiesGrid: {
     flexDirection: "row",
@@ -982,11 +988,11 @@ const styles = StyleSheet.create({
   partyHeaderText: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#0D7A53",
+    color: "#176B49",
     letterSpacing: 0.4,
   },
   partyName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800",
     color: "#0F172A",
   },
@@ -1010,10 +1016,10 @@ const styles = StyleSheet.create({
   logisticsBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#F4FBF6",
     borderWidth: 1,
-    borderColor: "#BBF7D0",
-    borderRadius: 10,
+    borderColor: "#D6ECDD",
+    borderRadius: 12,
     padding: 8,
     marginTop: 10,
     gap: 8,
@@ -1048,23 +1054,23 @@ const styles = StyleSheet.create({
     color: "#15803D",
   },
   tableWrap: {
-    marginTop: 14,
+    marginTop: 16,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 8,
+    borderColor: "#DDE9E1",
+    borderRadius: 12,
     overflow: "hidden",
   },
   tableHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0D7A53",
+    backgroundColor: "#F0F8F2",
     paddingHorizontal: 8,
     paddingVertical: 7,
   },
   tableHeaderCell: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#FFFFFF",
+    color: "#176B49",
     letterSpacing: 0.3,
   },
   tableBodyRow: {
@@ -1073,7 +1079,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#F0F4F1",
   },
   tableCell: {
     fontSize: 10,
@@ -1091,11 +1097,11 @@ const styles = StyleSheet.create({
   breakdownInner: {
     width: "100%",
     maxWidth: 320,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 10,
+    backgroundColor: "#F7FAF8",
+    borderRadius: 12,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DDE9E1",
   },
   breakdownRow: {
     flexDirection: "row",
@@ -1126,7 +1132,7 @@ const styles = StyleSheet.create({
   grandTotalLabel: {
     fontSize: 10,
     fontWeight: "900",
-    color: "#0F172A",
+    color: "#176B49",
     letterSpacing: 0.4,
   },
   paymentMethodSub: {
@@ -1134,14 +1140,20 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginTop: 1,
   },
+  paymentStatusSub: {
+    fontSize: 9,
+    color: "#15803D",
+    marginTop: 2,
+    fontWeight: "700",
+  },
   grandTotalVal: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900",
     color: "#0D7A53",
   },
   securityFooter: {
-    marginTop: 16,
-    paddingTop: 10,
+    marginTop: 18,
+    paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
     alignItems: "center",
@@ -1174,10 +1186,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#E5EEE8",
   },
   footerShareBtn: {
     flex: 1.5,
@@ -1185,9 +1197,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#0D7A53",
+    backgroundColor: "#176B49",
     paddingVertical: 11,
-    borderRadius: 10,
+    borderRadius: 12,
   },
   footerShareBtnDisabled: {
     opacity: 0.7,
@@ -1202,12 +1214,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#F4FBF6",
     borderWidth: 1,
-    borderColor: "#86EFAC",
+    borderColor: "#B9DEC5",
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 10,
+    borderRadius: 12,
   },
   footerPrintBtnText: {
     fontSize: 12,
@@ -1217,8 +1229,8 @@ const styles = StyleSheet.create({
   footerCloseBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "#F1F5F9",
+    borderRadius: 12,
+    backgroundColor: "#F4F7F5",
     alignItems: "center",
     justifyContent: "center",
   },

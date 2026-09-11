@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -626,7 +627,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Main Scroll Content */}
@@ -2408,7 +2409,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
       {/* MODAL 6: Fullscreen Image Preview Modal */}
       <Modal visible={!!fullImagePreviewUrl} transparent animationType="fade">
         <View style={styles.fullImageOverlay}>
-          <SafeAreaView style={styles.fullImageSafeArea}>
+          <ResponsiveSafeAreaView style={styles.fullImageSafeArea}>
             <View style={styles.fullImageHeader}>
               <Text style={styles.fullImageTitle}>Bukti Pembayaran</Text>
               <TouchableOpacity
@@ -2429,10 +2430,10 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
                 />
               ) : null}
             </View>
-          </SafeAreaView>
+          </ResponsiveSafeAreaView>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 

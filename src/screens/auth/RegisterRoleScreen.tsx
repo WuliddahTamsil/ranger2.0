@@ -1,10 +1,11 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { ArrowLeft, Bike, Building2, ChevronRight, Coffee, ShieldCheck, ShoppingBag, UserRound, WashingMachine } from "lucide-react-native";
 import * as Google from "expo-auth-session/providers/google";
 import { makeRedirectUri } from "expo-auth-session";
 import { Nav } from "../../types";
-import { AuthRegistrationRole, GoogleProfile, ROLE_LABELS } from "./authTypes";
+import { AuthRegistrationRole, GoogleCredential, GoogleProfile, ROLE_LABELS } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
 import { googleClientIds, googleConfigMessage, hasGoogleClientId } from "./googleAuth";
 import { AuthBrand } from "./components/AuthBrand";
@@ -12,7 +13,7 @@ import { GoogleLogo } from "./components/GoogleLogo";
 
 interface Props extends Nav {
   googleDraft?: GoogleProfile | null;
-  onGoogleConnect?: (accessToken?: string) => Promise<void>;
+  onGoogleConnect?: (credential: GoogleCredential) => Promise<void>;
   onSelect: (role: AuthRegistrationRole) => void;
 }
 
@@ -27,7 +28,7 @@ const options: Array<{ role: AuthRegistrationRole; description: string; icon: Re
 
 export const RegisterRoleScreen: React.FC<Props> = ({ navigate, googleDraft, onGoogleConnect, onSelect }) => {
   return (
-    <SafeAreaView style={authStyles.container}>
+    <ResponsiveSafeAreaView style={authStyles.container}>
       <ScrollView contentContainerStyle={[authStyles.scroll, styles.scroll]} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
         <TouchableOpacity onPress={() => navigate("login")} style={styles.back} activeOpacity={0.75}>
@@ -36,8 +37,8 @@ export const RegisterRoleScreen: React.FC<Props> = ({ navigate, googleDraft, onG
         </TouchableOpacity>
         <AuthBrand />
         <View style={styles.heading}>
-          <Text style={authStyles.title}>Mulai dari peranmu</Text>
-          <Text style={authStyles.subtitle}>Pilih jenis akun yang sesuai. Data dan dokumen yang diminta akan menyesuaikan peran ini.</Text>
+          <Text style={authStyles.title}>Pilih jenis akun</Text>
+          <Text style={authStyles.subtitle}>Pilih satu peran untuk melanjutkan. Data dan dokumen berikutnya akan menyesuaikan pilihanmu.</Text>
         </View>
 
         {googleDraft ? (
@@ -51,7 +52,7 @@ export const RegisterRoleScreen: React.FC<Props> = ({ navigate, googleDraft, onG
           </View>
         ) : onGoogleConnect && hasGoogleClientId ? <GoogleConnectButton onConnect={onGoogleConnect} /> : null}
 
-        <View style={styles.notice}><ShieldCheck size={18} color={authColors.primary} /><Text style={styles.noticeText}>Satu akun hanya menggunakan satu peran agar akses dashboard dan verifikasi berkas tetap aman.</Text></View>
+        <View style={styles.notice}><ShieldCheck size={17} color={authColors.primary} /><Text style={styles.noticeText}>Satu akun digunakan untuk satu peran.</Text></View>
         <View style={styles.list}>
           {options.map(({ role, description, icon: Icon, color }) => (
             <TouchableOpacity key={role} onPress={() => onSelect(role)} activeOpacity={0.8} style={styles.option}>
@@ -63,14 +64,19 @@ export const RegisterRoleScreen: React.FC<Props> = ({ navigate, googleDraft, onG
         </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 
-const GoogleConnectButton: React.FC<{ onConnect: (accessToken?: string) => Promise<void> }> = ({ onConnect }) => {
+const GoogleConnectButton: React.FC<{ onConnect: (credential: GoogleCredential) => Promise<void> }> = ({ onConnect }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [request, , promptAsync] = Google.useAuthRequest({ ...googleClientIds, redirectUri: makeRedirectUri({ scheme: "geoverse" }) });
+  const [request, , promptAsync] = Google.useAuthRequest({
+    ...googleClientIds,
+    scopes: ["openid", "profile", "email"],
+    selectAccount: true,
+    redirectUri: makeRedirectUri({ scheme: "geoverse" }),
+  });
 
   const connect = async () => {
     setError("");
@@ -79,8 +85,12 @@ const GoogleConnectButton: React.FC<{ onConnect: (accessToken?: string) => Promi
       if (!request) throw new Error(googleConfigMessage);
       const result = await promptAsync();
       if (result.type === "success") {
-        const token = result.authentication?.accessToken || result.params?.id_token || result.params?.access_token;
-        if (token) await onConnect(token);
+        const credential: GoogleCredential = {
+          accessToken: result.authentication?.accessToken || result.params?.access_token,
+          idToken: result.authentication?.idToken || result.params?.id_token,
+        };
+        if (credential.accessToken || credential.idToken) await onConnect(credential);
+        else throw new Error("Google tidak mengembalikan token autentikasi.");
       } else if (result.type === "error") {
         setError(result.params?.error === "disabled_client"
           ? "Google OAuth Client sedang dinonaktifkan. Ganti Client ID aktif di file .env."
@@ -97,20 +107,20 @@ const GoogleConnectButton: React.FC<{ onConnect: (accessToken?: string) => Promi
 };
 
 const styles = StyleSheet.create({
-  scroll: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 28, paddingBottom: 38, justifyContent: "center" },
-  card: { width: "100%", maxWidth: 560, alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: "#E5E9EE", padding: 36, shadowColor: "#142238", shadowOpacity: 0.07, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
-  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, marginBottom: 28 },
+  scroll: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 24, paddingBottom: 32, justifyContent: "center" },
+  card: { width: "100%", maxWidth: 600, alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 20, borderWidth: 1, borderColor: "#E5E9EE", padding: 28, shadowColor: "#142238", shadowOpacity: 0.035, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, marginBottom: 20 },
   backText: { color: authColors.primary, fontSize: 13, fontWeight: "800" },
-  heading: { marginTop: 30 },
-  notice: { flexDirection: "row", alignItems: "flex-start", gap: 9, backgroundColor: authColors.mint, borderRadius: 15, padding: 14, marginTop: 22 },
-  noticeText: { flex: 1, color: authColors.primaryDark, fontSize: 12, lineHeight: 18 },
-  list: { gap: 12, marginTop: 18 },
-  option: { backgroundColor: "#FFFFFF", borderRadius: 18, borderWidth: 1, borderColor: authColors.line, padding: 15, flexDirection: "row", alignItems: "center", shadowColor: "#132238", shadowOpacity: 0.035, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
-  icon: { width: 50, height: 50, borderRadius: 15, alignItems: "center", justifyContent: "center", marginRight: 13 },
+  heading: { marginTop: 26 },
+  notice: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#F6FAF8", borderRadius: 11, padding: 11, marginTop: 20, borderWidth: 1, borderColor: "#E2EFE7" },
+  noticeText: { flex: 1, color: authColors.primaryDark, fontSize: 12 },
+  list: { gap: 10, marginTop: 16 },
+  option: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: authColors.line, padding: 13, flexDirection: "row", alignItems: "center" },
+  icon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 12 },
   optionText: { flex: 1 },
-  optionTitle: { color: authColors.ink, fontSize: 15, fontWeight: "800", letterSpacing: -0.1 },
-  optionDescription: { color: authColors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
-  chevron: { width: 30, height: 30, borderRadius: 15, backgroundColor: authColors.mint, alignItems: "center", justifyContent: "center", marginLeft: 9 },
+  optionTitle: { color: authColors.ink, fontSize: 14, fontWeight: "800", letterSpacing: -0.1 },
+  optionDescription: { color: authColors.muted, fontSize: 12, lineHeight: 16, marginTop: 3 },
+  chevron: { width: 28, height: 28, borderRadius: 14, backgroundColor: authColors.mint, alignItems: "center", justifyContent: "center", marginLeft: 9 },
   googleAccountBadge: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: authColors.mint, borderWidth: 1, borderColor: "#CDE5D7", borderRadius: 15, padding: 12, marginTop: 18 },
   googleAccountCopy: { flex: 1 },
   googleAccountTitle: { color: authColors.primary, fontSize: 12.5, fontWeight: "800" },

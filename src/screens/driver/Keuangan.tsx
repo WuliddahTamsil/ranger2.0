@@ -1,3 +1,4 @@
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -128,10 +129,10 @@ export const Keuangan: React.FC<KeuanganProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Dompet Keuangan</Text>
-        <Text style={styles.subtitle}>Kelola saldo, penarikan pendapatan, dan top up deposit.</Text>
+        <Text style={styles.subtitle}>Saldo berasal dari order yang sudah selesai dan pencairan yang kamu ajukan.</Text>
 
         {/* Balance Card */}
         <View style={styles.balanceCard}>
@@ -366,7 +367,7 @@ export const Keuangan: React.FC<KeuanganProps> = ({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ResponsiveSafeAreaView>
   );
 };
 
