@@ -43,6 +43,8 @@ import {
   weighAndBillLaundryOrder,
   verifyLaundryPayment,
   updateLaundryOrderStatus,
+  acceptLaundryOrder,
+  markLaundryReadyForDelivery,
   subscribeLaundry,
   LaundryOrder,
   getActiveLaundryOrder,
@@ -53,7 +55,7 @@ interface LaundryOrderScreenProps extends Nav {
 }
 
 export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate, authAccount }) => {
-  const [activeFilter, setActiveFilter] = useState<"semua" | "perlu_timbang" | "verifikasi_bayar" | "diproses" | "selesai">("semua");
+  const [activeFilter, setActiveFilter] = useState<"semua" | "menunggu_acc" | "perlu_timbang" | "verifikasi_bayar" | "diproses" | "selesai">("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [orders, setOrders] = useState<LaundryOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,9 +81,18 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
 
   const loadOrders = async () => {
     setLoading(true);
-    const data = await fetchStoreOrders("all");
+    if (!authAccount?.id) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+    const data = await fetchStoreOrders(authAccount.id);
     const active = getActiveLaundryOrder();
-    if (active && !data.some((d) => (d._id || d.id) === (active._id || active.id))) {
+    if (
+      active &&
+      active.ownerId === authAccount.id &&
+      !data.some((d) => (d._id || d.id) === (active._id || active.id))
+    ) {
       data.unshift(active);
     }
     setOrders(data);
@@ -94,7 +105,17 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
       loadOrders();
     });
     return unsub;
-  }, []);
+  }, [authAccount?.id]);
+
+  const handleAcceptOrder = async (ord: LaundryOrder) => {
+    const ordId = ord._id || ord.id || "";
+    await acceptLaundryOrder(ordId);
+    await loadOrders();
+    Alert.alert(
+      "Pesanan Diterima!",
+      "Pesanan telah di-ACC. Notifikasi penjemputan pakaian kotor telah disebarkan ke para driver di sekitar lokasi!"
+    );
+  };
 
   const handleOpenWeighModal = (ord: LaundryOrder) => {
     setSelectedOrderForWeigh(ord);
@@ -160,15 +181,18 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
     if (ord.paymentStatus !== "lunas") {
       Alert.alert(
         "Peringatan Pembayaran",
-        "Pakaian TIDAK DAPAT diantar ke customer sebelum customer membayar dan Anda memverifikasi bukti transfernya!"
+        "Pakaian TIDAK DAPAT diantar ke customer sebelum customer membayar non-tunai dan Anda memverifikasi bukti transfernya!"
       );
       return;
     }
 
     const ordId = ord._id || ord.id || "";
-    await updateLaundryOrderStatus(ordId, "SIAP_DIANTAR");
-    loadOrders();
-    Alert.alert("Driver Pengantaran Dipanggil", "Pakaian selesai dicuci & pembayaran sudah lunas. Driver terdekat telah ditugaskan untuk mengantar pakaian bersih ke customer!");
+    await markLaundryReadyForDelivery(ordId);
+    await loadOrders();
+    Alert.alert(
+      "Driver Pengantaran Dipanggil!",
+      "Pakaian selesai dicuci & pembayaran sudah lunas. Job pengantaran pakaian bersih telah disebarkan ke para driver!"
+    );
   };
 
   const handleCreateOfflineOrder = () => {
@@ -212,14 +236,17 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
       o.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       o.serviceName.toLowerCase().includes(searchQuery.toLowerCase());
 
+    if (activeFilter === "menunggu_acc") {
+      return matchesSearch && o.status === "MENUNGGU_KONFIRMASI_MITRA";
+    }
     if (activeFilter === "perlu_timbang") {
-      return matchesSearch && (!o.actualWeightOrQty || o.status === "MENUNGGU_DRIVER_JEMPUT" || o.status === "TIBA_DI_LAUNDRY");
+      return matchesSearch && (o.status === "TIBA_DI_LAUNDRY" || (!o.actualWeightOrQty && o.status !== "MENUNGGU_KONFIRMASI_MITRA"));
     }
     if (activeFilter === "verifikasi_bayar") {
       return matchesSearch && (o.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN" || o.paymentStatus === "menunggu_verifikasi");
     }
     if (activeFilter === "diproses") {
-      return matchesSearch && (o.status === "SEDANG_DICUCI" || (o.paymentStatus === "lunas" && o.status !== "SELESAI"));
+      return matchesSearch && (o.status === "SEDANG_DICUCI" || (o.paymentStatus === "lunas" && o.status !== "SELESAI" && o.status !== "SIAP_DIANTAR" && o.status !== "DRIVER_MENGANTAR_BALIK"));
     }
     if (activeFilter === "selesai") {
       return matchesSearch && (o.status === "SIAP_DIANTAR" || o.status === "DRIVER_MENGANTAR_BALIK" || o.status === "SELESAI");
@@ -277,11 +304,20 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.filterChip, activeFilter === "menunggu_acc" && styles.filterChipActive]}
+            onPress={() => setActiveFilter("menunggu_acc")}
+          >
+            <Text style={[styles.filterChipText, activeFilter === "menunggu_acc" && styles.filterChipTextActive]}>
+              📥 Masuk ({orders.filter((o) => o.status === "MENUNGGU_KONFIRMASI_MITRA").length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.filterChip, activeFilter === "perlu_timbang" && styles.filterChipActive]}
             onPress={() => setActiveFilter("perlu_timbang")}
           >
             <Text style={[styles.filterChipText, activeFilter === "perlu_timbang" && styles.filterChipTextActive]}>
-              ⚖️ Timbang ({orders.filter((o) => !o.actualWeightOrQty).length})
+              ⚖️ Timbang ({orders.filter((o) => o.status === "TIBA_DI_LAUNDRY" || (!o.actualWeightOrQty && o.status !== "MENUNGGU_KONFIRMASI_MITRA")).length})
             </Text>
           </TouchableOpacity>
 
@@ -290,7 +326,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
             onPress={() => setActiveFilter("verifikasi_bayar")}
           >
             <Text style={[styles.filterChipText, activeFilter === "verifikasi_bayar" && styles.filterChipTextActive]}>
-              🔍 Cek Bukti Bayar ({orders.filter((o) => o.paymentStatus === "menunggu_verifikasi" || o.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN").length})
+              🔍 Cek Bayar ({orders.filter((o) => o.paymentStatus === "menunggu_verifikasi" || o.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN").length})
             </Text>
           </TouchableOpacity>
 
@@ -299,7 +335,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
             onPress={() => setActiveFilter("diproses")}
           >
             <Text style={[styles.filterChipText, activeFilter === "diproses" && styles.filterChipTextActive]}>
-              🧺 Sedang Dicuci ({orders.filter((o) => o.status === "SEDANG_DICUCI").length})
+              🧺 Dicuci ({orders.filter((o) => o.status === "SEDANG_DICUCI").length})
             </Text>
           </TouchableOpacity>
 
@@ -308,7 +344,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
             onPress={() => setActiveFilter("selesai")}
           >
             <Text style={[styles.filterChipText, activeFilter === "selesai" && styles.filterChipTextActive]}>
-              🚚 Antar / Selesai ({orders.filter((o) => o.status === "SIAP_DIANTAR" || o.status === "SELESAI").length})
+              🚚 Antar / Selesai ({orders.filter((o) => o.status === "SIAP_DIANTAR" || o.status === "DRIVER_MENGANTAR_BALIK" || o.status === "SELESAI").length})
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -327,12 +363,18 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
         ) : (
           <View style={styles.orderList}>
             {filteredOrders.map((o) => {
+              const isPendingMitraAcc = o.status === "MENUNGGU_KONFIRMASI_MITRA";
+              const isWaitingPickupDriver = o.status === "MENUNGGU_DRIVER_JEMPUT";
+              const isDriverToCust = o.status === "DRIVER_MENUJU_CUSTOMER";
+              const isDriverToStore = o.status === "DRIVER_MENUJU_LAUNDRY";
+              const isArrivedStore = o.status === "TIBA_DI_LAUNDRY";
               const isWeighed = Boolean(o.actualWeightOrQty);
               const isVerifying = o.paymentStatus === "menunggu_verifikasi" || o.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN";
               const isPaid = o.paymentStatus === "lunas";
               const isRejected = o.paymentStatus === "ditolak";
-              const isWashing = o.status === "SEDANG_DICUCI";
-              const isReadyToDeliver = o.status === "SIAP_DIANTAR" || o.status === "DRIVER_MENGANTAR_BALIK";
+              const isWashing = o.status === "SEDANG_DICUCI" || o.status === "PEMBAYARAN_LUNAS";
+              const isWaitingDeliveryDriver = o.status === "SIAP_DIANTAR";
+              const isDriverDelivering = o.status === "DRIVER_MENGANTAR_BALIK";
               const isCompleted = o.status === "SELESAI";
 
               return (
@@ -348,36 +390,50 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
                     <View
                       style={[
                         styles.statusPill,
-                        !isWeighed && { backgroundColor: "#FEF3C7" },
+                        isPendingMitraAcc && { backgroundColor: "#FEF3C7" },
+                        (isWaitingPickupDriver || isDriverToCust || isDriverToStore) && { backgroundColor: "#DBEAFE" },
+                        (isArrivedStore || (!isWeighed && !isPendingMitraAcc)) && { backgroundColor: "#FEF3C7" },
                         isWeighed && !isPaid && !isVerifying && { backgroundColor: "#FFF7ED" },
                         isVerifying && { backgroundColor: "#FEF3C7" },
-                        isPaid && !isReadyToDeliver && !isCompleted && { backgroundColor: "#DCFCE7" },
-                        isReadyToDeliver && { backgroundColor: "#DBEAFE" },
+                        isPaid && isWashing && { backgroundColor: "#DCFCE7" },
+                        (isWaitingDeliveryDriver || isDriverDelivering) && { backgroundColor: "#DBEAFE" },
                         isCompleted && { backgroundColor: "#F3F4F6" },
                       ]}
                     >
                       <Text
                         style={[
                           styles.statusPillText,
-                          !isWeighed && { color: "#D97706" },
+                          isPendingMitraAcc && { color: "#D97706" },
+                          (isWaitingPickupDriver || isDriverToCust || isDriverToStore) && { color: "#2563EB" },
+                          (isArrivedStore || (!isWeighed && !isPendingMitraAcc)) && { color: "#D97706" },
                           isWeighed && !isPaid && !isVerifying && { color: "#EA580C" },
                           isVerifying && { color: "#B45309" },
-                          isPaid && !isReadyToDeliver && !isCompleted && { color: "#166534" },
-                          isReadyToDeliver && { color: "#2563EB" },
+                          isPaid && isWashing && { color: "#166534" },
+                          (isWaitingDeliveryDriver || isDriverDelivering) && { color: "#2563EB" },
                           isCompleted && { color: "#4B5563" },
                         ]}
                       >
-                        {!isWeighed
-                          ? "Perlu Ditimbang"
+                        {isPendingMitraAcc
+                          ? "📥 Pesanan Masuk (Perlu ACC)"
+                          : isWaitingPickupDriver
+                          ? "🚴 Menunggu Driver Jemput"
+                          : isDriverToCust
+                          ? "🛵 Driver Menuju Customer"
+                          : isDriverToStore
+                          ? "🚚 Driver Mengantar ke Toko"
+                          : isArrivedStore || !isWeighed
+                          ? "⚖️ Pakaian Tiba (Perlu Timbang)"
                           : isVerifying
                           ? "🔍 Cek Bukti Transfer"
                           : !isPaid
-                          ? "Menunggu Bayar"
+                          ? "⏳ Menunggu Bayar"
                           : isWashing
-                          ? "Sedang Dicuci"
-                          : isReadyToDeliver
-                          ? "Siap Diantar"
-                          : "Selesai"}
+                          ? "🧺 Sedang Dicuci"
+                          : isWaitingDeliveryDriver
+                          ? "🛵 Menunggu Driver Antar"
+                          : isDriverDelivering
+                          ? "🚚 Sedang Diantar Driver"
+                          : "✓ Selesai"}
                       </Text>
                     </View>
                   </View>
@@ -427,8 +483,38 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
 
                   {/* Action Buttons based on Workflow Stage */}
                   <View style={styles.cardActionsRow}>
-                    {/* Action 1: Timbang & Buat Tagihan */}
-                    {!isWeighed || o.status === "TIBA_DI_LAUNDRY" || o.status === "MENUNGGU_DRIVER_JEMPUT" ? (
+                    {/* Stage 0: ACC Pesanan Masuk */}
+                    {isPendingMitraAcc && (
+                      <TouchableOpacity
+                        style={styles.actionBtnWeigh}
+                        onPress={() => handleAcceptOrder(o)}
+                        activeOpacity={0.85}
+                      >
+                        <CheckCircle2 size={16} color="#FFFFFF" />
+                        <Text style={styles.actionBtnWeighText}>ACC & Broadcast Driver Jemput</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Stage 1: Menunggu Driver Jemput */}
+                    {isWaitingPickupDriver && (
+                      <View style={styles.driverDeliveringBanner}>
+                        <Bike size={16} color="#2563EB" />
+                        <Text style={styles.driverDeliveringText}>Mencari driver terdekat untuk jemput baju kotor...</Text>
+                      </View>
+                    )}
+
+                    {/* Stage 2: Driver Menuju Customer / Outlet */}
+                    {(isDriverToCust || isDriverToStore) && (
+                      <View style={styles.driverDeliveringBanner}>
+                        <Bike size={16} color="#2563EB" />
+                        <Text style={styles.driverDeliveringText}>
+                          Driver {o.driverPickupName || "Kurir"} sedang {isDriverToCust ? "menuju customer" : "membawa baju ke outlet"}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Stage 3: Timbang & Buat Tagihan (ketika baju tiba / belum timbang) */}
+                    {(isArrivedStore || (!isWeighed && !isPendingMitraAcc && !isWaitingPickupDriver && !isDriverToCust && !isDriverToStore)) && (
                       <TouchableOpacity
                         style={styles.actionBtnWeigh}
                         onPress={() => handleOpenWeighModal(o)}
@@ -437,9 +523,9 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
                         <Scale size={16} color="#FFFFFF" />
                         <Text style={styles.actionBtnWeighText}>Timbang & Kirim Tagihan</Text>
                       </TouchableOpacity>
-                    ) : null}
+                    )}
 
-                    {/* Action 2: Customer sudah upload bukti bayar ➔ Pemilik verifikasi */}
+                    {/* Stage 4: Customer sudah upload bukti bayar ➔ Pemilik verifikasi */}
                     {isVerifying && (
                       <TouchableOpacity
                         style={styles.actionBtnCheckProof}
@@ -451,7 +537,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
                       </TouchableOpacity>
                     )}
 
-                    {/* Action 3: Menunggu Customer bayar (belum upload) */}
+                    {/* Stage 5: Menunggu Customer bayar (belum upload) */}
                     {isWeighed && !isPaid && !isVerifying && (
                       <View style={{ flex: 1, flexDirection: "row", gap: 8 }}>
                         <TouchableOpacity
@@ -470,8 +556,8 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
                       </View>
                     )}
 
-                    {/* Action 4: Pembayaran Lunas & Sedang Dicuci ➔ Selesai Cuci & Panggil Driver Antar */}
-                    {isPaid && (isWashing || o.status === "PEMBAYARAN_LUNAS") && (
+                    {/* Stage 6: Pembayaran Lunas & Sedang Dicuci ➔ Selesai Cuci & Panggil Driver Antar */}
+                    {isPaid && isWashing && (
                       <TouchableOpacity
                         style={styles.actionBtnFinish}
                         onPress={() => handleFinishWashingAndCallDriver(o)}
@@ -482,11 +568,21 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
                       </TouchableOpacity>
                     )}
 
-                    {/* Action 5: Sedang diantar driver */}
-                    {isReadyToDeliver && (
+                    {/* Stage 7: Menunggu Driver Antar / Sedang Diantar */}
+                    {(isWaitingDeliveryDriver || isDriverDelivering) && (
                       <View style={styles.driverDeliveringBanner}>
                         <Bike size={16} color="#2563EB" />
-                        <Text style={styles.driverDeliveringText}>Driver sedang mengantar ke customer</Text>
+                        <Text style={styles.driverDeliveringText}>
+                          {isWaitingDeliveryDriver ? "Mencari driver untuk antar baju bersih..." : `Driver ${o.driverDeliveryName || "Kurir"} sedang mengantar ke customer`}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Stage 8: Selesai */}
+                    {isCompleted && (
+                      <View style={[styles.driverDeliveringBanner, { backgroundColor: "#F3F4F6", borderColor: "#E5E7EB" }]}>
+                        <CheckCircle2 size={16} color="#166534" />
+                        <Text style={[styles.driverDeliveringText, { color: "#166534" }]}>Pesanan Selesai & Diterima Customer</Text>
                       </View>
                     )}
                   </View>

@@ -227,7 +227,7 @@ export default function App() {
       case "pemilik_laundry_user":
         return <LaundryUserScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_riwayat":
-        return <LaundryRiwayatScreen navigate={navigate} />;
+        return <LaundryRiwayatScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_pendapatan":
         return <LaundryPendapatanScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_laundry_profil":

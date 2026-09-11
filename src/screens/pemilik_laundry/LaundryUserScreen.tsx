@@ -56,12 +56,8 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
   const [customers, setCustomers] = useState<LaundryCustomerSummary[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Staff state
-  const [staffList, setStaffList] = useState<StaffItem[]>([
-    { id: "1", name: "Mas Anton (Kurir)", phone: "0815-5544-4333", role: "Staf Penjemputan & Antar" },
-    { id: "2", name: "Mbok Yem (Operator)", phone: "0817-7788-8999", role: "Staf Cuci & Pengering" },
-    { id: "3", name: "Teh Nita", phone: "0819-1122-3344", role: "Staf Setrika Uap & Packing" },
-  ]);
+  // Staff state (Starts empty for fresh accounts)
+  const [staffList, setStaffList] = useState<StaffItem[]>([]);
 
   // Modal Detail Riwayat Pelanggan
   const [selectedCustomer, setSelectedCustomer] = useState<LaundryCustomerSummary | null>(null);
@@ -75,8 +71,12 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
 
   const loadData = async () => {
     setLoading(true);
-    const ownerId = authAccount?.id || "all";
-    const data = await fetchStoreCustomers(ownerId);
+    if (!authAccount?.id) {
+      setCustomers([]);
+      setLoading(false);
+      return;
+    }
+    const data = await fetchStoreCustomers(authAccount.id);
     setCustomers(data);
     setLoading(false);
   };
@@ -87,7 +87,7 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
       loadData();
     });
     return unsub;
-  }, []);
+  }, [authAccount?.id]);
 
   const handleAddSubmit = () => {
     if (!newUserName) return;

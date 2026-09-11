@@ -1,4 +1,6 @@
-import { io, Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
+// @ts-ignore
+import { io } from "socket.io-client/dist/socket.io.js";
 import { API_BASE_URL, getStoredAuthToken } from "./api";
 
 const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, "");

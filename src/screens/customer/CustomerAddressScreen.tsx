@@ -26,11 +26,8 @@ import {
 } from "../../services/customerAddressService";
 import { useResponsiveLayout } from "../../utils/responsive";
 import { CustomerLocationPicker, CustomerLocationValue } from "../../components/CustomerLocationPicker";
+import { NativeMapComponent } from "../../components/NativeMapComponent";
 
-// Keep the native map module out of the Expo Web startup path.
-const nativeMaps = Platform.OS === "web" ? null : (require("react-native-maps") as typeof import("react-native-maps"));
-const NativeMapView = nativeMaps?.default;
-const NativeMarker = nativeMaps?.Marker;
 
 interface CustomerAddressScreenProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -394,27 +391,11 @@ export const CustomerAddressScreen: React.FC<CustomerAddressScreenProps> = ({ na
               <Text style={styles.fullAddress}>{address.fullAddress || "Alamat belum dilengkapi"}</Text>
               {address.latitude !== undefined && address.longitude !== undefined && (
                 <TouchableOpacity style={styles.previewMapWrap} onPress={() => openEditForm(address)} activeOpacity={0.9}>
-                  {Platform.OS === "web" ? (
-                    <iframe
-                      title={`Google Maps ${address.label}`}
-                      src={`https://maps.google.com/maps?q=${address.latitude},${address.longitude}&z=16&output=embed`}
-                      style={styles.previewMapFrame as any}
-                      loading="lazy"
-                    />
-                  ) : !NativeMapView || !NativeMarker ? (
-                    <View style={styles.previewMapFallback}><MapPin size={26} color="#1B7A4E" /><Text style={styles.previewMapFallbackText}>Titik lokasi tersimpan</Text></View>
-                  ) : (
-                    <NativeMapView
-                      style={styles.previewMap}
-                      initialRegion={{ latitude: address.latitude, longitude: address.longitude, latitudeDelta: 0.008, longitudeDelta: 0.008 }}
-                      scrollEnabled={false}
-                      zoomEnabled={false}
-                      rotateEnabled={false}
-                      pitchEnabled={false}
-                    >
-                      <NativeMarker coordinate={{ latitude: address.latitude, longitude: address.longitude }} />
-                    </NativeMapView>
-                  )}
+                  <NativeMapComponent
+                    pin={{ latitude: address.latitude, longitude: address.longitude }}
+                    interactive={false}
+                    style={styles.previewMap}
+                  />
                   <View style={styles.previewMapBadge}><MapPin size={12} color="#1B7A4E" /><Text style={styles.previewMapText}>Lokasi sudah dipilih · Ubah</Text></View>
                 </TouchableOpacity>
               )}

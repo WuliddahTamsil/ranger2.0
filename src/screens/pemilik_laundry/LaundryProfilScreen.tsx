@@ -12,6 +12,7 @@ import {
   StatusBar,
   Modal,
   Alert,
+  Image,
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -34,11 +35,14 @@ import {
   Plus,
   CheckCircle2,
   Trash2,
+  QrCode,
+  Building2,
 } from "lucide-react-native";
 import {
   getSelectedStore,
   saveMyLaundryStore,
   setSelectedStore,
+  fetchMyLaundryStore,
   LaundryStore,
   LaundryServiceItem,
 } from "../../services/laundryService";
@@ -49,7 +53,18 @@ interface LaundryProfilProps extends Nav {
 
 export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, authAccount }) => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-  const [store, setStore] = useState<LaundryStore>(getSelectedStore());
+  const [store, setStore] = useState<LaundryStore>({
+    id: authAccount?.id || "my_store",
+    ownerId: authAccount?.id || "",
+    storeName: authAccount?.roleData?.businessName || authAccount?.name || "Toko Laundry Saya",
+    address: authAccount?.address || "Kamojang, Jawa Barat",
+    phone: authAccount?.phone || "",
+    bankName: "",
+    bankAccountNumber: "",
+    bankAccountHolder: "",
+    qrisImageUrl: "",
+    services: [],
+  });
   const [profilePhoto, setProfilePhoto] = useState(authAccount?.profilePhoto || "");
 
   // Edit Services Modal
@@ -60,23 +75,61 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
   const [newServiceUnit, setNewServiceUnit] = useState<"kg" | "pcs">("kg");
   const [newServiceCategory, setNewServiceCategory] = useState<"biasa" | "ekspres" | "satuan">("biasa");
 
+  // Edit Payment (Bank & QRIS) Modal
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankAccountHolder, setBankAccountHolder] = useState("");
+  const [qrisImageUrl, setQrisImageUrl] = useState("");
+
+  const loadStoreData = async () => {
+    if (!authAccount?.id) return;
+    const currentStore = await fetchMyLaundryStore(authAccount.id);
+    if (currentStore) {
+      setStore(currentStore);
+      setServicesList(currentStore.services || []);
+      setBankName(currentStore.bankName || "BCA");
+      setBankAccountNumber(currentStore.bankAccountNumber || "");
+      setBankAccountHolder(currentStore.bankAccountHolder || authAccount?.name || "");
+      setQrisImageUrl(currentStore.qrisImageUrl || "");
+    }
+  };
+
   useEffect(() => {
-    const currentStore = getSelectedStore();
-    setStore(currentStore);
-    setServicesList(currentStore.services || []);
-  }, []);
+    loadStoreData();
+  }, [authAccount?.id]);
 
   useEffect(() => {
     setProfilePhoto(authAccount?.profilePhoto || "");
   }, [authAccount?.profilePhoto]);
 
-  const displayName = authAccount?.name || "Pak Dedi Kurniawan";
-  const displayPhone = authAccount?.phone || "0812-3456-7001";
-  const businessName = store.storeName || authAccount?.roleData.businessName || "Laundry Express Pak Dedi";
+  const displayName = authAccount?.name || "Pemilik Laundry";
+  const displayPhone = authAccount?.phone || "0812-xxxx-xxxx";
+  const businessName = store.storeName || authAccount?.roleData?.businessName || authAccount?.name || "Toko Laundry Saya";
 
   const handleLogout = () => {
     setIsLogoutModalOpen(false);
     navigate("login");
+  };
+
+  const handleSavePaymentSettings = async () => {
+    if (!bankAccountNumber.trim() || !bankAccountHolder.trim()) {
+      Alert.alert("Input Kurang", "Harap lengkapi nomor rekening dan nama pemilik rekening.");
+      return;
+    }
+    const updatedStore: LaundryStore = {
+      ...store,
+      ownerId: authAccount?.id || store.ownerId,
+      bankName: bankName.trim(),
+      bankAccountNumber: bankAccountNumber.trim(),
+      bankAccountHolder: bankAccountHolder.trim(),
+      qrisImageUrl: qrisImageUrl.trim(),
+    };
+    setSelectedStore(updatedStore);
+    setStore(updatedStore);
+    await saveMyLaundryStore(updatedStore);
+    setIsPaymentModalOpen(false);
+    Alert.alert("Berhasil", "Data Rekening Bank & QRIS toko berhasil disimpan. Customer akan langsung melihat metode pembayaran ini saat checkout!");
   };
 
   const handleAddService = () => {
@@ -160,8 +213,33 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
         </View>
 
         {/* Group TOKO & LAYANAN */}
-        <Text style={styles.sectionTitle}>PENGATURAN TOKO & LAYANAN</Text>
+        <Text style={styles.sectionTitle}>PENGATURAN TOKO & PEMBAYARAN</Text>
         <View style={styles.groupCard}>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              setBankName(store.bankName || "BCA");
+              setBankAccountNumber(store.bankAccountNumber || "");
+              setBankAccountHolder(store.bankAccountHolder || authAccount?.name || "");
+              setQrisImageUrl(store.qrisImageUrl || "");
+              setIsPaymentModalOpen(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconBg, { backgroundColor: "#FEF3C7" }]}>
+              <Wallet size={18} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuText}>Rekening Bank & QRIS Toko</Text>
+              <Text style={[styles.menuSubText, !store.bankAccountNumber && { color: "#D97706", fontWeight: "600" }]}>
+                {store.bankAccountNumber
+                  ? `${store.bankName || "Bank"} • ${store.bankAccountNumber} (${store.bankAccountHolder || displayName})`
+                  : "Belum diatur (Tekan untuk mengatur rekening & QRIS)"}
+              </Text>
+            </View>
+            <ChevronRight size={18} color="#9CA3AF" />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.menuRow}
             onPress={() => {
@@ -192,8 +270,8 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.menuRow, { borderBottomWidth: 0 }]} activeOpacity={0.7}>
-            <View style={[styles.iconBg, { backgroundColor: "#FEF3C7" }]}>
-              <Pencil size={18} color="#D97706" />
+            <View style={[styles.iconBg, { backgroundColor: "#F3E8FF" }]}>
+              <Pencil size={18} color="#7C3AED" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.menuText}>Edit Nama & Banner Outlet</Text>
@@ -358,6 +436,93 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
         </View>
       </Modal>
 
+      {/* Modal: Rekening Bank & QRIS Toko */}
+      <Modal visible={isPaymentModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Rekening Bank & QRIS Toko</Text>
+              <TouchableOpacity onPress={() => setIsPaymentModalOpen(false)}>
+                <X size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+              <Text style={styles.paymentModalNotice}>
+                Customer wajib membayar non-tunai (Transfer Bank / Scan QRIS Toko Anda) sebelum cucian bersih dapat diantar oleh kurir.
+              </Text>
+
+              {/* Pilihan Bank */}
+              <Text style={styles.formFieldLabel}>PILIH NAMA BANK</Text>
+              <View style={styles.bankPillsRow}>
+                {["BCA", "BRI", "Mandiri", "BNI", "BSI"].map((b) => (
+                  <TouchableOpacity
+                    key={b}
+                    style={[styles.bankPill, bankName === b && styles.bankPillActive]}
+                    onPress={() => setBankName(b)}
+                  >
+                    <Text style={[styles.bankPillText, bankName === b && styles.bankPillTextActive]}>{b}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.formFieldLabel}>NOMOR REKENING</Text>
+              <TextInput
+                style={styles.inputField}
+                placeholder="Contoh: 8035129988"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="numeric"
+                value={bankAccountNumber}
+                onChangeText={setBankAccountNumber}
+              />
+
+              <Text style={styles.formFieldLabel}>ATAS NAMA (PEMILIK REKENING)</Text>
+              <TextInput
+                style={styles.inputField}
+                placeholder="Contoh: Ais Laundry Management"
+                placeholderTextColor="#9CA3AF"
+                value={bankAccountHolder}
+                onChangeText={setBankAccountHolder}
+              />
+
+              {/* QRIS Toko Preview */}
+              <Text style={styles.formFieldLabel}>URL / PRESET QRIS TOKO</Text>
+              <TextInput
+                style={styles.inputField}
+                placeholder="URL Gambar QRIS Toko"
+                placeholderTextColor="#9CA3AF"
+                value={qrisImageUrl}
+                onChangeText={setQrisImageUrl}
+              />
+
+              <View style={styles.qrisPreviewBox}>
+                <Text style={styles.qrisPreviewTitle}>Preview QRIS Pembayaran Customer:</Text>
+                {qrisImageUrl ? (
+                  <Image
+                    source={{ uri: qrisImageUrl }}
+                    style={styles.qrisImageStyle}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <View style={styles.qrisPlaceholder}>
+                    <QrCode size={48} color="#9CA3AF" />
+                    <Text style={styles.qrisPlaceholderText}>QRIS Toko Belum Diatur</Text>
+                  </View>
+                )}
+                <Text style={styles.qrisMerchantName}>{store.storeName || "Ais Laundry"}</Text>
+                <Text style={styles.qrisNmidText}>NMID: ID1023249012 • Merchant G-Pay / All e-Wallet</Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity style={styles.btnSaveAll} onPress={handleSavePaymentSettings} activeOpacity={0.85}>
+              <CheckCircle2 size={18} color="#FFFFFF" />
+              <Text style={styles.btnSaveAllText}>Simpan Pengaturan Pembayaran</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Logout Modal */}
       <Modal visible={isLogoutModalOpen} transparent animationType="fade">
         <View style={styles.modalOverlayCenter}>
@@ -507,6 +672,22 @@ const styles = StyleSheet.create({
   btnTrash: { padding: 6 },
   btnSaveAll: { backgroundColor: "#0D7A53", height: 48, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 16 },
   btnSaveAllText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+
+  // Payment Modal Specific Styles
+  paymentModalNotice: { fontSize: 12, color: "#065F46", backgroundColor: "#D1FAE5", padding: 12, borderRadius: 10, lineHeight: 17, marginBottom: 12, fontWeight: "600" },
+  formFieldLabel: { fontSize: 11, fontWeight: "800", color: "#4B5563", marginTop: 12, marginBottom: 6, letterSpacing: 0.5 },
+  bankPillsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 4 },
+  bankPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F9FAFB" },
+  bankPillActive: { backgroundColor: "#0D7A53", borderColor: "#0D7A53" },
+  bankPillText: { fontSize: 12, fontWeight: "800", color: "#4B5563" },
+  bankPillTextActive: { color: "#FFFFFF" },
+  qrisPreviewBox: { marginTop: 14, backgroundColor: "#F9FAFB", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center" },
+  qrisPreviewTitle: { fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 10, alignSelf: "flex-start" },
+  qrisImageStyle: { width: 170, height: 170, backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB" },
+  qrisPlaceholder: { width: 170, height: 170, backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", justifyContent: "center", alignItems: "center" },
+  qrisPlaceholderText: { fontSize: 11, color: "#9CA3AF", marginTop: 6, fontWeight: "600" },
+  qrisMerchantName: { fontSize: 13, fontWeight: "800", color: "#111827", marginTop: 8 },
+  qrisNmidText: { fontSize: 10, color: "#6B7280", marginTop: 2 },
 
   // Center Confirm Modal
   modalOverlayCenter: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 24 },

@@ -28,10 +28,15 @@ export interface LaundryStore {
   distanceText?: string;
   imageUrl?: string;
   badges?: string[];
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolder?: string;
+  qrisImageUrl?: string;
   services: LaundryServiceItem[];
 }
 
 export type LaundryOrderStatus =
+  | "MENUNGGU_KONFIRMASI_MITRA"
   | "MENUNGGU_DRIVER_JEMPUT"
   | "DRIVER_MENUJU_CUSTOMER"
   | "DRIVER_MENUJU_LAUNDRY"
@@ -64,12 +69,19 @@ export interface LaundryOrder {
   serviceName: string;
   pricePerUnit: number;
   unitType: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolder?: string;
+  qrisImageUrl?: string;
   driverPickupId?: string | null;
   driverPickupName?: string;
   driverPickupPhone?: string;
   driverDeliveryId?: string | null;
   driverDeliveryName?: string;
   driverDeliveryPhone?: string;
+  driverLiveCoords?: string;
+  driverLiveLat?: number;
+  driverLiveLng?: number;
   actualWeightOrQty?: number | null;
   laundryCost?: number;
   deliveryFeePickup?: number;
@@ -251,12 +263,36 @@ export const fetchMyLaundryStore = async (ownerId: string): Promise<LaundryStore
     const url = getApiUrl(`/laundry/store/my-store?ownerId=${ownerId}`);
     const res = await fetch(url);
     const json = await res.json();
-    if (json.success) return json.data;
-    return FALLBACK_LAUNDRY_STORES[0];
+    if (json.success && json.data) return json.data;
   } catch (err) {
     console.warn("⚠️ fetchMyLaundryStore fallback:", err);
-    return FALLBACK_LAUNDRY_STORES[0];
   }
+  return {
+    id: ownerId || "my_store",
+    ownerId: ownerId || "",
+    storeName: "Toko Laundry Saya",
+    description: "Layanan cuci higienis, bersih & wangi rapi.",
+    address: "Lokasi Outlet Belum Diatur",
+    phone: "",
+    openingHours: "Buka • Tutup 21.00",
+    isOpen: true,
+    rating: 5.0,
+    totalReviews: 0,
+    distanceText: "0.1 km",
+    imageUrl: "https://images.unsplash.com/photo-1545173168-9f1947eebb7f?auto=format&fit=crop&w=600&q=80",
+    badges: ["Antar Jemput", "Garansi Bersih"],
+    bankName: "",
+    bankAccountNumber: "",
+    bankAccountHolder: "",
+    qrisImageUrl: "",
+    services: [
+      { id: "s1", name: "Cuci Komplit (Cuci + Setrika)", desc: "Cuci, kering, setrika uap, pewangi & packing rapi", price: 6000, unit: "kg", durationHours: 24, category: "biasa", isActive: true },
+      { id: "s2", name: "Express 3 Jam (Siap Pakai)", desc: "Prioritas kilat selesai dalam 3 jam", price: 10000, unit: "kg", durationHours: 3, category: "ekspres", isActive: true },
+      { id: "s3", name: "Cuci Kering Lipat", desc: "Cuci higienis & lipat rapi tanpa setrika", price: 4500, unit: "kg", durationHours: 24, category: "biasa", isActive: true },
+      { id: "s4", name: "Setrika Uap Saja", desc: "Setrika uap licin dan wangi tahan lama", price: 3500, unit: "kg", durationHours: 12, category: "biasa", isActive: true },
+      { id: "s5", name: "Cuci Bedcover Besar", desc: "Pembersihan menyeluruh bedcover/selimut besar", price: 25000, unit: "pcs", durationHours: 48, category: "satuan", isActive: true },
+    ],
+  };
 };
 
 export const saveMyLaundryStore = async (storeData: Partial<LaundryStore>): Promise<LaundryStore | null> => {
@@ -317,7 +353,7 @@ export const createLaundryOrder = async (orderPayload: Partial<LaundryOrder>): P
     serviceFee: 1000,
     totalAmount: 0,
     paymentStatus: "menunggu_timbangan",
-    status: "MENUNGGU_DRIVER_JEMPUT",
+    status: "MENUNGGU_KONFIRMASI_MITRA",
     notes: orderPayload.notes || "",
     createdAt: new Date().toISOString(),
   };
@@ -325,7 +361,245 @@ export const createLaundryOrder = async (orderPayload: Partial<LaundryOrder>): P
   return localOrder;
 };
 
+export const acceptLaundryOrder = async (orderId: string): Promise<LaundryOrder | null> => {
+  try {
+    const url = getApiUrl(`/laundry/orders/${orderId}/accept`);
+    const res = await fetch(url, { method: "PUT" });
+    const json = await res.json();
+    if (json.success && json.data) {
+      setActiveLaundryOrder(json.data);
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ acceptLaundryOrder offline fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    const updated: LaundryOrder = {
+      ...activeCustomerOrder,
+      status: "MENUNGGU_DRIVER_JEMPUT",
+    };
+    setActiveLaundryOrder(updated);
+    return updated;
+  }
+  return null;
+};
+
+export const takeLaundryPickupJob = async (
+  orderId: string,
+  driverInfo: { driverId: string; driverName: string; driverPhone?: string }
+): Promise<LaundryOrder | null> => {
+  try {
+    const url = getApiUrl(`/laundry/orders/${orderId}/take-pickup`);
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(driverInfo),
+    });
+    const json = await res.json();
+    if (json.success && json.data) {
+      setActiveLaundryOrder(json.data);
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ takeLaundryPickupJob offline fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    const updated: LaundryOrder = {
+      ...activeCustomerOrder,
+      status: "DRIVER_MENUJU_CUSTOMER",
+      driverPickupId: driverInfo.driverId,
+      driverPickupName: driverInfo.driverName,
+      driverPickupPhone: driverInfo.driverPhone || "081234567890",
+    };
+    setActiveLaundryOrder(updated);
+    return updated;
+  }
+  return null;
+};
+
+export const pickedUpLaundryByDriver = async (orderId: string): Promise<LaundryOrder | null> => {
+  try {
+    const url = getApiUrl(`/laundry/orders/${orderId}/picked-up`);
+    const res = await fetch(url, { method: "PUT" });
+    const json = await res.json();
+    if (json.success && json.data) {
+      setActiveLaundryOrder(json.data);
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ pickedUpLaundryByDriver offline fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    const updated: LaundryOrder = {
+      ...activeCustomerOrder,
+      status: "DRIVER_MENUJU_LAUNDRY",
+    };
+    setActiveLaundryOrder(updated);
+    return updated;
+  }
+  return null;
+};
+
+export const arrivedLaundryAtStore = async (orderId: string): Promise<LaundryOrder | null> => {
+  try {
+    const url = getApiUrl(`/laundry/orders/${orderId}/arrived-at-laundry`);
+    const res = await fetch(url, { method: "PUT" });
+    const json = await res.json();
+    if (json.success && json.data) {
+      setActiveLaundryOrder(json.data);
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ arrivedLaundryAtStore offline fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    const updated: LaundryOrder = {
+      ...activeCustomerOrder,
+      status: "TIBA_DI_LAUNDRY",
+    };
+    setActiveLaundryOrder(updated);
+    return updated;
+  }
+  return null;
+};
+
+export const markLaundryReadyForDelivery = async (orderId: string): Promise<LaundryOrder | null> => {
+  try {
+    const url = getApiUrl(`/laundry/orders/${orderId}/ready-for-delivery`);
+    const res = await fetch(url, { method: "PUT" });
+    const json = await res.json();
+    if (json.success && json.data) {
+      setActiveLaundryOrder(json.data);
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ markLaundryReadyForDelivery offline fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    const updated: LaundryOrder = {
+      ...activeCustomerOrder,
+      status: "SIAP_DIANTAR",
+    };
+    setActiveLaundryOrder(updated);
+    return updated;
+  }
+  return null;
+};
+
+export const takeLaundryDeliveryJob = async (
+  orderId: string,
+  driverInfo: { driverId: string; driverName: string; driverPhone?: string }
+): Promise<LaundryOrder | null> => {
+  try {
+    const url = getApiUrl(`/laundry/orders/${orderId}/take-delivery`);
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(driverInfo),
+    });
+    const json = await res.json();
+    if (json.success && json.data) {
+      setActiveLaundryOrder(json.data);
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ takeLaundryDeliveryJob offline fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    const updated: LaundryOrder = {
+      ...activeCustomerOrder,
+      status: "DRIVER_MENGANTAR_BALIK",
+      driverDeliveryId: driverInfo.driverId,
+      driverDeliveryName: driverInfo.driverName,
+      driverDeliveryPhone: driverInfo.driverPhone || "081234567890",
+    };
+    setActiveLaundryOrder(updated);
+    return updated;
+  }
+  return null;
+};
+
+export const completeLaundryDelivery = async (orderId: string): Promise<LaundryOrder | null> => {
+  try {
+    const url = getApiUrl(`/laundry/orders/${orderId}/complete-delivery`);
+    const res = await fetch(url, { method: "PUT" });
+    const json = await res.json();
+    if (json.success && json.data) {
+      setActiveLaundryOrder(json.data);
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ completeLaundryDelivery offline fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    const updated: LaundryOrder = {
+      ...activeCustomerOrder,
+      status: "SELESAI",
+    };
+    setActiveLaundryOrder(updated);
+    return updated;
+  }
+  return null;
+};
+
+export const updateLaundryDriverLocation = async (
+  orderId: string,
+  coords: string,
+  lat?: number,
+  lng?: number
+): Promise<LaundryOrder | null> => {
+  try {
+    const url = getApiUrl(`/laundry/orders/${orderId}/driver-location`);
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coords, lat, lng }),
+    });
+    const json = await res.json();
+    if (json.success && json.data) {
+      setActiveLaundryOrder(json.data);
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ updateLaundryDriverLocation fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    const updated: LaundryOrder = {
+      ...activeCustomerOrder,
+      driverLiveCoords: coords,
+      driverLiveLat: lat,
+      driverLiveLng: lng,
+    };
+    setActiveLaundryOrder(updated);
+    return updated;
+  }
+  return null;
+};
+
+export const fetchDriverLaundryJobs = async (): Promise<LaundryOrder[]> => {
+  try {
+    const url = getApiUrl(`/laundry/driver/jobs`);
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ fetchDriverLaundryJobs fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    if (
+      activeCustomerOrder.status === "MENUNGGU_DRIVER_JEMPUT" ||
+      activeCustomerOrder.status === "SIAP_DIANTAR"
+    ) {
+      return [activeCustomerOrder];
+    }
+  }
+  return [];
+};
+
 export const fetchStoreOrders = async (ownerId: string = "all"): Promise<LaundryOrder[]> => {
+  if (!ownerId || ownerId === "none") return [];
   try {
     const url = getApiUrl(`/laundry/orders/store/${ownerId}`);
     const res = await fetch(url);
@@ -336,8 +610,13 @@ export const fetchStoreOrders = async (ownerId: string = "all"): Promise<Laundry
   } catch (err) {
     console.warn("⚠️ fetchStoreOrders fallback:", err);
   }
-  // Return active local order if present
-  return activeCustomerOrder ? [activeCustomerOrder] : [];
+  // Return active local order ONLY if it matches the current owner
+  if (activeCustomerOrder) {
+    if (ownerId === "all" || activeCustomerOrder.ownerId === ownerId) {
+      return [activeCustomerOrder];
+    }
+  }
+  return [];
 };
 
 export interface LaundryCustomerSummary {
@@ -362,6 +641,7 @@ export interface LaundryCustomerSummary {
 }
 
 export const fetchStoreCustomers = async (ownerId: string = "all"): Promise<LaundryCustomerSummary[]> => {
+  if (!ownerId || ownerId === "none") return [];
   try {
     const url = getApiUrl(`/laundry/customers/store/${ownerId}`);
     const res = await fetch(url);
@@ -373,8 +653,8 @@ export const fetchStoreCustomers = async (ownerId: string = "all"): Promise<Laun
     console.warn("⚠️ fetchStoreCustomers fallback:", err);
   }
 
-  // Fallback to active order customer if available
-  if (activeCustomerOrder) {
+  // Fallback to active order customer ONLY if it matches this owner
+  if (activeCustomerOrder && (ownerId === "all" || activeCustomerOrder.ownerId === ownerId)) {
     return [
       {
         id: activeCustomerOrder.customerId,

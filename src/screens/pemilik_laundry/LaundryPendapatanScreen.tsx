@@ -1,13 +1,15 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
+  Modal,
+  TextInput,
+  Alert,
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -19,7 +21,19 @@ import {
   Users,
   User,
   ArrowUpRight,
+  ArrowDownLeft,
+  Calendar,
+  Building2,
+  CheckCircle2,
+  X,
+  CreditCard,
 } from "lucide-react-native";
+import {
+  fetchStoreOrders,
+  subscribeLaundry,
+  LaundryOrder,
+  getActiveLaundryOrder,
+} from "../../services/laundryService";
 
 interface LaundryPendapatanProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -28,16 +42,121 @@ interface LaundryPendapatanProps extends Nav {
 export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navigate, authAccount }) => {
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "order" | "user" | "keuangan" | "profil">("keuangan");
   const [chartFilter, setChartFilter] = useState<"minggu" | "bulan">("minggu");
+  const [orders, setOrders] = useState<LaundryOrder[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const barData = [
-    { label: "1", val: 18, heightPct: "30%" },
-    { label: "5", val: 32, heightPct: "55%" },
-    { label: "10", val: 40, heightPct: "72%" },
-    { label: "15", val: 24, heightPct: "42%" },
-    { label: "20", val: 35, heightPct: "60%" },
-    { label: "25", val: 48, heightPct: "92%" },
-    { label: "30", val: 34, heightPct: "58%" },
-  ];
+  // Modal Tarik Dana
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawBank, setWithdrawBank] = useState("BCA");
+  const [withdrawAccountNo, setWithdrawAccountNo] = useState("");
+
+  const loadData = async () => {
+    setLoading(true);
+    if (!authAccount?.id) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+    const data = await fetchStoreOrders(authAccount.id);
+    const active = getActiveLaundryOrder();
+    if (
+      active &&
+      active.ownerId === authAccount.id &&
+      !data.some((d) => (d._id || d.id) === (active._id || active.id))
+    ) {
+      data.unshift(active);
+    }
+    setOrders(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+    const unsub = subscribeLaundry(() => {
+      loadData();
+    });
+    return unsub;
+  }, [authAccount?.id]);
+
+  // Real financial calculations
+  const paidOrders = useMemo(() => {
+    return orders.filter((o) => o.paymentStatus === "lunas" || o.status === "SELESAI");
+  }, [orders]);
+
+  const totalPendapatan = useMemo(() => {
+    return paidOrders.reduce((sum, o) => sum + (o.laundryCost || o.totalAmount || 0), 0);
+  }, [paidOrders]);
+
+  const totalPengeluaran = useMemo(() => {
+    // Estimasi biaya operasional detergen & listrik 20%
+    return Math.round(totalPendapatan * 0.2);
+  }, [totalPendapatan]);
+
+  const labaBersih = totalPendapatan - totalPengeluaran;
+
+  const totalKg = useMemo(() => {
+    return orders
+      .filter((o) => o.unitType === "kg" && o.actualWeightOrQty)
+      .reduce((sum, o) => sum + (o.actualWeightOrQty || 0), 0);
+  }, [orders]);
+
+  const totalPcs = useMemo(() => {
+    return orders
+      .filter((o) => (o.unitType === "pcs" || o.unitType === "pasang") && o.actualWeightOrQty)
+      .reduce((sum, o) => sum + (o.actualWeightOrQty || 0), 0);
+  }, [orders]);
+
+  // Chart data calculation
+  const barData = useMemo(() => {
+    if (chartFilter === "minggu") {
+      const days = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+      const counts = [0, 0, 0, 0, 0, 0, 0];
+      paidOrders.forEach((o) => {
+        const d = new Date(o.createdAt || Date.now());
+        const dayIdx = (d.getDay() + 6) % 7;
+        counts[dayIdx] += o.laundryCost || 1;
+      });
+      const maxVal = Math.max(...counts, 1);
+      return days.map((label, idx) => {
+        const val = counts[idx];
+        const heightPct = totalPendapatan > 0 ? `${Math.max(12, Math.round((val / maxVal) * 90))}%` : "12%";
+        return { label, val, heightPct };
+      });
+    } else {
+      const intervals = ["1-5", "6-10", "11-15", "16-20", "21-25", "26-31"];
+      const counts = [0, 0, 0, 0, 0, 0];
+      paidOrders.forEach((o) => {
+        const d = new Date(o.createdAt || Date.now()).getDate();
+        const slot = Math.min(5, Math.floor((d - 1) / 5));
+        counts[slot] += o.laundryCost || 1;
+      });
+      const maxVal = Math.max(...counts, 1);
+      return intervals.map((label, idx) => {
+        const val = counts[idx];
+        const heightPct = totalPendapatan > 0 ? `${Math.max(12, Math.round((val / maxVal) * 90))}%` : "12%";
+        return { label, val, heightPct };
+      });
+    }
+  }, [chartFilter, paidOrders, totalPendapatan]);
+
+  const handleWithdraw = () => {
+    const amt = parseInt(withdrawAmount.replace(/[^0-9]/g, ""), 10);
+    if (isNaN(amt) || amt < 50000) {
+      Alert.alert("Gagal Tarik Dana", "Minimal penarikan saldo adalah Rp 50.000.");
+      return;
+    }
+    if (amt > labaBersih) {
+      Alert.alert("Saldo Tidak Cukup", "Jumlah penarikan melebihi saldo laba bersih yang tersedia.");
+      return;
+    }
+    Alert.alert(
+      "Permintaan Tarik Dana Terkirim",
+      `Permintaan transfer Rp ${amt.toLocaleString("id-ID")} ke rekening ${withdrawBank} (${withdrawAccountNo || "Tersimpan"}) sedang diproses oleh finance.`
+    );
+    setIsWithdrawModalOpen(false);
+    setWithdrawAmount("");
+  };
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -47,7 +166,11 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Laporan Keuangan & Pendapatan</Text>
-          <Text style={styles.headerSub}>Ringkasan pemasukan & pengeluaran usaha Anda</Text>
+          <Text style={styles.headerSub}>
+            {authAccount?.roleData?.businessName
+              ? `Rekapitulasi Keuangan ${authAccount.roleData.businessName}`
+              : "Ringkasan pemasukan & pengeluaran usaha Anda"}
+          </Text>
         </View>
 
         {/* 3 Summary Cards Row (Pendapatan, Pengeluaran, Laba Bersih) */}
@@ -56,15 +179,15 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
           <View style={styles.topStatCard}>
             <Text style={styles.topStatTitle}>Pendapatan</Text>
             <Text style={[styles.topStatVal, { color: "#0D7A53" }]}>
-              Rp{"\n"}18.750.000
+              Rp{"\n"}{totalPendapatan.toLocaleString("id-ID")}
             </Text>
           </View>
 
           {/* Card 2: Pengeluaran */}
           <View style={styles.topStatCard}>
-            <Text style={styles.topStatTitle}>Pengeluaran</Text>
+            <Text style={styles.topStatTitle}>Estimasi Operasional</Text>
             <Text style={[styles.topStatVal, { color: "#DC2626" }]}>
-              Rp{"\n"}4.250.000
+              Rp{"\n"}{totalPengeluaran.toLocaleString("id-ID")}
             </Text>
           </View>
 
@@ -72,7 +195,7 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
           <View style={styles.topStatCard}>
             <Text style={styles.topStatTitle}>Laba Bersih</Text>
             <Text style={[styles.topStatVal, { color: "#0E6641" }]}>
-              Rp{"\n"}14.500.000
+              Rp{"\n"}{labaBersih.toLocaleString("id-ID")}
             </Text>
           </View>
         </View>
@@ -80,7 +203,7 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
         {/* Grafik Pendapatan Card */}
         <View style={styles.chartCard}>
           <View style={styles.chartHeaderRow}>
-            <Text style={styles.chartTitle}>Grafik Pendapatan</Text>
+            <Text style={styles.chartTitle}>Grafik Omset Laundry</Text>
 
             {/* Filter Toggle Pill (Minggu vs Bulan) */}
             <View style={styles.filterPillContainer}>
@@ -111,15 +234,15 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
             {/* Grid Horizontal Lines */}
             <View style={styles.chartGridLines}>
               <View style={styles.gridLineRow}>
-                <Text style={styles.yAxisText}>50</Text>
+                <Text style={styles.yAxisText}>Maks</Text>
                 <View style={styles.gridLine} />
               </View>
               <View style={styles.gridLineRow}>
-                <Text style={styles.yAxisText}>30</Text>
+                <Text style={styles.yAxisText}>50%</Text>
                 <View style={styles.gridLine} />
               </View>
               <View style={styles.gridLineRow}>
-                <Text style={styles.yAxisText}>10</Text>
+                <Text style={styles.yAxisText}>0</Text>
                 <View style={styles.gridLine} />
               </View>
             </View>
@@ -132,7 +255,15 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
                 {barData.map((b) => (
                   <View key={b.label} style={styles.barColumnItem}>
                     <View style={styles.barTrack}>
-                      <View style={[styles.barFill, { height: b.heightPct as any }]} />
+                      <View
+                        style={[
+                          styles.barFill,
+                          {
+                            height: b.heightPct as any,
+                            backgroundColor: totalPendapatan > 0 ? "#0E6641" : "#E5E7EB",
+                          },
+                        ]}
+                      />
                     </View>
                     <Text style={styles.xAxisText}>{b.label}</Text>
                   </View>
@@ -144,15 +275,18 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
 
         {/* Laba Bersih Banner Card */}
         <View style={styles.incomeCard}>
-          <Text style={styles.incomeLabel}>Total Pendapatan Bulan Ini</Text>
-          <Text style={styles.incomeValue}>Rp 3.850.000</Text>
+          <Text style={styles.incomeLabel}>Saldo Siap Ditarik (Laba Bersih)</Text>
+          <Text style={styles.incomeValue}>Rp {labaBersih.toLocaleString("id-ID")}</Text>
 
           <View style={styles.growthRow}>
-            <View style={styles.growthPill}>
-              <TrendingUp size={12} color="#0D7A53" />
-              <Text style={styles.growthPillText}>+15%</Text>
-            </View>
-            <Text style={styles.growthSub}>vs bulan lalu</Text>
+            <TouchableOpacity
+              style={styles.withdrawBtn}
+              onPress={() => setIsWithdrawModalOpen(true)}
+              activeOpacity={0.85}
+            >
+              <Wallet size={16} color="#0E6641" />
+              <Text style={styles.withdrawBtnText}>Tarik Dana ke Rekening</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -160,42 +294,124 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
         <View style={styles.statRow}>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Kiloan (Kg)</Text>
-            <Text style={styles.statVal}>420 kg</Text>
+            <Text style={styles.statVal}>{totalKg} kg</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Satuan (Pcs)</Text>
-            <Text style={styles.statVal}>85 pcs</Text>
+            <Text style={styles.statVal}>{totalPcs} pcs</Text>
           </View>
         </View>
 
         {/* Recent Income Log List */}
-        <Text style={styles.sectionTitle}>Pemasukan Terbaru</Text>
+        <Text style={styles.sectionTitle}>Pemasukan Pesanan Terkini</Text>
         <View style={styles.listCard}>
-          <View style={styles.itemRow}>
-            <View style={[styles.iconCircle, { backgroundColor: "#DCFCE7" }]}>
-              <ArrowUpRight size={18} color="#0D7A53" />
+          {paidOrders.length === 0 ? (
+            <View style={{ padding: 24, alignItems: "center" }}>
+              <Wallet size={36} color="#D1D5DB" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#6B7280", marginTop: 8 }}>
+                Belum ada transaksi pendapatan
+              </Text>
+              <Text style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", marginTop: 2 }}>
+                Saat customer selesai membayar pesanan laundry, transaksi pemasukan akan tercatat otomatis di sini.
+              </Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.itemTitle}>Laundry Kiloan 5 kg</Text>
-              <Text style={styles.itemSub}>Siti Aminah • 14 Juli 2026</Text>
-            </View>
-            <Text style={styles.incomeText}>+ Rp 35.000</Text>
-          </View>
+          ) : (
+            paidOrders.slice(0, 10).map((ord, idx) => {
+              const isLast = idx === Math.min(paidOrders.length, 10) - 1;
+              const dateStr = ord.createdAt
+                ? new Date(ord.createdAt).toLocaleDateString("id-ID", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "Hari ini";
+              const cost = ord.laundryCost || ord.totalAmount || 0;
 
-          <View style={[styles.itemRow, { borderBottomWidth: 0 }]}>
-            <View style={[styles.iconCircle, { backgroundColor: "#DCFCE7" }]}>
-              <ArrowUpRight size={18} color="#0D7A53" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.itemTitle}>Express 3 Jam</Text>
-              <Text style={styles.itemSub}>Ahmad Faisal • 14 Juli 2026</Text>
-            </View>
-            <Text style={styles.incomeText}>+ Rp 40.000</Text>
-          </View>
+              return (
+                <View key={ord._id || ord.id || idx} style={[styles.itemRow, isLast && { borderBottomWidth: 0 }]}>
+                  <View style={[styles.iconCircle, { backgroundColor: "#DCFCE7" }]}>
+                    <ArrowUpRight size={18} color="#0D7A53" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemTitle}>{ord.serviceName || "Layanan Laundry"}</Text>
+                    <Text style={styles.itemSub}>
+                      {ord.customerName || "Customer"} • {ord.orderCode} • {dateStr}
+                    </Text>
+                  </View>
+                  <Text style={styles.incomeText}>+ Rp {cost.toLocaleString("id-ID")}</Text>
+                </View>
+              );
+            })
+          )}
         </View>
 
-        <View style={{ height: 20 }} />
+        <View style={{ height: 90 }} />
       </ScrollView>
+
+      {/* Modal Tarik Dana */}
+      <Modal visible={isWithdrawModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Tarik Saldo Pendapatan</Text>
+              <TouchableOpacity onPress={() => setIsWithdrawModalOpen(false)}>
+                <X size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSub}>
+              Saldo tersedia: <Text style={{ fontWeight: "800", color: "#0E6641" }}>Rp {labaBersih.toLocaleString("id-ID")}</Text>
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Jumlah Penarikan (Rp)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Contoh: 100000"
+                keyboardType="numeric"
+                value={withdrawAmount}
+                onChangeText={setWithdrawAmount}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Bank Tujuan</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="BCA / BRI / Mandiri / BNI"
+                value={withdrawBank}
+                onChangeText={setWithdrawBank}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Nomor Rekening</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Nomor rekening tujuan transfer"
+                keyboardType="numeric"
+                value={withdrawAccountNo}
+                onChangeText={setWithdrawAccountNo}
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setIsWithdrawModalOpen(false)}
+              >
+                <Text style={styles.cancelBtnText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.submitBtn}
+                onPress={handleWithdraw}
+              >
+                <Text style={styles.submitBtnText}>Ajukan Penarikan</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Bottom Nav */}
       <View style={styles.bottomNav}>
@@ -339,8 +555,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   yAxisText: {
-    width: 24,
-    fontSize: 11,
+    width: 30,
+    fontSize: 10,
     color: "#9CA3AF",
     textAlign: "right",
     marginRight: 8,
@@ -356,7 +572,7 @@ const styles = StyleSheet.create({
     height: 156,
   },
   yAxisOffsetSpacer: {
-    width: 32,
+    width: 38,
   },
   barsFlexRow: {
     flex: 1,
@@ -378,7 +594,6 @@ const styles = StyleSheet.create({
   },
   barFill: {
     width: "100%",
-    backgroundColor: "#0E6641",
     borderRadius: 12,
   },
   xAxisText: {
@@ -397,17 +612,20 @@ const styles = StyleSheet.create({
   incomeLabel: { fontSize: 13, color: "rgba(255,255,255,0.8)" },
   incomeValue: { fontSize: 26, fontWeight: "900", color: "#FFFFFF", marginTop: 4, marginBottom: 12 },
   growthRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  growthPill: {
+  withdrawBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    gap: 8,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
   },
-  growthPillText: { fontSize: 11, fontWeight: "800", color: "#0D7A53" },
-  growthSub: { fontSize: 11, color: "rgba(255,255,255,0.7)" },
+  withdrawBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0E6641",
+  },
 
   // Stats Volume
   statRow: { flexDirection: "row", gap: 12, marginBottom: 20 },
@@ -444,8 +662,90 @@ const styles = StyleSheet.create({
   itemSub: { fontSize: 11, color: "#6B7280", marginTop: 2 },
   incomeText: { fontSize: 13, fontWeight: "800", color: "#0D7A53" },
 
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  modalSub: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  inputGroup: {
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 4,
+  },
+  textInput: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: "#111827",
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+  submitBtn: {
+    flex: 2,
+    backgroundColor: "#0E6641",
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: 12,
+  },
+  submitBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+
   // Bottom Navigation
   bottomNav: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: "row",
     height: 64,
     backgroundColor: "#FFFFFF",

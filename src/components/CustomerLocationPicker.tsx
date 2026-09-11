@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
-import type { MapPressEvent, Region } from "react-native-maps";
 import {
   ActivityIndicator,
   Alert,
@@ -15,12 +14,7 @@ import {
   View,
 } from "react-native";
 import { Check, Crosshair, MapPin, Search, X } from "lucide-react-native";
-
-// react-native-maps is a native-only view. Do not initialize it on Expo Web,
-// otherwise the whole app can fail before the first screen is rendered.
-const nativeMaps = Platform.OS === "web" ? null : (require("react-native-maps") as typeof import("react-native-maps"));
-const NativeMapView = nativeMaps?.default;
-const NativeMarker = nativeMaps?.Marker;
+import { NativeMapComponent, Region, MapPressEvent } from "./NativeMapComponent";
 
 export interface CustomerLocationValue {
   latitude: number;
@@ -108,8 +102,10 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
   };
 
   const handleMapPress = (event: MapPressEvent) => {
-    const coordinate = event.nativeEvent.coordinate;
-    movePin(coordinate.latitude, coordinate.longitude);
+    const coordinate = event?.nativeEvent?.coordinate;
+    if (coordinate) {
+      movePin(coordinate.latitude, coordinate.longitude);
+    }
   };
 
   const handleSearch = async () => {
@@ -206,42 +202,14 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
           </View>
 
           <View style={styles.mapWrap}>
-            {Platform.OS === "web" ? (
-              <iframe
-                key={googleMapsUrl}
-                title="Google Maps Lokasi Rumah"
-                src={googleMapsUrl}
-                style={styles.webMapFrame as any}
-                loading="lazy"
-              />
-            ) : !NativeMapView || !NativeMarker ? (
-              <View style={styles.webMapFallback}>
-                <MapPin size={38} color="#1B7A4E" />
-                <Text style={styles.webMapTitle}>Google Maps belum tersedia</Text>
-                <Text style={styles.webMapText}>Silakan gunakan build Android/iOS dengan konfigurasi Maps.</Text>
-              </View>
-            ) : (
-              <NativeMapView
-                style={StyleSheet.absoluteFill}
-                region={region}
-                onRegionChangeComplete={setRegion}
-                onPress={handleMapPress}
-                showsUserLocation
-                showsMyLocationButton={false}
-                loadingEnabled
-              >
-                <NativeMarker
-                  coordinate={pin}
-                  draggable
-                  onDragEnd={(event: any) => {
-                    const coordinate = event.nativeEvent.coordinate;
-                    movePin(coordinate.latitude, coordinate.longitude);
-                  }}
-                  title="Lokasi rumah"
-                  description="Geser pin ke titik rumah yang paling tepat"
-                />
-              </NativeMapView>
-            )}
+            <NativeMapComponent
+              googleMapsUrl={googleMapsUrl}
+              region={region}
+              onRegionChangeComplete={setRegion}
+              onPress={handleMapPress}
+              pin={pin}
+              onPinDragEnd={(coord: { latitude: number; longitude: number }) => movePin(coord.latitude, coord.longitude)}
+            />
             <View style={styles.mapBadge}><MapPin size={13} color="#1B7A4E" /><Text style={styles.mapBadgeText}>Pin rumah</Text></View>
             <TouchableOpacity style={styles.gpsButton} onPress={() => void useCurrentLocation()} disabled={locating}>
               {locating ? <ActivityIndicator size="small" color="#1B7A4E" /> : <Crosshair size={18} color="#1B7A4E" />}
@@ -281,10 +249,6 @@ const styles = StyleSheet.create({
   searchButton: { minWidth: 48, minHeight: 30, borderRadius: 9, alignItems: "center", justifyContent: "center", backgroundColor: "#1B7A4E", paddingHorizontal: 9 },
   searchButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
   mapWrap: { flex: 1, minHeight: 260, position: "relative", backgroundColor: "#E2E8F0" },
-  webMapFrame: { width: "100%", height: "100%", borderWidth: 0 },
-  webMapFallback: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, backgroundColor: "#EAF7EF" },
-  webMapTitle: { color: "#166534", fontSize: 14, fontWeight: "900", marginTop: 10, textAlign: "center" },
-  webMapText: { color: "#4D7C5B", fontSize: 11, textAlign: "center", marginTop: 5 },
   mapBadge: { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.96)" },
   mapBadgeText: { color: "#166534", fontSize: 10, fontWeight: "800" },
   gpsButton: { position: "absolute", right: 12, bottom: 12, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12, backgroundColor: "#FFFFFF", shadowColor: "#0F172A", shadowOpacity: 0.16, shadowRadius: 7, elevation: 4 },

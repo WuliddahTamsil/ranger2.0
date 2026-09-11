@@ -73,6 +73,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const getStepNumber = (status?: LaundryOrderStatus): number => {
     if (!status) return 1;
     switch (status) {
+      case "MENUNGGU_KONFIRMASI_MITRA":
       case "MENUNGGU_DRIVER_JEMPUT":
       case "DRIVER_MENUJU_CUSTOMER":
         return 1;
@@ -80,7 +81,6 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
       case "TIBA_DI_LAUNDRY":
         return 2;
       case "MENUNGGU_PEMBAYARAN":
-        return 3;
       case "MENUNGGU_VERIFIKASI_PEMBAYARAN":
         return 3;
       case "PEMBAYARAN_LUNAS":
@@ -101,43 +101,61 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const steps = [
     {
       stepNum: 1,
-      title: "Penjemputan oleh Driver",
-      subtitle: "Driver sedang menuju ke lokasi Anda untuk mengambil pakaian",
-      activeText: "Driver Menuju Lokasi",
-      activeSub: "Siapkan pakaian kotor yang akan dicuci...",
+      title: "Konfirmasi & Penjemputan Driver",
+      subtitle: "Mitra menyetujui pesanan dan driver terdekat menuju lokasi Anda",
+      activeText:
+        order?.status === "MENUNGGU_KONFIRMASI_MITRA"
+          ? "Menunggu Konfirmasi Mitra"
+          : order?.status === "MENUNGGU_DRIVER_JEMPUT"
+          ? "Mencari Driver Penjemput"
+          : "Driver Menuju Lokasi Anda",
+      activeSub:
+        order?.status === "MENUNGGU_KONFIRMASI_MITRA"
+          ? "Mitra sedang memeriksa ketersediaan slot..."
+          : order?.status === "MENUNGGU_DRIVER_JEMPUT"
+          ? "Menghubungkan ke mitra kurir terdekat..."
+          : `Driver ${order?.driverPickupName || "Kurir"} sedang menuju ke rumah Anda...`,
       icon: Bike,
     },
     {
       stepNum: 2,
       title: "Pakaian Tiba di Laundry",
       subtitle: "Pakaian telah sampai di toko dan sedang dalam antrean timbang",
-      activeText: "Pakaian Diterima Mitra",
-      activeSub: "Pemilik laundry sedang menimbang pakaian...",
+      activeText: order?.status === "DRIVER_MENUJU_LAUNDRY" ? "Driver Menuju Toko" : "Pakaian Tiba di Outlet",
+      activeSub: order?.status === "DRIVER_MENUJU_LAUNDRY" ? "Driver membawa pakaian kotor Anda ke outlet laundry..." : "Pemilik laundry sedang menyiapkan proses penimbangan...",
       icon: Scale,
     },
     {
       stepNum: 3,
       title: "Penimbangan & Pembayaran",
-      subtitle: "Tagihan diterbitkan berdasarkan berat riil, bayar via TF/QRIS & upload bukti",
+      subtitle: "Tagihan diterbitkan berdasarkan berat riil, bayar via TF/QRIS toko & upload bukti",
       activeText: order?.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN" ? "Menunggu Verifikasi Pembayaran" : "Menunggu Pembayaran Anda",
-      activeSub: order?.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN" ? "Pemilik toko sedang mengecek bukti transfer Anda..." : "Silakan bayar & unggah bukti transfer di bawah...",
+      activeSub: order?.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN" ? "Pemilik toko sedang mengecek bukti transfer Anda..." : "Silakan bayar non-tunai & unggah bukti transfer di bawah...",
       icon: CreditCard,
     },
     {
       stepNum: 4,
       title: "Proses Pencucian & Setrika",
-      subtitle: "Pakaian sedang dicuci bersih, wangi, dan disetrika rapi",
-      activeText: "Sedang Dicuci",
-      activeSub: "Mitra memproses pakaian dengan pewangi khusus...",
+      subtitle: "Pakaian sedang dicuci bersih, wangi tahan lama, dan disetrika rapi",
+      activeText: "Sedang Dicuci & Disetrika",
+      activeSub: "Mitra memproses cucian Anda dengan pewangi higienis...",
       icon: Shirt,
     },
     {
       stepNum: 5,
       title: "Pengantaran Balik",
       subtitle: "Driver mengantarkan pakaian bersih kembali ke alamat Anda",
-      activeText: "Dalam Perjalanan Antar",
-      activeSub: "Driver membawa pakaian harum ke rumah Anda...",
+      activeText: order?.status === "SIAP_DIANTAR" ? "Mencari Driver Pengantar" : "Driver Mengantar Baju Bersih",
+      activeSub: order?.status === "SIAP_DIANTAR" ? "Pakaian bersih siap diantar oleh kurir..." : `Driver ${order?.driverDeliveryName || "Kurir"} sedang menuju ke rumah Anda...`,
       icon: Bike,
+    },
+    {
+      stepNum: 6,
+      title: "Pesanan Selesai",
+      subtitle: "Pakaian bersih telah diterima dengan baik",
+      activeText: "Pesanan Selesai",
+      activeSub: "Terima kasih telah menggunakan layanan Laundry GEOVERSE!",
+      icon: CheckCircle2,
     },
   ];
 
@@ -189,30 +207,43 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const handleNextStepDemo = async () => {
     if (!order) return;
     const orderId = order._id || order.id || "temp";
-    if (currentStep === 1) {
+    if (order.status === "MENUNGGU_KONFIRMASI_MITRA") {
+      await updateLaundryOrderStatus(orderId, "MENUNGGU_DRIVER_JEMPUT");
+    } else if (order.status === "MENUNGGU_DRIVER_JEMPUT") {
+      await updateLaundryOrderStatus(orderId, "DRIVER_MENUJU_CUSTOMER", {
+        driverPickupId: "drv_1",
+        driverPickupName: "Rian Hidayat",
+        driverPickupPhone: "0812-9988-7766",
+      });
+    } else if (order.status === "DRIVER_MENUJU_CUSTOMER") {
+      await updateLaundryOrderStatus(orderId, "DRIVER_MENUJU_LAUNDRY");
+    } else if (order.status === "DRIVER_MENUJU_LAUNDRY") {
       await updateLaundryOrderStatus(orderId, "TIBA_DI_LAUNDRY");
-    } else if (currentStep === 2) {
+    } else if (order.status === "TIBA_DI_LAUNDRY") {
       await weighAndBillLaundryOrder(orderId, 3.8);
-    } else if (currentStep === 3) {
-      if (order.status === "MENUNGGU_PEMBAYARAN") {
-        setIsPaymentModalOpen(true);
-      } else {
-        // Otomatis verifikasi lunas oleh owner
-        await verifyLaundryPayment(orderId, "approve");
-      }
-    } else if (currentStep === 4) {
-      await updateLaundryOrderStatus(orderId, "DRIVER_MENGANTAR_BALIK");
-    } else if (currentStep === 5) {
+    } else if (order.status === "MENUNGGU_PEMBAYARAN") {
+      setIsPaymentModalOpen(true);
+    } else if (order.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN") {
+      await verifyLaundryPayment(orderId, "approve");
+    } else if (order.status === "SEDANG_DICUCI" || order.status === "PEMBAYARAN_LUNAS") {
+      await updateLaundryOrderStatus(orderId, "SIAP_DIANTAR");
+    } else if (order.status === "SIAP_DIANTAR") {
+      await updateLaundryOrderStatus(orderId, "DRIVER_MENGANTAR_BALIK", {
+        driverDeliveryId: "drv_2",
+        driverDeliveryName: "Budi Santoso",
+        driverDeliveryPhone: "0813-1122-3344",
+      });
+    } else if (order.status === "DRIVER_MENGANTAR_BALIK") {
       await updateLaundryOrderStatus(orderId, "SELESAI");
     } else {
-      await updateLaundryOrderStatus(orderId, "MENUNGGU_DRIVER_JEMPUT");
+      await updateLaundryOrderStatus(orderId, "MENUNGGU_KONFIRMASI_MITRA");
     }
   };
 
   const handleResetDemo = async () => {
     if (!order) return;
     const orderId = order._id || order.id || "temp";
-    await updateLaundryOrderStatus(orderId, "MENUNGGU_DRIVER_JEMPUT");
+    await updateLaundryOrderStatus(orderId, "MENUNGGU_KONFIRMASI_MITRA");
   };
 
   const storeName = order?.storeName || "Ais Laundry";
@@ -550,26 +581,33 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
               {/* Payment Details Container */}
               {selectedPaymentMethod === "QRIS" ? (
                 <View style={styles.qrisContainer}>
-                  <Text style={styles.qrisTitle}>Scan Barcode QRIS Mitra</Text>
+                  <Text style={styles.qrisTitle}>Scan Barcode QRIS Toko {storeName}</Text>
                   <Image
-                    source={{ uri: "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=GEOVERSE-LAUNDRY-PAYMENT-AIS-LAUNDRY" }}
+                    source={{
+                      uri:
+                        order?.qrisImageUrl ||
+                        "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=00020101021126590013ID.CO.AISLAUNDRY.WWW01189360099900000123455204581253033605802ID5912AIS_LAUNDRY6006GARUT61054415162070703A016304D6B2",
+                    }}
                     style={styles.qrisImage}
+                    resizeMode="contain"
                   />
-                  <Text style={styles.qrisStoreName}>NMID: ID1020304050 • {storeName}</Text>
-                  <Text style={styles.qrisNote}>Simpan/screenshot QRIS di atas untuk membayar lewat aplikasi m-banking atau e-wallet Anda.</Text>
+                  <Text style={styles.qrisStoreName}>{storeName}</Text>
+                  <Text style={styles.qrisNote}>
+                    Simpan / screenshot QRIS di atas untuk membayar melalui BCA Mobile, Livin, BRImo, GoPay, OVO, Dana, ShopeePay.
+                  </Text>
                 </View>
               ) : (
                 <View style={styles.bankContainer}>
-                  <Text style={styles.bankTitle}>Nomor Rekening Tujuan:</Text>
+                  <Text style={styles.bankTitle}>Nomor Rekening Tujuan Toko:</Text>
                   <View style={styles.bankCard}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.bankName}>Bank BCA</Text>
-                      <Text style={styles.bankAccountNum}>8735 0982 1140</Text>
-                      <Text style={styles.bankHolder}>a.n. Mitra {storeName}</Text>
+                      <Text style={styles.bankName}>{order?.bankName || "Bank BCA"}</Text>
+                      <Text style={styles.bankAccountNum}>{order?.bankAccountNumber || "8035 1299 88"}</Text>
+                      <Text style={styles.bankHolder}>a.n. {order?.bankAccountHolder || `Mitra ${storeName}`}</Text>
                     </View>
                     <TouchableOpacity
                       style={styles.btnCopy}
-                      onPress={() => Alert.alert("Tersalin", "Nomor rekening berhasil disalin.")}
+                      onPress={() => Alert.alert("Tersalin", `Nomor rekening ${order?.bankAccountNumber || "8035 1299 88"} berhasil disalin.`)}
                     >
                       <Copy size={16} color="#0D7A53" />
                       <Text style={styles.btnCopyText}>Salin</Text>

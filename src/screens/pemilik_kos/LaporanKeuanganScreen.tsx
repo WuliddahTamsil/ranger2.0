@@ -619,13 +619,19 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
                     <Text style={{ fontSize: 13, fontWeight: "800", color: "#111827" }}>
                       QRIS All Payment
                     </Text>
-                    <View style={styles.verifiedBadgeMini}>
-                      <ShieldCheck size={11} color="#0D7A53" />
-                      <Text style={styles.verifiedBadgeMiniText}>Aktif</Text>
-                    </View>
+                    {qrisImage || accountHolder ? (
+                      <View style={styles.verifiedBadgeMini}>
+                        <ShieldCheck size={11} color="#0D7A53" />
+                        <Text style={styles.verifiedBadgeMiniText}>Aktif</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.verifiedBadgeMini, { backgroundColor: "#F3F4F6" }]}>
+                        <Text style={[styles.verifiedBadgeMiniText, { color: "#6B7280" }]}>Belum diatur</Text>
+                      </View>
+                    )}
                   </View>
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#0D7A53" }}>
-                    a.n. {accountHolder || "Ais Kost Management"}
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: accountHolder ? "#0D7A53" : "#9CA3AF" }}>
+                    {accountHolder ? `a.n. ${accountHolder}` : "a.n. (Belum diatur)"}
                   </Text>
                   <Text style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
                     Customer membayar DP via scan QRIS
@@ -638,16 +644,22 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
                   <Text style={{ fontSize: 13, fontWeight: "800", color: "#111827" }}>
                     {bankName || "BCA"}
                   </Text>
-                  <View style={styles.verifiedBadgeMini}>
-                    <ShieldCheck size={11} color="#0D7A53" />
-                    <Text style={styles.verifiedBadgeMiniText}>Aktif</Text>
-                  </View>
+                  {accountNumber && accountHolder ? (
+                    <View style={styles.verifiedBadgeMini}>
+                      <ShieldCheck size={11} color="#0D7A53" />
+                      <Text style={styles.verifiedBadgeMiniText}>Aktif</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.verifiedBadgeMini, { backgroundColor: "#F3F4F6" }]}>
+                      <Text style={[styles.verifiedBadgeMiniText, { color: "#6B7280" }]}>Belum diatur</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={{ fontSize: 16, fontWeight: "900", color: "#0D7A53", letterSpacing: 0.5 }}>
+                <Text style={{ fontSize: 16, fontWeight: "900", color: accountNumber ? "#0D7A53" : "#9CA3AF", letterSpacing: 0.5 }}>
                   {accountNumber || "Belum diatur"}
                 </Text>
-                <Text style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
-                  a.n. {accountHolder || "Ais Kost Management"}
+                <Text style={{ fontSize: 12, color: accountHolder ? "#6B7280" : "#9CA3AF", marginTop: 2 }}>
+                  {accountHolder ? `a.n. ${accountHolder}` : "a.n. (Belum diatur)"}
                 </Text>
               </View>
             )}
@@ -1371,7 +1383,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
                   style={styles.input}
                   value={accountHolder}
                   onChangeText={setAccountHolder}
-                  placeholder="Cth: Ais Kost Management"
+                  placeholder="Cth: Nama Pemilik / Nama Usaha Kos"
                   placeholderTextColor="#9CA3AF"
                 />
               </>
@@ -1416,7 +1428,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
                   style={styles.input}
                   value={accountHolder}
                   onChangeText={setAccountHolder}
-                  placeholder="Cth: Ais Kost Management"
+                  placeholder="Cth: Nama Pemilik / Nama Usaha Kos"
                   placeholderTextColor="#9CA3AF"
                 />
               </>

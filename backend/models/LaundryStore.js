@@ -88,6 +88,23 @@ const laundryStoreSchema = new mongoose.Schema(
       type: [String],
       default: ["Antar Jemput", "Bergaransi Bersih"],
     },
+    // Payment Channels for Invoicing
+    bankName: {
+      type: String,
+      default: "BCA",
+    },
+    bankAccountNumber: {
+      type: String,
+      default: "",
+    },
+    bankAccountHolder: {
+      type: String,
+      default: "",
+    },
+    qrisImageUrl: {
+      type: String,
+      default: "",
+    },
     services: [laundryServiceItemSchema],
   },
   {

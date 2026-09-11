@@ -86,17 +86,24 @@ exports.getMyStore = async (req, res) => {
 
     let store = await LaundryStore.findOne({ ownerId });
     if (!store) {
-      // Buat default toko jika belum ada
+      const ownerUser = await User.findById(ownerId);
+      const storeName = ownerUser?.roleData?.businessName || ownerUser?.name || "Toko Laundry Saya";
+      // Buat default toko jika belum ada dengan rekening kosong (belum diatur)
       store = await LaundryStore.create({
         ownerId,
-        storeName: "Toko Laundry Saya",
-        address: "Kamojang, Jawa Barat",
+        storeName: storeName.charAt(0).toUpperCase() + storeName.slice(1),
+        address: ownerUser?.address || ownerUser?.roleData?.businessAddress || "Kamojang, Jawa Barat",
+        phone: ownerUser?.phone || "",
+        bankName: "",
+        bankAccountNumber: "",
+        bankAccountHolder: "",
+        qrisImageUrl: "",
         services: [
-          { name: "Cuci Komplit (Cuci + Setrika)", price: 6000, unit: "kg", desc: "Cuci, kering, setrika, pewangi, dan packing rapi", category: "biasa", durationHours: 24 },
-          { name: "Cuci Kering Lipat", price: 4500, unit: "kg", desc: "Cuci bersih, keringkan dan lipat rapi tanpa setrika", category: "biasa", durationHours: 24 },
-          { name: "Setrika Saja", price: 3500, unit: "kg", desc: "Setrika uap licin dan wangi tahan lama", category: "biasa", durationHours: 12 },
-          { name: "Express 3 Jam", price: 10000, unit: "kg", desc: "Selesai dalam 3 jam siap pakai", category: "ekspres", durationHours: 3 },
-          { name: "Bedcover / Selimut Besar", price: 25000, unit: "pcs", desc: "Pembersihan menyeluruh bebas tungau dan wangi", category: "satuan", durationHours: 48 },
+          { name: "Cuci Komplit (Cuci + Setrika)", price: 6000, unit: "kg", desc: "Cuci, kering, setrika, pewangi, dan packing rapi", category: "biasa", durationHours: 24, isActive: true },
+          { name: "Cuci Kering Lipat", price: 4500, unit: "kg", desc: "Cuci bersih, keringkan dan lipat rapi tanpa setrika", category: "biasa", durationHours: 24, isActive: true },
+          { name: "Setrika Saja", price: 3500, unit: "kg", desc: "Setrika uap licin dan wangi tahan lama", category: "biasa", durationHours: 12, isActive: true },
+          { name: "Express 3 Jam", price: 10000, unit: "kg", desc: "Selesai dalam 3 jam siap pakai", category: "ekspres", durationHours: 3, isActive: true },
+          { name: "Bedcover / Selimut Besar", price: 25000, unit: "pcs", desc: "Pembersihan menyeluruh bebas tungau dan wangi", category: "satuan", durationHours: 48, isActive: true },
         ],
       });
     }
@@ -112,7 +119,21 @@ exports.getMyStore = async (req, res) => {
 exports.saveMyStore = async (req, res) => {
   try {
     const ownerId = req.user?.id || req.body.ownerId;
-    const { storeName, description, address, phone, openingHours, isOpen, imageUrl, services, badges } = req.body;
+    const {
+      storeName,
+      description,
+      address,
+      phone,
+      openingHours,
+      isOpen,
+      imageUrl,
+      services,
+      badges,
+      bankName,
+      bankAccountNumber,
+      bankAccountHolder,
+      qrisImageUrl,
+    } = req.body;
 
     let store = await LaundryStore.findOne({ ownerId });
     if (store) {
@@ -125,6 +146,10 @@ exports.saveMyStore = async (req, res) => {
       if (imageUrl) store.imageUrl = imageUrl;
       if (services) store.services = services;
       if (badges) store.badges = badges;
+      if (bankName) store.bankName = bankName;
+      if (bankAccountNumber) store.bankAccountNumber = bankAccountNumber;
+      if (bankAccountHolder) store.bankAccountHolder = bankAccountHolder;
+      if (qrisImageUrl) store.qrisImageUrl = qrisImageUrl;
       await store.save();
     } else {
       store = await LaundryStore.create({
@@ -138,6 +163,10 @@ exports.saveMyStore = async (req, res) => {
         imageUrl,
         services: services || [],
         badges,
+        bankName: bankName || "BCA",
+        bankAccountNumber: bankAccountNumber || "",
+        bankAccountHolder: bankAccountHolder || "",
+        qrisImageUrl: qrisImageUrl || "",
       });
     }
 
@@ -148,7 +177,7 @@ exports.saveMyStore = async (req, res) => {
   }
 };
 
-// 5. Buat Pesanan Baru oleh Customer
+// 5. Buat Pesanan Baru oleh Customer (Status: MENUNGGU_KONFIRMASI_MITRA)
 exports.createOrder = async (req, res) => {
   try {
     const {
@@ -172,6 +201,15 @@ exports.createOrder = async (req, res) => {
 
     const orderCode = `LND-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    // Snapshot store bank & QRIS details
+    let storeSnapshot = null;
+    if (storeId) {
+      storeSnapshot = await LaundryStore.findById(storeId);
+    }
+    if (!storeSnapshot && ownerId) {
+      storeSnapshot = await LaundryStore.findOne({ ownerId });
+    }
+
     const newOrder = await LaundryOrder.create({
       orderCode,
       customerId: customerId || "cust-unknown",
@@ -182,32 +220,201 @@ exports.createOrder = async (req, res) => {
       deliveryAddress: deliveryAddress || pickupAddress || "Jl. Mawar No. 12, Kamojang",
       deliveryCoords: deliveryCoords || "",
       addressSnapshot: addressSnapshot || null,
-      storeId,
-      storeName: storeName || "Mitra Laundry",
-      ownerId: ownerId || "owner-unknown",
+      storeId: storeSnapshot ? storeSnapshot._id : storeId,
+      storeName: storeName || (storeSnapshot ? storeSnapshot.storeName : "Mitra Laundry"),
+      ownerId: ownerId || (storeSnapshot ? String(storeSnapshot.ownerId) : "owner-unknown"),
       serviceId: serviceId || "komplit",
       serviceName: serviceName || "Cuci Komplit",
       pricePerUnit: Number(pricePerUnit) || 6000,
       unitType: unitType || "kg",
       notes: notes || "",
-      status: "MENUNGGU_DRIVER_JEMPUT",
+      bankName: storeSnapshot?.bankName || "BCA",
+      bankAccountNumber: storeSnapshot?.bankAccountNumber || "",
+      bankAccountHolder: storeSnapshot?.bankAccountHolder || "",
+      qrisImageUrl: storeSnapshot?.qrisImageUrl || "",
+      deliveryFeePickup: 4000,
+      deliveryFeeDrop: 4000,
+      serviceFee: 1000,
+      status: "MENUNGGU_KONFIRMASI_MITRA",
       paymentStatus: "menunggu_timbangan",
     });
+
     await syncConversationForOrder(newOrder, "laundry");
 
     // Realtime notification via Socket.io
     if (req.io) {
       req.io.emit("new_laundry_order", newOrder);
-      req.io.emit(`laundry_owner_${ownerId}`, { type: "NEW_ORDER", order: newOrder });
+      req.io.emit(`laundry_owner_${newOrder.ownerId}`, { type: "NEW_ORDER", order: newOrder });
     }
 
     return res.status(201).json({
       success: true,
       data: newOrder,
-      message: "Pesanan laundry berhasil dibuat. Menunggu penjemputan driver!",
+      message: "Pesanan laundry berhasil dikirim! Menunggu konfirmasi (ACC) pemilik laundry.",
     });
   } catch (error) {
     console.error("❌ createOrder Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 5B. Pemilik Laundry ACC Pesanan Masuk (Status -> MENUNGGU_DRIVER_JEMPUT)
+exports.acceptOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await LaundryOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan laundry tidak ditemukan" });
+    }
+
+    order.status = "MENUNGGU_DRIVER_JEMPUT";
+    await order.save();
+
+    // Broadcast ke Driver & Customer
+    if (req.io) {
+      req.io.emit("laundry_order_updated", order);
+      req.io.emit("broadcast_driver_pickup", {
+        type: "NEW_PICKUP_JOB",
+        message: `Order Jemput Laundry baru (${order.orderCode}) dari ${order.customerName}!`,
+        order,
+      });
+      req.io.emit(`laundry_customer_${order.customerId}`, {
+        type: "ORDER_ACCEPTED_BY_MITRA",
+        message: `Pesanan ${order.orderCode} telah disetujui Mitra Laundry. Mencari driver terdekat untuk penjemputan!`,
+        order,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: order,
+      message: "Pesanan disetujui! Notifikasi penjemputan telah disiarkan ke para driver.",
+    });
+  } catch (error) {
+    console.error("❌ acceptOrder Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 5C. Driver Mengambil Job Penjemputan (Sistem Cepat-cepatan / First-Come-First-Serve)
+exports.takePickupJob = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driverId, driverName, driverPhone } = req.body;
+
+    const order = await LaundryOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    }
+
+    if (order.status !== "MENUNGGU_DRIVER_JEMPUT") {
+      return res.status(400).json({
+        success: false,
+        message: "Maaf, order penjemputan ini sudah diambil oleh driver lain!",
+      });
+    }
+
+    order.driverPickupId = driverId;
+    order.driverPickupName = driverName || "Driver GEOVERSE";
+    order.driverPickupPhone = driverPhone || "0812-3456-7890";
+    order.status = "DRIVER_MENUJU_CUSTOMER";
+    await order.save();
+
+    if (req.io) {
+      req.io.emit("laundry_order_updated", order);
+      req.io.emit(`laundry_customer_${order.customerId}`, {
+        type: "DRIVER_ASSIGNED_PICKUP",
+        message: `Driver ${order.driverPickupName} sedang menuju lokasimu untuk mengambil pakaian kotor.`,
+        order,
+      });
+      req.io.emit(`laundry_owner_${order.ownerId}`, {
+        type: "DRIVER_ASSIGNED_PICKUP",
+        message: `Driver ${order.driverPickupName} telah mengambil tugas penjemputan order ${order.orderCode}.`,
+        order,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: order,
+      message: "Berhasil mengambil order jemput! Silakan menuju lokasi customer.",
+    });
+  } catch (error) {
+    console.error("❌ takePickupJob Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 5D. Driver Konfirmasi Pakaian Kotor Sudah Diambil dari Customer (Status -> DRIVER_MENUJU_LAUNDRY)
+exports.pickedUpByDriver = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await LaundryOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    }
+
+    order.status = "DRIVER_MENUJU_LAUNDRY";
+    await order.save();
+
+    if (req.io) {
+      req.io.emit("laundry_order_updated", order);
+      req.io.emit(`laundry_customer_${order.customerId}`, {
+        type: "PICKED_UP_BY_DRIVER",
+        message: `Pakaian kotormu telah diambil oleh driver dan sedang dalam perjalanan menuju outlet laundry.`,
+        order,
+      });
+      req.io.emit(`laundry_owner_${order.ownerId}`, {
+        type: "PICKED_UP_BY_DRIVER",
+        message: `Driver sedang mengantar pakaian kotor order ${order.orderCode} ke outletmu.`,
+        order,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: order,
+      message: "Pakaian berhasil diambil! Silakan antar ke outlet laundry.",
+    });
+  } catch (error) {
+    console.error("❌ pickedUpByDriver Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 5E. Driver Konfirmasi Pakaian Kotor Tiba di Outlet Laundry (Status -> TIBA_DI_LAUNDRY)
+exports.arrivedAtLaundry = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await LaundryOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    }
+
+    order.status = "TIBA_DI_LAUNDRY";
+    await order.save();
+
+    if (req.io) {
+      req.io.emit("laundry_order_updated", order);
+      req.io.emit(`laundry_owner_${order.ownerId}`, {
+        type: "LAUNDRY_ARRIVED_AT_STORE",
+        message: `Pakaian order ${order.orderCode} telah tiba di outlet. Silakan timbang dan terbitkan tagihan!`,
+        order,
+      });
+      req.io.emit(`laundry_customer_${order.customerId}`, {
+        type: "LAUNDRY_ARRIVED_AT_STORE",
+        message: `Pakaianmu telah sampai di outlet laundry. Menunggu proses penimbangan.`,
+        order,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: order,
+      message: "Pakaian telah diserahkan ke outlet laundry! Trip penjemputan selesai.",
+    });
+  } catch (error) {
+    console.error("❌ arrivedAtLaundry Error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -340,6 +547,17 @@ exports.weighAndBillOrder = async (req, res) => {
     order.totalAmount = laundryCost + (order.deliveryFeePickup || 4000) + (order.deliveryFeeDrop || 4000) + (order.serviceFee || 1000);
     order.status = "MENUNGGU_PEMBAYARAN";
     order.paymentStatus = "menunggu_pembayaran";
+
+    // Synchronize current store bank / QRIS info in case owner updated it
+    if (order.ownerId) {
+      const storeObj = await LaundryStore.findOne({ ownerId: order.ownerId });
+      if (storeObj) {
+        if (storeObj.bankName) order.bankName = storeObj.bankName;
+        if (storeObj.bankAccountNumber) order.bankAccountNumber = storeObj.bankAccountNumber;
+        if (storeObj.bankAccountHolder) order.bankAccountHolder = storeObj.bankAccountHolder;
+        if (storeObj.qrisImageUrl) order.qrisImageUrl = storeObj.qrisImageUrl;
+      }
+    }
 
     await order.save();
     // Broadcast Realtime via Socket.io
@@ -508,6 +726,178 @@ exports.updateOrderStatus = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ updateOrderStatus Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 12. Pemilik Laundry Selesai Cuci & Siapkan Pengantaran Balik (Status -> SIAP_DIANTAR)
+exports.markReadyForDelivery = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await LaundryOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan laundry tidak ditemukan" });
+    }
+
+    if (order.paymentStatus !== "lunas") {
+      return res.status(400).json({
+        success: false,
+        message: "Pakaian tidak dapat disiapkan untuk antar balik karena customer belum melunasi pembayaran!",
+      });
+    }
+
+    order.status = "SIAP_DIANTAR";
+    await order.save();
+
+    // Broadcast ke Driver & Customer
+    if (req.io) {
+      req.io.emit("laundry_order_updated", order);
+      req.io.emit("broadcast_driver_delivery", {
+        type: "NEW_DELIVERY_JOB",
+        message: `Order Antar Laundry Bersih (${order.orderCode}) siap diantar ke ${order.customerName}!`,
+        order,
+      });
+      req.io.emit(`laundry_customer_${order.customerId}`, {
+        type: "LAUNDRY_READY_FOR_DELIVERY",
+        message: `Cucianmu telah selesai dicuci & dipacking rapi! Sedang mencari driver untuk pengantaran ke rumah.`,
+        order,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: order,
+      message: "Cucian siap diantar! Notifikasi pengantaran telah disiarkan ke para driver.",
+    });
+  } catch (error) {
+    console.error("❌ markReadyForDelivery Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 13. Driver Mengambil Job Pengantaran Balik (Sistem Cepat-cepatan)
+exports.takeDeliveryJob = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driverId, driverName, driverPhone } = req.body;
+
+    const order = await LaundryOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    }
+
+    if (order.status !== "SIAP_DIANTAR") {
+      return res.status(400).json({
+        success: false,
+        message: "Maaf, order pengantaran ini sudah diambil oleh driver lain!",
+      });
+    }
+
+    order.driverDeliveryId = driverId;
+    order.driverDeliveryName = driverName || "Driver GEOVERSE";
+    order.driverDeliveryPhone = driverPhone || "0812-3456-7890";
+    order.status = "DRIVER_MENGANTAR_BALIK";
+    await order.save();
+
+    if (req.io) {
+      req.io.emit("laundry_order_updated", order);
+      req.io.emit(`laundry_customer_${order.customerId}`, {
+        type: "DRIVER_DELIVERING_CLEAN",
+        message: `Driver ${order.driverDeliveryName} sedang mengantar pakaian bersihmu ke alamat tujuan!`,
+        order,
+      });
+      req.io.emit(`laundry_owner_${order.ownerId}`, {
+        type: "DRIVER_DELIVERING_CLEAN",
+        message: `Driver ${order.driverDeliveryName} telah mengambil cucian bersih order ${order.orderCode} untuk diantar ke customer.`,
+        order,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: order,
+      message: "Berhasil mengambil order pengantaran! Silakan ambil cucian di outlet dan antar ke customer.",
+    });
+  } catch (error) {
+    console.error("❌ takeDeliveryJob Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 14. Konfirmasi Pengantaran Selesai
+exports.completeDelivery = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await LaundryOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    }
+
+    order.status = "SELESAI";
+    await order.save();
+
+    if (req.io) {
+      req.io.emit("laundry_order_updated", order);
+      req.io.emit(`laundry_customer_${order.customerId}`, {
+        type: "ORDER_COMPLETED",
+        message: `Pesanan laundry ${order.orderCode} telah selesai. Terima kasih telah menggunakan layanan GEOVERSE!`,
+        order,
+      });
+      req.io.emit(`laundry_owner_${order.ownerId}`, {
+        type: "ORDER_COMPLETED",
+        message: `Pesanan ${order.orderCode} telah sukses diantar dan selesai!`,
+        order,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: order,
+      message: "Pesanan laundry telah berhasil diselesaikan!",
+    });
+  } catch (error) {
+    console.error("❌ completeDelivery Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 15. Update Lokasi Live Driver untuk Tracking Peta
+exports.updateDriverLocation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { coords, lat, lng } = req.body;
+
+    const order = await LaundryOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    }
+
+    if (coords) order.driverLiveCoords = coords;
+    if (typeof lat === "number") order.driverLiveLat = lat;
+    if (typeof lng === "number") order.driverLiveLng = lng;
+    await order.save();
+
+    if (req.io) {
+      req.io.emit("laundry_driver_location", {
+        orderId: order._id,
+        orderCode: order.orderCode,
+        coords: order.driverLiveCoords,
+        lat: order.driverLiveLat,
+        lng: order.driverLiveLng,
+        status: order.status,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        coords: order.driverLiveCoords,
+        lat: order.driverLiveLat,
+        lng: order.driverLiveLng,
+      },
+    });
+  } catch (error) {
+    console.error("❌ updateDriverLocation Error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };

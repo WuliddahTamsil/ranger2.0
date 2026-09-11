@@ -248,16 +248,17 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     const formattedPrice = `Rp ${rawPrice}`;
     const duration = tenant.durationMonths || 1;
 
+    const kostTitle = (authAccount as any)?.businessName || authAccount?.name || "Pengelola Kos";
     let msg = "";
     if (tenant.extensionRemaining && tenant.extensionRemaining > 0) {
       const kurangnya = `Rp ${tenant.extensionRemaining.toLocaleString("id-ID")}`;
-      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost* ingin menginformasikan pengingat sisa tagihan perpanjangan sewa kamar *${tenant.roomNumber}* Anda sebesar *${kurangnya}*.\n\nPembayaran dapat ditransfer ke rekening bank/QRIS pemilik kos. Jika sudah transfer, mohon kirimkan bukti pembayarannya ya Kak. Terima kasih! 🙏✨`;
+      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *${kostTitle}* ingin menginformasikan pengingat sisa tagihan perpanjangan sewa kamar *${tenant.roomNumber}* Anda sebesar *${kurangnya}*.\n\nPembayaran dapat ditransfer ke rekening bank/QRIS pemilik kos. Jika sudah transfer, mohon kirimkan bukti pembayarannya ya Kak. Terima kasih! 🙏✨`;
     } else if (duration > 1) {
       // Sewa > 1 bulan: Pengingat tagihan sewa bulanan / sisa periode berjalan
-      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost* ingin menginformasikan tagihan sewa kamar *${tenant.roomNumber}* sebesar *${formattedPrice}*.\nSisa periode sewa Anda: *${tenant.daysLeft} hari lagi*.\n\nPembayaran dapat ditransfer ke rekening bank/QRIS pemilik kos. Jika sudah transfer, mohon kirimkan bukti pembayarannya ya Kak. Terima kasih! 🙏`;
+      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *${kostTitle}* ingin menginformasikan tagihan sewa kamar *${tenant.roomNumber}* sebesar *${formattedPrice}*.\nSisa periode sewa Anda: *${tenant.daysLeft} hari lagi*.\n\nPembayaran dapat ditransfer ke rekening bank/QRIS pemilik kos. Jika sudah transfer, mohon kirimkan bukti pembayarannya ya Kak. Terima kasih! 🙏`;
     } else {
       // Sewa 1 bulan: Masa sewa akan habis, konfirmasi apakah mau memperpanjang atau checkout
-      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *Ais Kost* ingin menginformasikan bahwa masa sewa kamar *${tenant.roomNumber}* Anda tersisa *${tenant.daysLeft} hari lagi*.\n\nApakah Kakak berencana untuk *memperpanjang sewa* untuk bulan berikutnya atau *selesai (checkout)* di akhir periode ini?\n\n• *Jika ingin memperpanjang*: Kakak dapat melakukan transfer sewa sebesar *${formattedPrice}* ke rekening pemilik kos dan kirim bukti transfernya ke sini.\n• *Jika selesai sewa*: Mohon konfirmasikan tanggal & jam rencana checkout Kakak agar kami dapat mempersiapkan proses serah terima kamar.\n\nTerima kasih banyak atas kerjasamanya! 🙏✨`;
+      msg = `Halo Kak *${tenant.name}*,\n\nKami dari pengelola *${kostTitle}* ingin menginformasikan bahwa masa sewa kamar *${tenant.roomNumber}* Anda tersisa *${tenant.daysLeft} hari lagi*.\n\nApakah Kakak berencana untuk *memperpanjang sewa* untuk bulan berikutnya atau *selesai (checkout)* di akhir periode ini?\n\n• *Jika ingin memperpanjang*: Kakak dapat melakukan transfer sewa sebesar *${formattedPrice}* ke rekening pemilik kos dan kirim bukti transfernya ke sini.\n• *Jika selesai sewa*: Mohon konfirmasikan tanggal & jam rencana checkout Kakak agar kami dapat mempersiapkan proses serah terima kamar.\n\nTerima kasih banyak atas kerjasamanya! 🙏✨`;
     }
 
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => { });

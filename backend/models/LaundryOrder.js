@@ -125,6 +125,24 @@ const laundryOrderSchema = new mongoose.Schema(
       default: 0,
     },
 
+    // Store Payment Snapshot (Bank & QRIS for customer)
+    bankName: {
+      type: String,
+      default: "",
+    },
+    bankAccountNumber: {
+      type: String,
+      default: "",
+    },
+    bankAccountHolder: {
+      type: String,
+      default: "",
+    },
+    qrisImageUrl: {
+      type: String,
+      default: "",
+    },
+
     // Payment Status, Proof & Method
     paymentStatus: {
       type: String,
@@ -149,10 +167,25 @@ const laundryOrderSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Driver Live Tracking
+    driverLiveCoords: {
+      type: String,
+      default: "",
+    },
+    driverLiveLat: {
+      type: Number,
+      default: null,
+    },
+    driverLiveLng: {
+      type: Number,
+      default: null,
+    },
+
     // Order Lifecycle Status
     status: {
       type: String,
       enum: [
+        "MENUNGGU_KONFIRMASI_MITRA",
         "MENUNGGU_DRIVER_JEMPUT",
         "DRIVER_MENUJU_CUSTOMER",
         "DRIVER_MENUJU_LAUNDRY",
@@ -166,7 +199,7 @@ const laundryOrderSchema = new mongoose.Schema(
         "SELESAI",
         "DIBATALKAN",
       ],
-      default: "MENUNGGU_DRIVER_JEMPUT",
+      default: "MENUNGGU_KONFIRMASI_MITRA",
     },
 
     notes: {

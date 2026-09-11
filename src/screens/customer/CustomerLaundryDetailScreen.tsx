@@ -163,11 +163,15 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
         addressSnapshot: addressSnapshot || null,
         storeId: (store._id || store.id) as any,
         storeName: store.storeName,
-        ownerId: store.ownerId || "owner_dedi",
+        ownerId: store.ownerId || (store._id || store.id) || "",
         serviceId: activeSelectedService._id || activeSelectedService.id || "s1",
         serviceName: activeSelectedService.name,
         pricePerUnit: activeSelectedService.price,
         unitType: activeSelectedService.unit,
+        bankName: store.bankName || "",
+        bankAccountNumber: store.bankAccountNumber || "",
+        bankAccountHolder: store.bankAccountHolder || "",
+        qrisImageUrl: store.qrisImageUrl || "",
         notes: "Tolong hati-hati dengan pakaian bahan sutra/katun tipis.",
       };
 

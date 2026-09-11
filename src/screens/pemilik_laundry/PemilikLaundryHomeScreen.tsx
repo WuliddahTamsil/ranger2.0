@@ -41,9 +41,17 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
   const [orders, setOrders] = useState<LaundryOrder[]>([]);
 
   const loadData = async () => {
-    const data = await fetchStoreOrders("all");
+    if (!authAccount?.id) {
+      setOrders([]);
+      return;
+    }
+    const data = await fetchStoreOrders(authAccount.id);
     const active = getActiveLaundryOrder();
-    if (active && !data.some((d) => (d._id || d.id) === (active._id || active.id))) {
+    if (
+      active &&
+      active.ownerId === authAccount.id &&
+      !data.some((d) => (d._id || d.id) === (active._id || active.id))
+    ) {
       data.unshift(active);
     }
     setOrders(data);
@@ -55,11 +63,12 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
       loadData();
     });
     return unsub;
-  }, []);
+  }, [authAccount?.id]);
 
-  const newOrdersCount = orders.filter((o) => !o.actualWeightOrQty || o.status === "MENUNGGU_DRIVER_JEMPUT" || o.status === "TIBA_DI_LAUNDRY").length;
-  const inProgressCount = orders.filter((o) => o.status === "SEDANG_DICUCI" || o.status === "MENUNGGU_PEMBAYARAN").length;
-  const completedCount = orders.filter((o) => o.status === "SELESAI" || o.status === "SIAP_DIANTAR").length;
+  const incomingPendingAccCount = orders.filter((o) => o.status === "MENUNGGU_KONFIRMASI_MITRA").length;
+  const newOrdersCount = orders.filter((o) => o.status === "MENUNGGU_KONFIRMASI_MITRA" || o.status === "TIBA_DI_LAUNDRY" || (!o.actualWeightOrQty && o.status !== "SELESAI")).length;
+  const inProgressCount = orders.filter((o) => o.status === "SEDANG_DICUCI" || o.status === "MENUNGGU_PEMBAYARAN" || o.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN").length;
+  const completedCount = orders.filter((o) => o.status === "SELESAI" || o.status === "SIAP_DIANTAR" || o.status === "DRIVER_MENGANTAR_BALIK").length;
   const totalRevenue = orders
     .filter((o) => o.paymentStatus === "lunas")
     .reduce((acc, curr) => acc + (curr.laundryCost || curr.totalAmount || 0), 0);
@@ -69,7 +78,7 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
       {/* Main Scroll Content */}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <RoleHeader
-          name={authAccount?.name || "Pak Dedi Kurniawan"}
+          name={authAccount?.name || "Pemilik Laundry"}
           role="Pemilik Laundry"
           icon={Shirt}
           fullBleed={false}
@@ -82,7 +91,11 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
           <View style={styles.summaryHeaderRow}>
             <View>
               <Text style={styles.summaryTitle}>Ringkasan Hari Ini</Text>
-              <Text style={styles.summarySubtitle}>Mitra Laundry GEOVERSE</Text>
+              <Text style={styles.summarySubtitle}>
+                {authAccount?.roleData?.businessName
+                  ? `${authAccount.roleData.businessName} • Mitra GEOVERSE`
+                  : "Mitra Laundry GEOVERSE"}
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -112,7 +125,9 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
                 </View>
                 <View style={styles.statTextGroup}>
                   <Text style={styles.statValNum}>{newOrdersCount}</Text>
-                  <Text style={styles.statValSub}>Perlu Timbang</Text>
+                  <Text style={styles.statValSub}>
+                    {incomingPendingAccCount > 0 ? `${incomingPendingAccCount} Perlu ACC` : "Perlu Timbang"}
+                  </Text>
                 </View>
               </TouchableOpacity>
 
@@ -185,7 +200,7 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.actionBannerTitle}>Timbang & Setor Tagihan</Text>
-              <Text style={styles.actionBannerSub}>Customer bayar setelah ditimbang sebelum baju diantar</Text>
+              <Text style={styles.actionBannerSub}>Customer wajib bayar non-tunai sebelum pakaian bersih diantar</Text>
             </View>
           </View>
           <ChevronRight size={18} color="#0E6641" />
@@ -214,7 +229,34 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
             orders.slice(0, 4).map((o, idx) => {
               const isLast = idx === Math.min(orders.length, 4) - 1;
               const isWeighed = Boolean(o.actualWeightOrQty);
+              const isPendingAcc = o.status === "MENUNGGU_KONFIRMASI_MITRA";
               const isPaid = o.paymentStatus === "lunas";
+
+              let badgeText = "Timbang";
+              let badgeColor = "#D97706";
+              let badgeBg = "#FEF3C7";
+
+              if (isPendingAcc) {
+                badgeText = "Perlu ACC";
+                badgeColor = "#D97706";
+                badgeBg = "#FEF3C7";
+              } else if (!isWeighed) {
+                badgeText = "Timbang";
+                badgeColor = "#D97706";
+                badgeBg = "#FEF3C7";
+              } else if (o.paymentStatus === "menunggu_verifikasi") {
+                badgeText = "Cek Bayar";
+                badgeColor = "#B45309";
+                badgeBg = "#FEF3C7";
+              } else if (!isPaid) {
+                badgeText = "Tunggu Bayar";
+                badgeColor = "#EA580C";
+                badgeBg = "#FFF7ED";
+              } else {
+                badgeText = "Lunas";
+                badgeColor = "#0E6641";
+                badgeBg = "#E6F7F0";
+              }
 
               return (
                 <TouchableOpacity
@@ -238,16 +280,16 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
                     <View
                       style={[
                         styles.badgePill,
-                        { backgroundColor: !isWeighed ? "#FEF3C7" : !isPaid ? "#FFF7ED" : "#E6F7F0" },
+                        { backgroundColor: badgeBg },
                       ]}
                     >
                       <Text
                         style={[
                           styles.badgePillText,
-                          { color: !isWeighed ? "#D97706" : !isPaid ? "#EA580C" : "#0E6641" },
+                          { color: badgeColor },
                         ]}
                       >
-                        {!isWeighed ? "Timbang" : !isPaid ? "Tunggu Bayar" : "Lunas"}
+                        {badgeText}
                       </Text>
                     </View>
                     <Text style={styles.orderAmountText}>

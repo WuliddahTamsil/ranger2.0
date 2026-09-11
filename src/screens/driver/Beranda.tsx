@@ -43,6 +43,14 @@ import {
   getNotifications,
   markNotificationRead,
 } from "../../services/api";
+import {
+  fetchDriverLaundryJobs,
+  takeLaundryPickupJob,
+  pickedUpLaundryByDriver,
+  arrivedLaundryAtStore,
+  takeLaundryDeliveryJob,
+  completeLaundryDelivery,
+} from "../../services/laundryService";
 
 // Import other screens
 import { Order, DriverOrder } from "./Order";
@@ -150,9 +158,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       return;
     }
     const loadOrders = async () => {
-      const [mktRes, catRes] = await Promise.all([
+      const [mktRes, catRes, laundryJobs] = await Promise.all([
         getMarketplaceOrdersForDriver(authAccount.id),
         getCateringOrdersForDriver(authAccount.id),
+        fetchDriverLaundryJobs(),
       ]);
 
       const normalizeStatus = (rawStatus: string): DriverOrder["status"] => {
@@ -208,7 +217,47 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         addressSnapshot: order.addressSnapshot || null,
       })) : [];
 
-      setOrders([...mktOrders, ...catOrders]);
+      const lndOrders: DriverOrder[] = Array.isArray(laundryJobs) ? laundryJobs.map((lnd: any) => {
+        const isPickupJob =
+          lnd.status === "MENUNGGU_DRIVER_JEMPUT" ||
+          lnd.status === "DRIVER_MENUJU_CUSTOMER" ||
+          lnd.status === "DRIVER_MENUJU_LAUNDRY";
+
+        let orderStatus: DriverOrder["status"] = "Menunggu";
+        if (lnd.status === "DRIVER_MENUJU_CUSTOMER") orderStatus = "Menuju Pickup";
+        else if (lnd.status === "DRIVER_MENUJU_LAUNDRY" || lnd.status === "DRIVER_MENGANTAR_BALIK") orderStatus = "Mengantar";
+        else if (lnd.status === "SELESAI") orderStatus = "Selesai";
+
+        return {
+          id: lnd._id || lnd.id,
+          customer: lnd.customerName,
+          phone: lnd.customerPhone || "",
+          type: "Laundry" as const,
+          time: new Date(lnd.createdAt || Date.now()).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          from: isPickupJob ? lnd.pickupAddress : lnd.storeName,
+          to: isPickupJob ? lnd.storeName : lnd.deliveryAddress,
+          dist: "1.2 km",
+          distanceKm: 1.2,
+          pay: Number(lnd.totalAmount || 0),
+          driverShare: isPickupJob ? Number(lnd.deliveryFeePickup || 4000) : Number(lnd.deliveryFeeDrop || 4000),
+          completedAt: lnd.updatedAt || lnd.createdAt,
+          status: orderStatus,
+          items: [
+            {
+              name: isPickupJob ? `[Jemput Pakaian Kotor] ${lnd.serviceName}` : `[Antar Pakaian Bersih] ${lnd.serviceName}`,
+              quantity: 1,
+              price: Number(lnd.laundryCost || 0),
+            },
+          ],
+          storeName: lnd.storeName,
+          storeAddress: lnd.storeName,
+          storePhone: "0812-3456-7890",
+          ownerId: lnd.ownerId,
+          addressSnapshot: lnd.addressSnapshot || null,
+        };
+      }) : [];
+
+      setOrders([...mktOrders, ...catOrders, ...lndOrders]);
     };
     void loadOrders();
     const interval = setInterval(() => void loadOrders(), 4000);
@@ -219,8 +268,6 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
 
   // Pendapatan dan riwayat order selalu dihitung dari order selesai yang dikirim API.
-  // Dengan begitu driver baru tetap mulai dari Rp0 tanpa transaksi contoh, sementara
-  // order yang benar-benar selesai akan tetap terlihat setelah aplikasi dibuka ulang.
   useEffect(() => {
     const completedTransactions: TransactionRecord[] = orders
       .filter((order) => order.status === "Selesai")
@@ -256,7 +303,31 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 
     const targetOrder = orders.find((o) => o.id === orderId);
     if (targetOrder) {
-      if (targetOrder.type === "Catering") {
+      if (targetOrder.type === "Laundry") {
+        if (nextStatus === "Menuju Pickup") {
+          if (targetOrder.items?.[0]?.name?.includes("Jemput")) {
+            await takeLaundryPickupJob(orderId, {
+              driverId: authAccount?.id || "drv_1",
+              driverName: authAccount?.name || "Kurir",
+              driverPhone: authAccount?.phone || "081234567890",
+            });
+          } else {
+            await takeLaundryDeliveryJob(orderId, {
+              driverId: authAccount?.id || "drv_1",
+              driverName: authAccount?.name || "Kurir",
+              driverPhone: authAccount?.phone || "081234567890",
+            });
+          }
+        } else if (nextStatus === "Sampai Pickup" || nextStatus === "Mengantar") {
+          await pickedUpLaundryByDriver(orderId);
+        } else if (nextStatus === "Selesai") {
+          if (targetOrder.items?.[0]?.name?.includes("Jemput")) {
+            await arrivedLaundryAtStore(orderId);
+          } else {
+            await completeLaundryDelivery(orderId);
+          }
+        }
+      } else if (targetOrder.type === "Catering") {
         await updateCateringOrderStatus(orderId, nextStatus);
       } else {
         await updateMarketplaceOrderStatus(orderId, nextStatus);
@@ -301,6 +372,24 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             isOnline={isOnline}
             onStatusChange={async (orderId, status) => {
               const targetOrder = orders.find((o) => o.id === orderId);
+              if (targetOrder?.type === "Laundry") {
+                if (status === "Menuju Pickup") {
+                  await takeLaundryPickupJob(orderId, {
+                    driverId: authAccount?.id || "drv_1",
+                    driverName: authAccount?.name || "Kurir",
+                    driverPhone: authAccount?.phone || "081234567890",
+                  });
+                } else if (status === "Sampai Pickup" || status === "Mengantar") {
+                  await pickedUpLaundryByDriver(orderId);
+                } else if (status === "Selesai") {
+                  if (targetOrder.items?.[0]?.name?.includes("Jemput")) {
+                    await arrivedLaundryAtStore(orderId);
+                  } else {
+                    await completeLaundryDelivery(orderId);
+                  }
+                }
+                return true;
+              }
               const result = targetOrder?.type === "Catering"
                 ? await updateCateringOrderStatus(orderId, status)
                 : await updateMarketplaceOrderStatus(orderId, status);
@@ -312,6 +401,22 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             }}
             onAcceptOrder={async (orderId) => {
               const targetOrder = orders.find((o) => o.id === orderId);
+              if (targetOrder?.type === "Laundry") {
+                if (targetOrder.items?.[0]?.name?.includes("Jemput")) {
+                  await takeLaundryPickupJob(orderId, {
+                    driverId: authAccount?.id || "drv_1",
+                    driverName: authAccount?.name || "Kurir",
+                    driverPhone: authAccount?.phone || "081234567890",
+                  });
+                } else {
+                  await takeLaundryDeliveryJob(orderId, {
+                    driverId: authAccount?.id || "drv_1",
+                    driverName: authAccount?.name || "Kurir",
+                    driverPhone: authAccount?.phone || "081234567890",
+                  });
+                }
+                return true;
+              }
               const result = targetOrder?.type === "Catering"
                 ? await assignCateringDriver(orderId, authAccount?.id || "")
                 : await assignMarketplaceDriver(orderId, authAccount?.id || "");

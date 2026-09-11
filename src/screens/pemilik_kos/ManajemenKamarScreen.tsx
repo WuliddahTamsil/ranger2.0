@@ -129,6 +129,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   const [kamarStatus, setKamarStatus] = useState<"tersedia" | "tidak_tersedia">("tersedia");
   const [roomPhotos, setRoomPhotos] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isSavingRoom, setIsSavingRoom] = useState(false);
 
   const handleOpenAddModal = () => {
     setModalMode("add");
@@ -454,13 +455,14 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   };
 
   const handleSaveRoom = async () => {
+    setIsSavingRoom(true);
     const numPrice = parseInt(hargaSewa.replace(/[^0-9]/g, "")) || 1200000;
     const primaryImage = roomPhotos[0] || "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=500&auto=format&fit=crop&q=80";
 
     const cleanNum = (nomorKamar || `10${rooms.length + 1}`).replace(/^(Kamar\s*)+/gi, "").trim();
 
-    if (modalMode === "edit" && editingRoomId) {
-      try {
+    try {
+      if (modalMode === "edit" && editingRoomId) {
         await updateRoomInKost(ownerEmail, editingRoomId, {
           roomNumber: cleanNum,
           roomType: tipeKamar,
@@ -470,11 +472,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
           images: roomPhotos,
           image: primaryImage,
         });
-      } catch (e) {
-        console.log("Edit room error:", e);
-      }
-    } else {
-      try {
+      } else {
         await addRoomToKost(ownerEmail, {
           roomNumber: cleanNum,
           roomType: tipeKamar,
@@ -484,13 +482,16 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
           images: roomPhotos,
           image: primaryImage,
         });
-      } catch (e) {
-        console.log("Add room error:", e);
       }
+      await loadRoomsFromBackend();
+      setIsAddModalOpen(false);
+      setAddStep(1);
+    } catch (e: any) {
+      console.error("Save room error:", e);
+      Alert.alert("Gagal Menyimpan Kamar", e?.message || "Terjadi kesalahan saat menyimpan data kamar.");
+    } finally {
+      setIsSavingRoom(false);
     }
-    await loadRoomsFromBackend();
-    setIsAddModalOpen(false);
-    setAddStep(1);
   };
 
   const allFacilityOptions = [
@@ -1099,13 +1100,18 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.btnPrimary, { marginTop: 28 }]}
+                    style={[styles.btnPrimary, { marginTop: 28 }, isSavingRoom && { opacity: 0.7 }]}
                     onPress={handleSaveRoom}
+                    disabled={isSavingRoom}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.btnPrimaryText}>
-                      {modalMode === "edit" ? "Simpan Perubahan" : "Simpan Kamar"}
-                    </Text>
+                    {isSavingRoom ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.btnPrimaryText}>
+                        {modalMode === "edit" ? "Simpan Perubahan" : "Simpan Kamar"}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               )}

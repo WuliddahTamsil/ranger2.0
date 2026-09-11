@@ -180,22 +180,57 @@ const updateKost = async (req, res) => {
   }
 };
 
-// Helper to find kost by ownerId or email
+// Helper to find kost by ownerId or email (with auto-creation for valid partners)
 const findKostByOwnerOrEmail = async (ownerIdentifier) => {
   if (!ownerIdentifier) return null;
   let kost = null;
+  let user = null;
+
   // If valid ObjectId
-  if (ownerIdentifier.match(/^[0-9a-fA-F]{24}$/)) {
+  if (String(ownerIdentifier).match(/^[0-9a-fA-F]{24}$/)) {
     kost = await Kost.findOne({ ownerId: ownerIdentifier });
+    if (!kost) {
+      user = await User.findById(ownerIdentifier);
+    }
   }
+
   // If not found or identifier is email/username
   if (!kost) {
-    const cleanEmail = ownerIdentifier.toLowerCase().trim();
-    const user = await User.findOne({ email: cleanEmail });
+    const cleanEmail = String(ownerIdentifier).toLowerCase().trim();
+    if (!user) {
+      user = await User.findOne({ email: cleanEmail });
+    }
     if (user) {
       kost = await Kost.findOne({ ownerId: user._id });
     }
   }
+
+  // If still no Kost record but user exists as pemilik_kos, auto-provision their Kost document
+  if (!kost && user && (user.role === "pemilik_kos" || user.role === "admin")) {
+    const kostName = user.roleData?.businessName || user.name || "Kost Mitra";
+    let kostType = "Campur";
+    if (user.roleData?.propertyType?.toLowerCase().includes("putri")) kostType = "Putri";
+    else if (user.roleData?.propertyType?.toLowerCase().includes("putra")) kostType = "Putra";
+
+    kost = await Kost.create({
+      ownerId: user._id,
+      name: kostName.charAt(0).toUpperCase() + kostName.slice(1),
+      type: kostType,
+      address: user.address || user.roleData?.businessAddress || "Jl. Kamojang, Garut",
+      city: "Garut",
+      district: "Kamojang",
+      description: "Kos eksklusif nyaman, bersih, aman, dan berfasilitas lengkap untuk mahasiswa & pekerja.",
+      price: 1200000,
+      dpAmount: 300000,
+      facilities: ["WiFi", "AC", "KM Dalam", "Kasur", "Lemari"],
+      rules: ["Akses 24 Jam", "Dilarang Merokok di Kamar"],
+      images: [
+        user.profilePhoto || "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80",
+      ],
+      rooms: [],
+    });
+  }
+
   return kost;
 };
 
