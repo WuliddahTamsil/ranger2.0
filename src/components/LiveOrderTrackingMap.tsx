@@ -21,6 +21,7 @@ import {
   Layers,
   Maximize2,
 } from "lucide-react-native";
+import { Linking, Alert } from "react-native";
 
 export interface LiveOrderTrackingMapProps {
   storeName?: string;
@@ -35,9 +36,10 @@ export interface LiveOrderTrackingMapProps {
   showTurnInstructions?: boolean;
   currentLocationName?: string;
   onToggleFullscreen?: () => void;
+  marketplaceMode?: boolean;
 }
 
-export const LiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
+const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
   storeName = "Dapur Catering",
   storeAddress = "Kamal, Bangkalan, Madura",
   customerAddress = "Telang Indah, Bangkalan, Madura",
@@ -694,3 +696,87 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+
+const MarketplaceLocationMap: React.FC<LiveOrderTrackingMapProps> = ({
+  storeName,
+  storeAddress,
+  customerAddress,
+  orderStatus,
+  height = 270,
+  navigationMode,
+  onNavigationModeChange,
+}) => {
+  const [internalMode, setInternalMode] = useState<"overview" | "store" | "customer">("store");
+  const mode = navigationMode || internalMode;
+  const pickup = storeAddress?.trim() || "Alamat toko belum tersedia";
+  const delivery = customerAddress?.trim() || "Alamat pelanggan belum tersedia";
+  const destination = mode === "customer" ? delivery : pickup;
+  const openDirections = async () => {
+    if (destination.includes("belum tersedia")) {
+      Alert.alert("Alamat belum tersedia", "Navigasi bisa dibuka setelah alamat tujuan tersedia.");
+      return;
+    }
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Navigasi tidak tersedia", "Tidak dapat membuka aplikasi peta pada perangkat ini.");
+    }
+  };
+  const selectMode = (next: "overview" | "store" | "customer") => {
+    setInternalMode(next);
+    onNavigationModeChange?.(next);
+  };
+  const routeButton = (label: string, next: "overview" | "store" | "customer", Icon: typeof Compass) => (
+    <TouchableOpacity
+      key={next}
+      onPress={() => selectMode(next)}
+      style={{ flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 10, backgroundColor: mode === next ? "#0D7A53" : "#FFFFFF", borderWidth: 1, borderColor: mode === next ? "#0D7A53" : "#CBD5E1" }}
+      accessibilityRole="button"
+      accessibilityState={{ selected: mode === next }}
+    >
+      <Icon size={15} color={mode === next ? "#FFFFFF" : "#0D7A53"} />
+      <Text style={{ color: mode === next ? "#FFFFFF" : "#0F172A", fontSize: 12, fontWeight: "700" }}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={{ height, minHeight: 220, padding: 14, justifyContent: "space-between", gap: 10, backgroundColor: "#F8FAFC", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <MapPin size={18} color="#0D7A53" />
+        <Text style={{ color: "#0F172A", fontSize: 14, fontWeight: "800" }}>Informasi lokasi pesanan</Text>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {routeButton("Ringkasan", "overview", Compass)}
+        {routeButton("Toko", "store", Store)}
+        {routeButton("Pelanggan", "customer", MapPin)}
+      </View>
+      {mode === "overview" ? (
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: "#334155", fontSize: 12 }}><Text style={{ fontWeight: "800" }}>{storeName || "Toko"}: </Text>{pickup}</Text>
+          <Text style={{ color: "#334155", fontSize: 12 }}><Text style={{ fontWeight: "800" }}>Pelanggan: </Text>{delivery}</Text>
+        </View>
+      ) : (
+        <View style={{ gap: 3 }}>
+          <Text style={{ color: "#64748B", fontSize: 11, fontWeight: "700" }}>{mode === "customer" ? "TUJUAN PENGANTARAN" : "LOKASI PICKUP"}</Text>
+          <Text style={{ color: "#0F172A", fontSize: 13, fontWeight: "700" }}>{mode === "customer" ? delivery : `${storeName ? `${storeName} · ` : ""}${pickup}`}</Text>
+        </View>
+      )}
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 7, padding: 9, backgroundColor: "#FFF7ED", borderRadius: 9 }}>
+        <Navigation size={15} color="#C2410C" />
+        <Text style={{ flex: 1, color: "#9A3412", fontSize: 11, lineHeight: 16 }}>
+          {orderStatus === "Selesai" ? "Pengantaran selesai." : "Lokasi driver belum tersedia. GPS real-time Marketplace belum terhubung."}
+        </Text>
+      </View>
+      {mode !== "overview" && (
+        <TouchableOpacity onPress={() => void openDirections()} style={{ minHeight: 42, borderRadius: 10, backgroundColor: "#0D7A53", flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center" }} accessibilityRole="button">
+          <Navigation size={16} color="#FFFFFF" />
+          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800" }}>Buka navigasi ke {mode === "customer" ? "pelanggan" : "toko"}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+
+export const LiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = (props) =>
+  props.marketplaceMode ? <MarketplaceLocationMap {...props} /> : <LegacyLiveOrderTrackingMap {...props} />;

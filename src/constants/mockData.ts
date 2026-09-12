@@ -1,4 +1,4 @@
-import { Product, Restaurant, Laundry, KosItem, OrderItem, NotifItem, NewsItem, DriverOrder } from "../types";
+import { Product, Restaurant, Laundry, KosItem, NewsItem } from "../types";
 import { uImg } from "../utils/formatters";
 
 export const PRODUCTS: Product[] = [
@@ -37,31 +37,7 @@ export const KOS_LIST: KosItem[] = [
   { id: 3, name: "Kos Campur Harmoni", address: "Jl. Mawar No. 15", price: 900000, type: "Campur", facilities: ["WiFi", "AC", "KM Dalam", "Laundry"], available: false, img: uImg("1502672260266-1c1ef2d93688", 400, 220) },
 ];
 
-export const ORDERS: OrderItem[] = [
-  { id: "RNG001", type: "Marketplace", iconName: "Store", color: "#1B7A4E", item: "Nasi Timbel Komplit", detail: "Warung Bu Siti", status: "Dikirim", statusColor: "blue", date: "15 Jan 2024", total: 25000 },
-  { id: "RNG002", type: "Laundry", iconName: "Wind", color: "#2196F3", item: "Laundry Express Pak Dedi", detail: "2.5 kg pakaian", status: "Selesai", statusColor: "green", date: "14 Jan 2024", total: 15000 },
-  { id: "RNG003", type: "Catering", iconName: "Coffee", color: "#FF7043", item: "Nasi Box 20 Pax", detail: "Catering Bu Haji Nani", status: "Diproses", statusColor: "orange", date: "13 Jan 2024", total: 500000 },
-  { id: "RNG004", type: "Kos", iconName: "Building2", color: "#9C27B0", item: "Kos Putri Melati", detail: "Jan – Mar 2024", status: "Aktif", statusColor: "green", date: "01 Jan 2024", total: 2250000 },
-];
-
-export const NOTIFS: NotifItem[] = [
-  { id: 1, type: "order", title: "Pesanan Dikirim 🚴", msg: "Pesanan #RNG001 sedang dalam perjalanan ke lokasi Anda", time: "5 mnt lalu", read: false },
-  { id: 2, type: "promo", title: "🎉 Promo Spesial Hari Ini!", msg: "Diskon 20% untuk semua laundry. Gunakan kode BERSIH20", time: "1 jam lalu", read: false },
-  { id: 3, type: "info", title: "Fitur Baru: Kos Online", msg: "Temukan kos-kosan di sekitar Kamojang dengan mudah di GEOVERSE 2.0", time: "2 jam lalu", read: true },
-  { id: 4, type: "system", title: "Selamat Datang di GEOVERSE 2.0!", msg: "Terima kasih telah bergabung. Nikmati layanan komunitas Kamojang", time: "Kemarin", read: true },
-];
-
 export const NEWS: NewsItem[] = [
   { id: 1, title: "PGE Kamojang Dukung 120 UMKM Lokal lewat Dana CSR 2024", cat: "Berita", date: "15 Jan 2024", img: uImg("1560179707-f14e90ef3623", 400, 220) },
   { id: 2, title: "Festival Kuliner Ring 1 Sukses Digelar di Alun-Alun Kamojang", cat: "Komunitas", date: "12 Jan 2024", img: uImg("1555939594-58d7cb561ad1", 400, 220) },
-];
-
-export const EARNINGS_DATA = [
-  { day: "Sen", v: 75000 }, { day: "Sel", v: 92000 }, { day: "Rab", v: 58000 },
-  { day: "Kam", v: 110000 }, { day: "Jum", v: 85000 }, { day: "Sab", v: 130000 }, { day: "Min", v: 45000 },
-];
-
-export const DRIVER_ORDERS: DriverOrder[] = [
-  { id: "ORD-001", type: "Marketplace", from: "Warung Bu Siti", to: "Jl. Aster No. 7", dist: "1.2 km", pay: 12000, time: "5 mnt lalu" },
-  { id: "ORD-002", type: "Laundry Pickup", from: "Kos Putri Melati", to: "Laundry Bersih Kilat", dist: "0.8 km", pay: 8000, time: "12 mnt lalu" },
 ];

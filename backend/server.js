@@ -93,6 +93,17 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} joined authorized chat room: ${roomName}`);
   });
 
+  socket.on("join_user_room", async ({ token } = {}) => {
+    const user = await verifyAccessToken(token);
+    if (!user?._id) {
+      socket.emit("user:join_denied", { message: "Sesi login tidak valid." });
+      return;
+    }
+    const roomName = `user:${String(user._id)}`;
+    socket.join(roomName);
+    socket.emit("user:joined", { userId: String(user._id) });
+  });
+
   socket.on("join_room_legacy_disabled", (roomName) => {
     // Kept as a no-op for clients that still emit the old event.
     console.log(`📡 Socket ${socket.id} joined room: ${roomName}`);

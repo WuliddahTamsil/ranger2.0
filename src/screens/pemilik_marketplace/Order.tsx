@@ -61,6 +61,7 @@ interface DriverProfile {
   name: string;
   vehicle: string;
   plateNumber: string;
+  phone?: string;
   rating: number;
   stage: string;
   distance: string;
@@ -75,7 +76,14 @@ export interface OrderData {
   total: number;
   subtotal: number;
   deliveryFee: number;
+  serviceFee?: number;
+  discount?: number;
   time: string;
+  createdAt?: string;
+  completedAt?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  driverPhone?: string;
   status:
     | "Menunggu"
     | "Diproses"
@@ -143,7 +151,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
   useEffect(() => {
     if (!selectedOrder) return;
     const fresh = orders.find((o) => o.id === selectedOrder.id);
-    if (fresh && fresh.status !== selectedOrder.status) {
+    if (fresh && JSON.stringify(fresh) !== JSON.stringify(selectedOrder)) {
       setSelectedOrder(fresh);
     }
   }, [orders]);
@@ -324,27 +332,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
     if (onStatusChange && !(await onStatusChange(orderId, nextStatus))) return;
     const updated = orders.map((o) => {
       if (o.id === orderId) {
-        let driver = o.driver;
-        if (nextStatus === "Siap" && driver) {
-          driver.stage = "Pesanan siap, menunggu kurir penjemput";
-          driver.eta = "1 menit";
-        } else if (nextStatus === "Menuju Pickup" && driver) {
-          driver.stage = "Kurir sedang menuju ke toko Anda";
-          driver.eta = "5 menit";
-        } else if (nextStatus === "Sampai Pickup" && driver) {
-          driver.stage = "Kurir telah tiba di outlet toko";
-          driver.eta = "Sudah di lokasi";
-        } else if ((nextStatus === "Diambil" || nextStatus === "Mengantar") && driver) {
-          driver.stage = "Kurir sedang mengantar pesanan ke customer";
-          driver.distance = "2.4 km";
-          driver.eta = "7 menit";
-        } else if (nextStatus === "Selesai" && driver) {
-          driver.stage = "Pesanan selesai diantar";
-          driver.distance = "0 km";
-          driver.eta = "Selesai";
-        }
-
-        const newOrder = { ...o, status: nextStatus, driver };
+        const newOrder = { ...o, status: nextStatus };
         // Sync selectedOrder if it is currently open in detail modal
         if (selectedOrder && selectedOrder.id === orderId) {
           setSelectedOrder(newOrder);
@@ -745,7 +733,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                     <View style={{ flex: 1 }}>
                       <Text style={styles.assignDriverName}>{drv.name}</Text>
                       <Text style={styles.assignDriverSub}>
-                        {drv.vehicleType || "Motor"} • {drv.plateNumber || drv.phone}
+                        {drv.vehicleType || "Kendaraan belum tersedia"}{drv.plateNumber ? ` • ${drv.plateNumber}` : ""}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -756,16 +744,17 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                           if (ok) {
                             const newDriver: DriverProfile = {
                               name: drv.name,
-                              vehicle: drv.vehicleType || "Motor",
-                              plateNumber: drv.plateNumber || drv.phone,
-                              rating: 5,
-                              stage: "Driver menuju outlet penjemputan",
-                              distance: "1.2 km",
-                              eta: "5 mnt",
+                              vehicle: drv.vehicleType || "",
+                              plateNumber: drv.plateNumber || "",
+                              phone: drv.phone,
+                              rating: 0,
+                              stage: "Driver ditugaskan, lokasi GPS belum tersedia",
+                              distance: "",
+                              eta: "",
                             };
                             setSelectedOrder({
                               ...selectedOrder,
-                              status: "Siap",
+                              status: "Menuju Pickup",
                               driver: newDriver,
                             });
                           }
@@ -788,7 +777,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                 <Compass size={18} color="#15803D" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.sectionCardTitle}>Peta Pelacakan Real-Time</Text>
+                <Text style={styles.sectionCardTitle}>Lokasi Pesanan</Text>
                 <Text style={styles.sectionCardSubtitle}>
                   {selectedOrder.status === "Menuju Pickup"
                     ? "Kurir sedang dalam perjalanan menuju outlet toko Anda"
@@ -883,7 +872,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                     </Text>
                   </View>
                   <Text style={styles.driverJourneyEta}>
-                    {selectedOrder.status === "Sampai Pickup" ? "Sudah di lokasi" : "ETA ~5 mnt"}
+                    {selectedOrder.status === "Sampai Pickup" ? "Sudah tiba di toko" : "GPS belum tersedia"}
                   </Text>
                 </View>
 
@@ -894,7 +883,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                   <View style={{ flex: 1 }}>
                     <Text style={styles.driverProfileName}>{selectedOrder.driver.name}</Text>
                     <Text style={styles.driverProfileSub}>
-                      {selectedOrder.driver.vehicle || "Motor"} • {selectedOrder.driver.plateNumber || "Kurir GEOVERSE"}
+                      {selectedOrder.driver.vehicle || "Kendaraan belum tersedia"} • {selectedOrder.driver.plateNumber || "Plat nomor belum tersedia"}
                     </Text>
                   </View>
                   <View style={styles.driverQuickActionsRow}>
@@ -906,13 +895,11 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                       <MessageSquare size={13} color="#15803D" />
                       <Text style={styles.driverChatPillText}>Chat</Text>
                     </TouchableOpacity>
-                    {selectedOrder.driver.plateNumber?.includes("+") || selectedOrder.customerPhone ? (
+                    {selectedOrder.driver.phone ? (
                       <TouchableOpacity
                         style={styles.driverCallPill}
                         onPress={() => {
-                          const phone = selectedOrder.driver?.plateNumber?.includes("+")
-                            ? selectedOrder.driver.plateNumber
-                            : selectedOrder.customerPhone;
+                          const phone = selectedOrder.driver?.phone;
                           if (phone) void Linking.openURL(`tel:${phone.replace(/[^0-9+]/g, "")}`);
                         }}
                         activeOpacity={0.8}
@@ -929,10 +916,11 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
             <View style={{ marginTop: 10 }}>
               <LiveOrderTrackingMap
                 storeName={selectedOrder.storeName || "Toko Marketplace Saya"}
-                storeAddress={selectedOrder.storeAddress || "Toko Marketplace, Bangkalan"}
+                storeAddress={selectedOrder.storeAddress || ""}
                 customerAddress={selectedOrder.address || selectedOrder.customer}
+                marketplaceMode
                 driverName={selectedOrder.driver?.name}
-                driverVehicle={selectedOrder.driver?.plateNumber || selectedOrder.driver?.vehicle}
+                driverVehicle={selectedOrder.driver?.vehicle}
                 orderStatus={selectedOrder.status}
                 height={270}
                 navigationMode={mapRouteMode}
@@ -1055,20 +1043,16 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
           {selectedOrder.status === "Siap" && selectedOrder.driver && (
             <View style={styles.dualActionsRow}>
               <TouchableOpacity
-                style={[styles.sheetBtn, styles.sheetBtnOutline]}
+                style={[styles.sheetBtn, styles.sheetBtnSolid]}
                 onPress={() => openChat(selectedOrder, "driver")}
                 activeOpacity={0.8}
               >
-                <MessageSquare size={16} color="#15803D" />
-                <Text style={styles.sheetBtnTextOutline}>Chat Kurir</Text>
+                <MessageSquare size={16} color="#FFFFFF" />
+                <Text style={styles.sheetBtnTextSolid}>Chat Kurir</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#0D7A53" }]}
-                onPress={() => handleUpdateStatus(selectedOrder.id, "Menuju Pickup")}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.sheetBtnTextSolid}>Kurir Menuju Toko</Text>
-              </TouchableOpacity>
+              <View style={[styles.sheetBtn, styles.sheetBtnOutline]}>
+                <Text style={styles.sheetBtnTextOutline}>Menunggu kurir memulai perjalanan</Text>
+              </View>
             </View>
           )}
 
@@ -1082,25 +1066,17 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                 <MessageSquare size={16} color="#15803D" />
                 <Text style={styles.sheetBtnTextOutline}>Chat Kurir</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#2563EB" }]}
-                onPress={() => handleUpdateStatus(selectedOrder.id, "Sampai Pickup")}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.sheetBtnTextSolid}>Kurir Tiba di Toko</Text>
-              </TouchableOpacity>
+              <View style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#2563EB" }]}>
+                <Text style={styles.sheetBtnTextSolid}>Kurir menuju toko</Text>
+              </View>
             </View>
           )}
 
           {selectedOrder.status === "Sampai Pickup" && (
-            <TouchableOpacity
-              style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#7E22CE" }]}
-              onPress={() => handleUpdateStatus(selectedOrder.id, "Mengantar")}
-              activeOpacity={0.85}
-            >
+            <View style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#7E22CE" }]}>
               <CheckCircle size={18} color="#FFFFFF" />
-              <Text style={styles.sheetBtnTextSolid}>Serahkan Pesanan ke Kurir (Mulai Antar)</Text>
-            </TouchableOpacity>
+              <Text style={styles.sheetBtnTextSolid}>Kurir telah tiba, menunggu konfirmasi pengambilan</Text>
+            </View>
           )}
 
           {(selectedOrder.status === "Mengantar" || selectedOrder.status === "Diambil" || selectedOrder.status === "Dikirim") && (
@@ -1113,14 +1089,10 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                 <Truck size={16} color="#0891B2" />
                 <Text style={[styles.sheetBtnTextOutline, { color: "#0891B2" }]}>Chat Kurir</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#0891B2" }]}
-                onPress={() => handleUpdateStatus(selectedOrder.id, "Selesai")}
-                activeOpacity={0.85}
-              >
-                <CheckCircle size={18} color="#FFFFFF" />
-                <Text style={styles.sheetBtnTextSolid}>Selesaikan Pesanan</Text>
-              </TouchableOpacity>
+              <View style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#0891B2" }]}>
+                <Truck size={18} color="#FFFFFF" />
+                <Text style={styles.sheetBtnTextSolid}>Sedang diantar ke pelanggan</Text>
+              </View>
             </View>
           )}
 

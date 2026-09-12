@@ -4,6 +4,29 @@ const MarketplaceProduct = require("../models/MarketplaceProduct");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { syncConversationForOrder } = require("../services/conversationService");
+const { getMarketplaceTransition, getMarketplaceStatusNotification } = require("../utils/marketplaceOrderLifecycle");
+
+const isValidUserId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
+const emitToUser = (io, userId, event, payload) => {
+  if (userId) io?.to(`user:${String(userId)}`).emit(event, payload);
+};
+
+const createNotificationsForStatus = async (session, order, status) => {
+  const specification = getMarketplaceStatusNotification(status, order.orderCode, order.driverName || "Driver");
+  if (!specification) return [];
+  const recipients = new Set();
+  if (specification.recipients.includes("owner") && isValidUserId(order.ownerId)) recipients.add(String(order.ownerId));
+  if (specification.recipients.includes("customer") && isValidUserId(order.customerId)) recipients.add(String(order.customerId));
+  const documents = [...recipients].map((userId) => ({
+    userId,
+    title: specification.title,
+    message: specification.message,
+    type: "order_status",
+    relatedId: order._id,
+  }));
+  if (documents.length) await Notification.create(documents, { session, ordered: true });
+  return documents;
+};
 
 const createOrder = async (req, res) => {
   try {
@@ -11,9 +34,7 @@ const createOrder = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(ownerId) || !customerId || !customerName || customerName === "Customer Rangers" || customerName === "Customer GEOVERSE" || !address || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: "Data pesanan marketplace belum lengkap" });
     }
-
-    const productIds = items.map((item) => item.productId);
-    const products = await MarketplaceProduct.find({ _id: { $in: productIds }, ownerId, isActive: true });
+    const products = await MarketplaceProduct.find({ _id: { $in: items.map((item) => item.productId) }, ownerId, isActive: true });
     const productMap = new Map(products.map((product) => [String(product._id), product]));
     const orderItems = items.map((item) => {
       const product = productMap.get(String(item.productId));
@@ -21,49 +42,23 @@ const createOrder = async (req, res) => {
       return { productId: product._id, name: product.name, quantity: Number(item.quantity), price: product.price, notes: String(item.notes || "").trim().slice(0, 120) };
     });
     const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const safeDeliveryFee = Number(deliveryFee || 0);
-    const safeServiceFee = Number(serviceFee || 0);
-    const safeDriverTip = Number(driverTip || 0);
-    const safeDiscount = Math.max(0, Number(discount || 0));
-    const totalAmount = Math.max(0, subtotal + safeDeliveryFee + safeServiceFee + safeDriverTip - safeDiscount);
     const ownerProfile = await User.findById(ownerId).select("name address roleData");
     const order = await MarketplaceOrder.create({
-      orderCode: `RNG-MKT-${Date.now().toString().slice(-8)}`,
-      ownerId, storeId: String(ownerId), customerId: customerId || "", customerName, customerPhone: customerPhone || "", address, addressSnapshot: addressSnapshot || null, notes: notes || "",
-      items: orderItems,
-      storeName: ownerProfile?.roleData?.businessName || ownerProfile?.name || "",
+      orderCode: `RNG-MKT-${Date.now().toString().slice(-8)}`, ownerId, storeId: String(ownerId), customerId,
+      customerName, customerPhone: customerPhone || "", address, addressSnapshot: addressSnapshot || null, notes: notes || "",
+      items: orderItems, storeName: ownerProfile?.roleData?.businessName || ownerProfile?.name || "",
       storeAddress: ownerProfile?.roleData?.businessAddress || ownerProfile?.roleData?.address || ownerProfile?.address || "",
-      subtotal, deliveryFee: safeDeliveryFee, serviceFee: safeServiceFee,
-      driverTip: safeDriverTip, voucherId: voucherId || "", discount: safeDiscount,
-      totalAmount, paymentMethod: paymentMethod || "cod",
-      paymentStatus: paymentStatus || (paymentMethod === "cod" ? "Menunggu pembayaran di tempat" : "Berhasil"),
+      subtotal, deliveryFee: Number(deliveryFee || 0), serviceFee: Number(serviceFee || 0), driverTip: Number(driverTip || 0),
+      voucherId: voucherId || "", discount: Number(discount || 0),
+      totalAmount: subtotal + Number(deliveryFee || 0) + Number(serviceFee || 0) + Number(driverTip || 0) - Number(discount || 0),
+      paymentMethod: paymentMethod || "cod", paymentStatus: paymentStatus || "Menunggu pembayaran di tempat",
     });
     await syncConversationForOrder(order, "marketplace");
-    await Promise.all(orderItems.map((item) => MarketplaceProduct.updateOne(
-      { _id: item.productId, stock: { $gte: item.quantity } },
-      { $inc: { stock: -item.quantity, sold: item.quantity } }
-    )));
-    if (mongoose.Types.ObjectId.isValid(customerId)) {
-      await Notification.create({
-        userId: customerId,
-        title: "Pesanan berhasil dibuat",
-        message: `Pesanan ${order.orderCode} telah diteruskan ke toko.`,
-        type: "payment_confirmed",
-        relatedId: order._id,
-      });
-    }
-    const owner = await User.findById(ownerId).select("_id");
-    if (owner) {
-      await Notification.create({
-        userId: owner._id,
-        title: "Pesanan baru masuk",
-        message: `${customerName} membuat pesanan ${order.orderCode}.`,
-        type: "order_new",
-        relatedId: order._id,
-      });
-    }
-    req.io?.to(`owner:${ownerId}`).emit("order_created", order);
-    req.io?.to(`customer:${customerId}`).emit("order_created", order);
+    await Promise.all(orderItems.map((item) => MarketplaceProduct.updateOne({ _id: item.productId, stock: { $gte: item.quantity } }, { $inc: { stock: -item.quantity, sold: item.quantity } })));
+    const recipients = [customerId, ownerId].filter(isValidUserId);
+    await Notification.create(recipients.map((userId) => ({ userId, title: "Pesanan Marketplace dibuat", message: `Pesanan ${order.orderCode} telah diteruskan ke toko.`, type: "order_new", relatedId: order._id })));
+    emitToUser(req.io, ownerId, "order_created", order);
+    emitToUser(req.io, customerId, "order_created", order);
     return res.status(201).json({ success: true, data: order });
   } catch (error) {
     console.error("Create marketplace order error:", error);
@@ -74,9 +69,8 @@ const createOrder = async (req, res) => {
 const getOrdersByOwner = async (req, res) => {
   try {
     const orders = await MarketplaceOrder.find({
-      ownerId: req.params.ownerId,
-      customerId: { $nin: ["", null] },
-      customerName: { $nin: ["Customer Rangers", "Customer GEOVERSE"] },
+      ownerId: req.authUser._id,
+      customerId: { $regex: /^[a-fA-F0-9]{24}$/ },
     }).sort({ createdAt: -1 }).lean();
     return res.json({ success: true, data: orders });
   } catch (error) {
@@ -87,7 +81,7 @@ const getOrdersByOwner = async (req, res) => {
 
 const getOrdersByCustomer = async (req, res) => {
   try {
-    const orders = await MarketplaceOrder.find({ customerId: req.params.customerId }).sort({ createdAt: -1 }).lean();
+    const orders = await MarketplaceOrder.find({ customerId: String(req.authUser._id) }).sort({ createdAt: -1 }).lean();
     return res.json({ success: true, data: orders });
   } catch (error) {
     console.error("Get customer marketplace orders error:", error);
@@ -96,176 +90,174 @@ const getOrdersByCustomer = async (req, res) => {
 };
 
 const updateOrderStatus = async (req, res) => {
+  let session;
   try {
-    const order = await MarketplaceOrder.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true, runValidators: true });
-    if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
-    await syncConversationForOrder(order, "marketplace");
-    await Notification.create({
-      userId: driver._id,
-      title: "Order baru ditugaskan",
-      message: `Pesanan ${order.orderCode} siap Anda proses.`,
-      type: "order_status",
-      relatedId: order._id,
+    const authUser = req.authUser;
+    const nextStatus = req.body?.status;
+    if (!authUser || !["driver", "pemilik_marketplace"].includes(authUser.role)) {
+      return res.status(403).json({ success: false, message: "Aksi ini hanya tersedia untuk driver atau pemilik Marketplace." });
+    }
+    const current = await MarketplaceOrder.findById(req.params.id).lean();
+    if (!current) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    if (authUser.role === "driver" && String(current.driverId) !== String(authUser._id)) {
+      return res.status(403).json({ success: false, message: "Pesanan ini tidak ditugaskan kepada akun driver Anda." });
+    }
+    if (authUser.role === "pemilik_marketplace" && String(current.ownerId) !== String(authUser._id)) {
+      return res.status(403).json({ success: false, message: "Pesanan ini bukan milik toko Anda." });
+    }
+    if (!getMarketplaceTransition(authUser.role, current.status, nextStatus)) {
+      return res.status(409).json({ success: false, message: `Perubahan status ${current.status} ke ${nextStatus || "(kosong)"} tidak diizinkan.` });
+    }
+
+    session = await mongoose.startSession();
+    let order;
+    let notifiedDrivers = [];
+    let notificationRecipients = [];
+    await session.withTransaction(async () => {
+      const filter = { _id: current._id, status: current.status };
+      if (authUser.role === "driver") filter.driverId = String(authUser._id);
+      else filter.ownerId = authUser._id;
+      order = await MarketplaceOrder.findOneAndUpdate(filter, { status: nextStatus }, { new: true, runValidators: true, session });
+      if (!order) {
+        const error = new Error("Status pesanan sudah berubah. Muat ulang lalu coba lagi."); error.statusCode = 409; throw error;
+      }
+      if (nextStatus === "Siap" && !order.driverId) {
+        const drivers = await User.find({ role: "driver", status: { $ne: "rejected" } }).select("_id").session(session);
+        notifiedDrivers = drivers.map((driver) => String(driver._id));
+        notificationRecipients = notifiedDrivers;
+        if (notifiedDrivers.length) await Notification.create(notifiedDrivers.map((userId) => ({
+          userId, title: "Pesanan Siap Dijemput", message: `${order.storeName || "Toko"} telah menyiapkan pesanan ${order.orderCode}.`, type: "order_new", relatedId: order._id,
+        })), { session, ordered: true });
+      } else {
+        const notifications = await createNotificationsForStatus(session, order, nextStatus);
+        notificationRecipients = notifications.map((notification) => String(notification.userId));
+      }
     });
-    // Multi-role notifications based on driver journey stage
-    const driverName = order.driverName || "Kurir GEOVERSE";
-    const orderCode = order.orderCode || `#${String(order._id).slice(-8)}`;
+    await session.endSession(); session = null;
 
-    if (order.status === "Menuju Pickup") {
-      // Notify Owner that driver is on the way to pick up
-      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
-        await Notification.create({
-          userId: order.ownerId,
-          title: "Driver Menuju Toko",
-          message: `Driver ${driverName} sedang dalam perjalanan ke toko Anda untuk mengambil pesanan ${orderCode}.`,
-          type: "order_status",
-          relatedId: order._id,
-        });
-      }
-      // Notify Customer that driver is heading to store
-      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
-        await Notification.create({
-          userId: order.customerId,
-          title: "Driver Menuju Toko",
-          message: `Driver ${driverName} sedang menuju toko untuk mengambil pesanan Anda (${orderCode}).`,
-          type: "order_status",
-          relatedId: order._id,
-        });
-      }
-    } else if (order.status === "Sampai Pickup") {
-      // Notify Owner that driver arrived
-      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
-        await Notification.create({
-          userId: order.ownerId,
-          title: "Driver Telah Tiba di Toko",
-          message: `Driver ${driverName} telah sampai di toko Anda untuk mengambil pesanan ${orderCode}.`,
-          type: "order_status",
-          relatedId: order._id,
-        });
-      }
-    } else if (order.status === "Mengantar") {
-      // Notify Customer that driver is on the way to delivery address
-      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
-        await Notification.create({
-          userId: order.customerId,
-          title: "Pesanan Sedang Diantar!",
-          message: `Driver ${driverName} sedang dalam perjalanan mengantarkan pesanan ${orderCode} ke alamat Anda.`,
-          type: "order_status",
-          relatedId: order._id,
-        });
-      }
-      // Notify Owner that order left for delivery
-      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
-        await Notification.create({
-          userId: order.ownerId,
-          title: "Pesanan Berangkat ke Customer",
-          message: `Driver ${driverName} telah membawa pesanan ${orderCode} dan sedang mengantar ke customer.`,
-          type: "order_status",
-          relatedId: order._id,
-        });
-      }
-    } else if (order.status === "Selesai") {
-      // Notify Customer that order is complete
-      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
-        await Notification.create({
-          userId: order.customerId,
-          title: "Pesanan Selesai Diantar",
-          message: `Pesanan marketplace ${orderCode} telah berhasil diantarkan oleh ${driverName}. Terima kasih!`,
-          type: "order_status",
-          relatedId: order._id,
-        });
-      }
-      // Notify Owner that delivery is complete
-      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
-        await Notification.create({
-          userId: order.ownerId,
-          title: "Pengantaran Selesai",
-          message: `Pesanan ${orderCode} telah sukses diselesaikan oleh driver ${driverName}.`,
-          type: "order_status",
-          relatedId: order._id,
-        });
-      }
-    } else {
-      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
-        await Notification.create({
-          userId: order.customerId,
-          title: "Status pesanan diperbarui",
-          message: `Pesanan ${orderCode} sekarang ${order.status}.`,
-          type: "order_status",
-          relatedId: order._id,
-        });
-      }
-    }
-
-    req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
-    req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);
-    if (order.driverId) req.io?.to(`driver:${order.driverId}`).emit("order_status_updated", order);
-    if (order.status === "Siap" && !order.driverId) {
-      const drivers = await User.find({ role: "driver", status: { $ne: "rejected" } }).select("_id");
-      await Promise.all(drivers.map((driver) => Notification.create({
-        userId: driver._id,
-        title: "Pesanan Baru untuk Diantarkan",
-        message: `${order.storeName || "Toko"} - ${order.customerName}, pickup: ${order.storeAddress || "alamat toko"}.`,
-        type: "order_new",
-        relatedId: order._id,
-      })));
-      drivers.forEach((driver) => req.io?.to(`driver:${driver._id}`).emit("order_assigned", order));
-    }
-    return res.json({ success: true, data: order });
+    void syncConversationForOrder(order, "marketplace").catch((error) => console.error("Marketplace conversation sync error:", error));
+    [order.ownerId, order.customerId, order.driverId].forEach((userId) => emitToUser(req.io, userId, "order_status_updated", order));
+    if (nextStatus === "Siap") notifiedDrivers.forEach((userId) => emitToUser(req.io, userId, "order_assigned", order));
+    notificationRecipients.forEach((userId) => emitToUser(req.io, userId, "notification:new", { relatedId: String(order._id), type: nextStatus === "Siap" ? "order_new" : "order_status" }));
+    return res.json({ success: true, message: "Status pesanan berhasil diperbarui.", data: order });
   } catch (error) {
+    if (session) await session.endSession().catch(() => undefined);
     console.error("Update marketplace order error:", error);
-    return res.status(400).json({ success: false, message: "Gagal memperbarui status pesanan" });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message || "Status pesanan belum berhasil diperbarui." });
   }
 };
 
 const getOrdersByDriver = async (req, res) => {
   try {
+    const driverId = String(req.authUser._id);
+    if (req.params.driverId && String(req.params.driverId) !== driverId) return res.status(403).json({ success: false, message: "Anda hanya dapat melihat order untuk akun driver sendiri." });
     const orders = await MarketplaceOrder.find({
+      customerId: { $regex: /^[a-fA-F0-9]{24}$/ },
       $or: [
-        { driverId: req.params.driverId },
-        { driverId: { $in: ["", null] }, status: "Siap" },
-        { driverId: { $exists: false }, status: "Siap" },
+        { driverId },
+        { status: "Siap", driverId: { $in: ["", null] }, declinedByDrivers: { $nin: [driverId] } },
+        { status: "Siap", driverId: { $exists: false }, declinedByDrivers: { $nin: [driverId] } },
       ],
-      customerId: { $nin: ["", null] },
     }).populate("ownerId", "name address roleData").sort({ createdAt: -1 }).lean();
-    const normalizedOrders = orders.map((order) => ({
-      ...order,
-      ownerId: order.ownerId?._id || order.ownerId,
-      storeName: order.storeName || order.ownerId?.roleData?.businessName || order.ownerId?.name || "",
-      storeAddress: order.storeAddress || order.ownerId?.roleData?.businessAddress || order.ownerId?.roleData?.address || order.ownerId?.address || "",
-    }));
-    return res.json({ success: true, data: normalizedOrders });
+    const data = orders.map((order) => ({ ...order, ownerId: order.ownerId?._id || order.ownerId, storeName: order.storeName || order.ownerId?.roleData?.businessName || order.ownerId?.name || "", storeAddress: order.storeAddress || order.ownerId?.roleData?.businessAddress || order.ownerId?.roleData?.address || order.ownerId?.address || "" }));
+    return res.json({ success: true, data });
   } catch (error) {
     console.error("Get driver marketplace orders error:", error);
     return res.status(500).json({ success: false, message: "Gagal mengambil order driver" });
   }
 };
 
-const assignDriver = async (req, res) => {
+const acceptDriverOrder = async (req, res) => {
+  let session;
   try {
-    const { driverId } = req.body;
-    const driver = await User.findOne({ _id: driverId, role: "driver" }).select("_id name phone");
-    if (!driver) return res.status(400).json({ success: false, message: "Driver tidak valid" });
-    const order = await MarketplaceOrder.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        $or: [
-          { driverId: { $in: ["", null] }, status: { $in: ["Menunggu", "Diproses", "Siap"] } },
-          { driverId: String(driver._id) },
-        ],
-      },
-      { driverId: String(driver._id), driverName: driver.name, driverPhone: driver.phone, status: "Menuju Pickup" },
-      { new: true, runValidators: true }
-    );
-    if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
-    req.io?.to(`driver:${driver._id}`).emit("order_assigned", order);
-    req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);
-    req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
-    return res.json({ success: true, data: order });
+    const driver = req.authUser;
+    session = await mongoose.startSession();
+    let order;
+    let replay = false;
+    await session.withTransaction(async () => {
+      order = await MarketplaceOrder.findOneAndUpdate(
+        { _id: req.params.id, status: "Siap", driverId: { $in: ["", null] }, declinedByDrivers: { $nin: [String(driver._id)] } },
+        { $set: { driverId: String(driver._id), driverName: driver.name, driverPhone: driver.phone || "", status: "Menuju Pickup" } },
+        { new: true, runValidators: true, session }
+      );
+      if (!order) {
+        const existing = await MarketplaceOrder.findById(req.params.id).session(session);
+        if (!existing) { const error = new Error("Pesanan tidak ditemukan."); error.statusCode = 404; throw error; }
+        if (String(existing.driverId) === String(driver._id) && ["Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Selesai"].includes(existing.status)) { order = existing; replay = true; return; }
+        const error = new Error(existing.driverId ? "Pesanan sudah diterima driver lain." : "Pesanan tidak lagi tersedia untuk diterima."); error.statusCode = 409; throw error;
+      }
+      await createNotificationsForStatus(session, order, "Menuju Pickup");
+    });
+    await session.endSession(); session = null;
+    if (!replay) {
+      void syncConversationForOrder(order, "marketplace").catch((error) => console.error("Marketplace conversation sync error:", error));
+      [order.ownerId, order.customerId].forEach((userId) => {
+        emitToUser(req.io, userId, "order_status_updated", order);
+        emitToUser(req.io, userId, "notification:new", { relatedId: String(order._id), type: "order_status" });
+      });
+    }
+    return res.json({ success: true, message: replay ? "Pesanan sudah ditugaskan kepada Anda." : "Pesanan berhasil diterima.", data: order });
   } catch (error) {
-    console.error("Assign marketplace driver error:", error);
-    return res.status(400).json({ success: false, message: "Gagal menugaskan driver" });
+    if (session) await session.endSession().catch(() => undefined);
+    console.error("Accept marketplace order error:", error);
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message || "Gagal menerima pesanan." });
   }
 };
 
-module.exports = { createOrder, getOrdersByOwner, getOrdersByCustomer, getOrdersByDriver, assignDriver, updateOrderStatus };
+const declineDriverOrder = async (req, res) => {
+  try {
+    const order = await MarketplaceOrder.findOneAndUpdate(
+      { _id: req.params.id, status: "Siap", driverId: { $in: ["", null] } },
+      { $addToSet: { declinedByDrivers: String(req.authUser._id) } },
+      { new: true }
+    );
+    if (!order) return res.status(409).json({ success: false, message: "Pesanan tidak lagi tersedia untuk ditolak." });
+    return res.json({ success: true, message: "Pesanan dihapus dari daftar Anda.", data: order });
+  } catch (error) {
+    console.error("Decline marketplace order error:", error);
+    return res.status(500).json({ success: false, message: "Pesanan belum berhasil ditolak." });
+  }
+};
+
+const assignDriver = async (req, res) => {
+  let session;
+  try {
+    const ownerId = String(req.authUser._id);
+    const current = await MarketplaceOrder.findById(req.params.id).lean();
+    if (!current) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
+    if (String(current.ownerId) !== ownerId) return res.status(403).json({ success: false, message: "Pesanan ini bukan milik toko Anda." });
+    const driver = await User.findOne({ _id: req.body?.driverId, role: "driver", status: { $ne: "rejected" } }).select("_id name phone");
+    if (!driver) return res.status(400).json({ success: false, message: "Driver tidak valid." });
+    if (current.status !== "Siap" || current.driverId) return res.status(409).json({ success: false, message: "Pesanan harus berstatus Siap dan belum ditugaskan ke driver." });
+
+    session = await mongoose.startSession();
+    let order;
+    await session.withTransaction(async () => {
+      order = await MarketplaceOrder.findOneAndUpdate(
+        { _id: req.params.id, ownerId, status: "Siap", driverId: { $in: ["", null] } },
+        { $set: { driverId: String(driver._id), driverName: driver.name, driverPhone: driver.phone || "", status: "Menuju Pickup" } },
+        { new: true, runValidators: true, session }
+      );
+      if (!order) { const error = new Error("Pesanan sudah diterima atau ditugaskan ke driver lain."); error.statusCode = 409; throw error; }
+      await createNotificationsForStatus(session, order, "Menuju Pickup");
+      await Notification.create([{
+        userId: driver._id,
+        title: "Pesanan Ditugaskan",
+        message: `Anda ditugaskan mengantar pesanan ${order.orderCode}. Status saat ini: Menuju Pickup.`,
+        type: "order_status",
+        relatedId: order._id,
+      }], { session, ordered: true });
+    });
+    await session.endSession(); session = null;
+    void syncConversationForOrder(order, "marketplace").catch((error) => console.error("Marketplace conversation sync error:", error));
+    [driver._id, order.ownerId, order.customerId].forEach((userId) => emitToUser(req.io, userId, userId === driver._id ? "order_assigned" : "order_status_updated", order));
+    [driver._id, order.ownerId, order.customerId].forEach((userId) => emitToUser(req.io, userId, "notification:new", { relatedId: String(order._id), type: "order_status" }));
+    return res.json({ success: true, message: "Driver berhasil ditugaskan.", data: order });
+  } catch (error) {
+    if (session) await session.endSession().catch(() => undefined);
+    console.error("Assign marketplace driver error:", error);
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message || "Gagal menugaskan driver." });
+  }
+};
+
+module.exports = { createOrder, getOrdersByOwner, getOrdersByCustomer, getOrdersByDriver, acceptDriverOrder, declineDriverOrder, assignDriver, updateOrderStatus };

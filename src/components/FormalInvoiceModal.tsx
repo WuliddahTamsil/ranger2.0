@@ -93,16 +93,18 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
   const formattedId = cleanId.length >= 8 ? cleanId.slice(-8).toUpperCase() : cleanId.toUpperCase();
   const invoiceNum = data.invoiceNumber || `INV/${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, "0")}${new Date().getDate().toString().padStart(2, "0")}/RNG-${formattedId}`;
   
-  const subtotal = data.subtotal || data.items.reduce((sum, item) => sum + item.total, 0) || data.total;
-  const deliveryFee = data.deliveryFee ?? (data.total > subtotal ? data.total - subtotal : 5000);
-  const serviceFee = data.serviceFee ?? 1000;
+  const subtotal = data.subtotal;
+  const deliveryFee = data.deliveryFee ?? 0;
+  const serviceFee = data.serviceFee ?? 0;
   const discount = data.discount || 0;
-  const finalTotal = data.total || (subtotal + deliveryFee + serviceFee - discount);
-  const paymentMethod = data.paymentMethod || "QRIS / Transfer Bank BCA";
-  const dateStr = data.date || "Hari ini";
-  const timeStr = data.time || "14:45 WIB";
-  const storeName = data.storeName || (data.orderType === "Catering" ? "Dapur Barokah Catering" : "Toko Marketplace GEOVERSE");
-  const storeAddress = data.storeAddress || "Jl. Telang Raya No. 45, Kamal, Bangkalan, Madura";
+  const finalTotal = data.total ?? (subtotal + deliveryFee + serviceFee - discount);
+  const paymentMethod = data.paymentMethod || "Belum tersedia";
+  const paymentStatus = data.paymentStatus || (isCanceled ? "Dibatalkan" : "Belum tersedia");
+  const stampStatus = isCanceled ? "DIBATALKAN" : data.status.toUpperCase();
+  const dateStr = data.date || "Tanggal belum tersedia";
+  const timeStr = data.time || "Waktu belum tersedia";
+  const storeName = data.storeName || (data.orderType === "Catering" ? "Mitra Catering" : "Mitra Marketplace");
+  const storeAddress = data.storeAddress || "Alamat mitra belum tersedia";
 
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
@@ -129,7 +131,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Faktur Resmi - ${invoiceNum}</title>
+  <title>Ringkasan Pesanan - ${invoiceNum}</title>
   <style>
     @page { size: A4 portrait; margin: 12mm 15mm; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -375,7 +377,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
             <div class="brand-address">Bangkalan, Jawa Timur • cs@geoverse.id</div>
           </td>
           <td class="inv-header-right">
-            <div class="inv-title-badge ${isCanceled ? "canceled" : ""}">FAKTUR RESMI ELEKTRONIK</div>
+            <div class="inv-title-badge ${isCanceled ? "canceled" : ""}">RINGKASAN PESANAN</div>
             <div class="inv-code">${invoiceNum}</div>
             <div class="inv-date">Tanggal: ${dateStr}, ${timeStr}</div>
           </td>
@@ -384,8 +386,8 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
 
       <div class="stamp-wrap">
         <div class="stamp-box">
-          <div class="stamp-title">${isCanceled ? "✕ DIBATALKAN" : "✓ LUNAS / PAID"}</div>
-          <div class="stamp-sub">DIVERIFIKASI SISTEM PEMBAYARAN GEOVERSE</div>
+          <div class="stamp-title">${stampStatus}</div>
+          <div class="stamp-sub">STATUS PESANAN GEOVERSE</div>
         </div>
       </div>
 
@@ -394,21 +396,21 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
           <td class="party-box">
             <div class="party-heading">DITERBITKAN OLEH:</div>
             <div class="party-name">${storeName}</div>
-            <div class="party-detail">Mitra Terverifikasi GEOVERSE</div>
+            <div class="party-detail">Mitra GEOVERSE</div>
             <div class="party-detail">${storeAddress}</div>
           </td>
           <td class="party-box">
             <div class="party-heading">DITUJUKAN KEPADA:</div>
             <div class="party-name">${data.customerName}</div>
             ${data.customerPhone ? `<div class="party-detail">Telp: ${data.customerPhone}</div>` : ""}
-            <div class="party-detail">${data.customerAddress || "Bangkalan, Madura"}</div>
+            <div class="party-detail">${data.customerAddress || "Alamat pelanggan belum tersedia"}</div>
           </td>
         </tr>
       </table>
 
       ${data.driverName ? `
       <div class="logistics-bar">
-        <strong>Pengantaran Kurir GEOVERSE:</strong> ${data.driverName} • ${data.driverVehicle || "Motor"} ${data.driverPlate ? `(${data.driverPlate})` : ""}
+        <strong>Pengantaran Kurir GEOVERSE:</strong> ${data.driverName} • ${data.driverVehicle || "Kendaraan belum tersedia"} ${data.driverPlate ? `(${data.driverPlate})` : ""}
       </div>
       ` : ""}
 
@@ -454,14 +456,14 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
 
       <div style="font-size: 11px; color: #64748B; margin-bottom: 20px;">
         <strong>Metode Pembayaran:</strong> ${paymentMethod} &bull; 
-        <strong>Status:</strong> ${isCanceled ? '<span style="color:#DC2626; font-weight:700;">DIBATALKAN</span>' : '<span style="color:#16A34A; font-weight:700;">LUNAS</span>'}
+        <strong>Status Pembayaran:</strong> ${paymentStatus}
       </div>
 
       <div class="security-footer">
         <div class="barcode-visual">||| | || ||| || | ||| || |||| | ||| || ||| |</div>
         <div class="barcode-code">SEC-AUTH-${cleanId.slice(0, 16).toUpperCase()}</div>
         <div class="legal-notice">
-          Faktur ini diterbitkan secara elektronik oleh sistem GEOVERSE 2.0 dan merupakan dokumen bukti pembayaran resmi yang sah. Tidak memerlukan tanda tangan basah berdasarkan UU ITE Republik Indonesia.
+          Dokumen ini merupakan ringkasan pesanan dari GEOVERSE. Status pembayaran mengikuti data yang tercantum di atas.
         </div>
       </div>
     </div>
@@ -496,7 +498,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
         const itemsListText = data.items
           .map((i, idx) => `${idx + 1}. ${i.name} (${i.quantity}x) - ${rp(i.total)}`)
           .join("\n");
-        const message = `==============================\n📄 FAKTUR RESMI GEOVERSE 2.0\n==============================\nNo. Invoice: ${invoiceNum}\nTanggal: ${dateStr}, ${timeStr}\nStatus: ${isCanceled ? "DIBATALKAN" : "LUNAS"}\n\nMitra: ${storeName}\nPemesan: ${data.customerName}\nTotal: ${rp(finalTotal)}\nFile PDF tersimpan di perangkat.`;
+        const message = `==============================\n📄 RINGKASAN PESANAN GEOVERSE\n==============================\nNo. Referensi: ${invoiceNum}\nTanggal: ${dateStr}, ${timeStr}\nStatus pesanan: ${stampStatus}\nStatus pembayaran: ${paymentStatus}\n\nMitra: ${storeName}\nPemesan: ${data.customerName}\nTotal: ${rp(finalTotal)}\nFile PDF tersimpan di perangkat.`;
         await Share.share({ message, title: `Invoice ${invoiceNum}` });
       }
     } catch (err: any) {
@@ -574,7 +576,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
                 </View>
 
                 <View style={styles.invoiceCodeBlock}>
-                  <Text style={styles.invoiceTitleBadge}>INVOICE RESMI</Text>
+                  <Text style={styles.invoiceTitleBadge}>RINGKASAN PESANAN</Text>
                   <Text style={styles.invoiceNumText}>{invoiceNum}</Text>
                   <Text style={styles.invoiceDateText}>{dateStr}, {timeStr}</Text>
                 </View>
@@ -584,10 +586,10 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
               <View style={styles.stampContainer}>
                 <View style={[styles.stampBox, isCanceled ? styles.stampBoxCanceled : styles.stampBoxPaid]}>
                   <Text style={[styles.stampTextMain, isCanceled ? styles.stampTextCanceled : styles.stampTextPaid]}>
-                    {isCanceled ? "✕ DIBATALKAN" : "✓ LUNAS / PAID"}
+                    {stampStatus}
                   </Text>
                   <Text style={[styles.stampTextSub, isCanceled ? styles.stampTextCanceled : styles.stampTextPaid]}>
-                    VERIFIKASI SISTEM ELEKTRONIK
+                    STATUS PESANAN GEOVERSE
                   </Text>
                 </View>
               </View>
@@ -603,7 +605,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
                     <Text style={styles.partyHeaderText}>DITERBITKAN OLEH:</Text>
                   </View>
                   <Text style={styles.partyName}>{storeName}</Text>
-                  <Text style={styles.partyDesc}>Mitra Terverifikasi GEOVERSE</Text>
+                  <Text style={styles.partyDesc}>Mitra GEOVERSE</Text>
                   <View style={styles.partyAddressRow}>
                     <MapPin size={12} color="#64748B" />
                     <Text style={styles.partyAddressText} numberOfLines={2}>
@@ -630,7 +632,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
                   <View style={styles.partyAddressRow}>
                     <MapPin size={12} color="#64748B" />
                     <Text style={styles.partyAddressText} numberOfLines={2}>
-                      {data.customerAddress || "Bangkalan, Madura"}
+                      {data.customerAddress || "Alamat pelanggan belum tersedia"}
                     </Text>
                   </View>
                 </View>
@@ -645,7 +647,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
                   <View style={{ flex: 1 }}>
                     <Text style={styles.logisticsTitle}>Pengantaran Kurir GEOVERSE</Text>
                     <Text style={styles.logisticsDesc}>
-                      Kurir: <Text style={{ fontWeight: "700", color: "#0F172A" }}>{data.driverName}</Text> • {data.driverVehicle || "Motor"} {data.driverPlate ? `(${data.driverPlate})` : ""}
+                      Kurir: <Text style={{ fontWeight: "700", color: "#0F172A" }}>{data.driverName}</Text> • {data.driverVehicle || "Kendaraan belum tersedia"} {data.driverPlate ? `(${data.driverPlate})` : ""}
                     </Text>
                   </View>
                   <View style={styles.logisticsBadge}>
@@ -666,10 +668,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
 
                 {data.items.length === 0 ? (
                   <View style={styles.tableBodyRow}>
-                    <Text style={[styles.tableCell, { flex: 1 }]}>Menu / Produk Pesanan</Text>
-                    <Text style={[styles.tableCell, { width: 38, textAlign: "center" }]}>1x</Text>
-                    <Text style={[styles.tableCell, { width: 75, textAlign: "right" }]}>{rp(data.total)}</Text>
-                    <Text style={[styles.tableCellBold, { width: 85, textAlign: "right" }]}>{rp(data.total)}</Text>
+                    <Text style={[styles.tableCell, { flex: 1 }]}>Rincian item belum tersedia</Text>
                   </View>
                 ) : (
                   data.items.map((item, index) => (
@@ -724,7 +723,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
                     <View>
                       <Text style={styles.grandTotalLabel}>TOTAL PEMBAYARAN</Text>
                       <Text style={styles.paymentMethodSub}>{paymentMethod}</Text>
-                      <Text style={styles.paymentStatusSub}>{data.paymentStatus || (isCanceled ? "Dibatalkan" : "Lunas")}</Text>
+                      <Text style={styles.paymentStatusSub}>{paymentStatus}</Text>
                     </View>
                     <Text style={styles.grandTotalVal}>{rp(finalTotal)}</Text>
                   </View>
@@ -738,7 +737,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
                   <Text style={styles.barcodeNumber}>SEC-AUTH-{cleanId.slice(0, 16).toUpperCase()}</Text>
                 </View>
                 <Text style={styles.legalNotice}>
-                  Faktur ini diterbitkan secara elektronik oleh sistem GEOVERSE 2.0 dan merupakan dokumen bukti pembayaran resmi yang sah. Tidak memerlukan tanda tangan basah.
+                  Dokumen ini merupakan ringkasan pesanan dari GEOVERSE. Status pembayaran mengikuti data yang tercantum di atas.
                 </Text>
               </View>
             </View>

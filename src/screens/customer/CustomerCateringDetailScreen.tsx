@@ -1,6 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useMemo, useState, useEffect } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -16,7 +15,6 @@ import {
 } from "react-native";
 import { getSelectedCateringShop } from "./customerCateringStore";
 import { getCateringProducts, createCateringOrder } from "../../services/api";
-import { restoreStoredAccount } from "../auth/authService";
 import {
   CalendarDays,
   Check,
@@ -28,8 +26,7 @@ import {
   Minus,
   Plus,
   ReceiptText,
-  ShieldCheck,
-  Wallet,
+  ShieldAlert,
   X,
 } from "lucide-react-native";
 import { BackHeader } from "../../components/BackHeader";
@@ -44,22 +41,6 @@ interface CustomerCateringDetailProps extends Nav {
 }
 
 type FormStep = "form" | "checkout";
-type PaymentMethod = "qris" | "gopay" | "bca_va" | "ovo";
-
-// Initial mock default (fallback)
-const defaultMenus = [
-  { id: "nasi_box", name: "Paket Nasi Box Komplit", description: "Nasi, ayam, sayur, sambal, kerupuk, dan buah", price: 25000 },
-  { id: "prasmanan", name: "Paket Prasmanan Acara", description: "Menu rumahan lengkap untuk acara keluarga dan kantor", price: 45000 },
-  { id: "snack_box", name: "Snack Box Tradisional", description: "Aneka jajanan pasar dan minuman segar", price: 18000 },
-];
-
-const paymentMethods: Array<{ id: PaymentMethod; name: string; subtitle: string; color: string }> = [
-  { id: "qris", name: "QRIS", subtitle: "Scan dengan aplikasi pembayaran", color: "#0D7A53" },
-  { id: "gopay", name: "GoPay", subtitle: "Bayar instan dengan GoPay", color: "#00AED6" },
-  { id: "bca_va", name: "BCA Virtual Account", subtitle: "Transfer otomatis", color: "#003C93" },
-  { id: "ovo", name: "OVO", subtitle: "Pembayaran cepat dan aman", color: "#4C3494" },
-];
-
 const weekdays = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
@@ -80,6 +61,8 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
   const selectedCateringShop = getSelectedCateringShop();
   const [step, setStep] = useState<FormStep>("form");
   const [menus, setMenus] = useState<any[]>([]);
+  const [menuError, setMenuError] = useState("");
+  const [menuReloadKey, setMenuReloadKey] = useState(0);
   const [selectedMenu, setSelectedMenu] = useState<any>(null);
   const [portions, setPortions] = useState(20);
   const [poDate, setPoDate] = useState(() => createDateOptions()[2]);
@@ -87,36 +70,47 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
   const [address, setAddress] = useState("");
   const [selectedAddress, setSelectedAddress] = useState<CustomerAddress | undefined>();
   const [paymentOption, setPaymentOption] = useState<CateringPaymentOption>("dp30");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("qris");
   const [dateModalVisible, setDateModalVisible] = useState(false);
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const idempotencyKey = useRef<{ signature: string; key: string } | null>(null);
 
   useEffect(() => {
-    if (!selectedCateringShop) return;
+    let active = true;
     const fetchMenus = async () => {
       setLoading(true);
+      setMenuError("");
+      if (!selectedCateringShop?.ownerId) {
+        setMenus([]);
+        setMenuError("Mitra Catering tidak ditemukan. Kembali dan pilih mitra yang tersedia.");
+        setLoading(false);
+        return;
+      }
       const res = await getCateringProducts(selectedCateringShop.ownerId);
+      if (!active) return;
       if (res.success && res.data && res.data.length > 0) {
         const mapped = res.data.map((m: any) => ({
           id: m._id,
           name: m.name,
           description: m.description || "",
           price: m.price,
+          stock: Number(m.stock || 0),
           img: m.img,
           images: Array.isArray(m.images) && m.images.length > 0 ? m.images : (m.img ? [m.img] : []),
         }));
         setMenus(mapped);
         setSelectedMenu(mapped[0]);
       } else {
-        setMenus(defaultMenus);
-        setSelectedMenu(defaultMenus[0]);
+        setMenus([]);
+        setSelectedMenu(null);
+        setMenuError(res.success ? "Mitra belum menyediakan menu aktif." : "Menu belum dapat dimuat. Periksa koneksi lalu coba lagi.");
       }
       setLoading(false);
     };
     void fetchMenus();
-  }, [selectedCateringShop]);
+    return () => { active = false; };
+  }, [selectedCateringShop?.ownerId, menuReloadKey]);
 
   useEffect(() => {
     const primary = getPrimaryCustomerAddress(authAccount);
@@ -130,133 +124,96 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
   const subtotal = selectedMenu ? selectedMenu.price * portions : 0;
   const total = subtotal + deliveryFee + serviceFee;
   const dpPercent = paymentOption === "dp30" ? 30 : paymentOption === "dp50" ? 50 : 100;
-  const paidAmount = Math.round((total * dpPercent) / 100);
-  const remainingAmount = total - paidAmount;
-  const selectedPaymentName = paymentMethods.find((method) => method.id === paymentMethod)?.name || "QRIS";
+  const plannedDeposit = Math.round((total * dpPercent) / 100);
+  const remainingAfterPlannedDeposit = total - plannedDeposit;
 
   const updatePortions = (delta: number) => setPortions((current) => Math.max(10, current + delta));
 
-  const confirmPayment = async () => {
+  const confirmOrder = async () => {
+    const showMessage = (title: string, message: string) => {
+      if (Platform.OS === "web") alert(`${title}: ${message}`);
+      else Alert.alert(title, message);
+    };
+    if (submitting) return;
+    if (!authAccount?.id || !authAccount.name) {
+      showMessage("Masuk diperlukan", "Masuk ke akun pelanggan sebelum membuat pesanan Catering.");
+      navigate("login");
+      return;
+    }
     if (!address.trim()) {
-      if (Platform.OS === "web") {
-        alert("Tambahkan alamat utama di Profile > Alamat Saya sebelum checkout.");
-      } else {
-        Alert.alert("Alamat belum tersedia", "Tambahkan alamat utama di Profile > Alamat Saya sebelum checkout.");
-      }
+      showMessage("Alamat belum tersedia", "Pilih alamat pengiriman sebelum checkout.");
       navigate("c_addresses");
       return;
     }
-    // Close payment modal first so UI doesn't look frozen
-    setPaymentModalVisible(false);
-
-    // Retrieve current session or search fallback
-    let customerId = "6a85892d8d27c7d42a0d8ba8";
-    let customerName = "Customer Barokah";
-    let customerPhone = "08123456789";
-
-    try {
-      const { account } = await restoreStoredAccount();
-      if (account) {
-        customerId = account.id;
-        customerName = account.name || "Customer Barokah";
-        customerPhone = account.phone || "08123456789";
-      } else {
-        const storedAccountsRaw = await AsyncStorage.getItem("rangers.auth.accounts.v1");
-        if (storedAccountsRaw) {
-          const parsed = JSON.parse(storedAccountsRaw);
-          const anyCustomer = parsed.find((a: any) => a.role === "customer");
-          if (anyCustomer) {
-            customerId = anyCustomer.id;
-            customerName = anyCustomer.name || "Customer Barokah";
-            customerPhone = anyCustomer.phone || "08123456789";
-          }
-        }
-      }
-    } catch (err) {
-      console.log("Error restoring account, using fallback:", err);
-    }
-
-    const orderId = `RNG-CAT-${Date.now().toString().slice(-6)}`;
-    const paymentLabel = paymentOption === "lunas" ? "Lunas" : `DP ${dpPercent}%`;
-    const addressSnapshot = selectedAddress || getPrimaryCustomerAddress(authAccount);
-
-    const apiOrderData = {
-      customerId,
-      ownerId: selectedCateringShop?.ownerId || "6a858afa8d27c7d42a0d8bb2",
-      customerName,
-      customerPhone,
-      address: address || "Jl. Raya Kamojang",
-      addressSnapshot: addressSnapshot || null,
-      menuName: selectedMenu?.name || "Paket Nasi Box",
-      portions: portions || 20,
-      price: selectedMenu?.price || 25000,
-      totalAmount: total,
-      deliveryFee,
-      serviceFee,
-      paymentOption,
-      paymentMethod: selectedPaymentName,
-      paymentStatus: paymentOption === "lunas" ? "Lunas" : `${paymentLabel} dibayar`,
-      paidAmount,
-      remainingAmount,
-      cateringDate: poDate,
-      cateringTime: deliveryTime,
-      notes: "Pesanan catering terjadwal",
-    };
-
-    console.log("Sending catering order to backend...", apiOrderData);
-
-    // Save in database
-    const res = await createCateringOrder(apiOrderData);
-    if (!res.success) {
-      const errMsg = res.message || "Gagal mengirim pesanan ke server catering.";
-      if (Platform.OS === "web") {
-        alert(`Gagal Membuat Pesanan: ${errMsg}`);
-      } else {
-        Alert.alert("Gagal Membuat Pesanan", errMsg);
-      }
+    if (!selectedCateringShop?.ownerId || !selectedMenu?.id) {
+      showMessage("Menu belum tersedia", "Kembali dan pilih mitra serta menu yang masih aktif.");
       return;
     }
 
-    console.log("Catering order successfully created in MongoDB:", res.data);
+    setSubmitting(true);
+    try {
+      const addressSnapshot = selectedAddress || getPrimaryCustomerAddress(authAccount);
+      const orderPayload = {
+        customerId: authAccount.id,
+        ownerId: selectedCateringShop.ownerId,
+        productId: selectedMenu.id,
+        portions,
+        address: address.trim(),
+        addressSnapshot: addressSnapshot || null,
+        paymentOption,
+        cateringDate: poDate,
+        cateringTime: deliveryTime,
+        notes: "Pesanan catering terjadwal",
+      };
+      const signature = JSON.stringify(orderPayload);
+      if (idempotencyKey.current?.signature !== signature) {
+        idempotencyKey.current = {
+          signature,
+          key: `cat-${Date.now()}-${Math.random().toString(36).slice(2, 14)}`,
+        };
+      }
+      const res = await createCateringOrder(orderPayload, idempotencyKey.current.key);
 
-    // Show success popup before navigating
-    if (Platform.OS === "web") {
-      alert("Pembayaran Berhasil! Pesanan Anda telah diterima oleh mitra catering.");
-    } else {
-      Alert.alert("Sukses", "Pembayaran Berhasil! Pesanan Anda telah diterima oleh mitra catering.");
+      if (!res.success || !res.data) {
+        showMessage("Pesanan belum dibuat", res.message || "Periksa koneksi lalu coba lagi.");
+        return;
+      }
+
+      const order: OrderItem = {
+        id: res.data._id,
+        type: "Catering",
+        iconName: "Coffee",
+        color: "#1B7A4E",
+        item: res.data.menuName,
+        detail: `${res.data.storeName || selectedCateringShop.name} · ${res.data.portions} porsi`,
+        status: res.data.status,
+        statusColor: "orange",
+        date: "Hari ini",
+        total: res.data.totalAmount,
+        deliveryFee: res.data.deliveryFee,
+        serviceFee: res.data.serviceFee,
+        paymentMethod: res.data.paymentMethod,
+        paymentStatus: res.data.paymentStatus,
+        paymentOption: res.data.paymentOption,
+        paidAmount: res.data.paidAmount,
+        remainingAmount: res.data.remainingAmount,
+        paymentReminder: "Belum ada pembayaran yang tercatat. Tunggu konfirmasi pembayaran dari Geoverse atau mitra.",
+        cateringDate: res.data.cateringDate,
+        cateringPortions: res.data.portions,
+        cateringTime: res.data.cateringTime,
+        address: res.data.address,
+        notes: res.data.notes,
+      };
+
+      addCustomerOrder(order);
+      idempotencyKey.current = null;
+      showMessage("Pesanan dibuat", "Pesanan tercatat dan menunggu konfirmasi pembayaran. Belum ada pembayaran yang diproses.");
+      navigate("c_catering_tracking");
+    } catch {
+      showMessage("Status pesanan belum diketahui", "Koneksi terputus. Coba lagi untuk memeriksa hasil; permintaan yang sama tidak akan menggandakan pesanan.");
+    } finally {
+      setSubmitting(false);
     }
-
-    const order: OrderItem = {
-      id: res.data._id || orderId,
-      type: "Catering",
-      iconName: "Coffee",
-      color: "#1B7A4E",
-      item: selectedMenu?.name || "Paket Nasi Box",
-      detail: `${selectedCateringShop?.name || "Barokah Catering"} • ${portions} pax`,
-      status: "Menunggu",
-      statusColor: "orange",
-      date: "Hari ini",
-      total,
-      deliveryFee,
-      serviceFee,
-      paymentMethod: selectedPaymentName,
-      paymentStatus: paymentOption === "lunas" ? "Lunas" : `${paymentLabel} dibayar`,
-      paymentOption,
-      paidAmount,
-      remainingAmount,
-      paymentDueDate: remainingAmount > 0 ? `${poDate} (sebelum pengiriman)` : undefined,
-      paymentReminder: remainingAmount > 0 ? `Sisa ${formatRupiah(remainingAmount)} wajib dilunasi sebelum pesanan dikirim.` : "Pembayaran sudah lunas.",
-      paymentReference: res.data.orderCode || `PAY-${Date.now().toString().slice(-8)}`,
-      paymentHistory: [{ type: paymentLabel, amount: paidAmount, method: selectedPaymentName, date: "Hari ini" }],
-      cateringDate: poDate,
-      cateringPortions: portions,
-      cateringTime: deliveryTime,
-      address,
-      notes: "Pesanan catering terjadwal",
-    };
-
-    addCustomerOrder(order);
-    navigate("c_catering_tracking");
   };
 
   if (step === "checkout") {
@@ -269,26 +226,23 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
           <Text style={styles.sectionTitle}>Detail Pesanan</Text>
           <View style={styles.card}>
             <Text style={styles.menuTitle}>{selectedMenu?.name}</Text>
-            <Text style={styles.mutedText}>{portions} pax • {selectedCateringShop?.name || "Catering Lokal"}</Text>
+          <Text style={styles.mutedText}>{portions} pax • {selectedCateringShop?.name || "Mitra Catering"}</Text>
             <View style={styles.detailRow}><CalendarDays size={17} color="#1B7A4E" /><Text style={styles.detailText}>PO: {poDate}</Text></View>
             <View style={styles.detailRow}><Clock3 size={17} color="#1B7A4E" /><Text style={styles.detailText}>Estimasi kirim: {deliveryTime}</Text></View>
             <View style={styles.detailRow}><MapPin size={17} color="#1B7A4E" /><Text style={styles.detailText}>{address}</Text></View>
           </View>
 
-          <Text style={styles.sectionTitle}>Skema Pembayaran</Text>
+          <Text style={styles.sectionTitle}>Rencana Pembayaran</Text>
           <View style={styles.card}>
             <View style={styles.paymentSummaryRow}><Text style={styles.mutedText}>Total pesanan</Text><Text style={styles.totalText}>{formatRupiah(total)}</Text></View>
-            <View style={styles.paymentSummaryRow}><Text style={styles.mutedText}>Bayar sekarang ({dpPercent}%)</Text><Text style={styles.paidText}>{formatRupiah(paidAmount)}</Text></View>
-            <View style={styles.paymentSummaryRow}><Text style={styles.mutedText}>Sisa pelunasan</Text><Text style={[styles.totalText, remainingAmount > 0 && styles.warningText]}>{formatRupiah(remainingAmount)}</Text></View>
-            {remainingAmount > 0 && <View style={styles.reminderBox}><Text style={styles.reminderTitle}>Pengingat pelunasan</Text><Text style={styles.reminderText}>Sisa pembayaran harus dilunasi sebelum {poDate} agar pesanan dapat dikirim tepat waktu.</Text></View>}
+            <View style={styles.paymentSummaryRow}><Text style={styles.mutedText}>DP sesuai pilihan ({dpPercent}%)</Text><Text style={styles.paidText}>{formatRupiah(plannedDeposit)}</Text></View>
+            <View style={styles.paymentSummaryRow}><Text style={styles.mutedText}>Perkiraan sisa setelah DP</Text><Text style={styles.totalText}>{formatRupiah(remainingAfterPlannedDeposit)}</Text></View>
+            <View style={styles.reminderBox}><Text style={styles.reminderTitle}>Pembayaran belum tersedia</Text><Text style={styles.reminderText}>Pilihan DP ini baru menjadi rencana. Aplikasi belum memproses atau mencatat pembayaran.</Text></View>
           </View>
 
-          <Text style={styles.sectionTitle}>Metode Pembayaran</Text>
-          <TouchableOpacity style={styles.selectedPaymentCard} onPress={() => setPaymentModalVisible(true)}><View style={styles.paymentIcon}><Wallet size={20} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{selectedPaymentName}</Text><Text style={styles.mutedText}>Tap untuk mengganti metode pembayaran</Text></View><ChevronRight size={18} color="#6B7280" /></TouchableOpacity>
-          <View style={styles.secureNote}><ShieldCheck size={17} color="#1B7A4E" /><Text style={styles.mutedText}>Pembayaran kamu diproses secara aman.</Text></View>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => setPaymentModalVisible(true)}><Text style={styles.primaryButtonText}>Bayar {formatRupiah(paidAmount)}</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity>
+          <View style={styles.secureNote}><ShieldAlert size={17} color="#B45309" /><Text style={styles.mutedText}>Pesanan akan dicatat sebagai menunggu konfirmasi pembayaran.</Text></View>
+          <TouchableOpacity style={[styles.primaryButton, submitting && { opacity: 0.65 }]} disabled={submitting} onPress={confirmOrder}><Text style={styles.primaryButtonText}>{submitting ? "Mengirim pesanan…" : "Buat Pesanan Catering"}</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity>
         </ScrollView>
-        {renderPaymentModal(paymentModalVisible, setPaymentModalVisible, paymentMethod, setPaymentMethod, confirmPayment)}
       </ResponsiveSafeAreaView>
     );
   }
@@ -305,13 +259,27 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
     );
   }
 
+  if (menuError || menus.length === 0) {
+    return (
+      <ResponsiveSafeAreaView style={styles.container}>
+        <BackHeader title="Pesan Catering" onBack={() => navigate("c_catering")} />
+        <View style={styles.centerContainer}>
+          <Text style={styles.emptyText}>{menuError || "Mitra belum menyediakan menu aktif."}</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => setMenuReloadKey((key) => key + 1)}>
+            <Text style={styles.primaryButtonText}>Coba Muat Ulang</Text>
+          </TouchableOpacity>
+        </View>
+      </ResponsiveSafeAreaView>
+    );
+  }
+
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       <BackHeader title="Pesan Catering" onBack={() => navigate("c_catering")} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Image source={{ uri: selectedCateringShop?.profilePhoto || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&h=500&fit=crop&q=85" }} style={styles.cover} />
-        <Text style={styles.title}>{selectedCateringShop?.name || "Catering Lokal"}</Text>
-        <Text style={styles.subtitle}>{selectedCateringShop?.description || "Nasi box, prasmanan, dan paket acara untuk kebutuhan komunitas."}</Text>
+        {selectedCateringShop?.profilePhoto ? <Image source={{ uri: selectedCateringShop.profilePhoto }} style={styles.cover} /> : <View style={styles.coverPlaceholder}><ReceiptText size={30} color="#1B7A4E" /><Text style={styles.placeholderText}>Foto mitra belum tersedia</Text></View>}
+        <Text style={styles.title}>{selectedCateringShop?.name || "Nama mitra belum tersedia"}</Text>
+        <Text style={styles.subtitle}>{selectedCateringShop?.description || "Deskripsi belum tersedia."}</Text>
         <TouchableOpacity style={styles.chatOwnerButton} onPress={() => Alert.alert("Chat setelah order", "Chat pemilik tersedia dari detail pesanan setelah checkout berhasil.")}><MessageCircle size={17} color="#1B7A4E" /><Text style={styles.chatOwnerText}>Chat Pemilik Catering</Text></TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Pilih Menu</Text>
@@ -337,9 +305,9 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
 
         <Text style={styles.sectionTitle}>Pilih Pembayaran</Text>
         <View style={styles.dpGrid}>{(["dp30", "dp50", "lunas"] as CateringPaymentOption[]).map((option) => { const percent = option === "dp30" ? 30 : option === "dp50" ? 50 : 100; const selected = paymentOption === option; return <TouchableOpacity key={option} style={[styles.dpCard, selected && styles.dpCardSelected]} onPress={() => setPaymentOption(option)}><Text style={[styles.dpPercent, selected && styles.dpTextSelected]}>{percent}%</Text><Text style={[styles.dpLabel, selected && styles.dpTextSelected]}>{option === "lunas" ? "Lunas" : `DP ${percent}%`}</Text><Text style={[styles.dpAmount, selected && styles.dpTextSelected]}>{formatRupiah(Math.round((total * percent) / 100))}</Text></TouchableOpacity>; })}</View>
-        <View style={styles.dpInfo}><CheckCircle2 size={17} color="#1B7A4E" /><Text style={styles.mutedText}>{paymentOption === "lunas" ? "Pesanan langsung lunas dan tidak ada tagihan berikutnya." : `Bayar ${dpPercent}% sekarang, sisa ${formatRupiah(remainingAmount)} dilunasi sebelum tanggal PO.`}</Text></View>
+        <View style={styles.dpInfo}><ShieldAlert size={17} color="#B45309" /><Text style={styles.mutedText}>{paymentOption === "lunas" ? "Rencana pelunasan 100%. Pembayaran belum diproses oleh aplikasi." : `Rencana DP ${dpPercent}% sebesar ${formatRupiah(plannedDeposit)}. Pembayaran belum diproses oleh aplikasi.`}</Text></View>
 
-        <View style={styles.totalCard}><View><Text style={styles.mutedText}>Total pesanan</Text><Text style={styles.totalText}>{formatRupiah(total)}</Text></View><TouchableOpacity style={styles.primaryButtonSmall} onPress={() => setStep("checkout")}><Text style={styles.primaryButtonText}>Lanjut Checkout</Text><ChevronRight size={17} color="#FFFFFF" /></TouchableOpacity></View>
+        <View style={styles.totalCard}><View><Text style={styles.mutedText}>Total estimasi</Text><Text style={styles.totalText}>{formatRupiah(total)}</Text></View><TouchableOpacity style={styles.primaryButtonSmall} onPress={() => selectedMenu ? setStep("checkout") : Alert.alert("Pilih Menu", "Pilih menu yang masih tersedia terlebih dahulu.")}><Text style={styles.primaryButtonText}>Lanjut Checkout</Text><ChevronRight size={17} color="#FFFFFF" /></TouchableOpacity></View>
       </ScrollView>
 
       <Modal visible={dateModalVisible} transparent animationType="slide" onRequestClose={() => setDateModalVisible(false)}><View style={styles.modalOverlay}><View style={styles.sheet}><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Pilih Tanggal PO</Text><TouchableOpacity onPress={() => setDateModalVisible(false)}><X size={20} color="#111827" /></TouchableOpacity></View><Text style={styles.mutedText}>Pilih tanggal acara minimal H+2 agar mitra dapat menyiapkan pesanan.</Text><ScrollView style={styles.dateList}>{dateOptions.map((date) => <TouchableOpacity key={date} style={[styles.dateOption, date === poDate && styles.dateOptionSelected]} onPress={() => { setPoDate(date); setDateModalVisible(false); }}><CalendarDays size={18} color={date === poDate ? "#FFFFFF" : "#1B7A4E"} /><Text style={[styles.dateOptionText, date === poDate && styles.dateOptionTextSelected]}>{date}</Text>{date === poDate && <Check size={17} color="#FFFFFF" />}</TouchableOpacity>)}</ScrollView></View></View></Modal>
@@ -347,22 +315,14 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
   );
 };
 
-const renderPaymentModal = (
-  visible: boolean,
-  setVisible: (visible: boolean) => void,
-  selected: PaymentMethod,
-  setSelected: (method: PaymentMethod) => void,
-  onConfirm: () => void,
-) => (
-  <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}><View style={styles.modalOverlay}><View style={styles.sheet}><View style={styles.sheetHandle} /><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Pilih Pembayaran</Text><TouchableOpacity onPress={() => setVisible(false)}><X size={20} color="#111827" /></TouchableOpacity></View>{paymentMethods.map((method) => { const isSelected = selected === method.id; return <TouchableOpacity key={method.id} style={[styles.paymentOption, isSelected && styles.paymentOptionSelected]} onPress={() => setSelected(method.id)}><View style={[styles.paymentIcon, { backgroundColor: `${method.color}15` }]}><Wallet size={20} color={method.color} /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{method.name}</Text><Text style={styles.mutedText}>{method.subtitle}</Text></View><View style={[styles.radio, isSelected && styles.radioSelected]}>{isSelected && <Check size={13} color="#FFFFFF" strokeWidth={3} />}</View></TouchableOpacity>; })}<TouchableOpacity style={styles.primaryButton} onPress={onConfirm}><Text style={styles.primaryButtonText}>Konfirmasi Pembayaran</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity></View></View></Modal>
-);
-
 const formatRupiah = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   content: { padding: 16, paddingBottom: 34 },
   cover: { width: "100%", height: 190, borderRadius: 18, marginBottom: 16 },
+  coverPlaceholder: { width: "100%", height: 190, borderRadius: 18, marginBottom: 16, alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: "#E8F5EE" },
+  placeholderText: { color: "#4B5563", fontSize: 11 },
   title: { color: "#111827", fontSize: 23, fontWeight: "900" },
   subtitle: { color: "#6B7280", fontSize: 13, lineHeight: 19, marginTop: 6 },
   chatOwnerButton: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "#E8F5EE", borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8, marginTop: 12 },
@@ -432,5 +392,6 @@ const styles = StyleSheet.create({
   paymentOption: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 14, padding: 12, marginBottom: 9 },
   paymentOptionSelected: { backgroundColor: "#E8F5EE", borderColor: "#1B7A4E" },
   centerContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40 },
+  emptyText: { color: "#4B5563", fontSize: 13, lineHeight: 19, textAlign: "center", paddingHorizontal: 24 },
   loadingText: { color: "#6B7280", fontSize: 13, marginTop: 10 },
 });

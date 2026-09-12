@@ -7,6 +7,8 @@ const cateringOrderSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    idempotencyKey: { type: String, default: undefined },
+    requestHash: { type: String, default: "" },
     customerId: {
       type: String,
       required: true,
@@ -113,5 +115,9 @@ const cateringOrderSchema = new mongoose.Schema(
 cateringOrderSchema.index({ ownerId: 1, createdAt: -1 });
 cateringOrderSchema.index({ customerId: 1, createdAt: -1 });
 cateringOrderSchema.index({ driverId: 1, status: 1 });
+cateringOrderSchema.index(
+  { idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: "string" } } }
+);
 
 module.exports = mongoose.model("CateringOrder", cateringOrderSchema);

@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const marketplaceOrderSchema = new mongoose.Schema(
   {
     orderCode: { type: String, required: true, unique: true },
+    idempotencyKey: { type: String, default: undefined },
+    requestHash: { type: String, default: "" },
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     customerId: { type: String, default: "" },
     customerName: { type: String, required: true },
@@ -32,6 +34,7 @@ const marketplaceOrderSchema = new mongoose.Schema(
     driverId: { type: String, default: "", index: true },
     driverName: { type: String, default: "" },
     driverPhone: { type: String, default: "" },
+    declinedByDrivers: { type: [String], default: [] },
     status: {
       type: String,
       enum: ["Menunggu", "Diproses", "Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Selesai", "Dibatalkan"],
@@ -43,5 +46,9 @@ const marketplaceOrderSchema = new mongoose.Schema(
 
 marketplaceOrderSchema.index({ ownerId: 1, createdAt: -1 });
 marketplaceOrderSchema.index({ customerId: 1, createdAt: -1 });
+marketplaceOrderSchema.index(
+  { idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: "string" } } }
+);
 
 module.exports = mongoose.model("MarketplaceOrder", marketplaceOrderSchema);

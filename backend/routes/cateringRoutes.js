@@ -7,13 +7,15 @@ const {
   getAllCateringShops,
   getProductsByShop,
   getAllActiveProducts,
-  createCateringOrder,
   getCateringOrdersByOwner,
   getCateringOrdersByCustomer,
   updateCateringOrderStatus,
   getOrdersByDriver,
   assignDriver,
 } = require("../controllers/cateringController");
+const { createCateringOrder } = require("../controllers/createCateringOrderController");
+const { requireAuth } = require("../middleware/authMiddleware");
+const { requireCustomerOrderOwner } = require("../middleware/requireCustomerOrderOwner");
 
 const router = express.Router();
 
@@ -21,7 +23,8 @@ const router = express.Router();
 router.get("/", getAllCateringShops);
 router.get("/products/active", getAllActiveProducts);
 router.get("/:ownerId/products", getProductsByShop);
-router.post("/orders", createCateringOrder);
+router.post("/orders", requireAuth, requireCustomerOrderOwner, createCateringOrder);
+router.get("/orders/customer/:customerId", requireAuth, requireCustomerOrderOwner, getCateringOrdersByCustomer);
 
 // Driver Endpoints
 router.get("/orders/driver/:driverId", getOrdersByDriver);
@@ -33,7 +36,6 @@ router.post("/products", createProduct);
 router.put("/products/:id", updateProduct);
 router.delete("/products/:id", deleteProduct);
 router.get("/orders/owner/:ownerId", getCateringOrdersByOwner);
-router.get("/orders/customer/:customerId", getCateringOrdersByCustomer);
 router.put("/orders/:id/status", updateCateringOrderStatus);
 
 module.exports = router;

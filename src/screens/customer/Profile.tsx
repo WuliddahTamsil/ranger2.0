@@ -36,7 +36,7 @@ interface ProfileProps {
   setCustomerLocation: (location: string) => void;
   orderCount: number;
   wishlistCount: number;
-  rating: string;
+  reviewCount: string;
   authAccount?: AuthAccount | null;
   profilePhoto?: string;
   setProfilePhoto?: (photoUri: string) => void;
@@ -54,7 +54,7 @@ export const Profile: React.FC<ProfileProps> = ({
   setCustomerLocation,
   orderCount,
   wishlistCount,
-  rating,
+  reviewCount,
   authAccount,
   profilePhoto,
   setProfilePhoto,
@@ -106,8 +106,8 @@ export const Profile: React.FC<ProfileProps> = ({
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{rating}</Text>
-              <Text style={styles.statLbl}>Rating</Text>
+              <Text style={styles.statVal}>{reviewCount}</Text>
+              <Text style={styles.statLbl}>Ulasan</Text>
             </View>
           </View>
         </View>

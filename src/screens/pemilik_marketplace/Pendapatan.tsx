@@ -59,16 +59,40 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
   const [accNumber, setAccNumber] = useState("");
   const [accName, setAccName] = useState("");
 
-  // Calculate stats based on orders
-  const completedOrders = orders.filter((o) => o.status === "Selesai");
-  const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const weekStart = new Date(todayStart);
+  weekStart.setDate(weekStart.getDate() - 6);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const getValidDate = (value: unknown) => {
+    if (!value) return null;
+    const date = new Date(value as string | number | Date);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const getCompletionDate = (order: any) => getValidDate(order.completedAt || order.updatedAt || order.createdAt);
+  const getOrderDate = (order: any) => getValidDate(order.createdAt);
+  const completedOrders = orders.filter((order) => order.status === "Selesai");
+  const totalRevenue = completedOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const completedOrderCount = completedOrders.length;
-
-  const todayOrders = orders.filter((o) => o.time !== ""); // simple mock: all are today
-  const todayRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0); // mock today revenue
-  const weekRevenue = Math.round(totalRevenue * 1.0);
-  const monthRevenue = Math.round(totalRevenue * 1.0);
-  const todayOrderCount = orders.length;
+  const todayOrders = orders.filter((order) => {
+    const date = getOrderDate(order);
+    return date && date >= todayStart && date < tomorrowStart;
+  });
+  const todayRevenue = completedOrders.reduce((sum, order) => {
+    const date = getCompletionDate(order);
+    return date && date >= todayStart && date < tomorrowStart ? sum + Number(order.total || 0) : sum;
+  }, 0);
+  const weekRevenue = completedOrders.reduce((sum, order) => {
+    const date = getCompletionDate(order);
+    return date && date >= weekStart && date < tomorrowStart ? sum + Number(order.total || 0) : sum;
+  }, 0);
+  const monthRevenue = completedOrders.reduce((sum, order) => {
+    const date = getCompletionDate(order);
+    return date && date >= monthStart && date < tomorrowStart ? sum + Number(order.total || 0) : sum;
+  }, 0);
+  const todayOrderCount = todayOrders.length;
 
   // Available Balance: total revenue - successful withdrawals
   const successfulWithdrawalsTotal = withdrawals
@@ -83,28 +107,32 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
   const availableBalance = Math.max(0, totalRevenue - totalWithdrawn);
   const hasRevenue = totalRevenue > 0;
 
-  // Chart data based on selected period
+  const sumCompletedBetween = (start: Date, end: Date) => completedOrders.reduce((sum, order) => {
+    const date = getCompletionDate(order);
+    return date && date >= start && date < end ? sum + Number(order.total || 0) : sum;
+  }, 0);
+
   const chartData = {
-    "7 hari": [
-      { label: "Sen", value: Math.round(totalRevenue * 0.1) },
-      { label: "Sel", value: Math.round(totalRevenue * 0.15) },
-      { label: "Rab", value: Math.round(totalRevenue * 0.08) },
-      { label: "Kam", value: Math.round(totalRevenue * 0.22) },
-      { label: "Jum", value: Math.round(totalRevenue * 0.12) },
-      { label: "Sab", value: Math.round(totalRevenue * 0.25) },
-      { label: "Min", value: Math.round(totalRevenue * 0.08) },
-    ],
-    "30 hari": [
-      { label: "M1", value: Math.round(totalRevenue * 0.2) },
-      { label: "M2", value: Math.round(totalRevenue * 0.3) },
-      { label: "M3", value: Math.round(totalRevenue * 0.25) },
-      { label: "M4", value: Math.round(totalRevenue * 0.25) },
-    ],
-    "Bulan ini": [
-      { label: "T1", value: Math.round(totalRevenue * 0.35) },
-      { label: "T2", value: Math.round(totalRevenue * 0.45) },
-      { label: "T3", value: Math.round(totalRevenue * 0.2) },
-    ],
+    "7 hari": Array.from({ length: 7 }, (_, index) => {
+      const start = new Date(weekStart);
+      start.setDate(start.getDate() + index);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      return { label: start.toLocaleDateString("id-ID", { weekday: "short" }), value: sumCompletedBetween(start, end) };
+    }),
+    "30 hari": Array.from({ length: 5 }, (_, index) => {
+      const start = new Date(todayStart);
+      start.setDate(start.getDate() - 29 + index * 6);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      return { label: `M${index + 1}`, value: sumCompletedBetween(start, end) };
+    }),
+    "Bulan ini": Array.from({ length: Math.ceil(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() / 7) }, (_, index) => {
+      const start = new Date(now.getFullYear(), now.getMonth(), index * 7 + 1);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 7);
+      return { label: `M${index + 1}`, value: sumCompletedBetween(start, end) };
+    }),
   };
 
   const currentChartPoints = chartData[period];
@@ -193,35 +221,35 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
             <CalendarDays size={18} color="#1B7A4E" />
             <Text style={styles.gridLabel}>Hari ini</Text>
             <Text style={styles.gridVal} numberOfLines={1}>
-              {hasRevenue ? rp(todayRevenue) : "—"}
+              {rp(todayRevenue)}
             </Text>
           </View>
           <View style={styles.gridCard}>
             <CalendarRange size={18} color="#1B7A4E" />
             <Text style={styles.gridLabel}>Minggu ini</Text>
             <Text style={styles.gridVal} numberOfLines={1}>
-              {hasRevenue ? rp(weekRevenue) : "—"}
+              {rp(weekRevenue)}
             </Text>
           </View>
           <View style={styles.gridCard}>
             <TrendingUp size={18} color="#1B7A4E" />
             <Text style={styles.gridLabel}>Bulan ini</Text>
             <Text style={styles.gridVal} numberOfLines={1}>
-              {hasRevenue ? rp(monthRevenue) : "—"}
+              {rp(monthRevenue)}
             </Text>
           </View>
           <View style={styles.gridCard}>
             <ShoppingBag size={18} color="#1B7A4E" />
             <Text style={styles.gridLabel}>Order hari ini</Text>
             <Text style={styles.gridVal} numberOfLines={1}>
-              {hasRevenue ? `${todayOrderCount} order` : "Belum ada"}
+              {todayOrderCount > 0 ? `${todayOrderCount} order` : "Belum ada"}
             </Text>
           </View>
           <View style={styles.gridCard}>
             <PackageCheck size={18} color="#1B7A4E" />
             <Text style={styles.gridLabel}>Order selesai</Text>
             <Text style={styles.gridVal} numberOfLines={1}>
-              {hasRevenue ? `${completedOrderCount} order` : "Belum ada"}
+              {completedOrderCount > 0 ? `${completedOrderCount} order` : "Belum ada"}
             </Text>
           </View>
           <View style={styles.gridCard}>

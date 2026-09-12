@@ -48,6 +48,9 @@ interface PesananProps {
   reviews: any[];
   setReviews: (reviews: any[]) => void;
   authAccount?: AuthAccount | null;
+  ordersLoading?: boolean;
+  ordersLoadError?: string;
+  onRetryOrders?: () => void;
 }
 
 interface ReviewMediaDraft {
@@ -63,6 +66,9 @@ export const Pesanan: React.FC<PesananProps> = ({
   reviews,
   setReviews,
   authAccount,
+  ordersLoading = false,
+  ordersLoadError = "",
+  onRetryOrders,
 }) => {
   const [activeTab, setActiveTab] = useState<number>(0);
   const [trackModalVisible, setTrackModalVisible] = useState(false);
@@ -253,33 +259,33 @@ export const Pesanan: React.FC<PesananProps> = ({
 
     const customerAddressStr = typeof order.address === "string"
       ? order.address
-      : order.address?.fullAddress || "Area Kampus UTM Kamal, Bangkalan";
+      : order.address?.fullAddress || undefined;
 
     const isCanceled = order.status.toLowerCase().includes("batal");
 
     const invoiceData: InvoiceData = {
       id: order.id,
-      invoiceNumber: `INV/20260909/GEO-${formattedId}`,
-      date: order.date || "09 Sep 2026",
-      time: raw.time || "14:45 WIB",
+      invoiceNumber: `INV/GEO-${formattedId}`,
+      date: order.date || undefined,
+      time: raw.createdAt ? new Date(raw.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : undefined,
       status: order.status,
       orderType: order.type,
-      storeName: raw.storeName || raw.store || (order.type.toLowerCase().includes("cater") ? "Dapur Barokah Catering" : "Mitra Toko GEOVERSE"),
-      storeAddress: raw.storeAddress || "Jl. Raya Telang No. 45, Kamal, Bangkalan",
-      customerName: authAccount?.name || raw.customer || "Customer GEOVERSE",
-      customerPhone: authAccount?.phone || raw.customerPhone || "0812-3456-7890",
+      storeName: raw.storeName || raw.store || (order.type.toLowerCase().includes("cater") ? "Mitra Catering" : "Mitra Marketplace"),
+      storeAddress: raw.storeAddress || undefined,
+      customerName: authAccount?.name || raw.customer || "Pelanggan",
+      customerPhone: authAccount?.phone || raw.customerPhone || undefined,
       customerAddress: customerAddressStr,
-      driverName: raw.driverName || (raw.driver?.name ? raw.driver.name : "Wuwu (Kurir GEOVERSE)"),
-      driverVehicle: raw.driverVehicle || (raw.driver?.vehicle ? raw.driver.vehicle : "Motor"),
-      driverPlate: raw.driverPlate || (raw.driver?.plateNumber ? raw.driver.plateNumber : "M 4128 AA"),
+      driverName: raw.driverName || raw.driver?.name || undefined,
+      driverVehicle: raw.driverVehicle || raw.driver?.vehicle || undefined,
+      driverPlate: raw.driverPlate || raw.driver?.plateNumber || undefined,
       items: parsedItems,
-      subtotal: raw.subtotal || (order.total - (order.deliveryFee || 5000) - (order.serviceFee || 1000) + (order.discount || 0)),
-      deliveryFee: order.deliveryFee ?? 5000,
-      serviceFee: order.serviceFee ?? 1000,
-      discount: order.discount || 0,
+      subtotal: Number(raw.subtotal ?? (order.total - (order.deliveryFee || 0) - (order.serviceFee || 0) + (order.discount || 0))),
+      deliveryFee: Number(order.deliveryFee ?? 0),
+      serviceFee: Number(order.serviceFee ?? 0),
+      discount: Number(order.discount ?? 0),
       total: order.total,
-      paymentMethod: order.paymentMethod || "QRIS / Transfer Bank BCA",
-      paymentStatus: isCanceled ? "Dibatalkan" : "Lunas",
+      paymentMethod: order.paymentMethod || undefined,
+      paymentStatus: order.paymentStatus || (isCanceled ? "Dibatalkan" : undefined),
     };
 
     setSelectedInvoice(invoiceData);
@@ -317,6 +323,13 @@ export const Pesanan: React.FC<PesananProps> = ({
           );
         })}
       </View>
+
+      {ordersLoadError ? (
+        <View style={{ marginHorizontal: 16, marginBottom: 10, padding: 12, borderRadius: 12, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" }}>
+          <Text style={{ color: "#9A3412", fontSize: 12, lineHeight: 17 }}>{orders.length ? "Pesanan belum berhasil diperbarui. Data terakhir tetap ditampilkan." : ordersLoadError}</Text>
+          {onRetryOrders ? <TouchableOpacity onPress={onRetryOrders} style={{ alignSelf: "flex-start", marginTop: 8 }}><Text style={{ color: "#C2410C", fontSize: 12, fontWeight: "700" }}>Coba lagi</Text></TouchableOpacity> : null}
+        </View>
+      ) : null}
 
       {/* FlatList of orders */}
       <FlatList
@@ -508,11 +521,12 @@ export const Pesanan: React.FC<PesananProps> = ({
           <View style={styles.emptyContainer}>
             <ShoppingBag size={48} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>
-              {activeTab === 0 ? "Belum ada pesanan aktif" : activeTab === 1 ? "Belum ada pesanan selesai" : "Belum ada pesanan dibatalkan"}
+              {ordersLoading ? "Memuat pesanan…" : activeTab === 0 ? "Belum ada pesanan aktif" : activeTab === 1 ? "Belum ada pesanan selesai" : "Belum ada pesanan dibatalkan"}
             </Text>
             <Text style={styles.emptySubtitle}>
-              Semua orderan dari layanan yang Anda pesan akan terpantau statusnya di halaman ini.
+              {ordersLoadError && !ordersLoading ? "Riwayat belum berhasil diambil dari server. Coba lagi setelah koneksi tersedia." : "Semua orderan dari layanan yang Anda pesan akan terpantau statusnya di halaman ini."}
             </Text>
+            {ordersLoadError && !ordersLoading && onRetryOrders ? <TouchableOpacity onPress={onRetryOrders} style={{ marginTop: 12, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, backgroundColor: "#1B7A4E" }}><Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}>Coba lagi</Text></TouchableOpacity> : null}
           </View>
         }
       />
@@ -556,13 +570,14 @@ export const Pesanan: React.FC<PesananProps> = ({
               {/* Real Interactive Google Maps (Spacious full width & 280 height) */}
               <View style={styles.mapCardWrapper}>
                 <LiveOrderTrackingMap
-                  storeName={selectedOrder.detail.split(" • ")[0] || "Mitra Toko"}
-                  storeAddress={selectedOrder.address || "Kamal, Bangkalan, Madura"}
-                  customerAddress={selectedOrder.address || "Telang, Kamal, Bangkalan"}
+                  storeName={(selectedOrder as any).storeName || selectedOrder.detail.split(" • ")[0] || "Mitra Toko"}
+                  storeAddress={(selectedOrder as any).storeAddress || ""}
+                  customerAddress={typeof selectedOrder.address === "string" ? selectedOrder.address : selectedOrder.address?.fullAddress || ""}
                   driverName={(selectedOrder as any).driverName}
                   driverVehicle={(selectedOrder as any).driverVehicle}
                   orderStatus={selectedOrder.status}
                   height={280}
+                  marketplaceMode={selectedOrder.type.toLowerCase().includes("market")}
                 />
               </View>
 
@@ -601,7 +616,7 @@ export const Pesanan: React.FC<PesananProps> = ({
 
               {/* Dynamic Timeline status list */}
               <View style={styles.timelineCard}>
-                <Text style={styles.timelineCardTitle}>Status Pengiriman Real-time</Text>
+                <Text style={styles.timelineCardTitle}>Status Pengiriman</Text>
 
                 {/* Step 1: Diterima */}
                 <View style={styles.timelineRow}>

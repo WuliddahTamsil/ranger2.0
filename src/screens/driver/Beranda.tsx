@@ -1,5 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Image,
   Modal,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import {
   Home,
@@ -36,6 +37,8 @@ import { RoleHeader } from "../../components/RoleHeader";
 import {
   getMarketplaceOrdersForDriver,
   updateMarketplaceOrderStatus,
+  acceptMarketplaceOrder,
+  declineMarketplaceOrder,
   assignMarketplaceDriver,
   getCateringOrdersForDriver,
   updateCateringOrderStatus,
@@ -58,6 +61,33 @@ import { Pendapatan } from "./Pendapatan";
 import { Keuangan, TransactionRecord } from "./Keuangan";
 import { Profile } from "./Profile";
 
+const mapMarketplaceDriverStatus = (rawStatus: string): DriverOrder["status"] => {
+  if (["Menuju Pickup", "Sampai Pickup", "Selesai", "Dibatalkan", "Siap"].includes(rawStatus)) return rawStatus as DriverOrder["status"];
+  if (["Diambil", "Mengantar", "Dikirim"].includes(rawStatus)) return "Mengantar";
+  return "Menunggu";
+};
+
+const mapMarketplaceDriverOrder = (order: any): DriverOrder => ({
+  id: String(order._id || order.id),
+  customer: order.customerName || "Pelanggan",
+  phone: order.customerPhone || "",
+  type: "Marketplace",
+  time: order.createdAt ? new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "",
+  from: order.storeAddress || order.storeName || "Lokasi pickup belum tersedia",
+  to: order.address || "Alamat tujuan belum tersedia",
+  dist: "Jarak belum tersedia",
+  pay: Number(order.totalAmount || 0),
+  driverShare: Number(order.driverEarnings ?? order.driverFee ?? order.driverTip ?? order.deliveryFee ?? 0),
+  completedAt: order.updatedAt || order.createdAt,
+  status: mapMarketplaceDriverStatus(String(order.status || "Menunggu")),
+  items: order.items || [],
+  storeName: order.storeName || "Toko Marketplace",
+  storeAddress: order.storeAddress || "Alamat toko belum tersedia",
+  storePhone: order.storePhone || order.merchantPhone || "",
+  ownerId: String(order.ownerId?._id || order.ownerId || ""),
+  addressSnapshot: order.addressSnapshot || null,
+});
+
 interface DriverHomeProps extends Nav {
   authAccount?: AuthAccount | null;
 }
@@ -76,6 +106,8 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [driverNotifs, setDriverNotifs] = useState<any[]>([]);
+  const [homeActionOrderId, setHomeActionOrderId] = useState<string | null>(null);
+  const homeActionLock = useRef(new Set<string>());
 
   useEffect(() => {
     if (!authAccount?.id || !notifModalVisible) return;
@@ -157,12 +189,19 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       setOrders([]);
       return;
     }
+    setOrders([]);
+    let active = true;
+    let loading = false;
     const loadOrders = async () => {
-      const [mktRes, catRes, laundryJobs] = await Promise.all([
-        getMarketplaceOrdersForDriver(authAccount.id),
-        getCateringOrdersForDriver(authAccount.id),
-        fetchDriverLaundryJobs(),
-      ]);
+      if (loading) return;
+      loading = true;
+      try {
+        const [mktRes, catRes, laundryJobs] = await Promise.all([
+          getMarketplaceOrdersForDriver(authAccount.id),
+          getCateringOrdersForDriver(authAccount.id),
+          fetchDriverLaundryJobs(),
+        ]);
+        if (!active) return;
 
       const normalizeStatus = (rawStatus: string): DriverOrder["status"] => {
         if (rawStatus === "Menuju Pickup") return "Menuju Pickup";
@@ -173,27 +212,9 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         return "Menunggu";
       };
 
-      const mktOrders: DriverOrder[] = (mktRes.success && Array.isArray(mktRes.data)) ? mktRes.data.map((order: any) => ({
-        id: order._id,
-        customer: order.customerName,
-        phone: order.customerPhone || "",
-        type: "Marketplace" as const,
-        time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-        from: order.storeAddress || order.storeName || "Lokasi pickup belum tersedia",
-        to: order.address || "Alamat tujuan belum tersedia",
-        dist: order.distance ? `${order.distance} km` : "Jarak belum tersedia",
-        distanceKm: Number(order.distanceKm ?? order.distance ?? 0),
-        pay: Number(order.totalAmount || 0),
-        driverShare: Number(order.driverEarnings ?? order.driverFee ?? order.driverTip ?? order.deliveryFee ?? 0),
-        completedAt: order.updatedAt || order.createdAt,
-        status: normalizeStatus(order.status),
-        items: order.items,
-        storeName: order.storeName || "Toko marketplace",
-        storeAddress: order.storeAddress || "Alamat toko belum tersedia",
-        storePhone: order.storePhone || order.merchantPhone || "",
-        ownerId: order.ownerId,
-        addressSnapshot: order.addressSnapshot || null,
-      })) : [];
+      const mktOrders: DriverOrder[] = (mktRes.success && Array.isArray(mktRes.data))
+        ? mktRes.data.map(mapMarketplaceDriverOrder)
+        : [];
 
       const catOrders: DriverOrder[] = (catRes.success && Array.isArray(catRes.data)) ? catRes.data.map((order: any) => ({
         id: order._id,
@@ -257,11 +278,24 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         };
       }) : [];
 
-      setOrders([...mktOrders, ...catOrders, ...lndOrders]);
+        setOrders((current) => {
+          const marketplaceOrders = mktRes.success && Array.isArray(mktRes.data)
+            ? mktOrders
+            : current.filter((order) => order.type === "Marketplace");
+          return [...marketplaceOrders, ...catOrders, ...lndOrders];
+        });
+      } catch (error) {
+        console.error("Load driver orders error:", error);
+      } finally {
+        loading = false;
+      }
     };
     void loadOrders();
     const interval = setInterval(() => void loadOrders(), 4000);
-    return () => clearInterval(interval);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [authAccount?.id]);
 
   // 4. Global Transactions State
@@ -330,7 +364,22 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       } else if (targetOrder.type === "Catering") {
         await updateCateringOrderStatus(orderId, nextStatus);
       } else {
-        await updateMarketplaceOrderStatus(orderId, nextStatus);
+        const result = await updateMarketplaceOrderStatus(orderId, nextStatus);
+        if (!result.success || !result.data) {
+          Alert.alert("Status belum tersimpan", result.message || "Periksa koneksi lalu coba lagi.");
+          return;
+        }
+        const serverOrder = mapMarketplaceDriverOrder(result.data);
+        setOrders((current) => current.map((order) => order.id === orderId ? serverOrder : order));
+        if (nextStatus === "Selesai") {
+          alertMsg = `Pengantaran selesai! Pendapatan ${rp(serverOrder.driverShare)} ditambahkan ke saldo.`;
+        } else if (nextStatus === "Mengantar") {
+          alertMsg = "Pesanan telah diambil dan mulai diantar ke customer.";
+        } else if (nextStatus === "Sampai Pickup") {
+          alertMsg = "Anda telah tiba di lokasi pickup.";
+        }
+        Alert.alert("Status Diperbarui", alertMsg);
+        return;
       }
     }
 
@@ -353,7 +402,27 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     Alert.alert("Status Diperbarui", alertMsg);
   };
 
-  const activeOrder = orders.find((o) => ["Menunggu", "Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status));
+  const activeOrder = orders.find((o) => o.type === "Marketplace" && ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status))
+    || orders.find((o) => o.type === "Marketplace" && o.status === "Siap")
+    || orders.find((o) => o.type !== "Marketplace" && ["Menunggu", "Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status));
+
+  const acceptMarketplaceFromHome = async (orderId: string) => {
+    if (homeActionLock.current.has(orderId)) return;
+    homeActionLock.current.add(orderId);
+    setHomeActionOrderId(orderId);
+    try {
+      const result = await acceptMarketplaceOrder(orderId);
+      if (!result.success || !result.data) {
+        Alert.alert("Pesanan belum diterima", result.message || "Pesanan mungkin sudah diambil driver lain.");
+        return;
+      }
+      const updated = mapMarketplaceDriverOrder(result.data);
+      setOrders((current) => current.map((order) => order.id === updated.id ? updated : order));
+    } finally {
+      homeActionLock.current.delete(orderId);
+      setHomeActionOrderId((current) => current === orderId ? null : current);
+    }
+  };
 
   // Tab views mapper
   const renderTabContent = () => {
@@ -397,6 +466,11 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 Alert.alert("Gagal", result.message || "Status order gagal diperbarui");
                 return false;
               }
+              if (targetOrder?.type === "Marketplace" && result.data) {
+                const updated = mapMarketplaceDriverOrder(result.data);
+                setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                return updated;
+              }
               return true;
             }}
             onAcceptOrder={async (orderId) => {
@@ -419,11 +493,25 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
               }
               const result = targetOrder?.type === "Catering"
                 ? await assignCateringDriver(orderId, authAccount?.id || "")
-                : await assignMarketplaceDriver(orderId, authAccount?.id || "");
+                : await acceptMarketplaceOrder(orderId);
               if (!result.success) {
                 Alert.alert("Gagal", result.message || "Order gagal diterima");
                 return false;
               }
+              if (targetOrder?.type === "Marketplace" && result.data) {
+                const updated = mapMarketplaceDriverOrder(result.data);
+                setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                return updated;
+              }
+              return true;
+            }}
+            onDeclineOrder={async (orderId) => {
+              const result = await declineMarketplaceOrder(orderId);
+              if (!result.success) {
+                Alert.alert("Belum berhasil menolak", result.message || "Periksa koneksi lalu coba lagi.");
+                return false;
+              }
+              setOrders((current) => current.filter((order) => order.id !== orderId));
               return true;
             }}
             driverId={authAccount?.id}
@@ -581,15 +669,37 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 
             <View style={styles.activeOrderFooter}>
               <View>
-                <Text style={styles.activeOrderDist}>{activeOrder.dist} · Bersih</Text>
+                <Text style={styles.activeOrderDist}>{activeOrder.type === "Marketplace" ? "Jarak belum tersedia" : `${activeOrder.dist} · Bersih`}</Text>
                 <Text style={styles.activeOrderPrice}>{rp(activeOrder.driverShare)}</Text>
               </View>
 
-              {activeOrder.status === "Menunggu" ? (
+              {((activeOrder.status === "Menunggu" && activeOrder.type !== "Marketplace") || (activeOrder.status === "Siap" && activeOrder.type === "Marketplace")) ? (
                 <View style={styles.btnRow}>
                   <TouchableOpacity 
                     style={[styles.actionBtn, styles.btnDecline]}
-                    onPress={() => handleUpdateStatus(activeOrder.id, "Dibatalkan")}
+                    disabled={homeActionOrderId === activeOrder.id}
+                    onPress={() => {
+                      if (activeOrder.type !== "Marketplace") {
+                        void handleUpdateStatus(activeOrder.id, "Dibatalkan");
+                        return;
+                      }
+                      Alert.alert("Tolak pesanan?", "Pesanan ini akan disembunyikan dari daftar Anda.", [
+                        { text: "Batal", style: "cancel" },
+                        { text: "Tolak", style: "destructive", onPress: async () => {
+                          if (homeActionLock.current.has(activeOrder.id)) return;
+                          homeActionLock.current.add(activeOrder.id);
+                          setHomeActionOrderId(activeOrder.id);
+                          try {
+                            const result = await declineMarketplaceOrder(activeOrder.id);
+                            if (!result.success) { Alert.alert("Belum berhasil", result.message || "Coba lagi."); return; }
+                            setOrders((current) => current.filter((order) => order.id !== activeOrder.id));
+                          } finally {
+                            homeActionLock.current.delete(activeOrder.id);
+                            setHomeActionOrderId((current) => current === activeOrder.id ? null : current);
+                          }
+                        } },
+                      ]);
+                    }}
                   >
                     <XCircle size={14} color="#B91C1C" />
                     <Text style={styles.btnTextDecline}>Tolak</Text>
@@ -597,10 +707,17 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 
                   <TouchableOpacity 
                     style={[styles.actionBtn, styles.btnAccept]}
-                    onPress={() => handleUpdateStatus(activeOrder.id, "Menuju Pickup")}
+                    disabled={homeActionOrderId === activeOrder.id}
+                    onPress={async () => {
+                      if (activeOrder.type !== "Marketplace") {
+                        await handleUpdateStatus(activeOrder.id, "Menuju Pickup");
+                        return;
+                      }
+                      await acceptMarketplaceFromHome(activeOrder.id);
+                    }}
                   >
-                    <CheckCircle2 size={14} color="#FFFFFF" />
-                    <Text style={styles.btnTextAccept}>Terima</Text>
+                    {homeActionOrderId === activeOrder.id ? <ActivityIndicator size="small" color="#FFFFFF" /> : <CheckCircle2 size={14} color="#FFFFFF" />}
+                    <Text style={styles.btnTextAccept}>{activeOrder.type === "Marketplace" ? "Terima Pesanan" : "Terima"}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (

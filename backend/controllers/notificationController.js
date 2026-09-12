@@ -6,7 +6,10 @@ const getNotifications = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
       return res.status(400).json({ success: false, message: "ID pengguna tidak valid" });
     }
-    const notifications = await Notification.find({ userId: req.params.userId })
+    if (String(req.params.userId) !== String(req.authUser._id)) {
+      return res.status(403).json({ success: false, message: "Notifikasi hanya dapat dilihat oleh pemilik akun." });
+    }
+    const notifications = await Notification.find({ userId: req.authUser._id })
       .sort({ createdAt: -1 })
       .limit(100)
       .lean();
@@ -19,8 +22,8 @@ const getNotifications = async (req, res) => {
 
 const markNotificationRead = async (req, res) => {
   try {
-    const notification = await Notification.findByIdAndUpdate(
-      req.params.id,
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id, userId: req.authUser._id },
       { isRead: true },
       { new: true }
     );

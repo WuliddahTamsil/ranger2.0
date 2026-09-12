@@ -1,5 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Image,
   Platform,
   Linking,
+  ActivityIndicator,
 } from "react-native";
 import {
   ShoppingBag,
@@ -64,7 +65,7 @@ export interface DriverOrder {
   dist: string;
   pay: number;
   driverShare: number;
-  status: "Menunggu" | "Menuju Pickup" | "Sampai Pickup" | "Mengantar" | "Selesai" | "Dibatalkan";
+  status: "Menunggu" | "Siap" | "Menuju Pickup" | "Sampai Pickup" | "Mengantar" | "Selesai" | "Dibatalkan";
   items?: { name: string; quantity: number; price: number; notes?: string }[];
   storeName?: string;
   storeAddress?: string;
@@ -82,14 +83,15 @@ export interface DriverOrder {
 
 interface OrderProps {
   orders: DriverOrder[];
-  setOrders: (orders: DriverOrder[]) => void;
+  setOrders: React.Dispatch<React.SetStateAction<DriverOrder[]>>;
   balance: number;
   setBalance: (bal: number) => void;
   transactions: any[];
   setTransactions: (txs: any[]) => void;
   isOnline: boolean;
-  onStatusChange?: (orderId: string, status: DriverOrder["status"]) => Promise<boolean>;
-  onAcceptOrder?: (orderId: string) => Promise<boolean>;
+  onStatusChange?: (orderId: string, status: DriverOrder["status"]) => Promise<boolean | DriverOrder>;
+  onAcceptOrder?: (orderId: string) => Promise<boolean | DriverOrder>;
+  onDeclineOrder?: (orderId: string) => Promise<boolean>;
   driverId?: string;
 }
 
@@ -118,6 +120,7 @@ export const Order: React.FC<OrderProps> = ({
   isOnline,
   onStatusChange,
   onAcceptOrder,
+  onDeclineOrder,
   driverId,
 }) => {
   const [activeTab, setActiveTab] = useState<"Masuk" | "Aktif" | "Selesai" | "Batal">("Masuk");
@@ -133,6 +136,14 @@ export const Order: React.FC<OrderProps> = ({
   const [cardNavMode, setCardNavMode] = useState<Record<string, "overview" | "store" | "customer">>({});
   const [navMode, setNavMode] = useState<"overview" | "store" | "customer">("store");
   const [fullscreenMapVisible, setFullscreenMapVisible] = useState(false);
+  const [mutatingOrderId, setMutatingOrderId] = useState<string | null>(null);
+  const mutationLockRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const fresh = orders.find((order) => order.id === selectedOrder.id);
+    if (fresh && JSON.stringify(fresh) !== JSON.stringify(selectedOrder)) setSelectedOrder(fresh);
+  }, [orders, selectedOrder]);
 
   // Auto load & poll chat messages
   useEffect(() => {
@@ -255,56 +266,73 @@ export const Order: React.FC<OrderProps> = ({
     orderId: string,
     nextStatus: DriverOrder["status"]
   ): Promise<boolean> => {
-    if (onStatusChange) {
-      try {
-        const success = await onStatusChange(orderId, nextStatus);
-        if (!success) return false;
-      } catch (err) {
-        console.error("Status change error:", err);
-        return false;
-      }
+    if (mutationLockRef.current.has(orderId)) return false;
+    mutationLockRef.current.add(orderId);
+    setMutatingOrderId(orderId);
+    try {
+      const result = onStatusChange ? await onStatusChange(orderId, nextStatus) : true;
+      if (result === false) return false;
+      const serverOrder = typeof result === "object" ? result : null;
+      const currentOrder = orders.find((order) => order.id === orderId);
+      const updatedOrder = serverOrder || (currentOrder ? {
+        ...currentOrder,
+        status: nextStatus,
+        completedAt: nextStatus === "Selesai" ? new Date().toISOString() : currentOrder.completedAt,
+      } : null);
+      if (!updatedOrder) return false;
+      setOrders((current) => current.map((order) => order.id === orderId ? updatedOrder : order));
+      if (selectedOrder?.id === orderId) setSelectedOrder(updatedOrder);
+
+      const alertCopy: Record<string, [string, string]> = {
+        "Sampai Pickup": ["Tiba di Toko", "Konfirmasi kedatangan tersimpan."],
+        Mengantar: ["Pesanan Diambil", "Pesanan dikonfirmasi telah diambil dan status pengantaran diperbarui."],
+        Selesai: ["Pengantaran Selesai", `Pesanan dinyatakan diterima pelanggan. Pendapatan ${rp(updatedOrder.driverShare)}.`],
+      };
+      const [title, message] = alertCopy[nextStatus] || ["Status Diperbarui", `Status pesanan sekarang ${nextStatus}.`];
+      Alert.alert(title, message);
+      return true;
+    } catch (error) {
+      console.error("Status change error:", error);
+      Alert.alert("Status belum diperbarui", "Periksa koneksi lalu coba lagi. Pesanan tetap pada status sebelumnya.");
+      return false;
+    } finally {
+      mutationLockRef.current.delete(orderId);
+      setMutatingOrderId((current) => current === orderId ? null : current);
     }
-
-    let alertTitle = "Status Diperbarui";
-    let alertMsg = "";
-
-    const updated = orders.map((o) => {
-      if (o.id === orderId) {
-        if (nextStatus === "Menuju Pickup") {
-          alertTitle = "Menuju Lokasi Toko";
-          alertMsg = `Live tracking aktif! Perjalanan menuju toko (${o.storeName || o.from}) telah dimulai. Notifikasi telah dikirim ke pemilik toko.`;
-        } else if (nextStatus === "Sampai Pickup") {
-          alertTitle = "Tiba di Toko";
-          alertMsg = `Anda telah tiba di ${o.storeName || "toko"}. Silakan periksa pesanan ke kasir atau dapur.`;
-        } else if (nextStatus === "Mengantar") {
-          alertTitle = "Menuju Alamat Customer";
-          alertMsg = `Live tracking aktif! Memulai pengantaran ke alamat ${o.customer}. Notifikasi telah dikirim ke customer dan pemilik toko.`;
-        } else if (nextStatus === "Selesai") {
-          alertTitle = "Pengantaran Selesai";
-          alertMsg = `Pesanan berhasil diserahkan. Pendapatan ${rp(o.driverShare)} telah ditambahkan ke saldo Anda.`;
-        } else if (nextStatus === "Dibatalkan") {
-          alertTitle = "Pesanan Ditolak";
-          alertMsg = "Pesanan telah ditolak.";
-        }
-        return { ...o, status: nextStatus, completedAt: nextStatus === "Selesai" ? new Date().toISOString() : o.completedAt };
-      }
-      return o;
-    });
-
-    setOrders(updated);
-
-    if (selectedOrder && selectedOrder.id === orderId) {
-      setSelectedOrder({ ...selectedOrder, status: nextStatus });
-    }
-
-    Alert.alert(alertTitle, alertMsg);
-    return true;
   };
 
   const handleAcceptOrder = async (orderId: string) => {
-    if (onAcceptOrder && !(await onAcceptOrder(orderId))) return;
-    await handleUpdateStatus(orderId, "Menuju Pickup");
-    setActiveTab("Aktif");
+    const order = orders.find((item) => item.id === orderId);
+    if (!order || mutationLockRef.current.has(orderId)) return;
+    mutationLockRef.current.add(orderId);
+    setMutatingOrderId(orderId);
+    let continueLegacyFlow = false;
+    try {
+      const result = onAcceptOrder ? await onAcceptOrder(orderId) : true;
+      if (result === false) return;
+      if (order.type === "Marketplace") {
+        if (typeof result !== "object") {
+          Alert.alert("Pesanan belum diterima", "Server belum mengirim status pesanan terbaru. Coba muat ulang lalu ulangi.");
+          return;
+        }
+        setOrders((current) => current.map((item) => item.id === orderId ? result : item));
+        if (selectedOrder?.id === orderId) setSelectedOrder(result);
+        setActiveTab("Aktif");
+        Alert.alert("Pesanan diterima", "Status pesanan diperbarui. Silakan menuju lokasi pickup.");
+      } else {
+        continueLegacyFlow = true;
+      }
+    } catch (error) {
+      console.error("Accept order error:", error);
+      Alert.alert("Pesanan belum diterima", "Periksa koneksi lalu coba lagi.");
+    } finally {
+      mutationLockRef.current.delete(orderId);
+      setMutatingOrderId((current) => current === orderId ? null : current);
+    }
+    if (continueLegacyFlow) {
+      await handleUpdateStatus(orderId, "Menuju Pickup");
+      setActiveTab("Aktif");
+    }
   };
 
   const handleDeclineOrder = (orderId: string) => {
@@ -316,13 +344,34 @@ export const Order: React.FC<OrderProps> = ({
         {
           text: "Tolak Pesanan",
           style: "destructive",
-          onPress: () => {
-            handleUpdateStatus(orderId, "Dibatalkan");
-            if (selectedOrder?.id === orderId) {
-              setSelectedOrder(null);
+          onPress: async () => {
+            const order = orders.find((item) => item.id === orderId);
+            if (order?.type === "Marketplace" && onDeclineOrder) {
+              const success = await onDeclineOrder(orderId);
+              if (!success) return;
+              setOrders((current) => current.filter((item) => item.id !== orderId));
+            } else {
+              await handleUpdateStatus(orderId, "Dibatalkan");
             }
+            if (selectedOrder?.id === orderId) setSelectedOrder(null);
           },
         },
+      ]
+    );
+  };
+
+  const confirmDriverTransition = (order: DriverOrder, nextStatus: DriverOrder["status"]) => {
+    if (order.type !== "Marketplace" || !["Mengantar", "Selesai"].includes(nextStatus)) {
+      void handleUpdateStatus(order.id, nextStatus);
+      return;
+    }
+    const completion = nextStatus === "Mengantar";
+    Alert.alert(
+      completion ? "Konfirmasi barang diambil" : "Selesaikan pesanan",
+      completion ? "Pastikan pesanan telah diterima dari toko." : "Pastikan pesanan sudah diterima pelanggan.",
+      [
+        { text: "Batal", style: "cancel" },
+        { text: completion ? "Ya, Sudah Diambil" : "Pesanan Sudah Diterima", onPress: () => void handleUpdateStatus(order.id, nextStatus) },
       ]
     );
   };
@@ -377,7 +426,7 @@ export const Order: React.FC<OrderProps> = ({
   // Filter tab
   const filteredOrders = orders.filter((order) => {
     if (activeTab === "Masuk") {
-      return order.status === "Menunggu";
+      return order.type === "Marketplace" ? order.status === "Siap" : order.status === "Menunggu";
     } else if (activeTab === "Aktif") {
       return (
         order.status === "Menuju Pickup" ||
@@ -394,6 +443,7 @@ export const Order: React.FC<OrderProps> = ({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Menunggu": return "#D97706";
+      case "Siap": return "#15803D";
       case "Menuju Pickup": return "#2563EB";
       case "Sampai Pickup": return "#7E22CE";
       case "Mengantar": return "#0891B2";
@@ -405,6 +455,7 @@ export const Order: React.FC<OrderProps> = ({
   const getStatusBg = (status: string) => {
     switch (status) {
       case "Menunggu": return "#FEF3C7";
+      case "Siap": return "#DCFCE7";
       case "Menuju Pickup": return "#EFF6FF";
       case "Sampai Pickup": return "#F3E8FF";
       case "Mengantar": return "#ECFEFF";
@@ -416,6 +467,7 @@ export const Order: React.FC<OrderProps> = ({
   const getStatusBadgeLabel = (status: string) => {
     switch (status) {
       case "Menunggu": return "Order Masuk";
+      case "Siap": return "Siap Dijemput";
       case "Menuju Pickup": return "Menuju Toko";
       case "Sampai Pickup": return "Tiba di Toko";
       case "Mengantar": return "Mengantar ke Customer";
@@ -497,14 +549,16 @@ export const Order: React.FC<OrderProps> = ({
                 {getStatusBadgeLabel(selectedOrder.status)} • {selectedOrder.type} Delivery
               </Text>
               <Text style={styles.statusNoticeText}>
-                {selectedOrder.status === "Menuju Pickup"
-                  ? "Kurir sedang dalam perjalanan ke alamat toko untuk mengambil pesanan."
+                {selectedOrder.status === "Siap"
+                  ? "Pesanan telah disiapkan toko dan siap Anda jemput."
+                  : selectedOrder.status === "Menuju Pickup"
+                  ? selectedOrder.type === "Marketplace" ? "Anda sedang menuju toko. Lokasi GPS real-time belum tersedia di aplikasi." : "Kurir sedang dalam perjalanan ke alamat toko untuk mengambil pesanan."
                   : selectedOrder.status === "Sampai Pickup"
                   ? "Kurir telah tiba di toko. Silakan periksa barang pesanan dan konfirmasi saat siap berangkat ke customer."
                   : selectedOrder.status === "Mengantar"
                   ? "Pesanan telah diambil dari toko. Kurir sedang mengantar pesanan ke alamat tujuan customer."
                   : selectedOrder.status === "Selesai"
-                  ? "Pengantaran selesai dilakukan. Pendapatan telah dikreditkan ke saldo dompet driver."
+                  ? "Pengantaran telah ditandai selesai."
                   : "Pesanan baru menunggu keputusan Anda."}
               </Text>
             </View>
@@ -515,11 +569,11 @@ export const Order: React.FC<OrderProps> = ({
             <View style={styles.fullMapHeader}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Compass size={16} color="#0D7A53" />
-                <Text style={styles.fullMapTitle}>Peta Rute Navigasi</Text>
+                <Text style={styles.fullMapTitle}>{selectedOrder.type === "Marketplace" ? "Informasi Lokasi" : "Peta Rute Navigasi"}</Text>
               </View>
-              <View style={styles.distChip}>
+              {selectedOrder.type !== "Marketplace" && <View style={styles.distChip}>
                 <Text style={styles.distChipText}>{selectedOrder.dist}</Text>
-              </View>
+              </View>}
             </View>
 
             <View style={{ padding: 12 }}>
@@ -527,6 +581,7 @@ export const Order: React.FC<OrderProps> = ({
                 storeName={selectedOrder.storeName || selectedOrder.from}
                 storeAddress={selectedOrder.storeAddress || selectedOrder.from}
                 customerAddress={selectedOrder.to}
+                marketplaceMode={selectedOrder.type === "Marketplace"}
                 driverName="Anda (Kurir)"
                 driverVehicle="Motor Kurir"
                 orderStatus={selectedOrder.status}
@@ -538,7 +593,7 @@ export const Order: React.FC<OrderProps> = ({
               />
 
               {/* Interactive Start Journey Navigation Controller */}
-              <View style={styles.startJourneyCard}>
+              {selectedOrder.type !== "Marketplace" && <View style={styles.startJourneyCard}>
                 {/* 1. Mode Rute ke Toko */}
                 {navMode === "store" && (
                   <View style={{ gap: 8 }}>
@@ -644,7 +699,7 @@ export const Order: React.FC<OrderProps> = ({
                     </Text>
                   </View>
                 )}
-              </View>
+              </View>}
 
               {/* Single Clean Fullscreen Navigation Button (Spacious, No Text Wrap) */}
               <TouchableOpacity
@@ -653,7 +708,7 @@ export const Order: React.FC<OrderProps> = ({
                 activeOpacity={0.8}
               >
                 <Maximize2 size={14} color="#0D7A53" />
-                <Text style={styles.openFullscreenGpsText}>Buka Navigasi Layar Penuh</Text>
+                <Text style={styles.openFullscreenGpsText}>{selectedOrder.type === "Marketplace" ? "Lihat alamat & opsi navigasi" : "Buka Navigasi Layar Penuh"}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -822,64 +877,55 @@ export const Order: React.FC<OrderProps> = ({
 
         {/* Sticky Action Footer */}
         <View style={styles.stickyActionFooter}>
-          {selectedOrder.status === "Menunggu" && isOnline && (
+          {((selectedOrder.status === "Menunggu" && selectedOrder.type !== "Marketplace") || (selectedOrder.status === "Siap" && selectedOrder.type === "Marketplace")) && isOnline && (
             <View style={styles.dualActionsRow}>
               <TouchableOpacity
                 style={[styles.sheetBtn, styles.sheetBtnOutline]}
+                disabled={mutatingOrderId === selectedOrder.id}
                 onPress={() => handleDeclineOrder(selectedOrder.id)}
               >
-                <Text style={styles.sheetBtnTextOutline}>Tolak Pesanan</Text>
+                    {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#15803D" /> : <Text style={styles.sheetBtnTextOutline}>Tolak Pesanan</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.sheetBtn, styles.sheetBtnSolid]}
+                disabled={mutatingOrderId === selectedOrder.id}
                 onPress={() => handleAcceptOrder(selectedOrder.id)}
               >
-                <Text style={styles.sheetBtnTextSolid}>Terima Pesanan</Text>
+                {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.sheetBtnTextSolid}>Terima Pesanan</Text>}
               </TouchableOpacity>
             </View>
-          )}
-
-          {["Siap", "Diproses"].includes(selectedOrder.status) && (
-            <TouchableOpacity
-              style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#0D7A53" }]}
-              onPress={() => handleUpdateStatus(selectedOrder.id, "Menuju Pickup")}
-              activeOpacity={0.85}
-            >
-              <Navigation size={18} color="#FFFFFF" />
-              <Text style={styles.sheetBtnTextSolid}>Mulai Jalan ke Toko</Text>
-            </TouchableOpacity>
           )}
 
           {selectedOrder.status === "Menuju Pickup" && (
             <TouchableOpacity
               style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#2563EB" }]}
-              onPress={() => handleUpdateStatus(selectedOrder.id, "Sampai Pickup")}
+              disabled={mutatingOrderId === selectedOrder.id}
+              onPress={() => confirmDriverTransition(selectedOrder, "Sampai Pickup")}
               activeOpacity={0.85}
             >
-              <Store size={18} color="#FFFFFF" />
-              <Text style={styles.sheetBtnTextSolid}>Tiba di Toko / Outlet</Text>
+              {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><Store size={18} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Saya Sudah Sampai" : "Tiba di Toko / Outlet"}</Text></>}
             </TouchableOpacity>
           )}
 
           {selectedOrder.status === "Sampai Pickup" && (
             <TouchableOpacity
               style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#7E22CE" }]}
-              onPress={() => handleUpdateStatus(selectedOrder.id, "Mengantar")}
+              disabled={mutatingOrderId === selectedOrder.id}
+              onPress={() => confirmDriverTransition(selectedOrder, "Mengantar")}
               activeOpacity={0.85}
             >
-              <Bike size={20} color="#FFFFFF" />
-              <Text style={styles.sheetBtnTextSolid}>Konfirmasi Ambil & OTW ke Customer</Text>
+              {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><Bike size={20} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Pesanan Sudah Diambil" : "Konfirmasi Ambil & OTW ke Customer"}</Text></>}
             </TouchableOpacity>
           )}
 
           {selectedOrder.status === "Mengantar" && (
             <TouchableOpacity
               style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#15803D" }]}
-              onPress={() => handleUpdateStatus(selectedOrder.id, "Selesai")}
+              disabled={mutatingOrderId === selectedOrder.id}
+              onPress={() => confirmDriverTransition(selectedOrder, "Selesai")}
               activeOpacity={0.85}
             >
-              <CheckCircle size={20} color="#FFFFFF" />
-              <Text style={styles.sheetBtnTextSolid}>Selesaikan Pengantaran</Text>
+              {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><CheckCircle size={20} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Pesanan Sudah Diterima Customer" : "Selesaikan Pengantaran"}</Text></>}
             </TouchableOpacity>
           )}
 
@@ -933,6 +979,7 @@ export const Order: React.FC<OrderProps> = ({
                 storeName={selectedOrder?.storeName || selectedOrder?.from}
                 storeAddress={selectedOrder?.storeAddress || selectedOrder?.from}
                 customerAddress={selectedOrder?.to}
+                marketplaceMode={selectedOrder?.type === "Marketplace"}
                 driverName="Anda (Kurir)"
                 driverVehicle="Motor Kurir"
                 orderStatus={selectedOrder?.status || "Mengantar"}
@@ -943,7 +990,7 @@ export const Order: React.FC<OrderProps> = ({
               />
 
               {/* Quick Trip Action Button inside Fullscreen View */}
-              {navMode === "store" && ["Menunggu", "Diproses", "Siap"].includes(selectedOrder?.status || "") && (
+              {selectedOrder?.type !== "Marketplace" && navMode === "store" && ["Menunggu", "Diproses", "Siap"].includes(selectedOrder?.status || "") && (
                 <TouchableOpacity
                   style={[styles.startTripButton, { marginTop: 10 }]}
                   onPress={async () => {
@@ -957,7 +1004,7 @@ export const Order: React.FC<OrderProps> = ({
                 </TouchableOpacity>
               )}
 
-              {navMode === "customer" && ["Menuju Pickup", "Sampai Pickup"].includes(selectedOrder?.status || "") && (
+              {selectedOrder?.type !== "Marketplace" && navMode === "customer" && ["Menuju Pickup", "Sampai Pickup"].includes(selectedOrder?.status || "") && (
                 <TouchableOpacity
                   style={[styles.startTripButton, { marginTop: 10 }]}
                   onPress={async () => {
@@ -1237,7 +1284,7 @@ export const Order: React.FC<OrderProps> = ({
         {(["Masuk", "Aktif", "Selesai", "Batal"] as const).map((tab) => {
           const isSelected = activeTab === tab;
           const count =
-            tab === "Masuk" ? orders.filter((o) => o.status === "Menunggu").length :
+            tab === "Masuk" ? orders.filter((o) => o.type === "Marketplace" ? o.status === "Siap" : o.status === "Menunggu").length :
             tab === "Aktif" ? orders.filter((o) => ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status)).length :
             tab === "Selesai" ? orders.filter((o) => o.status === "Selesai").length :
             orders.filter((o) => o.status === "Dibatalkan").length;
@@ -1264,7 +1311,7 @@ export const Order: React.FC<OrderProps> = ({
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => {
-          const isPending = item.status === "Menunggu";
+          const isPending = item.status === "Menunggu" && item.type !== "Marketplace" || item.status === "Siap" && item.type === "Marketplace";
           const isOngoing = ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(item.status);
           const isMapOpen = !!cardMapExpanded[item.id];
           const step = getStageStep(item.status);
@@ -1413,6 +1460,7 @@ export const Order: React.FC<OrderProps> = ({
                     storeName={item.storeName || item.from}
                     storeAddress={item.storeAddress || item.from}
                     customerAddress={item.to}
+                    marketplaceMode={item.type === "Marketplace"}
                     driverName="Anda (Kurir)"
                     driverVehicle="Motor Kurir"
                     orderStatus={item.status}
@@ -1504,16 +1552,18 @@ export const Order: React.FC<OrderProps> = ({
                 <View style={styles.actionButtonsRow}>
                   <TouchableOpacity
                     style={[styles.actionBtn, styles.actionBtnOutline]}
+                    disabled={mutatingOrderId === item.id}
                     onPress={() => handleDeclineOrder(item.id)}
                   >
-                    <Text style={styles.actionBtnTextOutline}>Tolak</Text>
+                      {mutatingOrderId === item.id ? <ActivityIndicator color="#15803D" /> : <Text style={styles.actionBtnTextOutline}>Tolak</Text>}
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={[styles.actionBtn, styles.actionBtnSolid]}
+                    disabled={mutatingOrderId === item.id}
                     onPress={() => handleAcceptOrder(item.id)}
                   >
-                    <Text style={styles.actionBtnTextSolid}>Terima Pesanan</Text>
+                    {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.actionBtnTextSolid}>Terima Pesanan</Text>}
                   </TouchableOpacity>
                 </View>
               )}
@@ -1558,11 +1608,11 @@ export const Order: React.FC<OrderProps> = ({
                   {item.status === "Menuju Pickup" && (
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#2563EB" }]}
-                      onPress={() => handleUpdateStatus(item.id, "Sampai Pickup")}
+                      disabled={mutatingOrderId === item.id}
+                      onPress={() => confirmDriverTransition(item, "Sampai Pickup")}
                       activeOpacity={0.85}
                     >
-                      <Store size={16} color="#FFFFFF" />
-                      <Text style={styles.primaryFlowBtnText}>Tiba di Toko / Outlet</Text>
+                      {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><Store size={16} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Saya Sudah Sampai" : "Tiba di Toko / Outlet"}</Text></>}
                     </TouchableOpacity>
                   )}
 
@@ -1570,11 +1620,11 @@ export const Order: React.FC<OrderProps> = ({
                   {item.status === "Sampai Pickup" && (
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#7E22CE" }]}
-                      onPress={() => handleUpdateStatus(item.id, "Mengantar")}
+                      disabled={mutatingOrderId === item.id}
+                      onPress={() => confirmDriverTransition(item, "Mengantar")}
                       activeOpacity={0.85}
                     >
-                      <Bike size={18} color="#FFFFFF" />
-                      <Text style={styles.primaryFlowBtnText}>Konfirmasi Ambil & OTW ke Customer</Text>
+                      {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><Bike size={18} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Pesanan Sudah Diambil" : "Konfirmasi Ambil & OTW ke Customer"}</Text></>}
                     </TouchableOpacity>
                   )}
 
@@ -1582,11 +1632,11 @@ export const Order: React.FC<OrderProps> = ({
                   {item.status === "Mengantar" && (
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#15803D" }]}
-                      onPress={() => handleUpdateStatus(item.id, "Selesai")}
+                      disabled={mutatingOrderId === item.id}
+                      onPress={() => confirmDriverTransition(item, "Selesai")}
                       activeOpacity={0.85}
                     >
-                      <CheckCircle size={18} color="#FFFFFF" />
-                      <Text style={styles.primaryFlowBtnText}>Selesaikan Pengantaran</Text>
+                      {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><CheckCircle size={18} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Pesanan Sudah Diterima Customer" : "Selesaikan Pengantaran"}</Text></>}
                     </TouchableOpacity>
                   )}
                 </View>

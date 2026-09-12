@@ -11,93 +11,40 @@ export interface HistoryItem {
   itemSummary: string;
   total: number;
   time: string;
+  createdAt?: string | Date;
   status: "Selesai" | "Dibatalkan";
   rawOrder?: any;
 }
 
 interface RiwayatProps {
   orders: any[]; // dynamic orders from parent
+  loading?: boolean;
+  error?: string;
+  onRetry?: () => void;
 }
 
-export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
+export const Riwayat: React.FC<RiwayatProps> = ({ orders, loading = false, error = "", onRetry }) => {
   const [filter, setFilter] = useState<"Semua" | "Selesai" | "Dibatalkan">("Semua");
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(null);
   const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
 
-  // Fallback mock history
-  const mockHistory: HistoryItem[] = [
-    {
-      id: "MKT-8841",
-      customerName: "Budi Santoso",
-      itemSummary: "Buku Tulis A5 (5x) & Pulpen Gel (10x)",
-      total: 75000,
-      time: "Hari ini, 10:15",
-      status: "Selesai",
-      rawOrder: {
-        id: "MKT-8841",
-        customer: "Budi Santoso",
-        customerPhone: "0813-2244-6688",
-        address: "Asrama Mahasiswa UTM Gedung B, Kamal",
-        storeName: "Toko ATK & Fotokopi UTM",
-        storeAddress: "Jl. Raya Telang No. 12, Kamal, Bangkalan",
-        driver: { name: "Wuwu", vehicle: "Motor", plateNumber: "M 4128 AA" },
-        items: [
-          { name: "Buku Tulis A5 Campus", quantity: 5, price: 7000, total: 35000 },
-          { name: "Pulpen Gel 0.5 Black", quantity: 10, price: 4000, total: 40000 },
-        ],
-        subtotal: 75000,
-        deliveryFee: 5000,
-        serviceFee: 1000,
-        total: 75000,
-        paymentMethod: "QRIS / Saldo Dompet GEOVERSE",
-        paymentStatus: "Lunas",
-        time: "10:15 WIB",
-      },
-    },
-    {
-      id: "MKT-8835",
-      customerName: "Siti Rahma",
-      itemSummary: "Kaos Polo GEOVERSE M (1x)",
-      total: 85000,
-      time: "Kemarin, 15:40",
-      status: "Selesai",
-      rawOrder: {
-        id: "MKT-8835",
-        customer: "Siti Rahma",
-        customerPhone: "0856-1133-5577",
-        address: "Kost Putri Melati No. 4, Telang",
-        storeName: "GEOVERSE Official Store",
-        storeAddress: "Jl. Raya Telang No. 01, Kamal, Bangkalan",
-        driver: { name: "Wuwu", vehicle: "Motor", plateNumber: "M 4128 AA" },
-        items: [{ name: "Kaos Polo GEOVERSE Hijau Size M", quantity: 1, price: 85000, total: 85000 }],
-        subtotal: 85000,
-        deliveryFee: 5000,
-        serviceFee: 1000,
-        total: 85000,
-        paymentMethod: "Transfer Bank BCA",
-        paymentStatus: "Lunas",
-        time: "15:40 WIB",
-      },
-    },
-  ];
-
-  // Convert parent orders that are completed or cancelled to history format
+  // History is derived only from persistent Marketplace orders supplied by the owner screen.
   const dynamicHistory: HistoryItem[] = orders
     .filter((o) => o.status === "Selesai" || o.status === "Dibatalkan")
     .map((o) => ({
-      id: o.id,
-      customerName: o.customer,
-      itemSummary: o.items ? o.items.map((i: any) => `${i.name} (${i.quantity}x)`).join(", ") : "Produk Marketplace",
-      total: o.total,
-      time: `Hari ini, ${o.time}`,
+      id: String(o.id || o._id),
+      customerName: o.customer || o.customerName || "Pelanggan",
+      itemSummary: Array.isArray(o.items) ? o.items.map((i: any) => `${i.name || "Produk"} (${i.quantity || 1}x)`).join(", ") : "Rincian produk tidak tersedia",
+      total: Number(o.total ?? o.totalAmount ?? 0),
+      createdAt: o.createdAt,
+      time: o.createdAt && !Number.isNaN(new Date(o.createdAt).getTime())
+        ? new Date(o.createdAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })
+        : "Waktu belum tersedia",
       status: o.status as "Selesai" | "Dibatalkan",
       rawOrder: o,
     }));
 
-  // Combine both, avoiding duplicates (if any ID matches)
-  const combinedHistory = [...dynamicHistory, ...mockHistory];
-
-  const visibleHistory = combinedHistory.filter(
+  const visibleHistory = dynamicHistory.filter(
     (item) => filter === "Semua" || item.status === filter
   );
 
@@ -106,48 +53,38 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
     const cleanId = (item.id || "").replace(/^#/, "");
     const formattedId = cleanId.length >= 8 ? cleanId.slice(-8).toUpperCase() : cleanId.toUpperCase();
 
-    let parsedItems: InvoiceItemDetail[] = [];
-    if (raw.items && Array.isArray(raw.items) && raw.items.length > 0) {
-      parsedItems = raw.items.map((i: any) => ({
+    const parsedItems: InvoiceItemDetail[] = Array.isArray(raw.items)
+      ? raw.items.map((i: any) => ({
         name: i.name || "Produk Marketplace",
         quantity: Number(i.quantity) || 1,
         price: Number(i.price) || 0,
         total: (Number(i.quantity) || 1) * (Number(i.price) || 0),
-      }));
-    } else {
-      parsedItems = [
-        {
-          name: item.itemSummary || "Produk Marketplace",
-          quantity: 1,
-          price: item.total,
-          total: item.total,
-        },
-      ];
-    }
+      }))
+      : [];
 
     const invoiceData: InvoiceData = {
       id: item.id,
-      invoiceNumber: `INV/20260909/RNG-${formattedId}`,
-      date: item.time?.includes(",") ? item.time.split(",")[0].trim() : "09 Sep 2026",
-      time: item.time?.includes(",") ? item.time.split(",")[1].trim() : "14:45 WIB",
+      invoiceNumber: `INV/RNG-${formattedId}`,
+      date: item.createdAt ? new Date(item.createdAt).toLocaleDateString("id-ID") : undefined,
+      time: item.createdAt ? new Date(item.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : undefined,
       status: item.status,
       orderType: "Marketplace",
-      storeName: raw.storeName || "Toko Marketplace GEOVERSE",
-      storeAddress: raw.storeAddress || "Jl. Raya Telang No. 01, Kamal, Bangkalan",
-      customerName: item.customerName || raw.customer || "Pemesan",
-      customerPhone: raw.customerPhone || "0812-3456-7890",
-      customerAddress: raw.address || "Area Kampus UTM, Bangkalan",
-      driverName: raw.driver?.name || "Wuwu (Kurir GEOVERSE)",
-      driverVehicle: raw.driver?.vehicle || "Motor",
-      driverPlate: raw.driver?.plateNumber || "M 4128 AA",
+      storeName: raw.storeName,
+      storeAddress: raw.storeAddress,
+      customerName: item.customerName || raw.customer || "Pelanggan",
+      customerPhone: raw.customerPhone || undefined,
+      customerAddress: raw.address || undefined,
+      driverName: raw.driver?.name || undefined,
+      driverVehicle: raw.driver?.vehicle || undefined,
+      driverPlate: raw.driver?.plateNumber || undefined,
       items: parsedItems,
-      subtotal: raw.subtotal || item.total,
-      deliveryFee: raw.deliveryFee ?? 5000,
-      serviceFee: raw.serviceFee ?? 1000,
-      discount: raw.discount || 0,
+      subtotal: Number(raw.subtotal ?? item.total),
+      deliveryFee: Number(raw.deliveryFee ?? 0),
+      serviceFee: Number(raw.serviceFee ?? 0),
+      discount: Number(raw.discount ?? 0),
       total: item.total,
-      paymentMethod: raw.paymentMethod || "QRIS / Transfer Bank BCA",
-      paymentStatus: item.status === "Dibatalkan" ? "Dibatalkan" : "Lunas",
+      paymentMethod: raw.paymentMethod || undefined,
+      paymentStatus: raw.paymentStatus || (item.status === "Dibatalkan" ? "Dibatalkan" : undefined),
     };
 
     setSelectedInvoice(invoiceData);
@@ -189,9 +126,19 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
 
         {/* History Cards */}
         <View style={styles.listContainer}>
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{orders.length ? "Riwayat belum berhasil diperbarui. Data yang sudah dimuat tetap ditampilkan." : error}</Text>
+              {onRetry ? (
+                <TouchableOpacity onPress={onRetry} style={styles.retryButton} activeOpacity={0.8}>
+                  <Text style={styles.retryText}>Coba lagi</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
           {visibleHistory.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Tidak ada riwayat untuk filter ini</Text>
+              <Text style={styles.emptyText}>{loading ? "Memuat riwayat pesanan…" : "Belum ada pesanan selesai atau dibatalkan untuk filter ini."}</Text>
             </View>
           ) : (
             visibleHistory.map((item) => {
@@ -385,5 +332,30 @@ const styles = StyleSheet.create({
   emptyText: {
     color: "#6B7280",
     fontSize: 13,
+  },
+  errorCard: {
+    backgroundColor: "#FFF7ED",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+  },
+  errorText: {
+    color: "#9A3412",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  retryButton: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: "#C2410C",
+  },
+  retryText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
 });

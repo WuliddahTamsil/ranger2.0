@@ -1,5 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -47,7 +47,10 @@ import {
   updateMarketplaceOrderStatus,
   getDrivers,
   assignMarketplaceDriver,
+  getNotifications,
+  markNotificationRead,
 } from "../../services/api";
+import { subscribeToUserRealtime } from "../../services/userRealtime";
 
 // Import other screens
 import { Order, OrderData } from "./Order";
@@ -138,46 +141,90 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
 
   // 3. Global Orders State
   const [orders, setOrders] = useState<OrderData[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersLoadError, setOrdersLoadError] = useState("");
+  const [ordersReloadKey, setOrdersReloadKey] = useState(0);
+  const ordersAccountIdRef = useRef<string | null>(null);
   const [drivers, setDrivers] = useState<{ id: string; name: string; phone: string; vehicleType?: string; plateNumber?: string }[]>([]);
 
   useEffect(() => {
-    if (!authAccount) return;
+    if (!authAccount?.id) {
+      ordersAccountIdRef.current = null;
+      setOrders([]);
+      setOrdersLoading(false);
+      setOrdersLoadError("");
+      return;
+    }
+    if (ordersAccountIdRef.current !== authAccount.id) {
+      ordersAccountIdRef.current = authAccount.id;
+      setOrders([]);
+    }
+    setOrdersLoading(true);
+    setOrdersLoadError("");
+    let active = true;
+    let loading = false;
+    let firstRequest = true;
     const loadOrders = async () => {
-      const result = await getMarketplaceOrdersForOwner(authAccount.id);
-      if (!result.success || !result.data) {
-        setOrders([]);
-        return;
+      if (loading) return;
+      loading = true;
+      try {
+        const result = await getMarketplaceOrdersForOwner(authAccount.id);
+        if (!active) return;
+        if (!result.success || !Array.isArray(result.data)) {
+          setOrdersLoadError(result.message || "Riwayat pesanan belum dapat dimuat. Periksa koneksi lalu coba lagi.");
+          return;
+        }
+        setOrders(result.data.map((order: any) => ({
+          id: String(order._id),
+          customer: order.customerName || "Pelanggan",
+          customerPhone: order.customerPhone || "",
+          items: Array.isArray(order.items) ? order.items : [],
+          total: Number(order.totalAmount || 0),
+          subtotal: Number(order.subtotal || 0),
+          deliveryFee: Number(order.deliveryFee || 0),
+          serviceFee: Number(order.serviceFee || 0),
+          discount: Number(order.discount || 0),
+          time: order.createdAt ? new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "",
+          createdAt: order.createdAt,
+          completedAt: order.updatedAt,
+          paymentMethod: order.paymentMethod,
+          paymentStatus: order.paymentStatus,
+          status: order.status,
+          address: order.address || "Alamat pelanggan belum tersedia",
+          storeName: order.storeName || "Mitra Marketplace",
+          storeAddress: order.storeAddress || "Alamat toko belum tersedia",
+          driverPhone: order.driverPhone || "",
+          driver: order.driverId ? {
+            name: order.driverName || "Driver",
+            vehicle: order.driverVehicle || "",
+            plateNumber: order.driverPlateNumber || "",
+            phone: order.driverPhone || "",
+            rating: 0,
+            stage: order.status === "Menuju Pickup" ? "Driver menuju toko" : order.status === "Sampai Pickup" ? "Driver tiba di toko" : order.status === "Mengantar" ? "Pesanan sedang diantar" : order.status === "Selesai" ? "Pengantaran selesai" : "",
+            distance: "",
+            eta: "",
+          } : null,
+          unreadCustomerMessages: 0,
+          unreadDriverMessages: 0,
+        })));
+        setOrdersLoadError("");
+      } catch {
+        if (active) setOrdersLoadError("Riwayat pesanan belum dapat dimuat. Periksa koneksi lalu coba lagi.");
+      } finally {
+        loading = false;
+        if (active && firstRequest) {
+          firstRequest = false;
+          setOrdersLoading(false);
+        }
       }
-      setOrders(result.data.map((order: any) => ({
-        id: order._id,
-        customer: order.customerName,
-        customerPhone: order.customerPhone || "",
-        items: order.items,
-        total: order.totalAmount,
-        subtotal: order.subtotal,
-        deliveryFee: order.deliveryFee,
-        time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-        status: order.status,
-        address: order.address || "Jl. Telang Indah, Kamal",
-        storeName: order.storeName || storeInfo.storeName || "Toko Marketplace",
-        storeAddress: order.storeAddress || storeInfo.address || "Kamal, Bangkalan, Madura",
-        driver: order.driverId ? {
-          name: order.driverName || "Driver",
-          vehicle: "Motor",
-          plateNumber: order.driverPhone || "",
-          rating: 5,
-          stage: order.status === "Selesai" ? "Pesanan telah selesai" : order.status === "Diambil" || order.status === "Mengantar" ? "Sedang mengantar pesanan" : "Menuju outlet penjemputan",
-          distance: "1.5 km",
-          eta: "5 mnt",
-        } : null,
-        unreadCustomerMessages: 0,
-        unreadDriverMessages: 0,
-      })));
     };
     void loadOrders();
     const interval = setInterval(() => void loadOrders(), 3500);
-    return () => clearInterval(interval);
-  }, [authAccount]);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [authAccount?.id, ordersReloadKey]);
 
   useEffect(() => {
     void getDrivers().then((result) => {
@@ -186,7 +233,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           id: driver._id,
           name: driver.name,
           phone: driver.phone || "",
-          vehicleType: driver.roleData?.vehicleType || "Motor",
+          vehicleType: driver.roleData?.vehicleType || "",
           plateNumber: driver.roleData?.plateNumber || "",
         })));
       }
@@ -194,19 +241,46 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
   }, []);
 
   // 4. Global Withdrawals State
-  const [withdrawals, setWithdrawals] = useState<any[]>([
-    {
-      id: "WDR-1234",
-      amount: 150000,
-      method: "GoPay",
-      destination: "0812-3456-7890",
-      createdAt: "08 Agu, 14:20",
-      status: "Sukses",
-    },
-  ]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
 
   // UI States inside Beranda View
   const [notifModalVisible, setNotifModalVisible] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+
+  const refreshNotifications = useCallback(async () => {
+    if (!authAccount?.id) return;
+    const result = await getNotifications(authAccount.id);
+    if (result.success && Array.isArray(result.data)) setNotifications(result.data);
+  }, [authAccount?.id]);
+
+  useEffect(() => {
+    if (!authAccount?.id) {
+      setNotifications([]);
+      return;
+    }
+    void refreshNotifications();
+    let isActive = true;
+    let unsubscribe: () => void = () => undefined;
+    void subscribeToUserRealtime(() => void refreshNotifications(), () => void refreshNotifications()).then((stop) => {
+      if (isActive) unsubscribe = stop;
+      else stop();
+    });
+    const interval = setInterval(() => void refreshNotifications(), 30000);
+    return () => {
+      isActive = false;
+      clearInterval(interval);
+      unsubscribe();
+    };
+  }, [authAccount?.id, refreshNotifications]);
+
+  const openNotification = async (notification: any) => {
+    if (!notification.isRead) {
+      const result = await markNotificationRead(String(notification._id));
+      if (result.success) setNotifications((current) => current.map((item) => item._id === notification._id ? { ...item, isRead: true } : item));
+    }
+    setNotifModalVisible(false);
+    setCurrentTab(1);
+  };
   const [productFormVisible, setProductFormVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [showAllProducts, setShowAllProducts] = useState(false);
@@ -395,7 +469,12 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           />
         );
       case 2:
-        return <Riwayat orders={orders} />;
+        return <Riwayat
+          orders={orders}
+          loading={ordersLoading}
+          error={ordersLoadError}
+          onRetry={() => setOrdersReloadKey((key) => key + 1)}
+        />;
       case 3:
         return (
           <Pendapatan
@@ -429,8 +508,8 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           name={storeInfo.ownerName || "Nama Pemilik"}
           role="Pemilik Marketplace"
           icon={StoreIcon}
-          notificationCount={orders.filter((order) => order.status === "Menunggu").length}
-          onNotificationPress={() => setNotifModalVisible(true)}
+          notificationCount={notifications.filter((notification) => !notification.isRead).length}
+          onNotificationPress={() => { void refreshNotifications(); setNotifModalVisible(true); }}
           onRolePress={() => navigate("role")}
         />
 
@@ -849,17 +928,20 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
             </View>
 
             <View style={styles.notifList}>
-              {orders.filter((order) => order.status === "Menunggu").length > 0 ? (
-                <TouchableOpacity
-                  style={styles.notifItemRow}
-                  onPress={() => { setNotifModalVisible(false); setCurrentTab(1); }}
-                >
-                  <View style={styles.notifIconBg}><ShoppingBag size={18} color="#1B7A4E" /></View>
-                  <View style={styles.notifBody}>
-                    <Text style={styles.notifRowTitle}>Pesanan Baru</Text>
-                    <Text style={styles.notifRowDesc}>Ada pesanan baru yang perlu diproses.</Text>
-                  </View>
-                </TouchableOpacity>
+              {notifications.length > 0 ? (
+                notifications.slice(0, 30).map((notification) => (
+                  <TouchableOpacity
+                    key={String(notification._id)}
+                    style={[styles.notifItemRow, !notification.isRead && { backgroundColor: "#F0FDF4" }]}
+                    onPress={() => void openNotification(notification)}
+                  >
+                    <View style={styles.notifIconBg}><ShoppingBag size={18} color="#1B7A4E" /></View>
+                    <View style={styles.notifBody}>
+                      <Text style={styles.notifRowTitle}>{notification.title}</Text>
+                      <Text style={styles.notifRowDesc}>{notification.message}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))
               ) : (
                 <Text style={styles.notifRowDesc}>Belum ada notifikasi pesanan.</Text>
               )}

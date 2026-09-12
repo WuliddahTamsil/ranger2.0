@@ -1,6 +1,7 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -32,7 +33,6 @@ import { AuthAccount } from "../auth/authTypes";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { getCateringOrdersForCustomer } from "../../services/api";
 import { subscribeCustomerOrders } from "./customerOrderStore";
-import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 
 interface CustomerCateringTrackingProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -40,21 +40,43 @@ interface CustomerCateringTrackingProps extends Nav {
 
 export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingProps> = ({ navigate, authAccount }) => {
   const [order, setOrder] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const targetOrderId = useRef<string | null>(null);
   const [chatVisible, setChatVisible] = useState(false);
   const [chatRecipient, setChatRecipient] = useState<"driver" | "merchant">("driver");
 
   useEffect(() => subscribeCustomerOrders((orders) => {
-    const latest = orders.find((item) => item.type.toLowerCase().includes("cater"));
-    if (latest) setOrder(latest);
+    const latest = orders.find((item) => item.type.toLowerCase().includes("cater") && /^[a-f\d]{24}$/i.test(String(item.id)));
+    if (latest) {
+      targetOrderId.current = String(latest.id);
+      setOrder(latest);
+    }
   }), []);
 
-  // Poll live status from backend frequently (every 2.5 seconds)
+  // Refresh order status at a bounded interval; this is not GPS live tracking.
   useEffect(() => {
-    if (!authAccount?.id) return;
+    if (!authAccount?.id) {
+      setLoading(false);
+      return;
+    }
+    let active = true;
     const fetchLive = async () => {
-      const res = await getCateringOrdersForCustomer(authAccount.id);
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        const live = res.data[0]; // Most recent catering order
+      try {
+        const res = await getCateringOrdersForCustomer(authAccount.id);
+        if (!active) return;
+        if (!res.success) {
+          setLoadError(true);
+          setLoading(false);
+          return;
+        }
+        const orders = Array.isArray(res.data) ? res.data : [];
+        const live = (targetOrderId.current
+          ? orders.find((candidate: any) => String(candidate._id || candidate.id) === targetOrderId.current)
+          : orders[0]);
+        if (live) {
+          targetOrderId.current = String(live._id || live.id);
+          setLoadError(false);
         setOrder((prev: any) => ({
           ...prev,
           id: live._id || prev?.id,
@@ -62,8 +84,8 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
           status: live.status,
           item: live.menuName || prev?.item,
           detail: `${live.portions} pax • ${live.storeName || "Catering Lokal"}`,
-          total: live.totalAmount || prev?.total,
-          paidAmount: live.paidAmount || prev?.paidAmount,
+          total: live.totalAmount ?? prev?.total,
+          paidAmount: live.paidAmount ?? prev?.paidAmount,
           remainingAmount: live.remainingAmount !== undefined ? live.remainingAmount : prev?.remainingAmount,
           cateringDate: live.cateringDate || prev?.cateringDate,
           cateringTime: live.cateringTime || prev?.cateringTime,
@@ -74,27 +96,35 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
           driverVehicle: live.driverVehicle,
           storeName: live.storeName,
           storeAddress: live.storeAddress,
+          paymentStatus: live.paymentStatus,
         }));
+        }
+        setLoading(false);
+      } catch {
+        if (!active) return;
+        setLoadError(true);
+        setLoading(false);
       }
     };
     void fetchLive();
-    const interval = setInterval(() => void fetchLive(), 2500);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => void fetchLive(), 15000);
+    return () => { active = false; clearInterval(interval); };
   }, [authAccount?.id]);
 
   const remaining = order?.remainingAmount || 0;
   const currentStatus = order?.status || "Menunggu";
 
   // Dynamic status evaluation
-  const isReceived = true;
+  const isReceived = Boolean(order);
   const isCooking = ["Diproses", "Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim", "Selesai"].includes(currentStatus);
   const isReady = ["Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar", "Dikirim", "Selesai"].includes(currentStatus);
   const isDriverHeading = ["Menuju Pickup", "Sampai Pickup"].includes(currentStatus);
   const isDelivering = ["Diambil", "Mengantar", "Dikirim"].includes(currentStatus);
   const isFinished = currentStatus === "Selesai";
+  const isCanceled = currentStatus === "Dibatalkan";
 
   const progress = [
-    { title: "Pesanan diterima", text: "Detail pesanan sudah dikonfirmasi", icon: CheckCircle2, active: isReceived },
+    { title: "Pesanan tercatat", text: "Permintaan pesanan tersimpan dan menunggu proses mitra", icon: CheckCircle2, active: isReceived },
     { title: "Sedang disiapkan", text: "Mitra catering menyiapkan menu masakan", icon: Clock3, active: isCooking },
     {
       title: "Pesanan siap & kurir ditugaskan",
@@ -128,6 +158,28 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
     setChatVisible(true);
   };
 
+  if (loading && !order) {
+    return (
+      <ResponsiveSafeAreaView style={styles.container}>
+        <BackHeader title="Lacak Catering" onBack={() => navigate("c_home")} />
+        <View style={styles.emptyState}><ActivityIndicator size="large" color="#1B7A4E" /><Text style={styles.emptyStateText}>Memuat status pesanan…</Text></View>
+      </ResponsiveSafeAreaView>
+    );
+  }
+
+  if (!order) {
+    return (
+      <ResponsiveSafeAreaView style={styles.container}>
+        <BackHeader title="Lacak Catering" onBack={() => navigate("c_home")} />
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateTitle}>{loadError ? "Status belum dapat dimuat" : "Belum ada pesanan Catering"}</Text>
+          <Text style={styles.emptyStateText}>{loadError ? "Periksa koneksi lalu buka kembali halaman ini." : "Pesanan yang berhasil dibuat akan tampil di sini."}</Text>
+          <TouchableOpacity style={styles.emptyStateButton} onPress={() => navigate("c_catering")}><Text style={styles.emptyStateButtonText}>Lihat Catering</Text></TouchableOpacity>
+        </View>
+      </ResponsiveSafeAreaView>
+    );
+  }
+
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       <BackHeader title="Lacak Catering" onBack={() => navigate("c_home")} />
@@ -138,7 +190,9 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
             <Check size={28} color="#FFFFFF" strokeWidth={3} />
           </View>
           <Text style={styles.statusTitle}>
-            {isFinished
+            {isCanceled
+              ? "Pesanan Dibatalkan"
+              : isFinished
               ? "Pesanan Telah Selesai!"
               : isDelivering
               ? "Kurir Sedang Mengantar"
@@ -148,10 +202,12 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
               ? "Pesanan Siap Diambil Kurir"
               : isCooking
               ? "Dapur Sedang Memasak Menu"
-              : "Pesanan Diterima Dapur"}
+              : "Pesanan Tercatat"}
           </Text>
           <Text style={styles.statusSubtitle}>
-            {isFinished
+            {isCanceled
+              ? "Pesanan ini dibatalkan. Hubungi mitra atau bantuan Geoverse jika Anda memerlukan informasi lebih lanjut."
+              : isFinished
               ? "Pesanan telah tiba di tujuan. Selamat menikmati hidangan Anda!"
               : isDelivering
               ? `Kurir (${order?.driverName || "GEOVERSE Delivery"}) sedang dalam perjalanan ke alamat Anda.`
@@ -161,25 +217,13 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
               ? "Dapur telah selesai menyiapkan pesanan. Menunggu kurir mengambil pesanan."
               : isCooking
               ? "Mitra catering sudah menerima pesanan dan sedang meracik hidangan segar."
-              : "Pesanan telah masuk ke antrean dapur mitra."}
+              : `Pesanan tercatat. Status pembayaran: ${order?.paymentStatus || "menunggu konfirmasi"}.`}
           </Text>
         </View>
 
-        {/* Real Interactive Google Maps Tracking */}
-        <View style={{ marginTop: 16 }}>
-          <Text style={styles.sectionTitleNoMargin}>Peta Pelacakan Real-Time (Google Maps)</Text>
-          <Text style={styles.mapSubtitle}>Pantau rute kurir dan lokasi dapur pengantaran</Text>
-          <View style={{ marginTop: 8 }}>
-            <LiveOrderTrackingMap
-              storeName={order?.storeName || "Dapur Barokah Catering"}
-              storeAddress={order?.storeAddress || "Jl. Raya Telang No. 12, Kamal"}
-              customerAddress={order?.address || "Jl. Telang Indah No. 45, Kamal"}
-              driverName={order?.driverName}
-              driverVehicle={order?.driverVehicle}
-              orderStatus={currentStatus}
-              height={260}
-            />
-          </View>
+        <View style={styles.locationNotice}>
+          <MapPin size={18} color="#64748B" />
+          <Text style={styles.mapSubtitle}>Lokasi driver belum tersedia. Status pesanan diperbarui berkala.</Text>
         </View>
 
         {/* Kurir Card / Waiting Driver Info */}
@@ -234,8 +278,8 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.storeLabel}>MITRA DAPUR CATERING</Text>
-            <Text style={styles.storeName}>{order?.storeName || "Dapur Barokah Catering"}</Text>
-            <Text style={styles.storeSub} numberOfLines={1}>{order?.storeAddress || "Dapur Produksi"}</Text>
+            <Text style={styles.storeName}>{order?.storeName || "Nama mitra belum tersedia"}</Text>
+            <Text style={styles.storeSub} numberOfLines={1}>{order?.storeAddress || "Alamat mitra belum tersedia"}</Text>
           </View>
           <TouchableOpacity
             style={styles.storeChatBtn}
@@ -265,7 +309,7 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
             </View>
             <View style={styles.detailRow}>
               <MapPin size={16} color="#1B7A4E" />
-              <Text style={styles.detailText}>{String(order.address || "Alamat pengiriman customer")}</Text>
+              <Text style={styles.detailText}>{String(order.address || "Alamat belum tersedia")}</Text>
             </View>
           </View>
         )}
@@ -322,6 +366,12 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
+  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
+  emptyStateTitle: { color: "#111827", fontSize: 18, fontWeight: "800", textAlign: "center" },
+  emptyStateText: { color: "#6B7280", fontSize: 13, lineHeight: 19, textAlign: "center" },
+  emptyStateButton: { backgroundColor: "#1B7A4E", borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12, marginTop: 6 },
+  emptyStateButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  locationNotice: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFFFFF", borderRadius: 12, padding: 12, marginTop: 16 },
   content: { padding: 16, paddingBottom: 32 },
   statusHero: { alignItems: "center", backgroundColor: "#E8F5EE", borderRadius: 18, padding: 20 },
   statusIcon: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#1B7A4E", alignItems: "center", justifyContent: "center" },

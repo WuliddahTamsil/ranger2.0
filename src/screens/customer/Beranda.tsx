@@ -1,5 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -36,7 +36,7 @@ import {
   PlayCircle,
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
-import { PRODUCTS, RESTAURANTS, LAUNDRIES, KOS_LIST, NOTIFS } from "../../constants/mockData";
+import { RESTAURANTS, LAUNDRIES, KOS_LIST } from "../../constants/mockData";
 import { Nav, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { getPrimaryCustomerAddress } from "../../services/customerAddressService";
@@ -47,7 +47,8 @@ import { Pesanan } from "./Pesanan";
 import { Inbox, CustomerNotification, CustomerChatThread } from "./Inbox";
 import { Profile } from "./Profile";
 import { hydrateCustomerChatThreads, subscribeCustomerChatThreads } from "./customerInboxStore";
-import { getAllActiveCateringProducts, getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer, getNotifications, markNotificationRead, getCustomerReviews } from "../../services/api";
+import { getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer, getNotifications, markNotificationRead, getCustomerReviews } from "../../services/api";
+import { setPendingMarketplaceCart } from "./marketplaceCartStore";
 
 interface CartItem {
   id: number | string;
@@ -57,6 +58,7 @@ interface CartItem {
   store: string;
   img: string;
   ownerId?: string;
+  serviceType?: "marketplace" | "catering";
 }
 
 interface CustomerHomeProps extends Nav {
@@ -73,6 +75,16 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   const [customerAddress, setCustomerAddress] = useState(authAccount?.address || "");
   const [customerLocation, setCustomerLocation] = useState(authAccount?.address || "");
   const [customerProfilePhoto, setCustomerProfilePhoto] = useState(authAccount?.profilePhoto || "");
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const ordersRef = useRef<OrderItem[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersLoadError, setOrdersLoadError] = useState("");
+  const [ordersReloadKey, setOrdersReloadKey] = useState(0);
+  const ordersAccountIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
 
   useEffect(() => {
     if (!authAccount) return;
@@ -87,13 +99,24 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   // Global Cart State
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartModalVisible, setCartModalVisible] = useState(false);
-  const [products, setProducts] = useState<any[]>(PRODUCTS);
+  const [products, setProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsLoadError, setProductsLoadError] = useState(false);
+  const [productsReloadKey, setProductsReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getMarketplaceProducts(), getAllActiveCateringProducts()]).then(([marketplace, catering]) => {
+    setProductsLoading(true);
+    setProductsLoadError(false);
+    getMarketplaceProducts().then((marketplace) => {
       if (!active) return;
-      const marketplaceProducts = marketplace.success ? marketplace.data.map((product: any) => ({
+      if (!marketplace.success) {
+        setProducts([]);
+        setProductsLoadError(true);
+        setProductsLoading(false);
+        return;
+      }
+      const marketplaceProducts = (marketplace.data || []).map((product: any) => ({
         id: product._id,
         name: product.name,
         store: product.ownerId?.roleData?.businessName || product.ownerId?.name || "GEOVERSE Marketplace",
@@ -110,40 +133,55 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         liked: false,
         cat: product.cat,
         ownerId: product.ownerId?._id || product.ownerId,
-      })) : [];
-      const cateringProducts = catering.success ? catering.data.map((product: any) => ({
-        id: product._id,
-        name: product.name,
-        store: product.ownerId?.roleData?.businessName || product.ownerId?.name || "Pemilik Catering",
-        price: product.price,
-        rating: product.rating || 0,
-        sold: product.sold || 0,
-        img: product.img,
-        images: product.images || [product.img],
-        description: product.description,
-        stock: product.stock,
-        totalReviews: product.totalReviews,
-        reviews: product.reviews,
-        storeAddress: product.ownerId?.roleData?.address || product.ownerId?.address,
-        liked: false,
-        cat: product.cat || "Makanan",
-        ownerId: product.ownerId?._id || product.ownerId,
-      })) : [];
-      const liveProducts = [...marketplaceProducts, ...cateringProducts];
-      if (liveProducts.length > 0) setProducts(liveProducts);
+        serviceType: "marketplace",
+      }));
+      setProducts(marketplaceProducts);
+      setProductsLoading(false);
+    }).catch(() => {
+      if (!active) return;
+      setProducts([]);
+      setProductsLoadError(true);
+      setProductsLoading(false);
     });
     return () => { active = false; };
-  }, []);
+  }, [productsReloadKey]);
 
   useEffect(() => {
-    if (!authAccount?.id) return;
+    if (!authAccount?.id) {
+      ordersAccountIdRef.current = null;
+      ordersRef.current = [];
+      setOrders([]);
+      setOrdersLoading(false);
+      setOrdersLoadError("");
+      return;
+    }
+    if (ordersAccountIdRef.current !== authAccount.id) {
+      ordersAccountIdRef.current = authAccount.id;
+      ordersRef.current = [];
+      setOrders([]);
+    }
+    setOrdersLoading(true);
+    setOrdersLoadError("");
+    let activeOrderLoader = true;
+    let loading = false;
+    let firstRequest = true;
     const loadBackendOrders = async () => {
-      const [marketplaceResult, cateringResult] = await Promise.all([
-        getMarketplaceOrdersForCustomer(authAccount.id),
-        getCateringOrdersForCustomer(authAccount.id),
-      ]);
-      if (!activeOrderLoader) return;
-      const marketplaceOrders = marketplaceResult.success ? marketplaceResult.data.map((order: any) => ({
+      if (loading) return;
+      loading = true;
+      try {
+        const [marketplaceResult, cateringResult] = await Promise.all([
+          getMarketplaceOrdersForCustomer(authAccount.id),
+          getCateringOrdersForCustomer(authAccount.id),
+        ]);
+        if (!activeOrderLoader) return;
+        const marketplaceLoadFailed = !marketplaceResult.success || !Array.isArray(marketplaceResult.data);
+        const cateringLoadFailed = !cateringResult.success || !Array.isArray(cateringResult.data);
+        if (marketplaceLoadFailed || cateringLoadFailed) {
+          setOrdersLoadError(marketplaceResult.message || cateringResult.message || "Pesanan belum dapat diperbarui. Periksa koneksi lalu coba lagi.");
+        } else {
+          setOrdersLoadError("");
+        }
+        const marketplaceOrders: OrderItem[] | null = marketplaceResult.success && Array.isArray(marketplaceResult.data) ? marketplaceResult.data.map((order: any) => ({
         id: order._id,
         type: "Marketplace",
         iconName: "Store",
@@ -163,10 +201,16 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         notes: order.notes,
         address: order.address,
         addressSnapshot: order.addressSnapshot,
+        createdAt: order.createdAt,
+        customerPhone: order.customerPhone,
         driverId: order.driverId,
         driverName: order.driverName,
-      })) : [];
-      const cateringOrders = cateringResult.success ? cateringResult.data.map((order: any) => ({
+        driverVehicle: order.driverVehicle || "",
+        driverPlate: order.driverPlateNumber || "",
+        storeName: order.storeName || "Mitra Toko Marketplace",
+        storeAddress: order.storeAddress || "",
+      })) : null;
+        const cateringOrders: OrderItem[] | null = cateringResult.success && Array.isArray(cateringResult.data) ? cateringResult.data.map((order: any) => ({
         id: order._id,
         type: "Catering",
         iconName: "Coffee",
@@ -191,20 +235,27 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         notes: order.notes,
         address: order.address,
         addressSnapshot: order.addressSnapshot,
+        createdAt: order.createdAt,
+        customerPhone: order.customerPhone,
         driverId: order.driverId,
         driverName: order.driverName,
         driverPhone: order.driverPhone,
         driverVehicle: order.driverVehicle,
         storeName: order.storeName,
         storeAddress: order.storeAddress,
-      })) : [];
+      })) : null;
 
-      const allCustomerOrders = [...marketplaceOrders, ...cateringOrders];
-      setOrders(allCustomerOrders);
+        const currentOrders = ordersRef.current;
+        const allCustomerOrders = [
+          ...(marketplaceOrders ?? currentOrders.filter((order) => order.type === "Marketplace")),
+          ...(cateringOrders ?? currentOrders.filter((order) => order.type === "Catering")),
+        ];
+        ordersRef.current = allCustomerOrders;
+        setOrders(allCustomerOrders);
 
-      // Dynamically build chat threads for active orders
-      const dynamicThreads: CustomerChatThread[] = [];
-      allCustomerOrders.forEach((o: any) => {
+        // Dynamically build chat threads for persisted orders.
+        const dynamicThreads: CustomerChatThread[] = [];
+        allCustomerOrders.forEach((o: any) => {
         if (o.driverName) {
           dynamicThreads.push({
             id: `driver_${o.id}`,
@@ -225,41 +276,35 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           updatedAt: "Hari ini",
           unreadCount: 0,
         });
-      });
-      if (dynamicThreads.length > 0) {
+        });
         setChatThreads(dynamicThreads);
+      } catch {
+        if (activeOrderLoader) setOrdersLoadError("Pesanan belum dapat diperbarui. Periksa koneksi lalu coba lagi.");
+      } finally {
+        loading = false;
+        if (activeOrderLoader && firstRequest) {
+          firstRequest = false;
+          setOrdersLoading(false);
+        }
       }
     };
-    let activeOrderLoader = true;
     void loadBackendOrders();
     const interval = setInterval(() => void loadBackendOrders(), 3500);
     return () => {
       activeOrderLoader = false;
       clearInterval(interval);
     };
-  }, [authAccount?.id]);
-
-  // Global Orders State
-  const [orders, setOrders] = useState<OrderItem[]>([]);
+  }, [authAccount?.id, ordersReloadKey]);
 
   // Global Notifications State
-  const [notifications, setNotifications] = useState<CustomerNotification[]>(
-    NOTIFS.map((n) => ({
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      msg: n.msg,
-      time: n.time,
-      read: n.read,
-    }))
-  );
+  const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
 
   useEffect(() => {
     if (!authAccount?.id) return;
     let active = true;
     const fetchLiveNotifs = async () => {
       const res = await getNotifications(authAccount.id);
-      if (active && res.success && Array.isArray(res.data) && res.data.length > 0) {
+      if (active && res.success && Array.isArray(res.data)) {
         const mapped: CustomerNotification[] = res.data.map((n: any) => ({
           id: n._id,
           type: n.type === "order_new" || n.type === "order_status" ? "transaksi" : n.type === "payment_confirmed" ? "sistem" : "promo",
@@ -280,26 +325,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   }, [authAccount?.id]);
 
   // Global Chat Threads State
-  const [chatThreads, setChatThreads] = useState<CustomerChatThread[]>([
-    {
-      id: "ch_001",
-      orderId: "RNG001",
-      participantType: "driver",
-      participantName: "Pak Asep (Driver)",
-      lastMessage: "Pak, saya sudah di depan pagar ya.",
-      updatedAt: "11:05",
-      unreadCount: 1,
-    },
-    {
-      id: "ch_002",
-      orderId: "RNG003",
-      participantType: "merchant",
-      participantName: "Catering Bu Haji Nani",
-      lastMessage: "Nasi Box 20 pax sedang disiapkan ya kak.",
-      updatedAt: "10:30",
-      unreadCount: 0,
-    },
-  ]);
+  const [chatThreads, setChatThreads] = useState<CustomerChatThread[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -330,7 +356,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   }, [authAccount?.id]);
 
   // Global Wishlist/Liked products State
-  const [wishlist, setWishlist] = useState<number[]>([2, 5]); // IDs of liked products
+  const [wishlist, setWishlist] = useState<Array<number | string>>([]);
 
   // Sub-service Modal states
   const [marketModalVisible, setMarketModalVisible] = useState(false);
@@ -344,6 +370,14 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   const [marketCat, setMarketCat] = useState("Semua");
 
   const handleAddToCart = (product: any) => {
+    if (product.serviceType === "catering") {
+      Alert.alert(
+        "Pesanan Catering Terjadwal",
+        "Pilih menu dan jadwal Catering dari layanan Catering agar detail porsi dan tanggal ikut tercatat.",
+        [{ text: "Buka Catering", onPress: () => navigate("c_catering") }, { text: "Tutup", style: "cancel" }]
+      );
+      return;
+    }
     setCart((currentCart) => {
       const existing = currentCart.find((item) => item.id === product.id);
       if (existing) {
@@ -359,6 +393,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         store: product.store,
         img: product.img,
         ownerId: product.ownerId,
+        serviceType: "marketplace",
       }];
     });
   };
@@ -390,44 +425,18 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       return;
     }
 
-    const orderId = `RNG0${orders.length + 1}`;
-    const firstItem = cart[0];
-    const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
-    const totalPrice = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+    if (cart.some((item) => item.serviceType === "catering")) {
+      Alert.alert("Pisahkan Jenis Pesanan", "Item Catering harus dipesan lewat layanan Catering agar jadwal dan jumlah porsi dapat diisi.");
+      return;
+    }
 
-    const newOrder: OrderItem = {
-      id: orderId,
-      type: "Marketplace",
-      iconName: "Store",
-      color: "#1B7A4E",
-      item: firstItem.name,
-      detail: totalQty > 1 ? `${firstItem.store} · +${totalQty - 1} item lainnya` : firstItem.store,
-      status: "Diproses",
-      statusColor: "orange",
-      date: "Hari ini",
-      total: totalPrice,
-    };
-
-    // Add automated driver notification
-    const newNotif: CustomerNotification = {
-      id: Date.now(),
-      type: "order",
-      title: "Pesanan Diproses ⏳",
-      msg: `Pesanan #${orderId} sedang diproses oleh merchant partner`,
-      time: "Baru saja",
-      read: false,
-    };
-    setNotifications([newNotif, ...notifications]);
-
+    setPendingMarketplaceCart(cart.map((item) => ({ productId: item.id, quantity: item.qty })));
     setCart([]);
     setCartModalVisible(false);
-    Alert.alert("Checkout Sukses", `Pesanan #${orderId} berhasil dibuat. Silakan pantau pengiriman di tab Pesanan.`, [
-      { text: "Tutup" },
-      { text: "Lihat Pesanan", onPress: () => setCurrentTab(2) },
-    ]);
+    navigate("c_marketplace");
   };
 
-  const handleToggleLike = (id: number) => {
+  const handleToggleLike = (id: number | string) => {
     if (wishlist.includes(id)) {
       setWishlist(wishlist.filter((wId) => wId !== id));
     } else {
@@ -480,6 +489,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             reviews={reviews}
             setReviews={setReviews}
             authAccount={authAccount}
+            ordersLoading={ordersLoading}
+            ordersLoadError={ordersLoadError}
+            onRetryOrders={() => setOrdersReloadKey((key) => key + 1)}
           />
         );
       case 3:
@@ -506,7 +518,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             setCustomerLocation={setCustomerLocation}
             orderCount={orders.length}
             wishlistCount={wishlist.length}
-            rating={(4.8).toString()}
+            reviewCount={String(reviews.length)}
             authAccount={authAccount}
             profilePhoto={customerProfilePhoto}
             setProfilePhoto={setCustomerProfilePhoto}
@@ -581,8 +593,8 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         {/* Promo slide card */}
         <View style={styles.promoBanner}>
           <Text style={styles.promoLabel}>PROMO HARI INI</Text>
-          <Text style={styles.promoTitle}>Diskon 20% UMKM Kamojang</Text>
-          <Text style={styles.promoSub}>Klaim voucher PGE 2.0 di halaman pembayaran</Text>
+          <Text style={styles.promoTitle}>Promo Marketplace</Text>
+          <Text style={styles.promoSub}>Gunakan kode LOKAL20 untuk potongan Rp5.000</Text>
         </View>
 
         {/* Service grid row */}
@@ -622,7 +634,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         </View>
 
         {/* Nearby Stores horizontal lists */}
-        <Text style={styles.sectionTitle}>Marketplace Terdekat</Text>
+        <Text style={styles.sectionTitle}>Toko Marketplace</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollList}>
           {[...new Set(products.map((product) => product.store))].map((store) => {
             const rating = getStoreRating(store);
@@ -655,7 +667,13 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         </View>
 
         <View style={styles.productsGrid}>
-          {filteredMarketProducts.slice(0, 4).map((p: any) => {
+          {productsLoading ? <Text style={styles.emptyCartSub}>Memuat produk Marketplace…</Text> : productsLoadError ? (
+            <TouchableOpacity onPress={() => setProductsReloadKey((key) => key + 1)}>
+              <Text style={styles.emptyCartSub}>Produk belum dapat dimuat. Ketuk untuk mencoba lagi.</Text>
+            </TouchableOpacity>
+          ) : filteredMarketProducts.length === 0 ? (
+            <Text style={styles.emptyCartSub}>Belum ada produk Marketplace yang tersedia.</Text>
+          ) : filteredMarketProducts.slice(0, 4).map((p: any) => {
             const isLiked = wishlist.includes(p.id);
             return (
               <TouchableOpacity key={p.id} style={styles.productCard} onPress={() => openProductDetail(p)} activeOpacity={0.9}>
@@ -972,7 +990,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
 
                 <View style={styles.cartFooterPanel}>
                   <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Total Pembayaran</Text>
+                    <Text style={styles.totalLabel}>Subtotal produk</Text>
                     <Text style={styles.totalValText}>{rp(totalCartPrice)}</Text>
                   </View>
 
@@ -981,7 +999,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     onPress={handleCheckout}
                   >
                     <CheckCircle size={16} color="#FFFFFF" />
-                    <Text style={styles.checkoutBtnText}>Checkout Sekarang</Text>
+                    <Text style={styles.checkoutBtnText}>Lanjutkan di Marketplace</Text>
                   </TouchableOpacity>
                 </View>
               </View>

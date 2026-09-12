@@ -17,29 +17,45 @@ interface CustomerCateringProps extends Nav {
 export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ navigate }) => {
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    let active = true;
     const fetchShops = async () => {
       setLoading(true);
-      const res = await getCateringShops();
-      if (res.success && res.data) {
-        setShops(res.data);
+      setLoadError(false);
+      try {
+        const res = await getCateringShops();
+        if (!active) return;
+        if (res.success && Array.isArray(res.data)) {
+          setShops(res.data);
+        } else {
+          setShops([]);
+          setLoadError(true);
+        }
+      } catch {
+        if (!active) return;
+        setShops([]);
+        setLoadError(true);
+      } finally {
+        if (active) setLoading(false);
       }
-      setLoading(false);
     };
     void fetchShops();
-  }, []);
+    return () => { active = false; };
+  }, [reloadKey]);
 
   const handleSelectShop = (shop: any) => {
     setSelectedCateringShop({
       id: shop._id,
-      name: shop.roleData?.businessName || shop.name || "Catering Lokal",
+      name: shop.roleData?.businessName || shop.name || "Mitra Catering",
       ownerId: shop._id,
       isOpen: shop.roleData?.isDapurOpen === "true",
       address: shop.roleData?.businessAddress || shop.address || "",
       phone: shop.phone || "",
       profilePhoto: shop.profilePhoto,
-      description: shop.roleData?.menuSpecialty || "Layanan catering prasmanan dan nasi box berkualitas.",
+      description: shop.roleData?.menuSpecialty || "",
     });
     navigate("c_catering_detail");
   };
@@ -56,7 +72,7 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Mitra catering terdekat</Text>
+        <Text style={styles.sectionTitle}>Mitra Catering</Text>
 
         {loading ? (
           <View style={styles.centerContainer}>
@@ -65,18 +81,18 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
           </View>
         ) : shops.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Tidak ada mitra katering aktif saat ini.</Text>
+            <Text style={styles.emptyText}>{loadError ? "Mitra Catering belum dapat dimuat. Periksa koneksi lalu coba lagi." : "Belum ada mitra Catering aktif saat ini."}</Text>
+            {loadError && <TouchableOpacity style={styles.retryButton} onPress={() => setReloadKey((key) => key + 1)}><Text style={styles.retryButtonText}>Coba lagi</Text></TouchableOpacity>}
           </View>
         ) : (
           shops.map((shop) => {
             const isOpen = shop.roleData?.isDapurOpen === "true";
-            const displayName = shop.roleData?.businessName || shop.name || "Katering";
-            const specialty = shop.roleData?.menuSpecialty || "Prasmanan & Nasi Box";
-            const profileImage = shop.profilePhoto || "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=400&h=220&fit=crop&q=80";
+            const displayName = shop.roleData?.businessName || shop.name || "Mitra Catering";
+            const specialty = shop.roleData?.menuSpecialty || "Spesialisasi belum tersedia";
 
             return (
               <View key={shop._id} style={[styles.card, !isOpen && styles.cardClosed]}>
-                <Image source={{ uri: profileImage }} style={styles.image} />
+                {shop.profilePhoto ? <Image source={{ uri: shop.profilePhoto }} style={styles.image} /> : <View style={styles.imagePlaceholder}><ChefHat size={30} color="#1B7A4E" /><Text style={styles.placeholderText}>Foto mitra belum tersedia</Text></View>}
                 {!isOpen && (
                   <View style={styles.closedOverlay}>
                     <Text style={styles.closedOverlayText}>TUTUP</Text>
@@ -85,13 +101,13 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
                 <View style={styles.cardBody}>
                   <View style={styles.titleRow}>
                     <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
-                    <Stars rating={4.8} />
+                    {Number(shop.rating) > 0 ? <Stars rating={Number(shop.rating)} /> : <Text style={styles.ratingFallback}>Belum ada ulasan</Text>}
                   </View>
                   <Text style={styles.cuisine}>{specialty}</Text>
                   <View style={styles.metaRow}>
                     <MapPin size={14} color="#6B7280" />
                     <Text style={styles.metaText}>
-                      {shop.address || "Kamojang"} · {isOpen ? "Dapur Buka" : "Dapur Tutup"}
+                      {shop.roleData?.businessAddress || shop.address || "Alamat belum tersedia"} · {isOpen ? "Dapur Buka" : "Dapur Tutup"}
                     </Text>
                   </View>
                   <TouchableOpacity
@@ -128,6 +144,8 @@ const styles = StyleSheet.create({
   closedOverlay: { position: "absolute", top: 12, left: 12, backgroundColor: "rgba(239, 68, 68, 0.9)", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   closedOverlayText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
   image: { width: "100%", height: 145 },
+  imagePlaceholder: { height: 145, alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#E8F5EE" },
+  placeholderText: { color: "#4B5563", fontSize: 11 },
   cardBody: { padding: 14 },
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   name: { flex: 1, color: "#111827", fontSize: 16, fontWeight: "800" },
@@ -141,4 +159,7 @@ const styles = StyleSheet.create({
   loadingText: { color: "#6B7280", fontSize: 13, marginTop: 10 },
   emptyContainer: { alignItems: "center", justifyContent: "center", paddingVertical: 60 },
   emptyText: { color: "#6B7280", fontSize: 13 },
+  ratingFallback: { color: "#6B7280", fontSize: 11 },
+  retryButton: { marginTop: 12, backgroundColor: "#1B7A4E", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
+  retryButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
 });

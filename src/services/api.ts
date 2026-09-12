@@ -292,8 +292,9 @@ export const deleteMarketplaceProduct = async (id: string | number) => {
 
 export const getMarketplaceOrdersForOwner = async (ownerId: string) => {
   try {
-    const res = await fetch(getApiUrl(`/marketplace/orders/owner/${ownerId}?t=${Date.now()}`), { cache: "no-store" });
-    return await res.json();
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/marketplace/orders/owner/${ownerId}?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
+    return await readApiJson(res);
   } catch (err) {
     console.error("getMarketplaceOrdersForOwner error:", err);
     return { success: false, data: [], message: "Gagal menyambung ke server" };
@@ -302,7 +303,8 @@ export const getMarketplaceOrdersForOwner = async (ownerId: string) => {
 
 export const getMarketplaceOrdersForCustomer = async (customerId: string) => {
   try {
-    const res = await fetch(getApiUrl(`/marketplace/orders/customer/${customerId}?t=${Date.now()}`), { cache: "no-store" });
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/marketplace/orders/customer/${customerId}?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
   } catch (err) {
     console.error("getMarketplaceOrdersForCustomer error:", err);
@@ -310,11 +312,16 @@ export const getMarketplaceOrdersForCustomer = async (customerId: string) => {
   }
 };
 
-export const createMarketplaceOrder = async (orderData: Record<string, unknown>) => {
+export const createMarketplaceOrder = async (orderData: Record<string, unknown>, idempotencyKey?: string) => {
   try {
+    const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl("/marketplace/orders"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      },
       body: JSON.stringify(orderData),
     });
     return await res.json();
@@ -326,9 +333,10 @@ export const createMarketplaceOrder = async (orderData: Record<string, unknown>)
 
 export const updateMarketplaceOrderStatus = async (id: string, status: string) => {
   try {
+    const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/marketplace/orders/${id}/status`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ status }),
     });
     return await res.json();
@@ -340,7 +348,9 @@ export const updateMarketplaceOrderStatus = async (id: string, status: string) =
 
 export const getMarketplaceOrdersForDriver = async (driverId: string) => {
   try {
-    const res = await fetch(getApiUrl(`/marketplace/orders/driver/${driverId}?t=${Date.now()}`), { cache: "no-store" });
+    void driverId;
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/marketplace/orders/driver?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
   } catch (err) {
     console.error("getMarketplaceOrdersForDriver error:", err);
@@ -348,17 +358,56 @@ export const getMarketplaceOrdersForDriver = async (driverId: string) => {
   }
 };
 
+export const acceptMarketplaceOrder = async (orderId: string) => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/accept`), { method: "POST", headers: authHeaders });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("acceptMarketplaceOrder error:", err);
+    return { success: false, message: "Gagal menerima pesanan" };
+  }
+};
+
+export const declineMarketplaceOrder = async (orderId: string) => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/decline`), { method: "POST", headers: authHeaders });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("declineMarketplaceOrder error:", err);
+    return { success: false, message: "Gagal menolak pesanan" };
+  }
+};
+
 export const assignMarketplaceDriver = async (orderId: string, driverId: string) => {
   try {
+    const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/assign-driver`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ driverId }),
     });
     return await readApiJson(res);
   } catch (err) {
     console.error("assignMarketplaceDriver error:", err);
-    return { success: false, message: "Gagal menugaskan driver" };
+    if (err instanceof Error) {
+      const apiError = err.message.match(/^API \d+:\s*([\s\S]*)$/);
+      if (apiError) {
+        try {
+          const payload = JSON.parse(apiError[1]);
+          if (typeof payload?.message === "string" && payload.message.trim()) {
+            return { success: false, message: payload.message };
+          }
+        } catch {
+          // Keep the generic message for non-JSON server responses.
+        }
+      }
+      if (/failed to fetch|network request failed/i.test(err.message)) {
+        return { success: false, message: "Server API tidak dapat dijangkau. Pastikan backend berjalan." };
+      }
+    }
+    return { success: false, message: "Gagal menugaskan driver. Periksa koneksi dan coba lagi." };
   }
 };
 
@@ -374,8 +423,9 @@ export const getDrivers = async () => {
 
 export const getNotifications = async (userId: string) => {
   try {
-    const res = await fetch(getApiUrl(`/notifications/${userId}`));
-    return await res.json();
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/notifications/${userId}`), { headers: authHeaders });
+    return await readApiJson(res);
   } catch (err) {
     console.error("getNotifications error:", err);
     return { success: false, data: [], message: "Gagal menyambung ke server" };
@@ -384,8 +434,9 @@ export const getNotifications = async (userId: string) => {
 
 export const markNotificationRead = async (notificationId: string) => {
   try {
-    const res = await fetch(getApiUrl(`/notifications/${notificationId}/read`), { method: "PATCH" });
-    return await res.json();
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/notifications/${notificationId}/read`), { method: "PATCH", headers: authHeaders });
+    return await readApiJson(res);
   } catch (err) {
     console.error("markNotificationRead error:", err);
     return { success: false, message: "Gagal menyambung ke server" };
@@ -410,11 +461,16 @@ export const updateCateringStatus = async (ownerId: string, isOpen: boolean) => 
   }
 };
 
-export const createCateringOrder = async (orderData: any) => {
+export const createCateringOrder = async (orderData: any, idempotencyKey?: string) => {
   try {
+    const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl("/catering/orders"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      },
       body: JSON.stringify(orderData),
     });
     return await res.json();
@@ -450,7 +506,8 @@ export const updateCateringOrderStatus = async (id: string | number, status: str
 
 export const getCateringOrdersForCustomer = async (customerId: string) => {
   try {
-    const res = await fetch(getApiUrl(`/catering/orders/customer/${customerId}`));
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/catering/orders/customer/${customerId}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
   } catch (err) {
     console.error("getCateringOrdersForCustomer error:", err);
