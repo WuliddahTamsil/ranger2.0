@@ -48,6 +48,7 @@ import { Inbox, CustomerNotification, CustomerChatThread } from "./Inbox";
 import { Profile } from "./Profile";
 import { hydrateCustomerChatThreads, subscribeCustomerChatThreads } from "./customerInboxStore";
 import { getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer, getNotifications, markNotificationRead, getCustomerReviews } from "../../services/api";
+import { subscribeToUserRealtime } from "../../services/userRealtime";
 import { setPendingMarketplaceCart } from "./marketplaceCartStore";
 
 interface CartItem {
@@ -176,10 +177,14 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         if (!activeOrderLoader) return;
         const marketplaceLoadFailed = !marketplaceResult.success || !Array.isArray(marketplaceResult.data);
         const cateringLoadFailed = !cateringResult.success || !Array.isArray(cateringResult.data);
-        if (marketplaceLoadFailed || cateringLoadFailed) {
-          setOrdersLoadError(marketplaceResult.message || cateringResult.message || "Pesanan belum dapat diperbarui. Periksa koneksi lalu coba lagi.");
-        } else {
-          setOrdersLoadError("");
+        // Marketplace status/proof must keep refreshing even if the separate Catering endpoint is unavailable.
+        setOrdersLoadError(
+          marketplaceLoadFailed
+            ? marketplaceResult.message || "Pesanan Marketplace belum berhasil diperbarui. Periksa koneksi lalu coba lagi."
+            : ""
+        );
+        if (cateringLoadFailed) {
+          console.warn("Customer Catering orders could not be refreshed:", cateringResult.message || "request failed");
         }
         const marketplaceOrders: OrderItem[] | null = marketplaceResult.success && Array.isArray(marketplaceResult.data) ? marketplaceResult.data.map((order: any) => ({
         id: order._id,
@@ -207,6 +212,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         driverName: order.driverName,
         driverVehicle: order.driverVehicle || "",
         driverPlate: order.driverPlateNumber || "",
+        deliveryProofUrl: order.deliveryProofUrl || "",
         storeName: order.storeName || "Mitra Toko Marketplace",
         storeAddress: order.storeAddress || "",
       })) : null;
@@ -317,10 +323,43 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       }
     };
     void fetchLiveNotifs();
+    let unsubscribe: () => void = () => undefined;
+    void subscribeToUserRealtime(
+      () => void fetchLiveNotifs(),
+      (updatedOrder) => {
+        const updatedOrderId = String(updatedOrder?._id || updatedOrder?.id || "");
+        const updatedStatus = updatedOrder?.status;
+        const deliveryProofUrl = updatedOrder?.deliveryProofUrl;
+        if (updatedOrderId && typeof updatedStatus === "string") {
+          const existingOrder = ordersRef.current.find((order) => String(order.id) === updatedOrderId);
+          if (existingOrder) {
+            const nextOrders = ordersRef.current.map((order) =>
+              String(order.id) === updatedOrderId
+                ? {
+                    ...order,
+                    status: updatedStatus || order.status,
+                    ...(typeof deliveryProofUrl === "string"
+                      ? { deliveryProofUrl }
+                      : {}),
+                  }
+                : order
+            );
+            ordersRef.current = nextOrders;
+            setOrders(nextOrders);
+          }
+        }
+        // Refresh the full record too, so the detail view receives the server's canonical order data.
+        setOrdersReloadKey((key) => key + 1);
+      }
+    ).then((stop) => {
+      if (active) unsubscribe = stop;
+      else stop();
+    });
     const interval = setInterval(fetchLiveNotifs, 8000);
     return () => {
       active = false;
       clearInterval(interval);
+      unsubscribe();
     };
   }, [authAccount?.id]);
 

@@ -190,6 +190,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           paymentMethod: order.paymentMethod,
           paymentStatus: order.paymentStatus,
           status: order.status,
+          deliveryProofUrl: order.deliveryProofUrl || "",
           address: order.address || "Alamat pelanggan belum tersedia",
           storeName: order.storeName || "Mitra Marketplace",
           storeAddress: order.storeAddress || "Alamat toko belum tersedia",
@@ -261,7 +262,13 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
     void refreshNotifications();
     let isActive = true;
     let unsubscribe: () => void = () => undefined;
-    void subscribeToUserRealtime(() => void refreshNotifications(), () => void refreshNotifications()).then((stop) => {
+    void subscribeToUserRealtime(
+      () => void refreshNotifications(),
+      () => {
+        void refreshNotifications();
+        setOrdersReloadKey((key) => key + 1);
+      }
+    ).then((stop) => {
       if (isActive) unsubscribe = stop;
       else stop();
     });
@@ -449,7 +456,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
             orders={orders}
             setOrders={setOrders}
             onStatusChange={async (orderId, status) => {
-              const result = await updateMarketplaceOrderStatus(orderId, status);
+              const result = await updateMarketplaceOrderStatus(orderId, status, authAccount);
               if (!result.success) {
                 showAlert("Gagal", result.message || "Gagal memperbarui status pesanan");
                 return false;

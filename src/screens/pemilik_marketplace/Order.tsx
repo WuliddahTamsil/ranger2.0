@@ -101,6 +101,7 @@ export interface OrderData {
   address?: string;
   storeName?: string;
   storeAddress?: string;
+  deliveryProofUrl?: string;
 }
 
 interface OrderProps {
@@ -709,6 +710,18 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
             )}
           </View>
 
+          {selectedOrder.deliveryProofUrl ? (
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionCardTitleSmall}>Bukti Foto Pengantaran</Text>
+              <Image
+                source={{ uri: selectedOrder.deliveryProofUrl }}
+                style={styles.deliveryProofImage}
+                resizeMode="cover"
+                accessibilityLabel="Foto bukti pengantaran pesanan Marketplace"
+              />
+            </View>
+          ) : null}
+
           {/* Quick Driver Assignment Card when ready & unassigned */}
           {selectedOrder.status === "Siap" && !selectedOrder.driver && (
             <View style={styles.sectionCard}>
@@ -1073,9 +1086,9 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
           )}
 
           {selectedOrder.status === "Sampai Pickup" && (
-            <View style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#7E22CE" }]}>
+            <View style={styles.pickupArrivalButton}>
               <CheckCircle size={18} color="#FFFFFF" />
-              <Text style={styles.sheetBtnTextSolid}>Kurir telah tiba, menunggu konfirmasi pengambilan</Text>
+              <Text style={styles.pickupArrivalButtonText}>Kurir telah tiba, menunggu konfirmasi pengambilan</Text>
             </View>
           )}
 
@@ -1246,13 +1259,13 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                     <Text style={styles.avatarText}>{item.customer.substring(0, 1)}</Text>
                   </View>
                   <View style={styles.customerInfo}>
-                    <Text style={styles.customerName}>{item.customer}</Text>
-                    <Text style={styles.customerPhoneSub}>{item.customerPhone}</Text>
+                    <Text style={styles.customerName} numberOfLines={1}>{item.customer}</Text>
+                    <Text style={styles.customerPhoneSub} numberOfLines={1}>{item.customerPhone}</Text>
                   </View>
                   {hasDriver && (
                     <View style={styles.driverAssignedTag}>
                       <Truck size={12} color="#15803D" />
-                      <Text style={styles.driverAssignedTagText}>{item.driver?.name}</Text>
+                      <Text style={styles.driverAssignedTagText} numberOfLines={1}>{item.driver?.name}</Text>
                     </View>
                   )}
                 </View>
@@ -1266,7 +1279,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
 
                 {/* Total Price */}
                 <View style={styles.cardTotalRow}>
-                  <Text style={styles.totalPriceLabel}>Total Pesanan</Text>
+                  <Text style={styles.totalPriceLabel} numberOfLines={1}>Total Pesanan</Text>
                   <Text style={styles.totalPrice}>{rp(item.total)}</Text>
                 </View>
               </TouchableOpacity>
@@ -1288,7 +1301,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                   onPress={() => setSelectedOrder(item)}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.cardDetailBtnText}>Kelola & Lacak</Text>
+                  <Text style={styles.cardDetailBtnText} numberOfLines={2}>Kelola & Lacak</Text>
                   <ChevronRight size={14} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
@@ -1415,12 +1428,15 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    padding: 16,
+    overflow: "hidden",
   },
   cardHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    columnGap: 8,
+    rowGap: 6,
   },
   orderId: {
     fontSize: 16,
@@ -1428,13 +1444,17 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   statusChip: {
+    maxWidth: "100%",
+    flexShrink: 1,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
   statusChipText: {
+    flexShrink: 1,
     fontSize: 10,
     fontWeight: "800",
+    textAlign: "center",
     textTransform: "uppercase",
   },
   customerRow: {
@@ -1458,6 +1478,7 @@ const styles = StyleSheet.create({
   },
   customerInfo: {
     flex: 1,
+    minWidth: 0,
   },
   customerName: {
     fontSize: 13,
@@ -1485,9 +1506,11 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
   totalPrice: {
+    flexShrink: 1,
     fontSize: 14,
     fontWeight: "800",
     color: "#1B7A4E",
+    textAlign: "right",
   },
   cardDivider: {
     height: 1,
@@ -1771,14 +1794,20 @@ const styles = StyleSheet.create({
   },
   dualActionsRow: {
     flexDirection: "row",
-    gap: 12,
+    flexWrap: "wrap",
+    gap: 8,
   },
   sheetBtn: {
     flex: 1,
-    height: 48,
+    minWidth: 130,
+    minHeight: 48,
     borderRadius: 14,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   sheetBtnOutline: {
     borderWidth: 1,
@@ -1788,15 +1817,41 @@ const styles = StyleSheet.create({
   sheetBtnSolid: {
     backgroundColor: "#1B7A4E",
   },
-  sheetBtnTextOutline: {
-    color: "#4B5563",
-    fontSize: 14,
-    fontWeight: "700",
+  pickupArrivalButton: {
+    alignSelf: "stretch",
+    minHeight: 56,
+    borderRadius: 14,
+    backgroundColor: "#7E22CE",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  sheetBtnTextSolid: {
+  pickupArrivalButtonText: {
+    flexShrink: 1,
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "700",
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  sheetBtnTextOutline: {
+    flexShrink: 1,
+    color: "#4B5563",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  sheetBtnTextSolid: {
+    flexShrink: 1,
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 18,
+    textAlign: "center",
   },
   sheetBtnClose: {
     backgroundColor: "#1B7A4E",
@@ -2081,6 +2136,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
+  },
+  deliveryProofImage: {
+    width: "100%",
+    height: 220,
+    borderRadius: 14,
+    marginTop: 10,
+    backgroundColor: "#F1F5F9",
   },
   sectionCardHeader: {
     flexDirection: "row",
@@ -2562,7 +2624,10 @@ const styles = StyleSheet.create({
   },
   cardHeaderLeft: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
+    flexShrink: 1,
+    minWidth: 0,
     gap: 6,
   },
   cardDotSeparator: {
@@ -2577,6 +2642,8 @@ const styles = StyleSheet.create({
   driverAssignedTag: {
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 1,
+    maxWidth: "48%",
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -2586,6 +2653,7 @@ const styles = StyleSheet.create({
     borderColor: "#86EFAC",
   },
   driverAssignedTagText: {
+    flexShrink: 1,
     fontSize: 11,
     fontWeight: "700",
     color: "#15803D",
@@ -2600,21 +2668,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     marginTop: 10,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
   },
   totalPriceLabel: {
+    flexShrink: 1,
     fontSize: 12,
     color: "#64748B",
     fontWeight: "600",
   },
   cardBottomBar: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
+    alignItems: "stretch",
+    gap: 8,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: "#FAFDFB",
     borderTopWidth: 1,
@@ -2625,9 +2695,13 @@ const styles = StyleSheet.create({
   cardChatBtn: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    minWidth: 68,
+    minHeight: 42,
+    flexShrink: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#BBF7D0",
@@ -2645,17 +2719,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#EF4444",
   },
   cardDetailBtn: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
+    justifyContent: "center",
+    gap: 4,
+    minHeight: 42,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
     backgroundColor: "#0D7A53",
   },
   cardDetailBtnText: {
+    flexShrink: 1,
     fontSize: 12,
     fontWeight: "700",
+    lineHeight: 16,
     color: "#FFFFFF",
+    textAlign: "center",
   },
 });

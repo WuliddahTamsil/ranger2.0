@@ -150,6 +150,7 @@ export interface OrderItem {
   paymentReminder?: string;
   paymentReference?: string;
   paymentHistory?: any[];
+  deliveryProofUrl?: string;
   cateringDate?: string;
   cateringPortions?: number;
   cateringTime?: string;

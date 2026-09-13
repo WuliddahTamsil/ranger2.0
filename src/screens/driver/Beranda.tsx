@@ -80,6 +80,7 @@ const mapMarketplaceDriverOrder = (order: any): DriverOrder => ({
   driverShare: Number(order.driverEarnings ?? order.driverFee ?? order.driverTip ?? order.deliveryFee ?? 0),
   completedAt: order.updatedAt || order.createdAt,
   status: mapMarketplaceDriverStatus(String(order.status || "Menunggu")),
+  deliveryProofUrl: order.deliveryProofUrl || "",
   items: order.items || [],
   storeName: order.storeName || "Toko Marketplace",
   storeAddress: order.storeAddress || "Alamat toko belum tersedia",
@@ -364,7 +365,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       } else if (targetOrder.type === "Catering") {
         await updateCateringOrderStatus(orderId, nextStatus);
       } else {
-        const result = await updateMarketplaceOrderStatus(orderId, nextStatus);
+        const result = await updateMarketplaceOrderStatus(orderId, nextStatus, authAccount);
         if (!result.success || !result.data) {
           Alert.alert("Status belum tersimpan", result.message || "Periksa koneksi lalu coba lagi.");
           return;
@@ -439,7 +440,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             transactions={transactions}
             setTransactions={setTransactions}
             isOnline={isOnline}
-            onStatusChange={async (orderId, status) => {
+            onStatusChange={async (orderId, status, deliveryProofUrl) => {
               const targetOrder = orders.find((o) => o.id === orderId);
               if (targetOrder?.type === "Laundry") {
                 if (status === "Menuju Pickup") {
@@ -461,7 +462,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
               }
               const result = targetOrder?.type === "Catering"
                 ? await updateCateringOrderStatus(orderId, status)
-                : await updateMarketplaceOrderStatus(orderId, status);
+                : await updateMarketplaceOrderStatus(orderId, status, authAccount, deliveryProofUrl);
               if (!result.success) {
                 Alert.alert("Gagal", result.message || "Status order gagal diperbarui");
                 return false;
@@ -651,7 +652,9 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 <Truck size={14} color="#1B7A4E" />
                 <Text style={styles.activeOrderBadgeText}>{activeOrder.type} Delivery</Text>
               </View>
-              <Text style={styles.activeOrderId}>#{activeOrder.id}</Text>
+              <Text style={styles.activeOrderId} accessibilityLabel={`#${activeOrder.id}`}>
+                #{activeOrder.id.replace(/(.{8})/g, "$1\u200B")}
+              </Text>
             </View>
 
             <Text style={styles.activeOrderCustomer}>{activeOrder.customer}</Text>
@@ -1054,12 +1057,15 @@ const styles = StyleSheet.create({
   },
   activeOrderHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
+    gap: 8,
   },
   activeOrderBadge: {
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 0,
     backgroundColor: "#E8F5EE",
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -1072,9 +1078,13 @@ const styles = StyleSheet.create({
     color: "#1B7A4E",
   },
   activeOrderId: {
+    flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: 13,
     fontWeight: "700",
     color: "#9CA3AF",
+    textAlign: "right",
   },
   activeOrderCustomer: {
     fontSize: 16,

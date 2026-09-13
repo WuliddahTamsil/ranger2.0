@@ -1,12 +1,17 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from "react-native";
-import { Nav } from "../../types";
+import { Nav, Role } from "../../types";
 import { User, Bike, Coffee, Store, Wind, Building2, ShieldCheck } from "lucide-react-native";
 
-export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
+interface RoleScreenProps extends Nav {
+  onSelectRole?: (role: Role) => void;
+}
+
+export const RoleScreen: React.FC<RoleScreenProps> = ({ navigate, onSelectRole }) => {
   const roles = [
     {
+      role: "customer" as const,
       id: "c_home" as const,
       title: "Pelanggan / Customer",
       desc: "Beli produk UMKM, pesanan catering, laundry, dan cari kosan.",
@@ -15,6 +20,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
       bg: "#E8F5EE",
     },
     {
+      role: "driver" as const,
       id: "d_home" as const,
       title: "Driver GEOVERSE",
       desc: "Terima orderan antar makanan, barang, dan laundry.",
@@ -23,6 +29,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
       bg: "#FFEDD5",
     },
     {
+      role: "pemilik_catering" as const,
       id: "pemilik_catering_home" as const,
       title: "Pemilik Catering",
       desc: "Kelola menu paket catering, terima pesanan prasmanan & nasi box.",
@@ -31,6 +38,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
       bg: "#FEF3C7",
     },
     {
+      role: "pemilik_marketplace" as const,
       id: "pemilik_marketplace_home" as const,
       title: "Pemilik Marketplace (UMKM)",
       desc: "Jual produk olahan, kerajinan, fashion, dan kelola stok toko.",
@@ -39,6 +47,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
       bg: "#D1FAE5",
     },
     {
+      role: "pemilik_laundry" as const,
       id: "pemilik_laundry_home" as const,
       title: "Pemilik Laundry",
       desc: "Terima order cuci kiloan/satuan dan status pengerjaan pakaian.",
@@ -47,6 +56,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
       bg: "#E0F2FE",
     },
     {
+      role: "pemilik_kos" as const,
       id: "pemilik_kos_home" as const,
       title: "Pemilik Kos",
       desc: "Kelola ketersediaan kamar kos dan penerimaan penghuni baru.",
@@ -55,6 +65,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
       bg: "#E8F5EE",
     },
     {
+      role: "admin" as const,
       id: "admin_home" as const,
       title: "Admin Sistem / PGE",
       desc: "Verifikasi pendaftaran mitra, pantau transaksi & laporan komunal.",
@@ -77,7 +88,7 @@ export const RoleScreen: React.FC<Nav> = ({ navigate }) => {
               <TouchableOpacity
                 key={r.id}
                 style={styles.card}
-                onPress={() => navigate(r.id)}
+                onPress={() => onSelectRole ? onSelectRole(r.role) : navigate(r.id)}
                 activeOpacity={0.7}
               >
                 <View style={[styles.iconBg, { backgroundColor: r.bg }]}>

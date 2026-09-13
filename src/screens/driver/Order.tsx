@@ -4,6 +4,7 @@ import {
   View,
   Text,
   FlatList,
+  Pressable,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
@@ -47,7 +48,7 @@ import {
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { rp } from "../../utils/formatters";
-import { getChatMessages, sendChatMessage } from "../../services/api";
+import { getChatMessages, sendChatMessage, uploadFileToBackend } from "../../services/api";
 import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 
@@ -71,6 +72,7 @@ export interface DriverOrder {
   storeAddress?: string;
   storePhone?: string;
   ownerId?: string;
+  deliveryProofUrl?: string;
   addressSnapshot?: {
     label?: string;
     fullAddress?: string;
@@ -89,7 +91,7 @@ interface OrderProps {
   transactions: any[];
   setTransactions: (txs: any[]) => void;
   isOnline: boolean;
-  onStatusChange?: (orderId: string, status: DriverOrder["status"]) => Promise<boolean | DriverOrder>;
+  onStatusChange?: (orderId: string, status: DriverOrder["status"], deliveryProofUrl?: string) => Promise<boolean | DriverOrder>;
   onAcceptOrder?: (orderId: string) => Promise<boolean | DriverOrder>;
   onDeclineOrder?: (orderId: string) => Promise<boolean>;
   driverId?: string;
@@ -137,7 +139,11 @@ export const Order: React.FC<OrderProps> = ({
   const [navMode, setNavMode] = useState<"overview" | "store" | "customer">("store");
   const [fullscreenMapVisible, setFullscreenMapVisible] = useState(false);
   const [mutatingOrderId, setMutatingOrderId] = useState<string | null>(null);
+  const [proofUploadOrderId, setProofUploadOrderId] = useState<string | null>(null);
+  const [proofUploadError, setProofUploadError] = useState<{ orderId: string; message: string } | null>(null);
+  const [deliveryProofOrder, setDeliveryProofOrder] = useState<DriverOrder | null>(null);
   const mutationLockRef = useRef(new Set<string>());
+  const proofUploadLockRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (!selectedOrder) return;
@@ -264,19 +270,21 @@ export const Order: React.FC<OrderProps> = ({
   // Status updates with clean notifications
   const handleUpdateStatus = async (
     orderId: string,
-    nextStatus: DriverOrder["status"]
+    nextStatus: DriverOrder["status"],
+    deliveryProofUrl?: string
   ): Promise<boolean> => {
     if (mutationLockRef.current.has(orderId)) return false;
     mutationLockRef.current.add(orderId);
     setMutatingOrderId(orderId);
     try {
-      const result = onStatusChange ? await onStatusChange(orderId, nextStatus) : true;
+      const result = onStatusChange ? await onStatusChange(orderId, nextStatus, deliveryProofUrl) : true;
       if (result === false) return false;
       const serverOrder = typeof result === "object" ? result : null;
       const currentOrder = orders.find((order) => order.id === orderId);
       const updatedOrder = serverOrder || (currentOrder ? {
         ...currentOrder,
         status: nextStatus,
+        ...(deliveryProofUrl ? { deliveryProofUrl } : {}),
         completedAt: nextStatus === "Selesai" ? new Date().toISOString() : currentOrder.completedAt,
       } : null);
       if (!updatedOrder) return false;
@@ -286,7 +294,7 @@ export const Order: React.FC<OrderProps> = ({
       const alertCopy: Record<string, [string, string]> = {
         "Sampai Pickup": ["Tiba di Toko", "Konfirmasi kedatangan tersimpan."],
         Mengantar: ["Pesanan Diambil", "Pesanan dikonfirmasi telah diambil dan status pengantaran diperbarui."],
-        Selesai: ["Pengantaran Selesai", `Pesanan dinyatakan diterima pelanggan. Pendapatan ${rp(updatedOrder.driverShare)}.`],
+        Selesai: ["Pengantaran Selesai", `${deliveryProofUrl ? "Bukti foto tersimpan. " : ""}Pendapatan ${rp(updatedOrder.driverShare)} ditambahkan ke saldo.`],
       };
       const [title, message] = alertCopy[nextStatus] || ["Status Diperbarui", `Status pesanan sekarang ${nextStatus}.`];
       Alert.alert(title, message);
@@ -299,6 +307,112 @@ export const Order: React.FC<OrderProps> = ({
       mutationLockRef.current.delete(orderId);
       setMutatingOrderId((current) => current === orderId ? null : current);
     }
+  };
+
+  const completeMarketplaceDelivery = async (order: DriverOrder, source: "camera" | "library") => {
+    if (proofUploadLockRef.current.has(order.id) || mutationLockRef.current.has(order.id)) return;
+    proofUploadLockRef.current.add(order.id);
+    setProofUploadOrderId(order.id);
+    setProofUploadError(null);
+    try {
+      if (Platform.OS !== "web") {
+        const permission = source === "camera"
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (permission.status !== "granted") {
+          throw new Error(source === "camera" ? "Izinkan akses kamera untuk mengambil foto bukti." : "Izinkan akses galeri untuk memilih foto bukti.");
+        }
+      }
+
+      const selection = source === "camera"
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.75, allowsEditing: false })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.75, allowsEditing: false });
+      if (selection.canceled) return;
+
+      const asset = selection.assets?.[0];
+      if (!asset?.uri) throw new Error("Pilih satu foto bukti pengantaran.");
+
+      const fileName = asset.fileName || `bukti-pengantaran-${order.id}-${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || (fileName.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
+      const uploadResult = await uploadFileToBackend(asset.uri, fileName, mimeType);
+      const proofUrl = uploadResult?.data?.url;
+      if (!uploadResult?.success || typeof proofUrl !== "string" || !proofUrl.trim()) {
+        throw new Error(uploadResult?.message || "Foto bukti gagal diunggah. Coba pilih foto lain.");
+      }
+
+      const updated = await handleUpdateStatus(order.id, "Selesai", proofUrl);
+      if (!updated) throw new Error("Foto sudah diunggah, tetapi status belum tersimpan. Silakan coba lagi.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Foto bukti gagal diunggah. Periksa koneksi lalu coba lagi.";
+      setProofUploadError({ orderId: order.id, message });
+    } finally {
+      proofUploadLockRef.current.delete(order.id);
+      setProofUploadOrderId((current) => current === order.id ? null : current);
+    }
+  };
+
+  const handleDriverTransition = (order: DriverOrder, nextStatus: DriverOrder["status"]) => {
+    if (order.type === "Marketplace" && nextStatus === "Selesai") {
+      setProofUploadError(null);
+      setDeliveryProofOrder(order);
+      return;
+    }
+    void handleUpdateStatus(order.id, nextStatus);
+  };
+
+  const renderDeliveryProofPicker = () => {
+    if (!deliveryProofOrder) return null;
+    const order = deliveryProofOrder;
+    const startProofCapture = (source: "camera" | "library") => {
+      setDeliveryProofOrder(null);
+      void completeMarketplaceDelivery(order, source);
+    };
+
+    return (
+      <Modal
+        visible
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeliveryProofOrder(null)}
+      >
+        <View style={styles.proofPickerBackdrop}>
+          <View style={styles.proofPickerCard}>
+            <View style={styles.proofPickerIcon}>
+              <Camera size={22} color="#15803D" />
+            </View>
+            <Text style={styles.proofPickerTitle}>Foto bukti pengantaran</Text>
+            <Text style={styles.proofPickerDescription}>
+              Pilih foto setelah pesanan diterima customer. Status akan selesai setelah foto berhasil dikirim.
+            </Text>
+            {Platform.OS !== "web" && (
+              <Pressable
+                style={styles.proofPickerPrimaryButton}
+                accessibilityRole="button"
+                onPress={() => startProofCapture("camera")}
+              >
+                <Camera size={17} color="#FFFFFF" />
+                <Text style={styles.proofPickerPrimaryText}>Ambil Foto</Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={styles.proofPickerSecondaryButton}
+              accessibilityRole="button"
+              onPress={() => startProofCapture("library")}
+            >
+              <ImageIcon size={17} color="#15803D" />
+              <Text style={styles.proofPickerSecondaryText}>Pilih dari Galeri</Text>
+            </Pressable>
+            <Pressable
+              style={styles.proofPickerCancelButton}
+              accessibilityRole="button"
+              onPress={() => setDeliveryProofOrder(null)}
+            >
+              <Text style={styles.proofPickerCancelText}>Batal</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   const handleAcceptOrder = async (orderId: string) => {
@@ -356,22 +470,6 @@ export const Order: React.FC<OrderProps> = ({
             if (selectedOrder?.id === orderId) setSelectedOrder(null);
           },
         },
-      ]
-    );
-  };
-
-  const confirmDriverTransition = (order: DriverOrder, nextStatus: DriverOrder["status"]) => {
-    if (order.type !== "Marketplace" || !["Mengantar", "Selesai"].includes(nextStatus)) {
-      void handleUpdateStatus(order.id, nextStatus);
-      return;
-    }
-    const completion = nextStatus === "Mengantar";
-    Alert.alert(
-      completion ? "Konfirmasi barang diambil" : "Selesaikan pesanan",
-      completion ? "Pastikan pesanan telah diterima dari toko." : "Pastikan pesanan sudah diterima pelanggan.",
-      [
-        { text: "Batal", style: "cancel" },
-        { text: completion ? "Ya, Sudah Diambil" : "Pesanan Sudah Diterima", onPress: () => void handleUpdateStatus(order.id, nextStatus) },
       ]
     );
   };
@@ -508,6 +606,7 @@ export const Order: React.FC<OrderProps> = ({
     const step = getStageStep(selectedOrder.status);
 
     return (
+      <>
       <Modal
         visible={Boolean(selectedOrder)}
         animationType="slide"
@@ -672,11 +771,16 @@ export const Order: React.FC<OrderProps> = ({
                         </View>
                         <TouchableOpacity
                           style={[styles.tripNextActionButton, { backgroundColor: "#15803D" }]}
-                          onPress={() => handleUpdateStatus(selectedOrder.id, "Selesai")}
+                          disabled={mutatingOrderId === selectedOrder.id || proofUploadOrderId === selectedOrder.id}
+                          onPress={() => handleDriverTransition(selectedOrder, "Selesai")}
                           activeOpacity={0.85}
                         >
-                          <CheckCircle size={15} color="#FFFFFF" />
-                          <Text style={styles.tripNextActionText}>Selesaikan Pengantaran</Text>
+                          {mutatingOrderId === selectedOrder.id || proofUploadOrderId === selectedOrder.id
+                            ? <ActivityIndicator size="small" color="#FFFFFF" />
+                            : <CheckCircle size={15} color="#FFFFFF" />}
+                          <Text style={styles.tripNextActionText}>
+                            Selesaikan Pengantaran
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     ) : selectedOrder.status === "Selesai" ? (
@@ -900,7 +1004,7 @@ export const Order: React.FC<OrderProps> = ({
             <TouchableOpacity
               style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#2563EB" }]}
               disabled={mutatingOrderId === selectedOrder.id}
-              onPress={() => confirmDriverTransition(selectedOrder, "Sampai Pickup")}
+              onPress={() => handleDriverTransition(selectedOrder, "Sampai Pickup")}
               activeOpacity={0.85}
             >
               {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><Store size={18} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Saya Sudah Sampai" : "Tiba di Toko / Outlet"}</Text></>}
@@ -911,7 +1015,7 @@ export const Order: React.FC<OrderProps> = ({
             <TouchableOpacity
               style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#7E22CE" }]}
               disabled={mutatingOrderId === selectedOrder.id}
-              onPress={() => confirmDriverTransition(selectedOrder, "Mengantar")}
+              onPress={() => handleDriverTransition(selectedOrder, "Mengantar")}
               activeOpacity={0.85}
             >
               {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><Bike size={20} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Pesanan Sudah Diambil" : "Konfirmasi Ambil & OTW ke Customer"}</Text></>}
@@ -919,14 +1023,16 @@ export const Order: React.FC<OrderProps> = ({
           )}
 
           {selectedOrder.status === "Mengantar" && (
-            <TouchableOpacity
-              style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#15803D" }]}
-              disabled={mutatingOrderId === selectedOrder.id}
-              onPress={() => confirmDriverTransition(selectedOrder, "Selesai")}
-              activeOpacity={0.85}
+            <Pressable
+              style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#15803D", flex: 0, width: "100%", alignSelf: "stretch", minHeight: 50, zIndex: 1 }]}
+              disabled={mutatingOrderId === selectedOrder.id || proofUploadOrderId === selectedOrder.id}
+              onPress={() => handleDriverTransition(selectedOrder, "Selesai")}
+              accessibilityRole="button"
+              accessibilityLabel="Pesanan sudah diterima customer"
+              hitSlop={8}
             >
-              {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><CheckCircle size={20} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Pesanan Sudah Diterima Customer" : "Selesaikan Pengantaran"}</Text></>}
-            </TouchableOpacity>
+              {mutatingOrderId === selectedOrder.id || proofUploadOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><CheckCircle size={20} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Pesanan Sudah Diterima Customer" : "Selesaikan Pengantaran"}</Text></>}
+            </Pressable>
           )}
 
           {selectedOrder.status === "Selesai" && (
@@ -934,6 +1040,9 @@ export const Order: React.FC<OrderProps> = ({
               <CheckCircle size={18} color="#15803D" />
               <Text style={styles.completedBadgeBtnText}>Pengantaran Selesai</Text>
             </View>
+          )}
+          {proofUploadError?.orderId === selectedOrder.id && (
+            <Text style={styles.proofUploadError}>{proofUploadError.message}</Text>
           )}
         </View>
 
@@ -1022,6 +1131,8 @@ export const Order: React.FC<OrderProps> = ({
         </Modal>
         </ResponsiveSafeAreaView>
       </Modal>
+      {renderDeliveryProofPicker()}
+      </>
     );
   }
 
@@ -1265,6 +1376,7 @@ export const Order: React.FC<OrderProps> = ({
   // =========================================================================
   return (
     <ResponsiveSafeAreaView style={styles.container}>
+      {renderDeliveryProofPicker()}
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -1609,7 +1721,7 @@ export const Order: React.FC<OrderProps> = ({
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#2563EB" }]}
                       disabled={mutatingOrderId === item.id}
-                      onPress={() => confirmDriverTransition(item, "Sampai Pickup")}
+                      onPress={() => handleDriverTransition(item, "Sampai Pickup")}
                       activeOpacity={0.85}
                     >
                       {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><Store size={16} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Saya Sudah Sampai" : "Tiba di Toko / Outlet"}</Text></>}
@@ -1621,7 +1733,7 @@ export const Order: React.FC<OrderProps> = ({
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#7E22CE" }]}
                       disabled={mutatingOrderId === item.id}
-                      onPress={() => confirmDriverTransition(item, "Mengantar")}
+                      onPress={() => handleDriverTransition(item, "Mengantar")}
                       activeOpacity={0.85}
                     >
                       {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><Bike size={18} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Pesanan Sudah Diambil" : "Konfirmasi Ambil & OTW ke Customer"}</Text></>}
@@ -1632,12 +1744,15 @@ export const Order: React.FC<OrderProps> = ({
                   {item.status === "Mengantar" && (
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#15803D" }]}
-                      disabled={mutatingOrderId === item.id}
-                      onPress={() => confirmDriverTransition(item, "Selesai")}
+                      disabled={mutatingOrderId === item.id || proofUploadOrderId === item.id}
+                      onPress={() => handleDriverTransition(item, "Selesai")}
                       activeOpacity={0.85}
                     >
-                      {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><CheckCircle size={18} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Pesanan Sudah Diterima Customer" : "Selesaikan Pengantaran"}</Text></>}
+                      {mutatingOrderId === item.id || proofUploadOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><CheckCircle size={18} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Upload Bukti & Selesaikan" : "Selesaikan Pengantaran"}</Text></>}
                     </TouchableOpacity>
+                  )}
+                  {proofUploadError?.orderId === item.id && (
+                    <Text style={styles.proofUploadError}>{proofUploadError.message}</Text>
                   )}
                 </View>
               )}
@@ -2041,17 +2156,22 @@ const styles = StyleSheet.create({
     color: "#334155",
   },
   primaryFlowBtn: {
-    height: 44,
+    minHeight: 44,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   primaryFlowBtnText: {
+    flexShrink: 1,
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "900",
+    lineHeight: 17,
+    textAlign: "center",
   },
   emptyContainer: {
     alignItems: "center",
@@ -2513,6 +2633,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 30,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
@@ -2523,20 +2644,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
-    elevation: 8,
+    elevation: 30,
   },
   dualActionsRow: {
     flexDirection: "row",
-    gap: 10,
+    flexWrap: "wrap",
+    gap: 8,
   },
   sheetBtn: {
     flex: 1,
-    height: 46,
+    minWidth: 132,
+    minHeight: 46,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   sheetBtnOutline: {
     borderWidth: 1.5,
@@ -2547,14 +2672,112 @@ const styles = StyleSheet.create({
     backgroundColor: "#0D7A53",
   },
   sheetBtnTextOutline: {
+    flexShrink: 1,
     color: "#DC2626",
     fontSize: 13,
     fontWeight: "800",
+    lineHeight: 18,
+    textAlign: "center",
   },
   sheetBtnTextSolid: {
+    flexShrink: 1,
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "900",
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  proofUploadError: {
+    marginTop: 8,
+    color: "#B91C1C",
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center",
+  },
+  proofPickerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.56)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  proofPickerCard: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  proofPickerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DCFCE7",
+  },
+  proofPickerTitle: {
+    color: "#0F172A",
+    fontSize: 17,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  proofPickerDescription: {
+    color: "#64748B",
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  proofPickerPrimaryButton: {
+    width: "100%",
+    minHeight: 48,
+    borderRadius: 12,
+    backgroundColor: "#15803D",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  proofPickerPrimaryText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  proofPickerSecondaryButton: {
+    width: "100%",
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    backgroundColor: "#F0FDF4",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  proofPickerSecondaryText: {
+    color: "#15803D",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  proofPickerCancelButton: {
+    width: "100%",
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proofPickerCancelText: {
+    color: "#64748B",
+    fontSize: 13,
+    fontWeight: "700",
   },
   completedBadgeBtn: {
     height: 46,

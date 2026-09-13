@@ -34,6 +34,7 @@ const marketplaceOrderSchema = new mongoose.Schema(
     driverId: { type: String, default: "", index: true },
     driverName: { type: String, default: "" },
     driverPhone: { type: String, default: "" },
+    deliveryProofUrl: { type: String, default: "" },
     declinedByDrivers: { type: [String], default: [] },
     status: {
       type: String,

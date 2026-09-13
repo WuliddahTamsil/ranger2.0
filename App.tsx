@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Screen } from "./src/types";
 
@@ -56,7 +56,7 @@ import {
   resetPassword,
 } from "./src/screens/auth/authService";
 import { roleToScreen } from "./src/screens/auth/authNavigation";
-import { clearSession } from "./src/screens/auth/authStorage";
+import { clearSession, loadAccounts } from "./src/screens/auth/authStorage";
 import { AuthAccount, AuthRegistrationRole, GoogleCredential, GoogleProfile, RegistrationForm } from "./src/screens/auth/authTypes";
 
 export default function App() {
@@ -136,6 +136,32 @@ export default function App() {
     navigate(roleToScreen(account.role, account.status));
   };
 
+  const handleRoleSelection = async (role: AuthAccount["role"]) => {
+    if (currentAuthAccount?.role === role && currentAuthAccount.token) {
+      navigate(roleToScreen(role, currentAuthAccount.status));
+      return;
+    }
+
+    const accounts = await loadAccounts();
+    const matchingAccounts = accounts.filter((account) =>
+      account.role === role && Boolean(account.token) && account.status !== "rejected"
+    );
+
+    if (matchingAccounts.length === 1) {
+      await startSession(matchingAccounts[0]);
+      return;
+    }
+
+    const roleLabel = role === "pemilik_marketplace" ? "pemilik Marketplace" : role;
+    const message = matchingAccounts.length > 1
+      ? `Ada beberapa akun ${roleLabel} tersimpan. Masuk kembali dan pilih akun yang benar untuk melanjutkan.`
+      : `Sesi akun ${roleLabel} belum tersedia. Masuk dengan akun ${roleLabel} agar aksi pesanan dikirim oleh akun yang berwenang.`;
+    Alert.alert("Pilih akun yang sesuai", message, [
+      { text: "Masuk", onPress: () => navigate("login") },
+      { text: "Batal", style: "cancel" },
+    ]);
+  };
+
   const renderScreen = () => {
     switch (currentScreen) {
       // Auth
@@ -146,7 +172,7 @@ export default function App() {
       case "login":
         return <LoginScreen navigate={navigate} onLogin={handleLogin} onGoogleLogin={handleGoogleLogin} />;
       case "role":
-        return <RoleScreen navigate={navigate} />;
+        return <RoleScreen navigate={navigate} onSelectRole={handleRoleSelection} />;
       case "auth_register_role":
         return <RegisterRoleScreen navigate={navigate} googleDraft={googleDraft} onGoogleConnect={handleGoogleLogin} onSelect={(role) => { setRegistrationRole(role); navigate("auth_register"); }} />;
       case "auth_register":

@@ -4,7 +4,7 @@ const MarketplaceProduct = require("../models/MarketplaceProduct");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { syncConversationForOrder } = require("../services/conversationService");
-const { getMarketplaceTransition, getMarketplaceStatusNotification } = require("../utils/marketplaceOrderLifecycle");
+const { getMarketplaceOrderActorRole, getMarketplaceTransition, isValidDeliveryProofUrl, getMarketplaceStatusNotification } = require("../utils/marketplaceOrderLifecycle");
 
 const isValidUserId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
 const emitToUser = (io, userId, event, payload) => {
@@ -94,19 +94,19 @@ const updateOrderStatus = async (req, res) => {
   try {
     const authUser = req.authUser;
     const nextStatus = req.body?.status;
-    if (!authUser || !["driver", "pemilik_marketplace"].includes(authUser.role)) {
-      return res.status(403).json({ success: false, message: "Aksi ini hanya tersedia untuk driver atau pemilik Marketplace." });
-    }
+    const deliveryProofUrl = String(req.body?.deliveryProofUrl || "").trim();
+    if (!authUser) return res.status(401).json({ success: false, message: "Silakan masuk kembali untuk memperbarui pesanan." });
     const current = await MarketplaceOrder.findById(req.params.id).lean();
     if (!current) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
-    if (authUser.role === "driver" && String(current.driverId) !== String(authUser._id)) {
-      return res.status(403).json({ success: false, message: "Pesanan ini tidak ditugaskan kepada akun driver Anda." });
+    const actorRole = getMarketplaceOrderActorRole(authUser._id, current);
+    if (!actorRole) {
+      return res.status(403).json({ success: false, message: "Akun ini bukan driver yang ditugaskan atau pemilik toko pada pesanan tersebut." });
     }
-    if (authUser.role === "pemilik_marketplace" && String(current.ownerId) !== String(authUser._id)) {
-      return res.status(403).json({ success: false, message: "Pesanan ini bukan milik toko Anda." });
-    }
-    if (!getMarketplaceTransition(authUser.role, current.status, nextStatus)) {
+    if (!getMarketplaceTransition(actorRole, current.status, nextStatus)) {
       return res.status(409).json({ success: false, message: `Perubahan status ${current.status} ke ${nextStatus || "(kosong)"} tidak diizinkan.` });
+    }
+    if (actorRole === "driver" && nextStatus === "Selesai" && !isValidDeliveryProofUrl(deliveryProofUrl)) {
+      return res.status(400).json({ success: false, message: "Foto bukti pengantaran wajib diunggah sebelum pesanan diselesaikan." });
     }
 
     session = await mongoose.startSession();
@@ -115,9 +115,11 @@ const updateOrderStatus = async (req, res) => {
     let notificationRecipients = [];
     await session.withTransaction(async () => {
       const filter = { _id: current._id, status: current.status };
-      if (authUser.role === "driver") filter.driverId = String(authUser._id);
+      if (actorRole === "driver") filter.driverId = String(authUser._id);
       else filter.ownerId = authUser._id;
-      order = await MarketplaceOrder.findOneAndUpdate(filter, { status: nextStatus }, { new: true, runValidators: true, session });
+      const update = { status: nextStatus };
+      if (actorRole === "driver" && nextStatus === "Selesai") update.deliveryProofUrl = deliveryProofUrl;
+      order = await MarketplaceOrder.findOneAndUpdate(filter, update, { new: true, runValidators: true, session });
       if (!order) {
         const error = new Error("Status pesanan sudah berubah. Muat ulang lalu coba lagi."); error.statusCode = 409; throw error;
       }

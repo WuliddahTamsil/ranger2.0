@@ -1,5 +1,6 @@
 import { NativeModules, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { AuthAccount } from "../screens/auth/authTypes";
 
 const AUTH_ACCOUNTS_KEY = "rangers.auth.accounts.v1";
 const AUTH_SESSION_KEY = "rangers.auth.session.v1";
@@ -88,7 +89,13 @@ export const updateUserProfile = async (userId: string, profileData: Record<stri
 const readApiJson = async (response: Response) => {
   const body = await response.text();
   if (!response.ok) {
-    throw new Error(`API ${response.status}: ${body.slice(0, 120)}`);
+    let message = "";
+    try {
+      message = JSON.parse(body)?.message || "";
+    } catch {
+      // Use the HTTP status when the server did not return a JSON error.
+    }
+    throw new Error(message || `Permintaan gagal (HTTP ${response.status}).`);
   }
   try {
     return JSON.parse(body);
@@ -308,7 +315,7 @@ export const getMarketplaceOrdersForCustomer = async (customerId: string) => {
     return await readApiJson(res);
   } catch (err) {
     console.error("getMarketplaceOrdersForCustomer error:", err);
-    return { success: false, data: [] };
+    return { success: false, data: [], message: err instanceof Error ? err.message : "Gagal mengambil pesanan Marketplace" };
   }
 };
 
@@ -331,13 +338,43 @@ export const createMarketplaceOrder = async (orderData: Record<string, unknown>,
   }
 };
 
-export const updateMarketplaceOrderStatus = async (id: string, status: string) => {
+const getMarketplaceActorHeaders = async (actor: Pick<AuthAccount, "id" | "role" | "token"> | null | undefined) => {
+  if (!actor?.id) {
+    return { error: "Sesi akun tidak ditemukan. Silakan masuk kembali sebagai driver atau pemilik Marketplace." };
+  }
+
+  let token = actor.token;
+  if (!token) {
+    try {
+      const accountsRaw = await AsyncStorage.getItem(AUTH_ACCOUNTS_KEY);
+      const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
+      const storedActor = Array.isArray(accounts)
+        ? accounts.find((item: any) => item.id === actor.id)
+        : null;
+      token = storedActor?.token;
+    } catch {
+      // Return a clear session error below if storage cannot provide a token.
+    }
+  }
+
+  return token
+    ? { headers: { Authorization: `Bearer ${token}` } }
+    : { error: "Token akun tidak ditemukan. Silakan keluar lalu masuk kembali sebagai driver atau pemilik Marketplace." };
+};
+
+export const updateMarketplaceOrderStatus = async (
+  id: string,
+  status: string,
+  actor: Pick<AuthAccount, "id" | "role" | "token"> | null | undefined,
+  deliveryProofUrl?: string,
+) => {
   try {
-    const authHeaders = await getAuthHeaders();
+    const auth = await getMarketplaceActorHeaders(actor);
+    if ("error" in auth) return { success: false, message: auth.error };
     const res = await fetch(getApiUrl(`/marketplace/orders/${id}/status`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify({ status }),
+      headers: { "Content-Type": "application/json", ...auth.headers },
+      body: JSON.stringify({ status, ...(deliveryProofUrl ? { deliveryProofUrl } : {}) }),
     });
     return await res.json();
   } catch (err) {
@@ -511,7 +548,7 @@ export const getCateringOrdersForCustomer = async (customerId: string) => {
     return await readApiJson(res);
   } catch (err) {
     console.error("getCateringOrdersForCustomer error:", err);
-    return { success: false, data: [] };
+    return { success: false, data: [], message: err instanceof Error ? err.message : "Gagal mengambil pesanan Catering" };
   }
 };
 

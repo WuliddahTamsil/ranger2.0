@@ -1,5 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   FileText,
+  Image as ImageIcon,
   PlayCircle,
   Plus,
 } from "lucide-react-native";
@@ -77,6 +78,14 @@ export const Pesanan: React.FC<PesananProps> = ({
   const [chatTarget, setChatTarget] = useState<{ orderId: string; participantName: string; participantType: "driver" | "merchant" } | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(null);
   const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const latestOrder = orders.find((order) => order.id === selectedOrder.id);
+    if (latestOrder && JSON.stringify(latestOrder) !== JSON.stringify(selectedOrder)) {
+      setSelectedOrder(latestOrder);
+    }
+  }, [orders, selectedOrder?.id]);
 
   // Review states
   const [ratingVal, setRatingVal] = useState(5);
@@ -430,6 +439,22 @@ export const Pesanan: React.FC<PesananProps> = ({
                         <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
                       </TouchableOpacity>
 
+                      {item.type.toLowerCase().includes("market") && (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnProof]}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            handleOpenTracking(item);
+                          }}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel={item.deliveryProofUrl ? "Lihat foto bukti pengantaran" : "Lihat status pesanan"}
+                        >
+                          <ImageIcon size={13} color="#0D7A53" />
+                          <Text style={styles.actionBtnTextInvoice}>{item.deliveryProofUrl ? "Bukti Foto" : "Lacak Pesanan"}</Text>
+                        </TouchableOpacity>
+                      )}
+
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.actionBtnOutlineGray]}
                         onPress={() => handleOpenChat(item, "merchant")}
@@ -703,6 +728,18 @@ export const Pesanan: React.FC<PesananProps> = ({
                   </View>
                 </View>
               </View>
+
+              {selectedOrder.type === "Marketplace" && selectedOrder.deliveryProofUrl ? (
+                <View style={styles.deliveryProofCard}>
+                  <Text style={styles.deliveryProofTitle}>Bukti Foto Pengantaran</Text>
+                  <Image
+                    source={{ uri: selectedOrder.deliveryProofUrl }}
+                    style={styles.deliveryProofImage}
+                    resizeMode="cover"
+                    accessibilityLabel="Foto bukti pesanan telah diterima customer"
+                  />
+                </View>
+              ) : null}
 
               {/* Actions Row */}
               <View style={styles.fullPageActionRow}>
@@ -1217,6 +1254,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#86EFAC",
   },
+  actionBtnProof: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
   actionBtnInvoiceOutline: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
@@ -1366,6 +1408,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
     padding: 16,
+  },
+  deliveryProofCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#D1FAE5",
+    padding: 14,
+    gap: 10,
+  },
+  deliveryProofTitle: {
+    color: "#0F172A",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  deliveryProofImage: {
+    width: "100%",
+    height: 220,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
   },
   timelineCardTitle: {
     fontSize: 13,
