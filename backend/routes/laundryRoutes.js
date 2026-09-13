@@ -34,8 +34,12 @@ router.put("/orders/:id/ready-for-delivery", laundryController.markReadyForDeliv
 router.put("/orders/:id/take-delivery", laundryController.takeDeliveryJob);
 router.put("/orders/:id/complete-delivery", laundryController.completeDelivery);
 
+// Reset / Clear Data
+router.delete("/orders/all", laundryController.clearAllOrders);
+
 // Live Location & Status Update
 router.put("/orders/:id/driver-location", laundryController.updateDriverLocation);
 router.put("/orders/:id/update-status", laundryController.updateOrderStatus);
 
 module.exports = router;
+

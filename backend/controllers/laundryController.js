@@ -906,3 +906,31 @@ exports.updateDriverLocation = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// 17. Reset / Clear semua pesanan laundry untuk uji coba baru
+exports.clearAllOrders = async (req, res) => {
+  try {
+    const deletedOrders = await LaundryOrder.deleteMany({});
+    const deletedNotifs = await Notification.deleteMany({
+      $or: [
+        { type: { $regex: /laundry/i } },
+        { title: { $regex: /laundry/i } },
+        { message: { $regex: /laundry/i } },
+        { message: { $regex: /LND-/i } },
+      ],
+    });
+
+    if (req.io) {
+      req.io.emit("laundry_orders_cleared", { timestamp: new Date() });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Berhasil membersihkan ${deletedOrders.deletedCount} pesanan laundry. Database bersih untuk uji coba baru.`,
+    });
+  } catch (error) {
+    console.error("❌ clearAllOrders Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+

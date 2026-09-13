@@ -259,6 +259,56 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const isPaid = order?.paymentStatus === "lunas";
   const isRejected = order?.paymentStatus === "ditolak";
 
+  if (!order) {
+    return (
+      <ResponsiveSafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigate("c_home")}
+            style={styles.backBtn}
+            activeOpacity={0.7}
+          >
+            <ArrowLeft size={22} color="#111827" />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Live Tracking Laundry</Text>
+            <Text style={styles.headerSubtitle}>Status pesanan cucian Anda</Text>
+          </View>
+        </View>
+
+        <View style={styles.emptyTrackingContainer}>
+          <View style={styles.emptyTrackingIconCircle}>
+            <Shirt size={48} color="#0D7A53" />
+          </View>
+          <Text style={styles.emptyTrackingTitle}>Belum Ada Pesanan Laundry Aktif</Text>
+          <Text style={styles.emptyTrackingDesc}>
+            Semua riwayat pesanan sebelumnya telah dibersihkan. Silakan buat pesanan baru dari mitra toko laundry untuk mulai uji coba alur secara real-time!
+          </Text>
+
+          <TouchableOpacity
+            style={styles.btnOrderNewLaundry}
+            onPress={() => navigate("c_laundry")}
+            activeOpacity={0.85}
+          >
+            <Sparkles size={18} color="#FFFFFF" />
+            <Text style={styles.btnOrderNewLaundryText}>Pesan Laundry Sekarang</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.btnBackHomeSecondary}
+            onPress={() => navigate("c_home")}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.btnBackHomeSecondaryText}>Kembali ke Beranda</Text>
+          </TouchableOpacity>
+        </View>
+      </ResponsiveSafeAreaView>
+    );
+  }
+
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -266,7 +316,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigate("c_home")}
+          onPress={() => navigate("c_laundry")}
           style={styles.backBtn}
           activeOpacity={0.7}
         >
@@ -1064,4 +1114,68 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   btnSubmitPaymentText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+
+  // Empty State Tracking
+  emptyTrackingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    paddingVertical: 40,
+  },
+  emptyTrackingIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "#E6F7F0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  emptyTrackingTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#111827",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  emptyTrackingDesc: {
+    fontSize: 13,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  btnOrderNewLaundry: {
+    backgroundColor: "#0D7A53",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 16,
+    elevation: 3,
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    marginBottom: 12,
+  },
+  btnOrderNewLaundryText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  btnBackHomeSecondary: {
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnBackHomeSecondaryText: {
+    color: "#6B7280",
+    fontSize: 13,
+    fontWeight: "700",
+  },
 });
+

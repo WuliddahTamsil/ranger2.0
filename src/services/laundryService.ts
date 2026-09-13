@@ -211,7 +211,19 @@ export const setActiveLaundryOrder = (order: LaundryOrder | null) => {
   notifyListeners();
 };
 
+export const clearAllLaundryOrders = async () => {
+  activeCustomerOrder = null;
+  notifyListeners();
+  try {
+    const url = getApiUrl(`/laundry/orders/all`);
+    await fetch(url, { method: "DELETE" });
+  } catch (err) {
+    console.warn("⚠️ clearAllLaundryOrders error:", err);
+  }
+};
+
 export const subscribeLaundry = (listener: () => void) => {
+
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
