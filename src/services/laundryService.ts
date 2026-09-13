@@ -619,6 +619,34 @@ export const fetchStoreOrders = async (ownerId: string = "all"): Promise<Laundry
   return [];
 };
 
+export const fetchCustomerLaundryOrders = async (customerId?: string, phone?: string): Promise<LaundryOrder[]> => {
+  try {
+    const cId = customerId || "cust_active";
+    const url = getApiUrl(`/laundry/orders/customer/${cId}${phone ? `?phone=${encodeURIComponent(phone)}` : ""}`);
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      if (
+        activeCustomerOrder &&
+        !json.data.some((d: any) => (d._id || d.id || d.orderCode) === (activeCustomerOrder?._id || activeCustomerOrder?.id || activeCustomerOrder?.orderCode))
+      ) {
+        if (!customerId || activeCustomerOrder.customerId === customerId) {
+          json.data.unshift(activeCustomerOrder);
+        }
+      }
+      return json.data;
+    }
+  } catch (err) {
+    console.warn("⚠️ fetchCustomerLaundryOrders fallback:", err);
+  }
+  if (activeCustomerOrder) {
+    if (!customerId || activeCustomerOrder.customerId === customerId) {
+      return [activeCustomerOrder];
+    }
+  }
+  return [];
+};
+
 export interface LaundryCustomerSummary {
   id: string;
   customerId: string;

@@ -423,7 +423,12 @@ exports.arrivedAtLaundry = async (req, res) => {
 exports.getCustomerOrders = async (req, res) => {
   try {
     const { customerId } = req.params;
-    const orders = await LaundryOrder.find({ customerId }).sort({ createdAt: -1 });
+    const { phone } = req.query;
+    let filter = { customerId };
+    if (phone) {
+      filter = { $or: [{ customerId }, { customerPhone: phone }] };
+    }
+    const orders = await LaundryOrder.find(filter).sort({ createdAt: -1 });
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
     console.error("❌ getCustomerOrders Error:", error);

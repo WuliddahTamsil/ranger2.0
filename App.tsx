@@ -223,7 +223,7 @@ export default function App() {
       case "c_catering_tracking":
         return <CustomerCateringTrackingScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_laundry":
-        return <CustomerLaundryScreen navigate={navigate} />;
+        return <CustomerLaundryScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_laundry_detail":
         return <CustomerLaundryDetailScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_laundry_tracking":
