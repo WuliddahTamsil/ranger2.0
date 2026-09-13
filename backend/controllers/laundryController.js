@@ -442,7 +442,19 @@ exports.getStoreOrders = async (req, res) => {
     const { ownerId } = req.params;
     let query = {};
     if (ownerId && ownerId !== "all") {
-      query.ownerId = ownerId;
+      const stores = await LaundryStore.find({
+        $or: [
+          { ownerId: ownerId },
+          ...(mongoose.Types.ObjectId.isValid(ownerId) ? [{ _id: ownerId }] : []),
+        ],
+      });
+      const storeIds = stores.map((s) => s._id);
+
+      query.$or = [
+        { ownerId: ownerId },
+        { storeId: { $in: storeIds } },
+        ...(mongoose.Types.ObjectId.isValid(ownerId) ? [{ storeId: ownerId }] : []),
+      ];
     }
     const orders = await LaundryOrder.find(query).sort({ createdAt: -1 });
     return res.status(200).json({ success: true, data: orders });
@@ -451,6 +463,7 @@ exports.getStoreOrders = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 // 7B. Ambil daftar pelanggan riil yang sudah pernah order ke Toko Laundry ini
 exports.getStoreCustomers = async (req, res) => {

@@ -37,7 +37,14 @@ import {
   Trash2,
   QrCode,
   Building2,
+  Upload,
+  Image as ImageIcon,
+  Camera,
+  RefreshCw,
 } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import { uploadFileToBackend } from "../../services/api";
+
 import {
   getSelectedStore,
   saveMyLaundryStore,
@@ -112,25 +119,79 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
     navigate("login");
   };
 
+  const handlePickQrisImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Izin Galeri Diperlukan",
+          "Aplikasi memerlukan izin untuk memilih foto QRIS dari galeri Anda."
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 0.85,
+        base64: true,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const dataUri = asset.base64
+          ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`
+          : asset.uri;
+        setQrisImageUrl(dataUri);
+
+        try {
+          const fileName = asset.fileName || `qris-${Date.now()}.jpg`;
+          const mimeType = asset.mimeType || "image/jpeg";
+          const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType);
+          if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
+            setQrisImageUrl(uploadRes.data.url);
+          }
+        } catch (uploadErr) {
+          console.log("QRIS upload fallback to base64 data uri:", uploadErr);
+        }
+      }
+    } catch (err) {
+      console.error("Error picking QRIS image:", err);
+      Alert.alert("Gagal Memuat Foto", "Terjadi kesalahan saat memilih gambar.");
+    }
+  };
+
   const handleSavePaymentSettings = async () => {
-    if (!bankAccountNumber.trim() || !bankAccountHolder.trim()) {
-      Alert.alert("Input Kurang", "Harap lengkapi nomor rekening dan nama pemilik rekening.");
+    if (!bankAccountNumber.trim() && !qrisImageUrl.trim()) {
+      Alert.alert("Input Kurang", "Harap lengkapi nomor rekening bank atau unggah barcode QRIS toko.");
       return;
     }
+
+    let finalQrisUrl = qrisImageUrl.trim();
+    if (finalQrisUrl.startsWith("blob:")) {
+      try {
+        const uploadRes = await uploadFileToBackend(finalQrisUrl, `qris-${Date.now()}.jpg`, "image/jpeg");
+        if (uploadRes?.success && uploadRes?.data?.url) {
+          finalQrisUrl = uploadRes.data.url;
+        }
+      } catch (e) {
+        console.warn("Failed blob upload in qris save:", e);
+      }
+    }
+
     const updatedStore: LaundryStore = {
       ...store,
       ownerId: authAccount?.id || store.ownerId,
       bankName: bankName.trim(),
       bankAccountNumber: bankAccountNumber.trim(),
-      bankAccountHolder: bankAccountHolder.trim(),
-      qrisImageUrl: qrisImageUrl.trim(),
+      bankAccountHolder: bankAccountHolder.trim() || store.storeName || "Pemilik Toko",
+      qrisImageUrl: finalQrisUrl,
     };
     setSelectedStore(updatedStore);
     setStore(updatedStore);
     await saveMyLaundryStore(updatedStore);
     setIsPaymentModalOpen(false);
-    Alert.alert("Berhasil", "Data Rekening Bank & QRIS toko berhasil disimpan. Customer akan langsung melihat metode pembayaran ini saat checkout!");
+    Alert.alert("Berhasil", "Pengaturan Rekening & Foto Barcode QRIS toko berhasil disimpan. Customer akan langsung melihat barcode ini saat melakukan checkout!");
   };
+
 
   const handleAddService = () => {
     if (!newServiceName.trim() || !newServicePrice.trim()) {
@@ -486,33 +547,70 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
                 onChangeText={setBankAccountHolder}
               />
 
-              {/* QRIS Toko Preview */}
-              <Text style={styles.formFieldLabel}>URL / PRESET QRIS TOKO</Text>
-              <TextInput
-                style={styles.inputField}
-                placeholder="URL Gambar QRIS Toko"
-                placeholderTextColor="#9CA3AF"
-                value={qrisImageUrl}
-                onChangeText={setQrisImageUrl}
-              />
+              {/* Barcode & Foto QRIS Toko Section */}
+              <View style={styles.qrisSectionHeaderRow}>
+                <View>
+                  <Text style={styles.formFieldLabel}>FOTO / BARCODE QRIS TOKO</Text>
+                  <Text style={styles.qrisUploadSubHint}>
+                    Customer akan memindai barcode ini langsung saat melakukan pembayaran tagihan.
+                  </Text>
+                </View>
+              </View>
 
-              <View style={styles.qrisPreviewBox}>
-                <Text style={styles.qrisPreviewTitle}>Preview QRIS Pembayaran Customer:</Text>
-                {qrisImageUrl ? (
+              {qrisImageUrl ? (
+                <View style={styles.qrisPreviewBox}>
+                  <View style={styles.qrisPreviewHeaderRow}>
+                    <View style={styles.qrisActiveIndicatorBadge}>
+                      <CheckCircle2 size={13} color="#166534" />
+                      <Text style={styles.qrisActiveIndicatorText}>QRIS Toko Aktif</Text>
+                    </View>
+
+                    <View style={styles.qrisActionButtonsRow}>
+                      <TouchableOpacity
+                        style={styles.btnChangeQris}
+                        onPress={handlePickQrisImage}
+                        activeOpacity={0.8}
+                      >
+                        <Upload size={13} color="#0D7A53" />
+                        <Text style={styles.btnChangeQrisText}>Ganti Foto</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.btnRemoveQris}
+                        onPress={() => setQrisImageUrl("")}
+                        activeOpacity={0.8}
+                      >
+                        <Trash2 size={13} color="#DC2626" />
+                        <Text style={styles.btnRemoveQrisText}>Hapus</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
                   <Image
                     source={{ uri: qrisImageUrl }}
                     style={styles.qrisImageStyle}
                     resizeMode="contain"
                   />
-                ) : (
-                  <View style={styles.qrisPlaceholder}>
-                    <QrCode size={48} color="#9CA3AF" />
-                    <Text style={styles.qrisPlaceholderText}>QRIS Toko Belum Diatur</Text>
+                  <Text style={styles.qrisMerchantName}>{store.storeName || "Toko Laundry"}</Text>
+                  <Text style={styles.qrisNmidText}>Siap dipindai: BCA Mobile, Livin, BRImo, GoPay, OVO, ShopeePay, Dana</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.uploadQrisPlaceholderBtn}
+                  onPress={handlePickQrisImage}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.uploadQrisIconBg}>
+                    <Upload size={24} color="#0D7A53" />
                   </View>
-                )}
-                <Text style={styles.qrisMerchantName}>{store.storeName || "Ais Laundry"}</Text>
-                <Text style={styles.qrisNmidText}>NMID: ID1023249012 • Merchant G-Pay / All e-Wallet</Text>
-              </View>
+                  <Text style={styles.uploadQrisPlaceholderTitle}>
+                    Pilih & Unggah Foto Barcode QRIS Toko
+                  </Text>
+                  <Text style={styles.uploadQrisPlaceholderSub}>
+                    Ambil dari Galeri (JPG, PNG, WebP) agar customer bisa langsung scan
+                  </Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
 
             <TouchableOpacity style={styles.btnSaveAll} onPress={handleSavePaymentSettings} activeOpacity={0.85}>
@@ -522,6 +620,7 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
           </View>
         </View>
       </Modal>
+
 
       {/* Logout Modal */}
       <Modal visible={isLogoutModalOpen} transparent animationType="fade">
@@ -681,13 +780,131 @@ const styles = StyleSheet.create({
   bankPillActive: { backgroundColor: "#0D7A53", borderColor: "#0D7A53" },
   bankPillText: { fontSize: 12, fontWeight: "800", color: "#4B5563" },
   bankPillTextActive: { color: "#FFFFFF" },
-  qrisPreviewBox: { marginTop: 14, backgroundColor: "#F9FAFB", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center" },
-  qrisPreviewTitle: { fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 10, alignSelf: "flex-start" },
-  qrisImageStyle: { width: 170, height: 170, backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB" },
+
+  // QRIS Section Styles
+  qrisSectionHeaderRow: {
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  qrisUploadSubHint: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  uploadQrisPlaceholderBtn: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 2,
+    borderColor: "#A7F3D0",
+    borderStyle: "dashed",
+    borderRadius: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  uploadQrisIconBg: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  uploadQrisPlaceholderTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#065F46",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  uploadQrisPlaceholderSub: {
+    fontSize: 11,
+    color: "#6B7280",
+    textAlign: "center",
+  },
+  qrisPreviewBox: {
+    marginTop: 10,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#A7F3D0",
+    alignItems: "center",
+    elevation: 2,
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  qrisPreviewHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 12,
+  },
+  qrisActiveIndicatorBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  qrisActiveIndicatorText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  qrisActionButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  btnChangeQris: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  btnChangeQrisText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  btnRemoveQris: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  btnRemoveQrisText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  qrisImageStyle: {
+    width: 200,
+    height: 200,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
   qrisPlaceholder: { width: 170, height: 170, backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", justifyContent: "center", alignItems: "center" },
   qrisPlaceholderText: { fontSize: 11, color: "#9CA3AF", marginTop: 6, fontWeight: "600" },
-  qrisMerchantName: { fontSize: 13, fontWeight: "800", color: "#111827", marginTop: 8 },
-  qrisNmidText: { fontSize: 10, color: "#6B7280", marginTop: 2 },
+  qrisMerchantName: { fontSize: 14, fontWeight: "900", color: "#111827", marginTop: 10 },
+  qrisNmidText: { fontSize: 10, color: "#6B7280", marginTop: 2, textAlign: "center" },
 
   // Center Confirm Modal
   modalOverlayCenter: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 24 },
@@ -700,3 +917,4 @@ const styles = StyleSheet.create({
   btnLogout: { flex: 1, height: 42, borderRadius: 10, backgroundColor: "#DC2626", alignItems: "center", justifyContent: "center" },
   btnLogoutText: { fontSize: 13, fontWeight: "700", color: "#FFFFFF" },
 });
+

@@ -39,6 +39,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
+import { uploadFileToBackend } from "../../services/api";
 import {
   getActiveLaundryOrder,
   subscribeLaundry,
@@ -170,11 +171,28 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: false,
-        quality: 0.8,
+        quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setProofImageUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        const dataUri = asset.base64
+          ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`
+          : asset.uri;
+        setProofImageUri(dataUri);
+
+        // Upload to server in background to get permanent host URL
+        try {
+          const fileName = asset.fileName || `proof-${Date.now()}.jpg`;
+          const mimeType = asset.mimeType || "image/jpeg";
+          const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType);
+          if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
+            setProofImageUri(uploadRes.data.url);
+          }
+        } catch (uploadErr) {
+          console.log("Upload to server fallback to base64 data uri:", uploadErr);
+        }
       }
     } catch (err) {
       console.warn("Picker error:", err);
@@ -192,12 +210,26 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
 
     setIsSubmittingProof(true);
     try {
+      let finalUrl = proofImageUri;
+      // If uri is still blob:, attempt upload to avoid cross-browser ERR_FILE_NOT_FOUND
+      if (finalUrl.startsWith("blob:")) {
+        try {
+          const uploadRes = await uploadFileToBackend(finalUrl, `proof-${Date.now()}.jpg`, "image/jpeg");
+          if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
+            finalUrl = uploadRes.data.url;
+          }
+        } catch (e) {
+          console.warn("Failed blob upload in pay:", e);
+        }
+      }
+
       const orderId = order._id || order.id || "temp";
-      await payLaundryOrder(orderId, selectedPaymentMethod, proofImageUri);
+      await payLaundryOrder(orderId, selectedPaymentMethod, finalUrl);
       setIsPaymentModalOpen(false);
       Alert.alert("Bukti Terkirim", "Bukti pembayaran berhasil diunggah dan masuk ke Pemilik Laundry untuk diverifikasi.");
     } catch (err) {
       console.error("Payment error:", err);
+      Alert.alert("Gagal Kirim Bukti", "Terjadi kesalahan saat mengunggah bukti pembayaran.");
     } finally {
       setIsSubmittingProof(false);
     }
@@ -632,15 +664,29 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
               {selectedPaymentMethod === "QRIS" ? (
                 <View style={styles.qrisContainer}>
                   <Text style={styles.qrisTitle}>Scan Barcode QRIS Toko {storeName}</Text>
-                  <Image
-                    source={{
-                      uri:
-                        order?.qrisImageUrl ||
-                        "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=00020101021126590013ID.CO.AISLAUNDRY.WWW01189360099900000123455204581253033605802ID5912AIS_LAUNDRY6006GARUT61054415162070703A016304D6B2",
-                    }}
-                    style={styles.qrisImage}
-                    resizeMode="contain"
-                  />
+                  {order?.qrisImageUrl ? (
+                    <Image
+                      source={{ uri: order.qrisImageUrl }}
+                      style={styles.qrisImage}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <View style={styles.qrisPlaceholderCustomer}>
+                      <QrCode size={56} color="#9CA3AF" />
+                      <Text style={styles.qrisPlaceholderCustomerTitle}>QRIS Belum Diunggah Pemilik Toko</Text>
+                      <Text style={styles.qrisPlaceholderCustomerSub}>
+                        Silakan gunakan opsi Transfer Bank Manual di bawah untuk melanjutkan pembayaran.
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.btnSwitchToBank}
+                        onPress={() => setSelectedPaymentMethod("Transfer Bank")}
+                        activeOpacity={0.8}
+                      >
+                        <CreditCard size={14} color="#FFFFFF" />
+                        <Text style={styles.btnSwitchToBankText}>Pilih Transfer Bank</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                   <Text style={styles.qrisStoreName}>{storeName}</Text>
                   <Text style={styles.qrisNote}>
                     Simpan / screenshot QRIS di atas untuk membayar melalui BCA Mobile, Livin, BRImo, GoPay, OVO, Dana, ShopeePay.
@@ -948,13 +994,20 @@ const styles = StyleSheet.create({
   btnSimResetText: { color: "#374151", fontSize: 12, fontWeight: "700" },
 
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
   paymentModalCard: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
     maxHeight: "90%",
+    width: "100%",
+    maxWidth: 480,
   },
   dragHandle: { width: 40, height: 4, backgroundColor: "#D1D5DB", borderRadius: 2, alignSelf: "center", marginBottom: 14 },
   modalTitle: { fontSize: 17, fontWeight: "900", color: "#111827" },
@@ -1177,5 +1230,46 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
+
+  // QRIS Customer Fallback
+  qrisPlaceholderCustomer: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginVertical: 10,
+  },
+  qrisPlaceholderCustomerTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#374151",
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  qrisPlaceholderCustomerSub: {
+    fontSize: 11,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 16,
+    lineHeight: 16,
+  },
+  btnSwitchToBank: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  btnSwitchToBankText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
 });
+
 

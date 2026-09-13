@@ -562,7 +562,29 @@ export const Order: React.FC<OrderProps> = ({
     }
   };
 
-  const getStatusBadgeLabel = (status: string) => {
+  const getStatusBadgeLabel = (status: string, order?: DriverOrder) => {
+    if (order?.type === "Laundry") {
+      const isJemput = order.items?.[0]?.name?.includes("Jemput");
+      if (isJemput) {
+        switch (status) {
+          case "Menunggu": return "Jemput Pakaian Kotor";
+          case "Menuju Pickup": return "Menuju Rumah Customer";
+          case "Sampai Pickup": return "Tiba di Rumah Customer";
+          case "Mengantar": return "Antar Cucian ke Toko";
+          case "Selesai": return "Cucian Tiba di Toko";
+          default: return "Dibatalkan";
+        }
+      } else {
+        switch (status) {
+          case "Menunggu": return "Antar Pakaian Bersih";
+          case "Menuju Pickup": return "Menuju Toko Laundry";
+          case "Sampai Pickup": return "Tiba di Toko Laundry";
+          case "Mengantar": return "Antar Bersih ke Customer";
+          case "Selesai": return "Selesai Diantar";
+          default: return "Dibatalkan";
+        }
+      }
+    }
     switch (status) {
       case "Menunggu": return "Order Masuk";
       case "Siap": return "Siap Dijemput";
@@ -573,6 +595,7 @@ export const Order: React.FC<OrderProps> = ({
       default: return "Dibatalkan";
     }
   };
+
 
   // Stepper helper
   const getStageStep = (status: string) => {
@@ -1444,7 +1467,7 @@ export const Order: React.FC<OrderProps> = ({
                   </View>
                   <View style={[styles.badge, { backgroundColor: getStatusBg(item.status) }]}>
                     <Text style={[styles.badgeText, { color: getStatusColor(item.status) }]}>
-                      {getStatusBadgeLabel(item.status)}
+                      {getStatusBadgeLabel(item.status, item)}
                     </Text>
                   </View>
                 </View>
@@ -1470,24 +1493,40 @@ export const Order: React.FC<OrderProps> = ({
                       </View>
                     </View>
                     <View style={styles.stepperLabelsRow}>
-                      <Text style={[styles.stepperLabel, step === 1 && styles.stepperLabelHighlight]}>Menuju Toko</Text>
-                      <Text style={[styles.stepperLabel, step === 2 && styles.stepperLabelHighlight]}>Tiba di Toko</Text>
-                      <Text style={[styles.stepperLabel, step === 3 && styles.stepperLabelHighlight]}>Ke Customer</Text>
-                      <Text style={[styles.stepperLabel, step === 4 && styles.stepperLabelHighlight]}>Selesai</Text>
+                      <Text style={[styles.stepperLabel, step === 1 && styles.stepperLabelHighlight]}>
+                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Customer" : "Menuju Toko"}
+                      </Text>
+                      <Text style={[styles.stepperLabel, step === 2 && styles.stepperLabelHighlight]}>
+                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Cust" : "Tiba di Toko"}
+                      </Text>
+                      <Text style={[styles.stepperLabel, step === 3 && styles.stepperLabelHighlight]}>
+                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Laundry" : "Ke Customer"}
+                      </Text>
+                      <Text style={[styles.stepperLabel, step === 4 && styles.stepperLabelHighlight]}>
+                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Toko" : "Selesai"}
+                      </Text>
                     </View>
                   </View>
                 )}
 
-                {/* Pickup (Toko) & Delivery (Customer) Cards */}
+                {/* Pickup (Toko / Customer) & Delivery (Customer / Toko) Cards */}
                 <View style={styles.locationsContainer}>
-                  {/* Toko / Merchant Card */}
+                  {/* First Card: Pickup origin */}
                   <View style={styles.locCard}>
-                    <View style={[styles.locIconWrap, { backgroundColor: "#DCFCE7" }]}>
-                      <Store size={15} color="#15803D" />
+                    <View style={[styles.locIconWrap, { backgroundColor: item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "#EFF6FF" : "#DCFCE7" }]}>
+                      {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? (
+                        <MapPin size={15} color="#2563EB" />
+                      ) : (
+                        <Store size={15} color="#15803D" />
+                      )}
                     </View>
                     <View style={styles.locInfo}>
                       <View style={styles.locHeaderRow}>
-                        <Text style={styles.locTypeTag}>LOKASI PENJEMPUTAN (TOKO)</Text>
+                        <Text style={[styles.locTypeTag, item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") && { color: "#2563EB" }]}>
+                          {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                            ? "LOKASI JEMPUT (RUMAH CUSTOMER)"
+                            : "LOKASI PENJEMPUTAN (TOKO)"}
+                        </Text>
                         <TouchableOpacity
                           style={styles.inlineNavBtn}
                           onPress={() => openNavigationToStore(item)}
@@ -1498,10 +1537,12 @@ export const Order: React.FC<OrderProps> = ({
                         </TouchableOpacity>
                       </View>
                       <Text style={styles.locTitle} numberOfLines={1}>
-                        {item.storeName || item.from}
+                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                          ? item.customer
+                          : (item.storeName || item.from)}
                       </Text>
                       <Text style={styles.locAddress} numberOfLines={2}>
-                        {item.storeAddress || item.from}
+                        {item.from}
                       </Text>
                     </View>
                   </View>
@@ -1510,14 +1551,22 @@ export const Order: React.FC<OrderProps> = ({
                     <View style={styles.locDottedDash} />
                   </View>
 
-                  {/* Customer Card */}
+                  {/* Second Card: Drop destination */}
                   <View style={styles.locCard}>
-                    <View style={[styles.locIconWrap, { backgroundColor: "#EFF6FF" }]}>
-                      <MapPin size={15} color="#2563EB" />
+                    <View style={[styles.locIconWrap, { backgroundColor: item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "#DCFCE7" : "#EFF6FF" }]}>
+                      {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? (
+                        <Store size={15} color="#15803D" />
+                      ) : (
+                        <MapPin size={15} color="#2563EB" />
+                      )}
                     </View>
                     <View style={styles.locInfo}>
                       <View style={styles.locHeaderRow}>
-                        <Text style={[styles.locTypeTag, { color: "#2563EB" }]}>LOKASI PENGANTARAN (CUSTOMER)</Text>
+                        <Text style={[styles.locTypeTag, { color: item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "#15803D" : "#2563EB" }]}>
+                          {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                            ? "LOKASI PENGANTARAN (OUTLET LAUNDRY)"
+                            : "LOKASI PENGANTARAN (CUSTOMER)"}
+                        </Text>
                         <TouchableOpacity
                           style={styles.inlineNavBtnCustomer}
                           onPress={() => openNavigationToCustomer(item)}
@@ -1528,7 +1577,9 @@ export const Order: React.FC<OrderProps> = ({
                         </TouchableOpacity>
                       </View>
                       <Text style={styles.locTitle} numberOfLines={1}>
-                        {item.customer}
+                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                          ? (item.storeName || item.to)
+                          : item.customer}
                       </Text>
                       <Text style={styles.locAddress} numberOfLines={2}>
                         {item.to}
@@ -1536,6 +1587,7 @@ export const Order: React.FC<OrderProps> = ({
                     </View>
                   </View>
                 </View>
+
 
                 {/* Price and distance info */}
                 <View style={styles.cardFooter}>
@@ -1705,6 +1757,7 @@ export const Order: React.FC<OrderProps> = ({
                   </View>
 
                   {/* Step 0: Ready / Menunggu / Siap -> Action: Mulai Jalan ke Toko */}
+                  {/* Step 0: Ready / Menunggu / Siap -> Action: Mulai Jalan */}
                   {["Menunggu", "Diproses", "Siap"].includes(item.status) && (
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#0D7A53" }]}
@@ -1712,11 +1765,15 @@ export const Order: React.FC<OrderProps> = ({
                       activeOpacity={0.85}
                     >
                       <Navigation size={16} color="#FFFFFF" />
-                      <Text style={styles.primaryFlowBtnText}>Mulai Jalan ke Toko</Text>
+                      <Text style={styles.primaryFlowBtnText}>
+                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                          ? "Mulai Jalan Jemput ke Customer"
+                          : "Mulai Jalan ke Toko"}
+                      </Text>
                     </TouchableOpacity>
                   )}
 
-                  {/* Step 1: Menuju Pickup -> Action: Tiba di Toko */}
+                  {/* Step 1: Menuju Pickup -> Action: Tiba di Lokasi Penjemputan */}
                   {item.status === "Menuju Pickup" && (
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#2563EB" }]}
@@ -1724,11 +1781,28 @@ export const Order: React.FC<OrderProps> = ({
                       onPress={() => handleDriverTransition(item, "Sampai Pickup")}
                       activeOpacity={0.85}
                     >
-                      {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><Store size={16} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Saya Sudah Sampai" : "Tiba di Toko / Outlet"}</Text></>}
+                      {mutatingOrderId === item.id ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <>
+                          {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? (
+                            <MapPin size={16} color="#FFFFFF" />
+                          ) : (
+                            <Store size={16} color="#FFFFFF" />
+                          )}
+                          <Text style={styles.primaryFlowBtnText}>
+                            {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                              ? "Tiba di Rumah Customer"
+                              : item.type === "Marketplace"
+                              ? "Saya Sudah Sampai"
+                              : "Tiba di Toko / Outlet"}
+                          </Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   )}
 
-                  {/* Step 2: Sampai Pickup -> Action: Ambil Pesanan & OTW ke Customer */}
+                  {/* Step 2: Sampai Pickup -> Action: Ambil Pesanan & Antar ke Tujuan */}
                   {item.status === "Sampai Pickup" && (
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#7E22CE" }]}
@@ -1736,11 +1810,24 @@ export const Order: React.FC<OrderProps> = ({
                       onPress={() => handleDriverTransition(item, "Mengantar")}
                       activeOpacity={0.85}
                     >
-                      {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><Bike size={18} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Pesanan Sudah Diambil" : "Konfirmasi Ambil & OTW ke Customer"}</Text></>}
+                      {mutatingOrderId === item.id ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Bike size={18} color="#FFFFFF" />
+                          <Text style={styles.primaryFlowBtnText}>
+                            {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                              ? "Baju Kotor Diterima & OTW ke Toko Laundry"
+                              : item.type === "Marketplace"
+                              ? "Pesanan Sudah Diambil"
+                              : "Konfirmasi Ambil & OTW ke Customer"}
+                          </Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   )}
 
-                  {/* Step 3: Mengantar -> Action: Pesanan Tiba & Selesaikan Pengantaran */}
+                  {/* Step 3: Mengantar -> Action: Tiba di Tujuan (Toko Laundry atau Customer) */}
                   {item.status === "Mengantar" && (
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#15803D" }]}
@@ -1748,9 +1835,23 @@ export const Order: React.FC<OrderProps> = ({
                       onPress={() => handleDriverTransition(item, "Selesai")}
                       activeOpacity={0.85}
                     >
-                      {mutatingOrderId === item.id || proofUploadOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <><CheckCircle size={18} color="#FFFFFF" /><Text style={styles.primaryFlowBtnText}>{item.type === "Marketplace" ? "Upload Bukti & Selesaikan" : "Selesaikan Pengantaran"}</Text></>}
+                      {mutatingOrderId === item.id || proofUploadOrderId === item.id ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <CheckCircle size={18} color="#FFFFFF" />
+                          <Text style={styles.primaryFlowBtnText}>
+                            {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                              ? "Tiba di Toko Laundry & Serahkan Cucian"
+                              : item.type === "Marketplace"
+                              ? "Upload Bukti & Selesaikan"
+                              : "Selesaikan Pengantaran ke Customer"}
+                          </Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   )}
+
                   {proofUploadError?.orderId === item.id && (
                     <Text style={styles.proofUploadError}>{proofUploadError.message}</Text>
                   )}

@@ -36,6 +36,7 @@ import {
   Eye,
   AlertCircle,
   Check,
+  Image as ImageIcon,
 } from "lucide-react-native";
 import { AuthAccount } from "../auth/authTypes";
 import {
@@ -504,26 +505,27 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
                     )}
 
                     {/* Stage 2: Driver Menuju Customer / Outlet */}
-                    {(isDriverToCust || isDriverToStore) && (
+                    {(isDriverToCust || isDriverToStore) && !isWeighed && (
                       <View style={styles.driverDeliveringBanner}>
                         <Bike size={16} color="#2563EB" />
                         <Text style={styles.driverDeliveringText}>
-                          Driver {o.driverPickupName || "Kurir"} sedang {isDriverToCust ? "menuju customer" : "membawa baju ke outlet"}
+                          Driver {o.driverPickupName || "Kurir"} sedang {isDriverToCust ? "menuju customer" : "membawa pakaian kotor ke outlet"}
                         </Text>
                       </View>
                     )}
 
                     {/* Stage 3: Timbang & Buat Tagihan (ketika baju tiba / belum timbang) */}
-                    {(isArrivedStore || (!isWeighed && !isPendingMitraAcc && !isWaitingPickupDriver && !isDriverToCust && !isDriverToStore)) && (
+                    {(!isWeighed && !isPendingMitraAcc) && (
                       <TouchableOpacity
                         style={styles.actionBtnWeigh}
                         onPress={() => handleOpenWeighModal(o)}
                         activeOpacity={0.85}
                       >
                         <Scale size={16} color="#FFFFFF" />
-                        <Text style={styles.actionBtnWeighText}>Timbang & Kirim Tagihan</Text>
+                        <Text style={styles.actionBtnWeighText}>⚖️ Timbang & Terbitkan Tagihan</Text>
                       </TouchableOpacity>
                     )}
+
 
                     {/* Stage 4: Customer sudah upload bukti bayar ➔ Pemilik verifikasi */}
                     {isVerifying && (
@@ -711,15 +713,20 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
               {/* Tampilan Gambar Bukti Transfer */}
               <Text style={[styles.inputLabel, { marginTop: 10 }]}>Foto Struk / Bukti Transfer Customer:</Text>
               <View style={styles.proofImageBox}>
-                <Image
-                  source={{
-                    uri:
-                      selectedOrderForProof?.paymentProofUrl ||
-                      "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=500&q=80",
-                  }}
-                  style={styles.proofImageFull}
-                  resizeMode="contain"
-                />
+                {selectedOrderForProof?.paymentProofUrl ? (
+                  <Image
+                    source={{
+                      uri: selectedOrderForProof.paymentProofUrl,
+                    }}
+                    style={styles.proofImageFull}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <View style={styles.emptyProofBox}>
+                    <ImageIcon size={36} color="#9CA3AF" />
+                    <Text style={styles.emptyProofText}>Bukti transfer belum diunggah customer</Text>
+                  </View>
+                )}
               </View>
 
               {/* Alasan Penolakan jika ingin menolak */}
@@ -740,7 +747,8 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
                 disabled={isVerifyingAction}
                 activeOpacity={0.8}
               >
-                <Text style={styles.btnRejectPaymentText}>Tolak / Minta Upload Ulang</Text>
+                <X size={15} color="#DC2626" />
+                <Text style={styles.btnRejectPaymentText}>Tolak Bukti</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -750,7 +758,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
                 activeOpacity={0.85}
               >
                 {isVerifyingAction ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <>
                     <CheckCircle2 size={16} color="#FFFFFF" />
@@ -1165,13 +1173,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
+    alignItems: "center",
   },
   weighModalCard: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 24,
+    padding: 20,
     maxHeight: "90%",
+    width: "100%",
+    maxWidth: 480,
   },
   dragHandle: {
     width: 40,
@@ -1295,9 +1306,9 @@ const styles = StyleSheet.create({
     color: "#0D7A53",
   },
   proofImageBox: {
-    height: 200,
+    height: 220,
     backgroundColor: "#F3F4F6",
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1308,39 +1319,61 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
+  emptyProofBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 16,
+  },
+  emptyProofText: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    fontWeight: "600",
+  },
   verifyActionRow: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
+    gap: 12,
+    marginTop: 16,
+    alignItems: "center",
   },
   btnRejectPayment: {
     flex: 1,
-    height: 46,
+    height: 48,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#EF4444",
+    borderWidth: 1.5,
+    borderColor: "#FCA5A5",
+    backgroundColor: "#FEF2F2",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 8,
   },
   btnRejectPaymentText: {
     color: "#DC2626",
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "800",
   },
   btnApprovePayment: {
     flex: 1.2,
-    height: 46,
+    height: 48,
     borderRadius: 12,
     backgroundColor: "#0D7A53",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
+    paddingHorizontal: 8,
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   btnApprovePaymentText: {
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
   },
   btnSubmitWeigh: {
     backgroundColor: "#0D7A53",
