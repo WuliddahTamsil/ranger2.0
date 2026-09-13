@@ -38,8 +38,9 @@ import {
   RefreshCw,
   Scale,
   Package,
-  Phone,
   Check,
+  Store,
+  Navigation,
 } from "lucide-react-native";
 import {
   fetchLaundryStores,
@@ -147,30 +148,114 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
   const getStatusMeta = (status: string) => {
     switch (status) {
       case "MENUNGGU_KONFIRMASI_MITRA":
-        return { label: "Menunggu ACC Mitra", color: "#D97706", bg: "#FEF3C7", step: 1 };
+        return {
+          label: "Menunggu ACC Mitra",
+          color: "#D97706",
+          bg: "#FEF3C7",
+          step: 1,
+          phaseTitle: "Tahap 1: Konfirmasi Outlet",
+          phaseDesc: "Menunggu pemilik outlet menyetujui pesanan Anda.",
+        };
       case "MENUNGGU_DRIVER_JEMPUT":
-        return { label: "Mencari Driver Jemput", color: "#2563EB", bg: "#EFF6FF", step: 2 };
+        return {
+          label: "Mencari Driver Penjemput",
+          color: "#2563EB",
+          bg: "#EFF6FF",
+          step: 2,
+          phaseTitle: "Tahap 2: Penjemputan Baju",
+          phaseDesc: "Sistem sedang menghubungkan ke kurir terdekat untuk mengambil pakaian kotor.",
+        };
       case "DRIVER_MENUJU_CUSTOMER":
-        return { label: "Driver Jemput Baju", color: "#0284C7", bg: "#E0F2FE", step: 2 };
+        return {
+          label: "Driver Menuju Alamat Anda",
+          color: "#0284C7",
+          bg: "#E0F2FE",
+          step: 2,
+          phaseTitle: "Tahap 2: Kurir Sedang Menuju Rumah",
+          phaseDesc: "Siapkan pakaian kotor yang akan dihitung/dicuci.",
+        };
       case "DRIVER_MENUJU_LAUNDRY":
-        return { label: "Driver Antar ke Toko", color: "#0891B2", bg: "#ECFEFF", step: 2 };
+        return {
+          label: "Driver Membawa ke Toko",
+          color: "#0891B2",
+          bg: "#ECFEFF",
+          step: 2,
+          phaseTitle: "Tahap 2: Baju Sedang Diantar ke Toko",
+          phaseDesc: "Kurir membawa cucian kotor ke outlet mitra laundry.",
+        };
       case "TIBA_DI_LAUNDRY":
-        return { label: "Tiba di Toko (Antre Timbang)", color: "#7C3AED", bg: "#F3E8FF", step: 3 };
+        return {
+          label: "Tiba di Toko (Antre Timbang)",
+          color: "#7C3AED",
+          bg: "#F3E8FF",
+          step: 3,
+          phaseTitle: "Tahap 3: Penimbangan & Tagihan",
+          phaseDesc: "Pakaian telah sampai di outlet dan sedang dalam proses timbang riil.",
+        };
       case "MENUNGGU_PEMBAYARAN":
-        return { label: "Tagihan Siap Dibayar", color: "#EA580C", bg: "#FFF7ED", step: 3 };
+        return {
+          label: "Tagihan Siap Dibayar",
+          color: "#EA580C",
+          bg: "#FFF7ED",
+          step: 3,
+          phaseTitle: "Tahap 3: Tagihan Non-Tunai Diterbitkan",
+          phaseDesc: "Silakan bayar via QRIS / Transfer Bank toko agar proses cuci segera dikerjakan.",
+        };
       case "MENUNGGU_VERIFIKASI_PEMBAYARAN":
-        return { label: "Verifikasi Pembayaran", color: "#D97706", bg: "#FEF3C7", step: 3 };
+        return {
+          label: "Verifikasi Pembayaran",
+          color: "#D97706",
+          bg: "#FEF3C7",
+          step: 3,
+          phaseTitle: "Tahap 3: Mengecek Bukti Bayar",
+          phaseDesc: "Pemilik laundry sedang memverifikasi bukti transfer pembayaran Anda.",
+        };
       case "PEMBAYARAN_LUNAS":
       case "SEDANG_DICUCI":
-        return { label: "Sedang Dicuci & Setrika", color: "#0D7A53", bg: "#DCFCE7", step: 4 };
+        return {
+          label: "Sedang Dicuci & Setrika",
+          color: "#0D7A53",
+          bg: "#DCFCE7",
+          step: 4,
+          phaseTitle: "Tahap 4: Proses Cuci Higienis",
+          phaseDesc: "Pembayaran lunas! Pakaian sedang dicuci bersih, wangi, dan disetrika rapi.",
+        };
       case "SIAP_DIANTAR":
-        return { label: "Selesai Cuci (Cari Kurir)", color: "#2563EB", bg: "#EFF6FF", step: 5 };
+        return {
+          label: "Selesai Cuci (Cari Kurir)",
+          color: "#2563EB",
+          bg: "#EFF6FF",
+          step: 5,
+          phaseTitle: "Tahap 5: Siap Antar Balik",
+          phaseDesc: "Cucian bersih sudah rapi & dipacking, mencari kurir untuk antar ke rumah.",
+        };
       case "DRIVER_MENGANTAR_BALIK":
-        return { label: "Driver Mengantar Baju Bersih", color: "#059669", bg: "#ECFDF5", step: 5 };
+        return {
+          label: "Driver Mengantar Baju Bersih",
+          color: "#059669",
+          bg: "#ECFDF5",
+          step: 5,
+          phaseTitle: "Tahap 5: Pengantaran Cucian Bersih",
+          phaseDesc: "Kurir sedang dalam perjalanan mengantar cucian bersih ke rumah Anda.",
+        };
       case "SELESAI":
-        return { label: "Pesanan Selesai", color: "#0D7A53", bg: "#E6F7F0", step: 6 };
+        return {
+          label: "Pesanan Selesai",
+          color: "#0D7A53",
+          bg: "#E6F7F0",
+          step: 6,
+          phaseTitle: "Tahap 6: Pesanan Selesai",
+          phaseDesc: "Pakaian bersih telah diterima dengan baik. Terima kasih!",
+        };
       default:
-        return { label: "Diproses", color: "#6B7280", bg: "#F3F4F6", step: 1 };
+        return {
+          label: "Diproses",
+          color: "#6B7280",
+          bg: "#F3F4F6",
+          step: 1,
+          phaseTitle: "Dalam Proses",
+          phaseDesc: "Pesanan laundry Anda sedang ditangani mitra.",
+        };
     }
   };
 
@@ -203,7 +288,7 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
             }}
             activeOpacity={0.7}
           >
-            <ReceiptText size={18} color={activeOrders.length > 0 ? "#0D7A53" : "#374151"} />
+            <ReceiptText size={19} color={activeOrders.length > 0 ? "#0D7A53" : "#374151"} />
             {activeOrders.length > 0 && (
               <View style={styles.activeBadgeCircle}>
                 <Text style={styles.activeBadgeText}>{activeOrders.length}</Text>
@@ -471,25 +556,28 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
       <Modal visible={isOrderModalOpen} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.historyModalCard}>
+            {/* Modal Drag Handle */}
+            <View style={styles.modalDragHandle} />
+
             {/* Modal Header */}
             <View style={styles.modalHeaderRow}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={styles.modalHeaderLeft}>
                 <View style={styles.modalHeaderIconBg}>
                   <ReceiptText size={20} color="#0D7A53" />
                 </View>
                 <View>
                   <Text style={styles.modalTitle}>Pesanan Laundry Saya</Text>
-                  <Text style={styles.modalSubtitle}>Pantau status cucian & riwayat transaksi</Text>
+                  <Text style={styles.modalSubtitle}>Pantau status cucian & rincian pesanan</Text>
                 </View>
               </View>
 
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={styles.modalHeaderRight}>
                 <TouchableOpacity
                   style={styles.btnModalRefresh}
                   onPress={loadOrders}
                   activeOpacity={0.7}
                 >
-                  <RefreshCw size={16} color={isRefreshingOrders ? "#0D7A53" : "#6B7280"} />
+                  <RefreshCw size={15} color={isRefreshingOrders ? "#0D7A53" : "#6B7280"} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -497,7 +585,7 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                   onPress={() => setIsOrderModalOpen(false)}
                   activeOpacity={0.7}
                 >
-                  <X size={20} color="#374151" />
+                  <X size={18} color="#374151" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -526,11 +614,11 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
             </View>
 
             {/* Modal Scroll List Content */}
-            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, paddingHorizontal: 16 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalListContent}>
               {orderModalTab === "aktif" ? (
                 activeOrders.length === 0 ? (
                   <View style={styles.modalEmptyState}>
-                    <Shirt size={48} color="#D1D5DB" />
+                    <Shirt size={44} color="#D1D5DB" />
                     <Text style={styles.modalEmptyTitle}>Tidak ada pesanan laundry aktif</Text>
                     <Text style={styles.modalEmptySub}>
                       Pilih toko laundry dan pesan layanan untuk menikmati penjemputan & pengantaran pakaian higienis.
@@ -540,16 +628,14 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                   activeOrders.map((ord, idx) => {
                     const statusMeta = getStatusMeta(ord.status);
                     const isAwaitingPayment = ord.status === "MENUNGGU_PEMBAYARAN";
+                    const isWeighed = Boolean(ord.actualWeightOrQty);
 
                     return (
                       <View key={ord._id || ord.id || ord.orderCode || idx} style={styles.orderHistoryItemCard}>
-                        {/* Card Header */}
-                        <View style={styles.historyCardTop}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            <View style={styles.orderCodeBadge}>
-                              <Text style={styles.orderCodeText}>#{ord.orderCode}</Text>
-                            </View>
-                            <Text style={styles.historyStoreName}>{ord.storeName}</Text>
+                        {/* 1. Card Top Bar: Order ID & Status Pill */}
+                        <View style={styles.historyCardTopRow}>
+                          <View style={styles.orderIdBadgePill}>
+                            <Text style={styles.orderIdBadgeText}>#{ord.orderCode}</Text>
                           </View>
 
                           <View style={[styles.statusPillBadge, { backgroundColor: statusMeta.bg }]}>
@@ -559,69 +645,84 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                           </View>
                         </View>
 
-                        {/* Service detail row */}
-                        <View style={styles.historyServiceRow}>
+                        {/* 2. Store Name Header */}
+                        <View style={styles.historyStoreHeaderRow}>
+                          <Store size={15} color="#0D7A53" />
+                          <Text style={styles.historyStoreNameText} numberOfLines={1}>
+                            {ord.storeName}
+                          </Text>
+                        </View>
+
+                        {/* 3. Service Detail & Price Box */}
+                        <View style={styles.historyServiceDetailBox}>
                           <View style={styles.serviceIconCircle}>
                             <Shirt size={18} color="#0D7A53" />
                           </View>
-                          <View style={{ flex: 1 }}>
+
+                          <View style={styles.serviceMainInfoCol}>
                             <Text style={styles.historyServiceName}>{ord.serviceName}</Text>
                             <Text style={styles.historyAddressText} numberOfLines={1}>
-                              📍 Alamat: {ord.pickupAddress || "Kamojang, Garut"}
+                              📍 {ord.pickupAddress || "Alamat Kamojang"}
                             </Text>
+
+                            {isWeighed ? (
+                              <Text style={styles.historyWeightText}>
+                                ⚖️ Berat: <Text style={{ fontWeight: "800", color: "#0D7A53" }}>{ord.actualWeightOrQty} {ord.unitType}</Text>
+                              </Text>
+                            ) : (
+                              <Text style={styles.historyWeightPendingText}>
+                                ⏳ Menunggu timbangan outlet
+                              </Text>
+                            )}
                           </View>
-                          <View style={{ alignItems: "flex-end" }}>
-                            <Text style={styles.historyCostLabel}>Total Biaya</Text>
+
+                          <View style={styles.servicePriceCol}>
+                            <Text style={styles.historyCostLabel}>Total Tagihan</Text>
                             <Text style={styles.historyCostVal}>
                               {ord.totalAmount ? `Rp ${ord.totalAmount.toLocaleString("id-ID")}` : "Menunggu Timbang"}
                             </Text>
                           </View>
                         </View>
 
-                        {/* Real-time Integrated Timeline Progress Stepper */}
-                        <View style={styles.integratedStepperBox}>
-                          <Text style={styles.stepperHeaderTitle}>Visualisasi Tracking Real-Time:</Text>
-                          <View style={styles.stepperFlexRow}>
-                            {[
-                              { num: 1, label: "ACC Mitra" },
-                              { num: 2, label: "Jemput" },
-                              { num: 3, label: "Timbang/Bayar" },
-                              { num: 4, label: "Cuci" },
-                              { num: 5, label: "Antar" },
-                              { num: 6, label: "Selesai" },
-                            ].map((s, sIdx) => {
-                              const isReached = s.num <= statusMeta.step;
-                              const isCurrent = s.num === statusMeta.step;
+                        {/* 4. Real-Time Tracking Stepper & Status Banner */}
+                        <View style={styles.stepperContainerCard}>
+                          {/* Phase Header Banner */}
+                          <View style={styles.phaseHeaderRow}>
+                            <Text style={styles.phaseTitleText}>{statusMeta.phaseTitle}</Text>
+                            <Text style={styles.phaseStepNumberText}>Tahap {statusMeta.step} dari 6</Text>
+                          </View>
+
+                          <Text style={styles.phaseDescText}>{statusMeta.phaseDesc}</Text>
+
+                          {/* 6-Node Horizontal Visual Timeline */}
+                          <View style={styles.stepperNodesRow}>
+                            {[1, 2, 3, 4, 5, 6].map((stepNumber, sIdx) => {
+                              const isCompleted = stepNumber < statusMeta.step;
+                              const isCurrent = stepNumber === statusMeta.step;
+
                               return (
-                                <View key={s.num} style={styles.stepColItem}>
+                                <View key={stepNumber} style={styles.stepNodeItem}>
                                   <View
                                     style={[
-                                      styles.stepCircleIcon,
-                                      isReached && styles.stepCircleReached,
-                                      isCurrent && styles.stepCircleCurrent,
+                                      styles.stepNodeCircle,
+                                      isCompleted && styles.stepNodeCircleCompleted,
+                                      isCurrent && styles.stepNodeCircleCurrent,
                                     ]}
                                   >
-                                    {isReached ? (
-                                      <Check size={10} color="#FFFFFF" />
+                                    {isCompleted ? (
+                                      <Check size={11} color="#FFFFFF" />
                                     ) : (
-                                      <Text style={styles.stepNumText}>{s.num}</Text>
+                                      <Text style={[styles.stepNodeText, isCurrent && styles.stepNodeTextCurrent]}>
+                                        {stepNumber}
+                                      </Text>
                                     )}
                                   </View>
-                                  <Text
-                                    style={[
-                                      styles.stepLabelText,
-                                      isReached && styles.stepLabelTextActive,
-                                      isCurrent && styles.stepLabelTextCurrent,
-                                    ]}
-                                    numberOfLines={1}
-                                  >
-                                    {s.label}
-                                  </Text>
+
                                   {sIdx < 5 && (
                                     <View
                                       style={[
-                                        styles.stepConnectingBar,
-                                        s.num < statusMeta.step && styles.stepConnectingBarActive,
+                                        styles.stepNodeConnector,
+                                        stepNumber < statusMeta.step && styles.stepNodeConnectorActive,
                                       ]}
                                     />
                                   )}
@@ -630,37 +731,51 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                             })}
                           </View>
 
-                          {/* Driver Live info if assigned */}
+                          {/* Micro labels below nodes */}
+                          <View style={styles.stepperLabelsRow}>
+                            <Text style={[styles.microStepLabel, statusMeta.step === 1 && styles.microStepLabelActive]}>ACC</Text>
+                            <Text style={[styles.microStepLabel, statusMeta.step === 2 && styles.microStepLabelActive]}>Jemput</Text>
+                            <Text style={[styles.microStepLabel, statusMeta.step === 3 && styles.microStepLabelActive]}>Timbang/Bayar</Text>
+                            <Text style={[styles.microStepLabel, statusMeta.step === 4 && styles.microStepLabelActive]}>Cuci</Text>
+                            <Text style={[styles.microStepLabel, statusMeta.step === 5 && styles.microStepLabelActive]}>Antar</Text>
+                            <Text style={[styles.microStepLabel, statusMeta.step === 6 && styles.microStepLabelActive]}>Selesai</Text>
+                          </View>
+
+                          {/* Driver assigned info card */}
                           {(ord.driverPickupName || ord.driverDeliveryName) && (
-                            <View style={styles.driverInfoSnippetRow}>
-                              <Bike size={14} color="#0D7A53" />
-                              <Text style={styles.driverSnippetText}>
-                                Kurir: <Text style={{ fontWeight: "800" }}>{ord.driverPickupName || ord.driverDeliveryName}</Text>
-                              </Text>
+                            <View style={styles.driverAssignedCard}>
+                              <View style={styles.driverAvatarCircle}>
+                                <Bike size={13} color="#0D7A53" />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.driverAssignedLabel}>Kurir Ditugaskan:</Text>
+                                <Text style={styles.driverAssignedName}>{ord.driverPickupName || ord.driverDeliveryName}</Text>
+                              </View>
                             </View>
                           )}
                         </View>
 
-                        {/* Action Buttons */}
-                        <View style={styles.historyCardActionsRow}>
+                        {/* 5. Action Buttons (Stacked & Full Width for Clean Visuals) */}
+                        <View style={styles.cardActionButtonsStack}>
                           {isAwaitingPayment && (
                             <TouchableOpacity
-                              style={styles.btnPayNowAlert}
+                              style={styles.btnPayNowHighlight}
                               onPress={() => handleOpenTracking(ord)}
                               activeOpacity={0.85}
                             >
-                              <CreditCard size={15} color="#FFFFFF" />
-                              <Text style={styles.btnPayNowAlertText}>Bayar Tagihan Sekarang</Text>
+                              <CreditCard size={16} color="#FFFFFF" />
+                              <Text style={styles.btnPayNowHighlightText}>💳 Bayar Tagihan Sekarang (QRIS / Transfer)</Text>
                             </TouchableOpacity>
                           )}
 
                           <TouchableOpacity
-                            style={styles.btnOpenFullTracking}
+                            style={styles.btnOpenLiveTrackingPrimary}
                             onPress={() => handleOpenTracking(ord)}
                             activeOpacity={0.85}
                           >
-                            <Text style={styles.btnOpenFullTrackingText}>Buka Live Tracking & Peta</Text>
-                            <ArrowRight size={15} color="#FFFFFF" />
+                            <Navigation size={15} color="#FFFFFF" />
+                            <Text style={styles.btnOpenLiveTrackingPrimaryText}>Buka Live Tracking Peta & Detail</Text>
+                            <ChevronRight size={16} color="#FFFFFF" />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -671,7 +786,7 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                 /* Completed Orders */
                 completedOrders.length === 0 ? (
                   <View style={styles.modalEmptyState}>
-                    <CheckCircle2 size={48} color="#D1D5DB" />
+                    <CheckCircle2 size={44} color="#D1D5DB" />
                     <Text style={styles.modalEmptyTitle}>Belum ada riwayat pesanan selesai</Text>
                     <Text style={styles.modalEmptySub}>
                       Pesanan yang telah selesai diantar dan diterima akan masuk ke daftar ini.
@@ -680,12 +795,9 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                 ) : (
                   completedOrders.map((ord, idx) => (
                     <View key={ord._id || ord.id || ord.orderCode || idx} style={styles.orderHistoryItemCard}>
-                      <View style={styles.historyCardTop}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                          <View style={[styles.orderCodeBadge, { backgroundColor: "#E6F7F0" }]}>
-                            <Text style={[styles.orderCodeText, { color: "#0D7A53" }]}>#{ord.orderCode}</Text>
-                          </View>
-                          <Text style={styles.historyStoreName}>{ord.storeName}</Text>
+                      <View style={styles.historyCardTopRow}>
+                        <View style={[styles.orderIdBadgePill, { backgroundColor: "#E6F7F0" }]}>
+                          <Text style={[styles.orderIdBadgeText, { color: "#0D7A53" }]}>#{ord.orderCode}</Text>
                         </View>
 
                         <View style={[styles.statusPillBadge, { backgroundColor: "#DCFCE7" }]}>
@@ -695,17 +807,24 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                         </View>
                       </View>
 
-                      <View style={styles.historyServiceRow}>
+                      <View style={styles.historyStoreHeaderRow}>
+                        <Store size={15} color="#0D7A53" />
+                        <Text style={styles.historyStoreNameText} numberOfLines={1}>
+                          {ord.storeName}
+                        </Text>
+                      </View>
+
+                      <View style={styles.historyServiceDetailBox}>
                         <View style={[styles.serviceIconCircle, { backgroundColor: "#E6F7F0" }]}>
                           <CheckCircle2 size={18} color="#0D7A53" />
                         </View>
-                        <View style={{ flex: 1 }}>
+                        <View style={styles.serviceMainInfoCol}>
                           <Text style={styles.historyServiceName}>{ord.serviceName}</Text>
                           <Text style={styles.historyAddressText}>
                             {ord.actualWeightOrQty ? `${ord.actualWeightOrQty} ${ord.unitType}` : "Pakaian Bersih"} • {ord.createdAt ? new Date(ord.createdAt).toLocaleDateString("id-ID") : "Hari ini"}
                           </Text>
                         </View>
-                        <View style={{ alignItems: "flex-end" }}>
+                        <View style={styles.servicePriceCol}>
                           <Text style={styles.historyCostLabel}>Total Bayar</Text>
                           <Text style={[styles.historyCostVal, { color: "#0D7A53" }]}>
                             Rp {(ord.totalAmount || 0).toLocaleString("id-ID")}
@@ -713,7 +832,7 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                         </View>
                       </View>
 
-                      <View style={styles.historyCardActionsRow}>
+                      <View style={{ marginTop: 10 }}>
                         <TouchableOpacity
                           style={styles.btnReorder}
                           onPress={() => {
@@ -733,7 +852,7 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                   ))
                 )
               )}
-              <View style={{ height: 30 }} />
+              <View style={{ height: 24 }} />
             </ScrollView>
           </View>
         </View>
@@ -751,8 +870,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
@@ -790,13 +909,13 @@ const styles = StyleSheet.create({
   },
   iconCircleBtnActive: {
     backgroundColor: "#E6F7F0",
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "#0D7A53",
   },
   activeBadgeCircle: {
     position: "absolute",
-    top: -3,
-    right: -3,
+    top: -2,
+    right: -2,
     backgroundColor: "#EF4444",
     minWidth: 18,
     height: 18,
@@ -864,7 +983,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 
-  // Interactive Live Tracking Card
+  // Interactive Live Tracking Card (Banner on Main Screen)
   liveTrackingBannerCard: {
     backgroundColor: "#FFFFFF",
     marginHorizontal: 16,
@@ -1184,33 +1303,47 @@ const styles = StyleSheet.create({
     color: "#0D7A53",
   },
 
-  // Modal Styles
+  // ================= MODAL STYLES (NEAT & PREMIUM) =================
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
   historyModalCard: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    maxHeight: "88%",
-    minHeight: "60%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "92%",
+    minHeight: "70%",
+    paddingTop: 8,
+  },
+  modalDragHandle: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
+    marginBottom: 8,
   },
   modalHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 18,
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
   },
+  modalHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
   modalHeaderIconBg: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     backgroundColor: "#E6F7F0",
     alignItems: "center",
     justifyContent: "center",
@@ -1223,20 +1356,32 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     fontSize: 11,
     color: "#6B7280",
+    marginTop: 1,
+  },
+  modalHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   btnModalRefresh: {
-    padding: 8,
-    borderRadius: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
   },
   btnModalClose: {
-    padding: 8,
-    borderRadius: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
   },
   modalTabBar: {
     flexDirection: "row",
-    marginHorizontal: 16,
+    marginHorizontal: 18,
     marginVertical: 12,
     backgroundColor: "#F3F4F6",
     borderRadius: 14,
@@ -1246,15 +1391,15 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 9,
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: 11,
   },
   modalTabBtnActive: {
     backgroundColor: "#FFFFFF",
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
   },
   modalTabBtnText: {
     fontSize: 12,
@@ -1265,8 +1410,12 @@ const styles = StyleSheet.create({
     color: "#0D7A53",
     fontWeight: "900",
   },
+  modalListContent: {
+    paddingHorizontal: 18,
+    paddingTop: 4,
+  },
   modalEmptyState: {
-    paddingVertical: 50,
+    paddingVertical: 60,
     alignItems: "center",
     paddingHorizontal: 24,
   },
@@ -1283,61 +1432,80 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 18,
   },
+
+  // Refined Order History Card
   orderHistoryItemCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
   },
-  historyCardTop: {
+  historyCardTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  orderCodeBadge: {
+  orderIdBadgePill: {
     backgroundColor: "#F3F4F6",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  orderCodeText: {
+  orderIdBadgeText: {
     fontSize: 11,
     fontWeight: "800",
     color: "#374151",
   },
-  historyStoreName: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#111827",
-  },
   statusPillBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 8,
   },
   statusPillBadgeText: {
     fontSize: 10,
     fontWeight: "800",
   },
-  historyServiceRow: {
+  historyStoreHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  historyStoreNameText: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#111827",
+  },
+
+  // Service details box
+  historyServiceDetailBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 14,
+    padding: 10,
     gap: 10,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    borderWidth: 1,
     borderColor: "#F3F4F6",
   },
   serviceIconCircle: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 12,
     backgroundColor: "#E6F7F0",
     alignItems: "center",
     justifyContent: "center",
+  },
+  serviceMainInfoCol: {
+    flex: 1,
   },
   historyServiceName: {
     fontSize: 13,
@@ -1349,6 +1517,21 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 2,
   },
+  historyWeightText: {
+    fontSize: 11,
+    color: "#374151",
+    marginTop: 2,
+  },
+  historyWeightPendingText: {
+    fontSize: 11,
+    color: "#D97706",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  servicePriceCol: {
+    alignItems: "flex-end",
+    paddingLeft: 4,
+  },
   historyCostLabel: {
     fontSize: 10,
     color: "#9CA3AF",
@@ -1356,135 +1539,172 @@ const styles = StyleSheet.create({
   historyCostVal: {
     fontSize: 13,
     fontWeight: "900",
-    color: "#111827",
+    color: "#0D7A53",
+    marginTop: 2,
   },
 
-  // Integrated Stepper Box in Card
-  integratedStepperBox: {
+  // Real-Time Stepper Container
+  stepperContainerCard: {
     backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 14,
+    padding: 12,
     marginTop: 10,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
+    borderColor: "#EEF2F6",
   },
-  stepperHeaderTitle: {
+  phaseHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  phaseTitleText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#0D7A53",
+  },
+  phaseStepNumberText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#6B7280",
-    marginBottom: 8,
+    color: "#9CA3AF",
   },
-  stepperFlexRow: {
+  phaseDescText: {
+    fontSize: 11,
+    color: "#4B5563",
+    lineHeight: 16,
+    marginBottom: 12,
+  },
+  stepperNodesRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  stepColItem: {
-    alignItems: "center",
+  stepNodeItem: {
     flex: 1,
+    alignItems: "center",
     position: "relative",
   },
-  stepCircleIcon: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+  stepNodeCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,
   },
-  stepCircleReached: {
+  stepNodeCircleCompleted: {
     backgroundColor: "#0D7A53",
   },
-  stepCircleCurrent: {
+  stepNodeCircleCurrent: {
     backgroundColor: "#10B981",
     borderWidth: 2,
     borderColor: "#DCFCE7",
   },
-  stepNumText: {
-    fontSize: 9,
-    fontWeight: "700",
+  stepNodeText: {
+    fontSize: 10,
+    fontWeight: "800",
     color: "#9CA3AF",
   },
-  stepLabelText: {
-    fontSize: 8,
-    color: "#9CA3AF",
-    marginTop: 4,
-    textAlign: "center",
+  stepNodeTextCurrent: {
+    color: "#FFFFFF",
   },
-  stepLabelTextActive: {
-    color: "#374151",
-    fontWeight: "600",
-  },
-  stepLabelTextCurrent: {
-    color: "#0D7A53",
-    fontWeight: "900",
-  },
-  stepConnectingBar: {
+  stepNodeConnector: {
     position: "absolute",
-    top: 9,
+    top: 10,
     left: "50%",
     width: "100%",
-    height: 2,
+    height: 2.5,
     backgroundColor: "#E5E7EB",
     zIndex: 1,
   },
-  stepConnectingBarActive: {
+  stepNodeConnectorActive: {
     backgroundColor: "#0D7A53",
   },
-  driverInfoSnippetRow: {
+  stepperLabelsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    justifyContent: "space-between",
+    marginTop: 6,
   },
-  driverSnippetText: {
-    fontSize: 11,
+  microStepLabel: {
+    fontSize: 8,
+    color: "#9CA3AF",
+    textAlign: "center",
+    flex: 1,
+  },
+  microStepLabelActive: {
     color: "#0D7A53",
+    fontWeight: "900",
   },
-
-  // Card Action Buttons
-  historyCardActionsRow: {
+  driverAssignedCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: 12,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
-  btnPayNowAlert: {
-    flex: 1,
+  driverAvatarCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#E6F7F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  driverAssignedLabel: {
+    fontSize: 9,
+    color: "#6B7280",
+  },
+  driverAssignedName: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#111827",
+  },
+
+  // Action Buttons Stack
+  cardActionButtonsStack: {
+    marginTop: 12,
+    gap: 8,
+  },
+  btnPayNowHighlight: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
     backgroundColor: "#EA580C",
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 11,
+    borderRadius: 14,
+    elevation: 2,
+    shadowColor: "#EA580C",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  btnPayNowAlertText: {
+  btnPayNowHighlightText: {
     fontSize: 12,
     fontWeight: "800",
     color: "#FFFFFF",
   },
-  btnOpenFullTracking: {
-    flex: 1,
+  btnOpenLiveTrackingPrimary: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
     backgroundColor: "#0D7A53",
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 11,
+    borderRadius: 14,
   },
-  btnOpenFullTrackingText: {
+  btnOpenLiveTrackingPrimaryText: {
     fontSize: 12,
     fontWeight: "800",
     color: "#FFFFFF",
   },
   btnReorder: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
