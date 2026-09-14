@@ -1,5 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -41,6 +41,11 @@ import {
   Check,
   Store,
   Navigation,
+  FileText,
+  ShieldCheck,
+  Eye,
+  Copy,
+  Maximize2,
 } from "lucide-react-native";
 import {
   fetchLaundryStores,
@@ -63,7 +68,7 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
   const [searchQuery, setSearchQuery] = useState("");
   const [isBannerVisible, setIsBannerVisible] = useState(true);
   const [stores, setStores] = useState<LaundryStore[]>(FALLBACK_LAUNDRY_STORES);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
 
   // Customer Orders State
   const [customerOrders, setCustomerOrders] = useState<LaundryOrder[]>([]);
@@ -71,39 +76,52 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
   const [orderModalTab, setOrderModalTab] = useState<"aktif" | "selesai">("aktif");
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
 
-  // Load stores
-  useEffect(() => {
-    let active = true;
-    const loadStores = async () => {
-      setLoading(true);
-      const data = await fetchLaundryStores(searchQuery);
-      if (active) {
+  // Completed Order Detail & Payment Proof Modal State
+  const [selectedDetailOrder, setSelectedDetailOrder] = useState<LaundryOrder | null>(null);
+  const [isDetailProofModalOpen, setIsDetailProofModalOpen] = useState(false);
+  const [isFullImageModalOpen, setIsFullImageModalOpen] = useState(false);
+
+  // Load stores from MongoDB
+  const loadStores = async (query?: string) => {
+    try {
+      const data = await fetchLaundryStores(query !== undefined ? query : searchQuery);
+      if (data && data.length > 0) {
         setStores(data);
-        setLoading(false);
       }
-    };
-    loadStores();
-    return () => {
-      active = false;
-    };
+    } catch (err) {
+      console.warn("⚠️ loadStores error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStores(searchQuery);
   }, [searchQuery]);
 
-  // Load and subscribe customer orders
+  // Load customer orders
   const loadOrders = async () => {
-    setIsRefreshingOrders(true);
-    const customerId = authAccount?.id || authAccount?.email || "cust_active";
-    const data = await fetchCustomerLaundryOrders(customerId, authAccount?.phone);
-    const activeSingleton = getActiveLaundryOrder();
-    if (activeSingleton && !data.some((d) => (d._id || d.id || d.orderCode) === (activeSingleton._id || activeSingleton.id || activeSingleton.orderCode))) {
-      data.unshift(activeSingleton);
+    try {
+      setIsRefreshingOrders(true);
+      const customerId = authAccount?.id || authAccount?.email || "cust_active";
+      const data = await fetchCustomerLaundryOrders(customerId, authAccount?.phone);
+      if (!data || data.length === 0) {
+        setActiveLaundryOrder(null);
+        setCustomerOrders([]);
+      } else {
+        setCustomerOrders(data);
+      }
+    } catch (err) {
+      console.warn("⚠️ loadOrders error:", err);
+    } finally {
+      setIsRefreshingOrders(false);
     }
-    setCustomerOrders(data);
-    setIsRefreshingOrders(false);
   };
 
   useEffect(() => {
     loadOrders();
     const unsub = subscribeLaundry(() => {
+      loadStores();
       loadOrders();
     });
     return unsub;
@@ -373,10 +391,10 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
             <View style={styles.liveTrackingTopRow}>
               <View style={styles.livePulseGroup}>
                 <View style={styles.livePulseDot} />
-                <Text style={styles.livePulseTitle}>Pesanan Laundry Sedang Berjalan</Text>
+                <Text style={styles.livePulseTitle} numberOfLines={1}>Pesanan Aktif</Text>
               </View>
               <View style={[styles.orderStatusPill, { backgroundColor: getStatusMeta(activeOrders[0].status).bg }]}>
-                <Text style={[styles.orderStatusPillText, { color: getStatusMeta(activeOrders[0].status).color }]}>
+                <Text style={[styles.orderStatusPillText, { color: getStatusMeta(activeOrders[0].status).color }]} numberOfLines={1}>
                   {getStatusMeta(activeOrders[0].status).label}
                 </Text>
               </View>
@@ -384,26 +402,28 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
 
             <View style={styles.liveOrderInfoRow}>
               <View style={styles.liveOrderIconBg}>
-                <Shirt size={22} color="#0D7A53" />
+                <Shirt size={20} color="#0D7A53" />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.liveStoreName}>{activeOrders[0].storeName}</Text>
-                <Text style={styles.liveServiceName}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+                <Text style={styles.liveStoreName} numberOfLines={1}>
+                  {activeOrders[0].storeName}
+                </Text>
+                <Text style={styles.liveServiceName} numberOfLines={1}>
                   {activeOrders[0].serviceName} • #{activeOrders[0].orderCode}
                 </Text>
                 {activeOrders[0].actualWeightOrQty ? (
-                  <Text style={styles.liveWeightTag}>
+                  <Text style={styles.liveWeightTag} numberOfLines={1}>
                     ⚖️ Berat: {activeOrders[0].actualWeightOrQty} {activeOrders[0].unitType} • Total: Rp {(activeOrders[0].totalAmount || 0).toLocaleString("id-ID")}
                   </Text>
                 ) : (
-                  <Text style={styles.liveWeightTagPending}>
-                    ⏳ Menunggu proses timbangan oleh outlet laundry
+                  <Text style={styles.liveWeightTagPending} numberOfLines={1}>
+                    ⏳ Menunggu timbangan outlet
                   </Text>
                 )}
               </View>
               <View style={styles.liveTrackActionBtn}>
                 <Text style={styles.liveTrackActionText}>Lacak</Text>
-                <ChevronRight size={16} color="#0D7A53" />
+                <ChevronRight size={14} color="#0D7A53" />
               </View>
             </View>
 
@@ -468,11 +488,22 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
             {filteredStores.map((item) => {
               const minPrice = getMinPrice(item);
               const isExpress = item.services?.some((s) => s.category === "ekspres");
+              const isStoreOpen = item.isOpen !== false;
+
               return (
                 <TouchableOpacity
                   key={item.id || item._id}
-                  style={styles.laundryCard}
-                  onPress={() => handleSelectStore(item)}
+                  style={[styles.laundryCard, !isStoreOpen && { opacity: 0.85 }]}
+                  onPress={() => {
+                    if (!isStoreOpen) {
+                      Alert.alert(
+                        "Toko Sedang Tutup",
+                        `Outlet ${item.storeName} sedang tutup sementara dan tidak menerima pesanan saat ini.`
+                      );
+                      return;
+                    }
+                    handleSelectStore(item);
+                  }}
                   activeOpacity={0.9}
                 >
                   {/* Image Column */}
@@ -486,16 +517,22 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                     <View
                       style={[
                         styles.typeBadge,
-                        { backgroundColor: isExpress ? "#FF6500" : "#0284C7" },
+                        { backgroundColor: !isStoreOpen ? "#64748B" : isExpress ? "#FF6500" : "#0284C7" },
                       ]}
                     >
                       {isExpress ? <Zap size={11} color="#FFFFFF" /> : <Shirt size={11} color="#FFFFFF" />}
-                      <Text style={styles.typeBadgeText}>{isExpress ? "EKSPRES" : "REGULER"}</Text>
+                      <Text style={styles.typeBadgeText}>
+                        {!isStoreOpen ? "TUTUP" : isExpress ? "EKSPRES" : "REGULER"}
+                      </Text>
                     </View>
 
                     {/* Operating Hours Overlay */}
-                    <View style={styles.hoursOverlay}>
-                      <Text style={styles.hoursOverlayText}>{item.openingHours || "Buka • Tutup 21.00"}</Text>
+                    <View style={[styles.hoursOverlay, !isStoreOpen && { backgroundColor: "rgba(220, 38, 38, 0.88)" }]}>
+                      <Text style={styles.hoursOverlayText}>
+                        {isStoreOpen
+                          ? `${item.openingDays ? `${item.openingDays} • ` : ""}${item.openingHours || (item.openingTime && item.closingTime ? `${item.openingTime} - ${item.closingTime}` : "07.00 - 21.00")}`
+                          : "🔴 Tutup Sementara"}
+                      </Text>
                     </View>
                   </View>
 
@@ -506,7 +543,12 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                       <Text style={styles.merchantName} numberOfLines={1}>
                         {item.storeName}
                       </Text>
-                      <TouchableOpacity activeOpacity={0.7} style={{ padding: 2 }}>
+                      {!isStoreOpen && (
+                        <View style={{ backgroundColor: "#FEE2E2", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginLeft: 6 }}>
+                          <Text style={{ fontSize: 10, fontWeight: "800", color: "#DC2626" }}>TUTUP</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity activeOpacity={0.7} style={{ padding: 2, marginLeft: "auto" }}>
                         <Heart size={16} color="#9CA3AF" />
                       </TouchableOpacity>
                     </View>
@@ -537,9 +579,11 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                         <Text style={styles.priceValue}>Rp {minPrice.toLocaleString("id-ID")} <Text style={styles.priceUnit}>/kg</Text></Text>
                       </View>
 
-                      <View style={styles.selectBtnPill}>
-                        <Text style={styles.selectBtnText}>Pilih</Text>
-                        <ChevronRight size={13} color="#0D7A53" />
+                      <View style={[styles.selectBtnPill, !isStoreOpen && { backgroundColor: "#F1F5F9" }]}>
+                        <Text style={[styles.selectBtnText, !isStoreOpen && { color: "#94A3B8" }]}>
+                          {isStoreOpen ? "Pilih" : "Tutup"}
+                        </Text>
+                        {isStoreOpen && <ChevronRight size={13} color="#0D7A53" />}
                       </View>
                     </View>
                   </View>
@@ -783,7 +827,6 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                   })
                 )
               ) : (
-                /* Completed Orders */
                 completedOrders.length === 0 ? (
                   <View style={styles.modalEmptyState}>
                     <CheckCircle2 size={44} color="#D1D5DB" />
@@ -794,7 +837,15 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                   </View>
                 ) : (
                   completedOrders.map((ord, idx) => (
-                    <View key={ord._id || ord.id || ord.orderCode || idx} style={styles.orderHistoryItemCard}>
+                    <TouchableOpacity
+                      key={ord._id || ord.id || ord.orderCode || idx}
+                      style={styles.orderHistoryItemCard}
+                      onPress={() => {
+                        setSelectedDetailOrder(ord);
+                        setIsDetailProofModalOpen(true);
+                      }}
+                      activeOpacity={0.88}
+                    >
                       <View style={styles.historyCardTopRow}>
                         <View style={[styles.orderIdBadgePill, { backgroundColor: "#E6F7F0" }]}>
                           <Text style={[styles.orderIdBadgeText, { color: "#0D7A53" }]}>#{ord.orderCode}</Text>
@@ -832,9 +883,22 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                         </View>
                       </View>
 
-                      <View style={{ marginTop: 10 }}>
+                      {/* Action Buttons: 1. Lihat Struk & Bukti Bayar, 2. Pesan Lagi */}
+                      <View style={styles.historyCardActionsRow}>
                         <TouchableOpacity
-                          style={styles.btnReorder}
+                          style={styles.btnViewProofPrimary}
+                          onPress={() => {
+                            setSelectedDetailOrder(ord);
+                            setIsDetailProofModalOpen(true);
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <FileText size={14} color="#FFFFFF" />
+                          <Text style={styles.btnViewProofPrimaryText}>Lihat Struk & Bukti Bayar</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.btnReorderSmall}
                           onPress={() => {
                             setIsOrderModalOpen(false);
                             const storeTarget = stores.find((s) => (s._id || s.id) === (ord.storeId || ord.ownerId));
@@ -844,17 +908,235 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
                           }}
                           activeOpacity={0.8}
                         >
-                          <Text style={styles.btnReorderText}>Pesan Lagi di Toko Ini</Text>
-                          <ChevronRight size={14} color="#0D7A53" />
+                          <Text style={styles.btnReorderSmallText}>Pesan Lagi</Text>
+                          <ChevronRight size={13} color="#0D7A53" />
                         </TouchableOpacity>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   ))
                 )
               )}
               <View style={{ height: 24 }} />
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: Detail Pesanan Selesai, Struk & Bukti Pembayaran */}
+      <Modal visible={isDetailProofModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.proofModalCard}>
+            <View style={styles.modalDragHandle} />
+
+            {/* Modal Header */}
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalHeaderLeft}>
+                <View style={[styles.modalHeaderIconBg, { backgroundColor: "#DCFCE7" }]}>
+                  <ReceiptText size={20} color="#0D7A53" />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Struk & Bukti Pembayaran</Text>
+                  <Text style={styles.modalSubtitle}>
+                    #{selectedDetailOrder?.orderCode || "LND-0000"} • Selesai & Lunas
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.btnModalClose}
+                onPress={() => setIsDetailProofModalOpen(false)}
+                activeOpacity={0.7}
+              >
+                <X size={18} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              {/* 1. Verified Status Banner */}
+              <View style={styles.receiptVerifiedBanner}>
+                <View style={styles.receiptVerifiedIconBg}>
+                  <CheckCircle2 size={22} color="#166534" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.receiptVerifiedTitle}>Pembayaran Terverifikasi Lunas</Text>
+                  <Text style={styles.receiptVerifiedSub}>
+                    Cucian telah selesai diproses higienis dan diantar ke alamat Anda oleh mitra {selectedDetailOrder?.storeName || "Laundry"}.
+                  </Text>
+                </View>
+              </View>
+
+              {/* 2. Store & Order Metadata Card */}
+              <View style={styles.receiptSectionCard}>
+                <View style={styles.receiptMetaRow}>
+                  <Text style={styles.receiptMetaLabel}>Mitra Laundry</Text>
+                  <Text style={styles.receiptMetaValueBold}>{selectedDetailOrder?.storeName || "-"}</Text>
+                </View>
+
+                <View style={styles.receiptMetaRow}>
+                  <Text style={styles.receiptMetaLabel}>Nomor Pesanan</Text>
+                  <Text style={styles.receiptMetaValue}>#{selectedDetailOrder?.orderCode || "-"}</Text>
+                </View>
+
+                <View style={styles.receiptMetaRow}>
+                  <Text style={styles.receiptMetaLabel}>Waktu Transaksi</Text>
+                  <Text style={styles.receiptMetaValue}>
+                    {selectedDetailOrder?.createdAt
+                      ? new Date(selectedDetailOrder.createdAt).toLocaleString("id-ID", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })
+                      : "Hari ini"}
+                  </Text>
+                </View>
+
+                <View style={styles.receiptMetaRow}>
+                  <Text style={styles.receiptMetaLabel}>Alamat Pengantaran</Text>
+                  <Text style={[styles.receiptMetaValue, { flex: 1, textAlign: "right" }]} numberOfLines={2}>
+                    {selectedDetailOrder?.deliveryAddress || selectedDetailOrder?.pickupAddress || "Kamojang, Garut"}
+                  </Text>
+                </View>
+
+                {(selectedDetailOrder?.driverDeliveryName || selectedDetailOrder?.driverPickupName) && (
+                  <View style={[styles.receiptMetaRow, { borderBottomWidth: 0 }]}>
+                    <Text style={styles.receiptMetaLabel}>Kurir Pengantar</Text>
+                    <Text style={styles.receiptMetaValueBold}>
+                      🛵 {selectedDetailOrder?.driverDeliveryName || selectedDetailOrder?.driverPickupName}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* 3. Breakdown Rincian Biaya */}
+              <Text style={styles.receiptSectionTitle}>RINCIAN BIAYA & PEMBAYARAN</Text>
+              <View style={styles.receiptSectionCard}>
+                <View style={styles.receiptMetaRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.receiptItemTitle}>{selectedDetailOrder?.serviceName || "Layanan Laundry"}</Text>
+                    <Text style={styles.receiptItemSub}>
+                      {selectedDetailOrder?.actualWeightOrQty || 3.8} {selectedDetailOrder?.unitType || "kg"} × Rp {(selectedDetailOrder?.pricePerUnit || 6000).toLocaleString("id-ID")}
+                    </Text>
+                  </View>
+                  <Text style={styles.receiptItemPrice}>
+                    Rp {(selectedDetailOrder?.laundryCost || Math.round((selectedDetailOrder?.pricePerUnit || 6000) * (selectedDetailOrder?.actualWeightOrQty || 3.8))).toLocaleString("id-ID")}
+                  </Text>
+                </View>
+
+                <View style={styles.receiptMetaRow}>
+                  <Text style={styles.receiptMetaLabel}>Ongkir Driver (Jemput & Antar)</Text>
+                  <Text style={styles.receiptItemPrice}>
+                    Rp {((selectedDetailOrder?.deliveryFeePickup || 4000) + (selectedDetailOrder?.deliveryFeeDrop || 4000)).toLocaleString("id-ID")}
+                  </Text>
+                </View>
+
+                <View style={styles.receiptMetaRow}>
+                  <Text style={styles.receiptMetaLabel}>Biaya Layanan</Text>
+                  <Text style={styles.receiptItemPrice}>
+                    Rp {(selectedDetailOrder?.serviceFee || 1000).toLocaleString("id-ID")}
+                  </Text>
+                </View>
+
+                <View style={styles.receiptTotalRow}>
+                  <Text style={styles.receiptTotalLabel}>Total Lunas</Text>
+                  <Text style={styles.receiptTotalValue}>
+                    Rp {(selectedDetailOrder?.totalAmount || 31800).toLocaleString("id-ID")}
+                  </Text>
+                </View>
+
+                <View style={styles.paymentMethodTagRow}>
+                  <Text style={styles.paymentMethodTagLabel}>Metode Pembayaran:</Text>
+                  <View style={styles.paymentMethodTagBadge}>
+                    <CreditCard size={12} color="#0D7A53" />
+                    <Text style={styles.paymentMethodTagBadgeText}>
+                      {selectedDetailOrder?.paymentMethod || "Transfer Bank / QRIS"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* 4. Bukti Pembayaran / Struk Transfer Pelanggan */}
+              <Text style={styles.receiptSectionTitle}>BUKTI TRANSFER / STRUK PEMBAYARAN</Text>
+              <View style={styles.proofCardContainer}>
+                {selectedDetailOrder?.paymentProofUrl ? (
+                  <View style={styles.proofImageWrapper}>
+                    <Image
+                      source={{ uri: selectedDetailOrder.paymentProofUrl }}
+                      style={styles.proofImagePreview}
+                      resizeMode="cover"
+                    />
+
+                    <View style={styles.proofOverlayBar}>
+                      <View style={styles.proofVerifiedBadge}>
+                        <ShieldCheck size={14} color="#166534" />
+                        <Text style={styles.proofVerifiedBadgeText}>Bukti Transfer Terverifikasi</Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.btnZoomProof}
+                        onPress={() => setIsFullImageModalOpen(true)}
+                        activeOpacity={0.8}
+                      >
+                        <Maximize2 size={13} color="#FFFFFF" />
+                        <Text style={styles.btnZoomProofText}>Perbesar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.digitalReceiptPlaceholder}>
+                    <ShieldCheck size={36} color="#0D7A53" />
+                    <Text style={styles.digitalReceiptTitle}>Struk Pembayaran Digital Lunas</Text>
+                    <Text style={styles.digitalReceiptSub}>
+                      Pembayaran tagihan telah diverifikasi dan disetujui langsung oleh mitra kasir {selectedDetailOrder?.storeName || "Ahlan laundry"}.
+                    </Text>
+                    <View style={styles.digitalReceiptRefBadge}>
+                      <Text style={styles.digitalReceiptRefText}>
+                        REF: RNG-PAY-{selectedDetailOrder?.orderCode || "8126"}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Action Button: Pesan Lagi */}
+              <TouchableOpacity
+                style={styles.btnProofReorder}
+                onPress={() => {
+                  setIsDetailProofModalOpen(false);
+                  setIsOrderModalOpen(false);
+                  if (selectedDetailOrder) {
+                    const storeTarget = stores.find((s) => (s._id || s.id) === (selectedDetailOrder.storeId || selectedDetailOrder.ownerId));
+                    if (storeTarget) {
+                      handleSelectStore(storeTarget);
+                    }
+                  }
+                }}
+                activeOpacity={0.85}
+              >
+                <Shirt size={16} color="#FFFFFF" />
+                <Text style={styles.btnProofReorderText}>Pesan Lagi di Toko Ini</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Full Image Zoom Modal */}
+      <Modal visible={isFullImageModalOpen} transparent animationType="fade">
+        <View style={styles.fullImageOverlay}>
+          <TouchableOpacity
+            style={styles.btnCloseFullImage}
+            onPress={() => setIsFullImageModalOpen(false)}
+            activeOpacity={0.8}
+          >
+            <X size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {selectedDetailOrder?.paymentProofUrl && (
+            <Image
+              source={{ uri: selectedDetailOrder.paymentProofUrl }}
+              style={styles.fullImageView}
+              resizeMode="contain"
+            />
+          )}
         </View>
       </Modal>
     </ResponsiveSafeAreaView>
@@ -997,17 +1279,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
+    overflow: "hidden",
   },
   liveTrackingTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     marginBottom: 10,
   },
   livePulseGroup: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flexShrink: 1,
   },
   livePulseDot: {
     width: 8,
@@ -1024,6 +1309,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
+    flexShrink: 1,
+    maxWidth: "58%",
   },
   orderStatusPillText: {
     fontSize: 10,
@@ -1035,12 +1322,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   liveOrderIconBg: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     backgroundColor: "#E6F7F0",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   liveStoreName: {
     fontSize: 14,
@@ -1048,7 +1336,7 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   liveServiceName: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#4B5563",
     marginTop: 1,
   },
@@ -1069,9 +1357,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 2,
     backgroundColor: "#E6F7F0",
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 10,
+    flexShrink: 0,
+    marginLeft: 4,
   },
   liveTrackActionText: {
     fontSize: 11,
@@ -1451,6 +1741,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     marginBottom: 8,
   },
   orderIdBadgePill: {
@@ -1458,6 +1749,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 8,
+    flexShrink: 0,
   },
   orderIdBadgeText: {
     fontSize: 11,
@@ -1468,6 +1760,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 8,
+    flexShrink: 1,
+    maxWidth: "65%",
   },
   statusPillBadgeText: {
     fontSize: 10,
@@ -1717,5 +2011,312 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     color: "#0D7A53",
+  },
+
+  // Completed order actions row
+  historyCardActionsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  btnViewProofPrimary: {
+    flex: 1.6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#0D7A53",
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  btnViewProofPrimaryText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  btnReorderSmall: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#E8F5EE",
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  btnReorderSmallText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+
+  // Proof & Receipt Modal Styles
+  proofModalCard: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    maxHeight: "92%",
+  },
+  receiptVerifiedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#DCFCE7",
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  receiptVerifiedIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  receiptVerifiedTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#166534",
+  },
+  receiptVerifiedSub: {
+    fontSize: 11,
+    color: "#15803D",
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  receiptSectionTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6B7280",
+    letterSpacing: 0.6,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  receiptSectionCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 8,
+  },
+  receiptMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  receiptMetaLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  receiptMetaValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  receiptMetaValueBold: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  receiptItemTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  receiptItemSub: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  receiptItemPrice: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  receiptTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 10,
+    marginTop: 4,
+  },
+  receiptTotalLabel: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  receiptTotalValue: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#0D7A53",
+  },
+  paymentMethodTagRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  paymentMethodTagLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    fontWeight: "600",
+  },
+  paymentMethodTagBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  paymentMethodTagBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+
+  // Proof Image Preview
+  proofCardContainer: {
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+    marginBottom: 16,
+  },
+  proofImageWrapper: {
+    position: "relative",
+    width: "100%",
+    height: 220,
+    backgroundColor: "#111827",
+  },
+  proofImagePreview: {
+    width: "100%",
+    height: "100%",
+  },
+  proofOverlayBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  proofVerifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  proofVerifiedBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  btnZoomProof: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  btnZoomProofText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  digitalReceiptPlaceholder: {
+    padding: 24,
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+  },
+  digitalReceiptTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#111827",
+    marginTop: 8,
+  },
+  digitalReceiptSub: {
+    fontSize: 11,
+    color: "#6B7280",
+    textAlign: "center",
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  digitalReceiptRefBadge: {
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  digitalReceiptRefText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  btnProofReorder: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#0D7A53",
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginTop: 8,
+    elevation: 2,
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  btnProofReorderText: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+
+  // Full Image Modal
+  fullImageOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  btnCloseFullImage: {
+    position: "absolute",
+    top: 40,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    padding: 8,
+    borderRadius: 20,
+  },
+  fullImageView: {
+    width: "100%",
+    height: "80%",
   },
 });

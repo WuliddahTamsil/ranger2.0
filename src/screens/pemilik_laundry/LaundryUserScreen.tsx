@@ -31,8 +31,10 @@ import {
   MapPin,
   CheckCircle2,
   Calendar,
+  MessageCircle,
 } from "lucide-react-native";
 import { AuthAccount } from "../auth/authTypes";
+import { CustomerChatModal } from "../customer/CustomerChatModal";
 import {
   fetchStoreCustomers,
   subscribeLaundry,
@@ -62,6 +64,9 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
   // Modal Detail Riwayat Pelanggan
   const [selectedCustomer, setSelectedCustomer] = useState<LaundryCustomerSummary | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  // Direct Live Chat with Customer
+  const [chatCustomer, setChatCustomer] = useState<LaundryCustomerSummary | null>(null);
 
   // Modal Tambah Staf / Pelanggan Manual
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -305,6 +310,16 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
                       </Text>
                     </View>
                   </View>
+
+                  {/* Direct Chat Shortcut */}
+                  <TouchableOpacity
+                    style={styles.btnCardChat}
+                    onPress={() => setChatCustomer(cust)}
+                    activeOpacity={0.8}
+                  >
+                    <MessageCircle size={14} color="#0D7A53" />
+                    <Text style={styles.btnCardChatText}>Chat Customer Langsung</Text>
+                  </TouchableOpacity>
                 </TouchableOpacity>
               ))}
             </View>
@@ -411,12 +426,27 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
               )}
             </ScrollView>
 
-            <TouchableOpacity
-              style={styles.btnCloseModal}
-              onPress={() => setIsDetailModalOpen(false)}
-            >
-              <Text style={styles.btnCloseModalText}>Tutup</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+              <TouchableOpacity
+                style={styles.btnModalChat}
+                onPress={() => {
+                  const target = selectedCustomer;
+                  setIsDetailModalOpen(false);
+                  if (target) setChatCustomer(target);
+                }}
+                activeOpacity={0.85}
+              >
+                <MessageCircle size={16} color="#FFFFFF" />
+                <Text style={styles.btnModalChatText}>Chat Customer</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btnCloseModal}
+                onPress={() => setIsDetailModalOpen(false)}
+              >
+                <Text style={styles.btnCloseModalText}>Tutup</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -482,6 +512,15 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
           </View>
         </View>
       </Modal>
+
+      {/* Live Direct Chat with Customer */}
+      <CustomerChatModal
+        visible={Boolean(chatCustomer)}
+        onClose={() => setChatCustomer(null)}
+        orderId={chatCustomer?.lastOrderCode || `laundry_${chatCustomer?.id || "chat"}`}
+        participantName={chatCustomer?.name || "Customer"}
+        participantType="merchant"
+      />
 
       {/* Bottom Navigation */}
       <SafeAreaBottomBar absolute style={styles.bottomNav}>
@@ -950,6 +989,39 @@ const styles = StyleSheet.create({
   btnSubmitAddText: {
     color: "#FFFFFF",
     fontSize: 14,
+    fontWeight: "800",
+  },
+  btnCardChat: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#C6E7D6",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  btnCardChatText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  btnModalChat: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#0D7A53",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  btnModalChatText: {
+    color: "#FFFFFF",
+    fontSize: 13,
     fontWeight: "800",
   },
   btnCancelAdd: {

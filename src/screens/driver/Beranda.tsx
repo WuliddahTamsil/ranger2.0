@@ -200,7 +200,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         const [mktRes, catRes, laundryJobs] = await Promise.all([
           getMarketplaceOrdersForDriver(authAccount.id),
           getCateringOrdersForDriver(authAccount.id),
-          fetchDriverLaundryJobs(),
+          fetchDriverLaundryJobs(authAccount.id),
         ]);
         if (!active) return;
 
@@ -246,9 +246,22 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           lnd.status === "DRIVER_MENUJU_LAUNDRY";
 
         let orderStatus: DriverOrder["status"] = "Menunggu";
-        if (lnd.status === "DRIVER_MENUJU_CUSTOMER") orderStatus = "Menuju Pickup";
-        else if (lnd.status === "DRIVER_MENUJU_LAUNDRY" || lnd.status === "DRIVER_MENGANTAR_BALIK") orderStatus = "Mengantar";
-        else if (lnd.status === "SELESAI") orderStatus = "Selesai";
+        if (lnd.status === "MENUNGGU_DRIVER_JEMPUT" || lnd.status === "SIAP_DIANTAR") {
+          orderStatus = "Menunggu";
+        } else if (lnd.status === "DRIVER_MENUJU_CUSTOMER") {
+          orderStatus = "Menuju Pickup";
+        } else if (lnd.status === "DRIVER_MENUJU_LAUNDRY" || lnd.status === "DRIVER_MENGANTAR_BALIK") {
+          orderStatus = "Mengantar";
+        } else if (lnd.status === "SELESAI") {
+          orderStatus = "Selesai";
+        } else if (lnd.status === "DIBATALKAN") {
+          orderStatus = "Dibatalkan";
+        } else {
+          // If the order has arrived at laundry or already ongoing, driver's pickup trip is completed
+          if (lnd.driverPickupId) {
+            orderStatus = "Selesai";
+          }
+        }
 
         return {
           id: lnd._id || lnd.id,
@@ -257,7 +270,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           type: "Laundry" as const,
           time: new Date(lnd.createdAt || Date.now()).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
           from: isPickupJob ? lnd.pickupAddress : lnd.storeName,
-          to: isPickupJob ? lnd.storeName : lnd.deliveryAddress,
+          to: isPickupJob ? lnd.storeName : (lnd.deliveryAddress || lnd.pickupAddress),
           dist: "1.2 km",
           distanceKm: 1.2,
           pay: Number(lnd.totalAmount || 0),

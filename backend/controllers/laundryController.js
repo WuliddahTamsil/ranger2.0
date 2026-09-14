@@ -124,6 +124,9 @@ exports.saveMyStore = async (req, res) => {
       description,
       address,
       phone,
+      openingDays,
+      openingTime,
+      closingTime,
       openingHours,
       isOpen,
       imageUrl,
@@ -138,18 +141,21 @@ exports.saveMyStore = async (req, res) => {
     let store = await LaundryStore.findOne({ ownerId });
     if (store) {
       if (storeName) store.storeName = storeName;
-      if (description) store.description = description;
+      if (description !== undefined) store.description = description;
       if (address) store.address = address;
-      if (phone) store.phone = phone;
-      if (openingHours) store.openingHours = openingHours;
+      if (phone !== undefined) store.phone = phone;
+      if (openingDays !== undefined) store.openingDays = openingDays;
+      if (openingTime !== undefined) store.openingTime = openingTime;
+      if (closingTime !== undefined) store.closingTime = closingTime;
+      if (openingHours !== undefined) store.openingHours = openingHours;
       if (typeof isOpen === "boolean") store.isOpen = isOpen;
       if (imageUrl) store.imageUrl = imageUrl;
       if (services) store.services = services;
       if (badges) store.badges = badges;
-      if (bankName) store.bankName = bankName;
-      if (bankAccountNumber) store.bankAccountNumber = bankAccountNumber;
-      if (bankAccountHolder) store.bankAccountHolder = bankAccountHolder;
-      if (qrisImageUrl) store.qrisImageUrl = qrisImageUrl;
+      if (typeof bankName === "string") store.bankName = bankName;
+      if (typeof bankAccountNumber === "string") store.bankAccountNumber = bankAccountNumber;
+      if (typeof bankAccountHolder === "string") store.bankAccountHolder = bankAccountHolder;
+      if (typeof qrisImageUrl === "string") store.qrisImageUrl = qrisImageUrl;
       await store.save();
     } else {
       store = await LaundryStore.create({
@@ -158,7 +164,10 @@ exports.saveMyStore = async (req, res) => {
         description,
         address: address || "Jl. Kamojang",
         phone,
-        openingHours,
+        openingDays: openingDays || "Buka Setiap Hari",
+        openingTime: openingTime || "08:00",
+        closingTime: closingTime || "21:00",
+        openingHours: openingHours || (openingTime && closingTime ? `${openingTime} - ${closingTime}` : "08.00 - 21.00"),
         isOpen: isOpen ?? true,
         imageUrl,
         services: services || [],
@@ -168,6 +177,42 @@ exports.saveMyStore = async (req, res) => {
         bankAccountHolder: bankAccountHolder || "",
         qrisImageUrl: qrisImageUrl || "",
       });
+    }
+
+    // Synchronize to all ongoing active orders of this store
+    try {
+      await LaundryOrder.updateMany(
+        {
+          $or: [{ ownerId: store.ownerId }, { storeId: store._id }],
+          status: {
+            $in: [
+              "MENUNGGU_KONFIRMASI_MITRA",
+              "MENUNGGU_DRIVER_JEMPUT",
+              "DRIVER_MENUJU_CUSTOMER",
+              "DRIVER_MENUJU_LAUNDRY",
+              "TIBA_DI_LAUNDRY",
+              "MENUNGGU_PEMBAYARAN",
+              "MENUNGGU_VERIFIKASI_PEMBAYARAN",
+            ],
+          },
+        },
+        {
+          $set: {
+            bankName: store.bankName || "BCA",
+            bankAccountNumber: store.bankAccountNumber || "",
+            bankAccountHolder: store.bankAccountHolder || "",
+            qrisImageUrl: store.qrisImageUrl || "",
+          },
+        }
+      );
+    } catch (syncErr) {
+      console.warn("⚠️ Order payment sync warning:", syncErr);
+    }
+
+    if (req.io) {
+      req.io.emit("laundry_store_updated", store);
+      req.io.emit(`laundry_store_${store._id}`, store);
+      req.io.emit("order_status_updated");
     }
 
     return res.status(200).json({ success: true, data: store, message: "Data toko laundry berhasil disimpan" });
@@ -519,21 +564,56 @@ exports.getStoreCustomers = async (req, res) => {
   }
 };
 
-// 8. Ambil pesanan untuk Driver (Jemput & Antar)
+// 8. Ambil pesanan untuk Driver (Jemput, Antar & Selesai)
 exports.getDriverOrders = async (req, res) => {
   try {
-    // Driver melihat order yang butuh penjemputan atau butuh pengantaran
-    const orders = await LaundryOrder.find({
-      status: {
-        $in: [
-          "MENUNGGU_DRIVER_JEMPUT",
-          "DRIVER_MENUJU_CUSTOMER",
-          "DRIVER_MENUJU_LAUNDRY",
-          "SIAP_DIANTAR",
-          "DRIVER_MENGANTAR_BALIK",
+    const { driverId } = req.query;
+    let filter = {};
+    if (driverId) {
+      filter = {
+        $or: [
+          { driverPickupId: driverId },
+          { driverDeliveryId: driverId },
+          {
+            status: {
+              $in: [
+                "MENUNGGU_DRIVER_JEMPUT",
+                "DRIVER_MENUJU_CUSTOMER",
+                "DRIVER_MENUJU_LAUNDRY",
+                "TIBA_DI_LAUNDRY",
+                "MENUNGGU_PEMBAYARAN",
+                "MENUNGGU_VERIFIKASI_PEMBAYARAN",
+                "PEMBAYARAN_LUNAS",
+                "SEDANG_DICUCI",
+                "SIAP_DIANTAR",
+                "DRIVER_MENGANTAR_BALIK",
+                "SELESAI",
+              ],
+            },
+          },
         ],
-      },
-    }).sort({ createdAt: -1 });
+      };
+    } else {
+      filter = {
+        status: {
+          $in: [
+            "MENUNGGU_DRIVER_JEMPUT",
+            "DRIVER_MENUJU_CUSTOMER",
+            "DRIVER_MENUJU_LAUNDRY",
+            "TIBA_DI_LAUNDRY",
+            "MENUNGGU_PEMBAYARAN",
+            "MENUNGGU_VERIFIKASI_PEMBAYARAN",
+            "PEMBAYARAN_LUNAS",
+            "SEDANG_DICUCI",
+            "SIAP_DIANTAR",
+            "DRIVER_MENGANTAR_BALIK",
+            "SELESAI",
+          ],
+        },
+      };
+    }
+
+    const orders = await LaundryOrder.find(filter).sort({ createdAt: -1 });
 
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
@@ -567,14 +647,21 @@ exports.weighAndBillOrder = async (req, res) => {
     order.paymentStatus = "menunggu_pembayaran";
 
     // Synchronize current store bank / QRIS info in case owner updated it
-    if (order.ownerId) {
-      const storeObj = await LaundryStore.findOne({ ownerId: order.ownerId });
+    try {
+      const storeObj = await LaundryStore.findOne({
+        $or: [
+          { ownerId: order.ownerId },
+          { _id: order.storeId },
+        ],
+      });
       if (storeObj) {
-        if (storeObj.bankName) order.bankName = storeObj.bankName;
-        if (storeObj.bankAccountNumber) order.bankAccountNumber = storeObj.bankAccountNumber;
-        if (storeObj.bankAccountHolder) order.bankAccountHolder = storeObj.bankAccountHolder;
-        if (storeObj.qrisImageUrl) order.qrisImageUrl = storeObj.qrisImageUrl;
+        order.bankName = storeObj.bankName || "BCA";
+        order.bankAccountNumber = storeObj.bankAccountNumber || "";
+        order.bankAccountHolder = storeObj.bankAccountHolder || "";
+        order.qrisImageUrl = storeObj.qrisImageUrl || "";
       }
+    } catch (sErr) {
+      console.warn("⚠️ storeObj lookup error:", sErr);
     }
 
     await order.save();

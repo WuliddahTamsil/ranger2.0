@@ -47,8 +47,11 @@ import {
   updateLaundryOrderStatus,
   weighAndBillLaundryOrder,
   verifyLaundryPayment,
+  fetchLaundryStoreById,
+  fetchMyLaundryStore,
   LaundryOrder,
   LaundryOrderStatus,
+  LaundryStore,
 } from "../../services/laundryService";
 
 interface CustomerLaundryTrackingProps extends Nav {
@@ -57,17 +60,32 @@ interface CustomerLaundryTrackingProps extends Nav {
 
 export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProps> = ({ navigate, authAccount }) => {
   const [order, setOrder] = useState<LaundryOrder | null>(getActiveLaundryOrder());
+  const [storeInfo, setStoreInfo] = useState<LaundryStore | null>(null);
   const [chatVisible, setChatVisible] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"QRIS" | "Transfer Bank">("QRIS");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"QRIS" | "Transfer Bank">("Transfer Bank");
   const [proofImageUri, setProofImageUri] = useState<string>("");
   const [isSubmittingProof, setIsSubmittingProof] = useState(false);
 
+  const loadData = async () => {
+    const currentOrder = getActiveLaundryOrder();
+    setOrder(currentOrder);
+    if (currentOrder) {
+      if (currentOrder.storeId) {
+        const s = await fetchLaundryStoreById(String(currentOrder.storeId));
+        if (s) setStoreInfo(s);
+      } else if (currentOrder.ownerId) {
+        const s = await fetchMyLaundryStore(currentOrder.ownerId);
+        if (s) setStoreInfo(s);
+      }
+    }
+  };
+
   useEffect(() => {
+    loadData();
     const unsub = subscribeLaundry(() => {
-      setOrder(getActiveLaundryOrder());
+      loadData();
     });
-    setOrder(getActiveLaundryOrder());
     return unsub;
   }, []);
 
@@ -290,6 +308,11 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const isVerifying = order?.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN" || order?.paymentStatus === "menunggu_verifikasi";
   const isPaid = order?.paymentStatus === "lunas";
   const isRejected = order?.paymentStatus === "ditolak";
+
+  const effectiveBankName = storeInfo?.bankName || order?.bankName || "Transfer Bank / E-Wallet";
+  const effectiveAccountNum = storeInfo?.bankAccountNumber || order?.bankAccountNumber || "";
+  const effectiveAccountHolder = storeInfo?.bankAccountHolder || order?.bankAccountHolder || (storeName ? `Mitra ${storeName}` : "Pemilik Toko");
+  const effectiveQrisImage = storeInfo?.qrisImageUrl || order?.qrisImageUrl || "";
 
   if (!order) {
     return (
@@ -664,9 +687,9 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
               {selectedPaymentMethod === "QRIS" ? (
                 <View style={styles.qrisContainer}>
                   <Text style={styles.qrisTitle}>Scan Barcode QRIS Toko {storeName}</Text>
-                  {order?.qrisImageUrl ? (
+                  {effectiveQrisImage ? (
                     <Image
-                      source={{ uri: order.qrisImageUrl }}
+                      source={{ uri: effectiveQrisImage }}
                       style={styles.qrisImage}
                       resizeMode="contain"
                     />
@@ -675,7 +698,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                       <QrCode size={56} color="#9CA3AF" />
                       <Text style={styles.qrisPlaceholderCustomerTitle}>QRIS Belum Diunggah Pemilik Toko</Text>
                       <Text style={styles.qrisPlaceholderCustomerSub}>
-                        Silakan gunakan opsi Transfer Bank Manual di bawah untuk melanjutkan pembayaran.
+                        Silakan gunakan opsi Transfer Bank / E-Wallet Manual di bawah untuk menyelesaikan pembayaran.
                       </Text>
                       <TouchableOpacity
                         style={styles.btnSwitchToBank}
@@ -683,7 +706,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                         activeOpacity={0.8}
                       >
                         <CreditCard size={14} color="#FFFFFF" />
-                        <Text style={styles.btnSwitchToBankText}>Pilih Transfer Bank</Text>
+                        <Text style={styles.btnSwitchToBankText}>Pilih Transfer Bank / E-Wallet</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -694,20 +717,24 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                 </View>
               ) : (
                 <View style={styles.bankContainer}>
-                  <Text style={styles.bankTitle}>Nomor Rekening Tujuan Toko:</Text>
+                  <Text style={styles.bankTitle}>Nomor Rekening / Akun Tujuan Toko:</Text>
                   <View style={styles.bankCard}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.bankName}>{order?.bankName || "Bank BCA"}</Text>
-                      <Text style={styles.bankAccountNum}>{order?.bankAccountNumber || "8035 1299 88"}</Text>
-                      <Text style={styles.bankHolder}>a.n. {order?.bankAccountHolder || `Mitra ${storeName}`}</Text>
+                      <Text style={styles.bankName}>{effectiveBankName}</Text>
+                      <Text style={styles.bankAccountNum}>
+                        {effectiveAccountNum || "Belum diatur oleh pemilik toko"}
+                      </Text>
+                      <Text style={styles.bankHolder}>a.n. {effectiveAccountHolder}</Text>
                     </View>
-                    <TouchableOpacity
-                      style={styles.btnCopy}
-                      onPress={() => Alert.alert("Tersalin", `Nomor rekening ${order?.bankAccountNumber || "8035 1299 88"} berhasil disalin.`)}
-                    >
-                      <Copy size={16} color="#0D7A53" />
-                      <Text style={styles.btnCopyText}>Salin</Text>
-                    </TouchableOpacity>
+                    {effectiveAccountNum ? (
+                      <TouchableOpacity
+                        style={styles.btnCopy}
+                        onPress={() => Alert.alert("Tersalin", `Nomor ${effectiveBankName} (${effectiveAccountNum}) berhasil disalin.`)}
+                      >
+                        <Copy size={16} color="#0D7A53" />
+                        <Text style={styles.btnCopyText}>Salin</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 </View>
               )}

@@ -1,4 +1,6 @@
-import { getApiUrl } from "./api";
+import { getApiUrl, API_BASE_URL } from "./api";
+// @ts-ignore
+import { io } from "socket.io-client/dist/socket.io.js";
 import { CustomerAddress } from "../types";
 
 export interface LaundryServiceItem {
@@ -21,6 +23,9 @@ export interface LaundryStore {
   description?: string;
   address: string;
   phone?: string;
+  openingDays?: string;
+  openingTime?: string;
+  closingTime?: string;
   openingHours?: string;
   isOpen?: boolean;
   rating?: number;
@@ -222,8 +227,38 @@ export const clearAllLaundryOrders = async () => {
   }
 };
 
-export const subscribeLaundry = (listener: () => void) => {
+let laundrySocket: any = null;
 
+const initLaundrySocket = () => {
+  if (laundrySocket) return;
+  try {
+    const SOCKET_URL = API_BASE_URL.replace(/\/api\/?$/, "");
+    laundrySocket = io(SOCKET_URL, { transports: ["websocket", "polling"] });
+    laundrySocket.on("laundry_order_created", (order: any) => {
+      notifyListeners();
+    });
+    laundrySocket.on("laundry_order_updated", (order: any) => {
+      if (activeCustomerOrder && (activeCustomerOrder._id === order?._id || activeCustomerOrder.id === order?._id || activeCustomerOrder.orderCode === order?.orderCode)) {
+        activeCustomerOrder = { ...activeCustomerOrder, ...order };
+      }
+      notifyListeners();
+    });
+    laundrySocket.on("laundry_store_updated", (updatedStore: any) => {
+      if (activeSelectedStore && (activeSelectedStore._id === updatedStore?._id || activeSelectedStore.id === updatedStore?._id || activeSelectedStore.ownerId === updatedStore?.ownerId)) {
+        activeSelectedStore = { ...activeSelectedStore, ...updatedStore };
+      }
+      notifyListeners();
+    });
+    laundrySocket.on("order_status_updated", () => {
+      notifyListeners();
+    });
+  } catch (err) {
+    console.warn("⚠️ Laundry socket init fallback:", err);
+  }
+};
+
+export const subscribeLaundry = (listener: () => void) => {
+  initLaundrySocket();
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
@@ -588,9 +623,9 @@ export const updateLaundryDriverLocation = async (
   return null;
 };
 
-export const fetchDriverLaundryJobs = async (): Promise<LaundryOrder[]> => {
+export const fetchDriverLaundryJobs = async (driverId?: string): Promise<LaundryOrder[]> => {
   try {
-    const url = getApiUrl(`/laundry/driver/jobs`);
+    const url = getApiUrl(`/laundry/driver/jobs${driverId ? `?driverId=${encodeURIComponent(driverId)}` : ""}`);
     const res = await fetch(url);
     const json = await res.json();
     if (json.success && Array.isArray(json.data)) {
@@ -602,7 +637,8 @@ export const fetchDriverLaundryJobs = async (): Promise<LaundryOrder[]> => {
   if (activeCustomerOrder) {
     if (
       activeCustomerOrder.status === "MENUNGGU_DRIVER_JEMPUT" ||
-      activeCustomerOrder.status === "SIAP_DIANTAR"
+      activeCustomerOrder.status === "SIAP_DIANTAR" ||
+      activeCustomerOrder.status === "SELESAI"
     ) {
       return [activeCustomerOrder];
     }
@@ -638,13 +674,8 @@ export const fetchCustomerLaundryOrders = async (customerId?: string, phone?: st
     const res = await fetch(url);
     const json = await res.json();
     if (json.success && Array.isArray(json.data)) {
-      if (
-        activeCustomerOrder &&
-        !json.data.some((d: any) => (d._id || d.id || d.orderCode) === (activeCustomerOrder?._id || activeCustomerOrder?.id || activeCustomerOrder?.orderCode))
-      ) {
-        if (!customerId || activeCustomerOrder.customerId === customerId) {
-          json.data.unshift(activeCustomerOrder);
-        }
+      if (json.data.length === 0) {
+        activeCustomerOrder = null;
       }
       return json.data;
     }

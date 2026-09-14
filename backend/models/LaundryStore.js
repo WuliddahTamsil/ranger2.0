@@ -60,6 +60,18 @@ const laundryStoreSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    openingDays: {
+      type: String,
+      default: "Buka Setiap Hari",
+    },
+    openingTime: {
+      type: String,
+      default: "08:00",
+    },
+    closingTime: {
+      type: String,
+      default: "21:00",
+    },
     openingHours: {
       type: String,
       default: "08.00 - 21.00",

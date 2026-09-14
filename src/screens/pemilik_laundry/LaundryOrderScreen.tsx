@@ -88,15 +88,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
       return;
     }
     const data = await fetchStoreOrders(authAccount.id);
-    const active = getActiveLaundryOrder();
-    if (
-      active &&
-      active.ownerId === authAccount.id &&
-      !data.some((d) => (d._id || d.id) === (active._id || active.id))
-    ) {
-      data.unshift(active);
-    }
-    setOrders(data);
+    setOrders(data || []);
     setLoading(false);
   };
 

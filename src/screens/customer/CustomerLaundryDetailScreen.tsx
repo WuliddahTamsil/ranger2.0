@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   Clock,
   ShieldCheck,
+  ShieldAlert,
   Shirt,
   Wind,
   Package,
@@ -45,6 +46,7 @@ import {
   getSelectedStore,
   createLaundryOrder,
   subscribeLaundry,
+  fetchLaundryStoreById,
   LaundryStore,
   LaundryServiceItem,
 } from "../../services/laundryService";
@@ -107,10 +109,30 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
   ];
 
   useEffect(() => {
-    const unsub = subscribeLaundry(() => {
-      setStore(getSelectedStore());
+    const fetchFresh = async () => {
+      const selected = getSelectedStore();
+      const targetId = selected._id || selected.id;
+      if (targetId) {
+        const fresh = await fetchLaundryStoreById(targetId);
+        if (fresh) {
+          setStore(fresh);
+        }
+      }
+    };
+    fetchFresh();
+
+    const unsub = subscribeLaundry(async () => {
+      const selected = getSelectedStore();
+      const targetId = selected._id || selected.id;
+      if (targetId) {
+        const fresh = await fetchLaundryStoreById(targetId);
+        if (fresh) {
+          setStore(fresh);
+          return;
+        }
+      }
+      setStore(selected);
     });
-    setStore(getSelectedStore());
     return unsub;
   }, []);
 
@@ -141,8 +163,13 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
     storeServices.find((s) => (s._id || s.id) === selectedServiceId) || storeServices[0];
 
   const estimatedCost = (activeSelectedService?.price || 6000) * 2; // Estimasi 2 kg/item
+  const isStoreOpen = store.isOpen !== false;
 
   const handleConfirmOrder = async () => {
+    if (!isStoreOpen) {
+      Alert.alert("Toko Sedang Tutup", "Outlet laundry ini sedang tutup sementara dan tidak dapat menerima pesanan saat ini.");
+      return;
+    }
     if (!address.trim()) {
       setAddressError("Alamat penjemputan wajib diisi!");
       return;
@@ -244,15 +271,19 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
           {/* Hero Overlay Badges */}
           <View style={styles.heroOverlayBadgesRow}>
             <View style={styles.heroOverlayLeft}>
-              <View style={styles.badgeOrangePill}>
-                <Zap size={12} color="#FFFFFF" />
-                <Text style={styles.badgeOrangeText}>DRIVER JEMPUT ANTAR</Text>
+              <View style={[styles.badgeOrangePill, !isStoreOpen && { backgroundColor: "#DC2626" }]}>
+                {isStoreOpen ? <Zap size={12} color="#FFFFFF" /> : <ShieldAlert size={12} color="#FFFFFF" />}
+                <Text style={styles.badgeOrangeText}>
+                  {isStoreOpen ? "DRIVER JEMPUT ANTAR" : "SEDANG TUTUP"}
+                </Text>
               </View>
 
-              <View style={styles.badgeDarkPill}>
-                <Bike size={12} color="#4ADE80" />
+              <View style={[styles.badgeDarkPill, !isStoreOpen && { backgroundColor: "rgba(220, 38, 38, 0.9)" }]}>
+                <Bike size={12} color={isStoreOpen ? "#4ADE80" : "#FCA5A5"} />
                 <Text style={styles.badgeDarkText}>
-                  {store.openingHours || "Buka • Tutup 21.00"}
+                  {isStoreOpen
+                    ? `${store.openingDays || "Buka Setiap Hari"} • ${store.openingHours || (store.openingTime && store.closingTime ? `${store.openingTime} - ${store.closingTime}` : "07.00 - 21.00")}`
+                    : "🔴 Tutup Sementara"}
                 </Text>
               </View>
             </View>
@@ -264,6 +295,17 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
             </View>
           </View>
         </View>
+
+        {/* Closed Store Notice Banner */}
+        {!isStoreOpen && (
+          <View style={{ marginHorizontal: 16, marginTop: 12, padding: 12, backgroundColor: "#FEF2F2", borderRadius: 12, borderWidth: 1, borderColor: "#FCA5A5", flexDirection: "row", alignItems: "center" }}>
+            <Text style={{ fontSize: 18, marginRight: 8 }}>🔴</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: "#991B1B" }}>Outlet Sedang Tutup</Text>
+              <Text style={{ fontSize: 12, color: "#B91C1C", marginTop: 2 }}>Pemilik laundry sedang menonaktifkan pesanan sementara waktu.</Text>
+            </View>
+          </View>
+        )}
 
         {/* Merchant Info Body */}
         <View style={styles.merchantInfoCard}>
@@ -373,8 +415,8 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
           <View style={styles.guaranteeItem}>
             <Clock size={14} color="#6B7280" />
             <Text style={styles.guaranteeText}>
-              Buka Setiap Hari{"\n"}
-              <Text style={{ fontWeight: "700" }}>{store.openingHours || "07.00 - 21.00"}</Text>
+              {store.openingDays || "Buka Setiap Hari"}{"\n"}
+              <Text style={{ fontWeight: "700" }}>{store.openingHours || (store.openingTime && store.closingTime ? `${store.openingTime} - ${store.closingTime}` : "07.00 - 21.00")}</Text>
             </Text>
           </View>
           <View style={styles.guaranteeItem}>
@@ -404,20 +446,30 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.btnPesanPickup}
-          onPress={() => setIsBottomSheetOpen(true)}
-          activeOpacity={0.85}
+          style={[styles.btnPesanPickup, !isStoreOpen && { backgroundColor: "#94A3B8" }]}
+          onPress={() => {
+            if (!isStoreOpen) {
+              Alert.alert("Toko Sedang Tutup", "Outlet laundry ini sedang tutup sementara dan tidak dapat menerima pesanan saat ini.");
+              return;
+            }
+            setIsBottomSheetOpen(true);
+          }}
+          activeOpacity={isStoreOpen ? 0.85 : 1}
         >
           <View style={styles.btnPickupLeft}>
-            <View style={styles.pickupBikeCircle}>
+            <View style={[styles.pickupBikeCircle, !isStoreOpen && { backgroundColor: "#64748B" }]}>
               <Bike size={18} color="#FFFFFF" />
             </View>
             <View>
-              <Text style={styles.btnPickupTitle}>Pesan Antar-Jemput</Text>
-              <Text style={styles.btnPickupSub}>Driver jemput pakaian ke rumah</Text>
+              <Text style={styles.btnPickupTitle}>
+                {isStoreOpen ? "Pesan Antar-Jemput" : "Toko Sedang Tutup"}
+              </Text>
+              <Text style={styles.btnPickupSub}>
+                {isStoreOpen ? "Driver jemput pakaian ke rumah" : "Tidak menerima pesanan saat ini"}
+              </Text>
             </View>
           </View>
-          <ChevronRight size={20} color="#FFFFFF" />
+          {isStoreOpen && <ChevronRight size={20} color="#FFFFFF" />}
         </TouchableOpacity>
       </SafeAreaBottomBar>
 

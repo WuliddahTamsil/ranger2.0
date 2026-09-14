@@ -45,12 +45,6 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
   const [orders, setOrders] = useState<LaundryOrder[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Modal Tarik Dana
-  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawBank, setWithdrawBank] = useState("BCA");
-  const [withdrawAccountNo, setWithdrawAccountNo] = useState("");
-
   const loadData = async () => {
     setLoading(true);
     if (!authAccount?.id) {
@@ -59,15 +53,7 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
       return;
     }
     const data = await fetchStoreOrders(authAccount.id);
-    const active = getActiveLaundryOrder();
-    if (
-      active &&
-      active.ownerId === authAccount.id &&
-      !data.some((d) => (d._id || d.id) === (active._id || active.id))
-    ) {
-      data.unshift(active);
-    }
-    setOrders(data);
+    setOrders(data || []);
     setLoading(false);
   };
 
@@ -84,16 +70,24 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
     return orders.filter((o) => o.paymentStatus === "lunas" || o.status === "SELESAI");
   }, [orders]);
 
-  const totalPendapatan = useMemo(() => {
-    return paidOrders.reduce((sum, o) => sum + (o.laundryCost || o.totalAmount || 0), 0);
+  // 1. Biaya Laundry (Laba Bersih Toko = Harga Layanan x Berat/Jumlah)
+  const totalLabaBersihLaundry = useMemo(() => {
+    return paidOrders.reduce((sum, o) => {
+      const cost = o.laundryCost || (o.pricePerUnit && o.actualWeightOrQty ? Math.round(o.pricePerUnit * o.actualWeightOrQty) : o.totalAmount) || 0;
+      return sum + cost;
+    }, 0);
   }, [paidOrders]);
 
-  const totalPengeluaran = useMemo(() => {
-    // Estimasi biaya operasional detergen & listrik 20%
-    return Math.round(totalPendapatan * 0.2);
-  }, [totalPendapatan]);
+  // 2. Biaya Ongkir Driver (1 KM = Rp 1.000)
+  const totalOngkirDriver = useMemo(() => {
+    return paidOrders.reduce((sum, o) => {
+      const ongkir = (o.deliveryFeePickup || 0) + (o.deliveryFeeDrop || 0);
+      return sum + ongkir;
+    }, 0);
+  }, [paidOrders]);
 
-  const labaBersih = totalPendapatan - totalPengeluaran;
+  // 3. Total Tagihan Keseluruhan Masuk dari Customer
+  const totalOmsetTransaksi = totalLabaBersihLaundry + totalOngkirDriver;
 
   const totalKg = useMemo(() => {
     return orders
@@ -115,12 +109,13 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
       paidOrders.forEach((o) => {
         const d = new Date(o.createdAt || Date.now());
         const dayIdx = (d.getDay() + 6) % 7;
-        counts[dayIdx] += o.laundryCost || 1;
+        const c = o.laundryCost || (o.pricePerUnit && o.actualWeightOrQty ? o.pricePerUnit * o.actualWeightOrQty : o.totalAmount) || 1;
+        counts[dayIdx] += c;
       });
       const maxVal = Math.max(...counts, 1);
       return days.map((label, idx) => {
         const val = counts[idx];
-        const heightPct = totalPendapatan > 0 ? `${Math.max(12, Math.round((val / maxVal) * 90))}%` : "12%";
+        const heightPct = totalLabaBersihLaundry > 0 ? `${Math.max(12, Math.round((val / maxVal) * 90))}%` : "12%";
         return { label, val, heightPct };
       });
     } else {
@@ -129,34 +124,17 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
       paidOrders.forEach((o) => {
         const d = new Date(o.createdAt || Date.now()).getDate();
         const slot = Math.min(5, Math.floor((d - 1) / 5));
-        counts[slot] += o.laundryCost || 1;
+        const c = o.laundryCost || (o.pricePerUnit && o.actualWeightOrQty ? o.pricePerUnit * o.actualWeightOrQty : o.totalAmount) || 1;
+        counts[slot] += c;
       });
       const maxVal = Math.max(...counts, 1);
       return intervals.map((label, idx) => {
         const val = counts[idx];
-        const heightPct = totalPendapatan > 0 ? `${Math.max(12, Math.round((val / maxVal) * 90))}%` : "12%";
+        const heightPct = totalLabaBersihLaundry > 0 ? `${Math.max(12, Math.round((val / maxVal) * 90))}%` : "12%";
         return { label, val, heightPct };
       });
     }
-  }, [chartFilter, paidOrders, totalPendapatan]);
-
-  const handleWithdraw = () => {
-    const amt = parseInt(withdrawAmount.replace(/[^0-9]/g, ""), 10);
-    if (isNaN(amt) || amt < 50000) {
-      Alert.alert("Gagal Tarik Dana", "Minimal penarikan saldo adalah Rp 50.000.");
-      return;
-    }
-    if (amt > labaBersih) {
-      Alert.alert("Saldo Tidak Cukup", "Jumlah penarikan melebihi saldo laba bersih yang tersedia.");
-      return;
-    }
-    Alert.alert(
-      "Permintaan Tarik Dana Terkirim",
-      `Permintaan transfer Rp ${amt.toLocaleString("id-ID")} ke rekening ${withdrawBank} (${withdrawAccountNo || "Tersimpan"}) sedang diproses oleh finance.`
-    );
-    setIsWithdrawModalOpen(false);
-    setWithdrawAmount("");
-  };
+  }, [chartFilter, paidOrders, totalLabaBersihLaundry]);
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -173,30 +151,33 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
           </Text>
         </View>
 
-        {/* 3 Summary Cards Row (Pendapatan, Pengeluaran, Laba Bersih) */}
+        {/* 3 Summary Cards Row (Laba Bersih Toko, Ongkir Kurir, Total Transaksi) */}
         <View style={styles.topThreeRow}>
-          {/* Card 1: Pendapatan */}
+          {/* Card 1: Laba Bersih Toko */}
           <View style={styles.topStatCard}>
-            <Text style={styles.topStatTitle}>Pendapatan</Text>
+            <Text style={styles.topStatTitle}>Laba Bersih Toko</Text>
             <Text style={[styles.topStatVal, { color: "#0D7A53" }]}>
-              Rp{"\n"}{totalPendapatan.toLocaleString("id-ID")}
+              Rp{"\n"}{totalLabaBersihLaundry.toLocaleString("id-ID")}
             </Text>
+            <Text style={{ fontSize: 9, color: "#6B7280", marginTop: 2 }}>Harga x Berat</Text>
           </View>
 
-          {/* Card 2: Pengeluaran */}
+          {/* Card 2: Ongkir Driver */}
           <View style={styles.topStatCard}>
-            <Text style={styles.topStatTitle}>Estimasi Operasional</Text>
-            <Text style={[styles.topStatVal, { color: "#DC2626" }]}>
-              Rp{"\n"}{totalPengeluaran.toLocaleString("id-ID")}
+            <Text style={styles.topStatTitle}>Ongkir Driver</Text>
+            <Text style={[styles.topStatVal, { color: "#0284C7" }]}>
+              Rp{"\n"}{totalOngkirDriver.toLocaleString("id-ID")}
             </Text>
+            <Text style={{ fontSize: 9, color: "#6B7280", marginTop: 2 }}>Rp 1.000 / KM</Text>
           </View>
 
-          {/* Card 3: Laba Bersih */}
+          {/* Card 3: Total Transaksi */}
           <View style={styles.topStatCard}>
-            <Text style={styles.topStatTitle}>Laba Bersih</Text>
-            <Text style={[styles.topStatVal, { color: "#0E6641" }]}>
-              Rp{"\n"}{labaBersih.toLocaleString("id-ID")}
+            <Text style={styles.topStatTitle}>Total Masuk</Text>
+            <Text style={[styles.topStatVal, { color: "#111827" }]}>
+              Rp{"\n"}{totalOmsetTransaksi.toLocaleString("id-ID")}
             </Text>
+            <Text style={{ fontSize: 9, color: "#6B7280", marginTop: 2 }}>Cuci + Ongkir</Text>
           </View>
         </View>
 
@@ -260,7 +241,7 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
                           styles.barFill,
                           {
                             height: b.heightPct as any,
-                            backgroundColor: totalPendapatan > 0 ? "#0E6641" : "#E5E7EB",
+                            backgroundColor: totalLabaBersihLaundry > 0 ? "#0E6641" : "#E5E7EB",
                           },
                         ]}
                       />
@@ -273,20 +254,15 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
           </View>
         </View>
 
-        {/* Laba Bersih Banner Card */}
+        {/* Info Direct Payment Card (No withdraw button needed!) */}
         <View style={styles.incomeCard}>
-          <Text style={styles.incomeLabel}>Saldo Siap Ditarik (Laba Bersih)</Text>
-          <Text style={styles.incomeValue}>Rp {labaBersih.toLocaleString("id-ID")}</Text>
+          <Text style={styles.incomeLabel}>Pemasukan Langsung Masuk ke Rekening / QRIS Toko</Text>
+          <Text style={styles.incomeValue}>Rp {totalLabaBersihLaundry.toLocaleString("id-ID")}</Text>
 
-          <View style={styles.growthRow}>
-            <TouchableOpacity
-              style={styles.withdrawBtn}
-              onPress={() => setIsWithdrawModalOpen(true)}
-              activeOpacity={0.85}
-            >
-              <Wallet size={16} color="#0E6641" />
-              <Text style={styles.withdrawBtnText}>Tarik Dana ke Rekening</Text>
-            </TouchableOpacity>
+          <View style={{ marginTop: 8, backgroundColor: "rgba(255, 255, 255, 0.15)", borderRadius: 10, padding: 10 }}>
+            <Text style={{ fontSize: 11, color: "#D1FAE5", lineHeight: 16 }}>
+              ✅ Semua uang pembayaran customer langsung masuk 100% ke rekening bank / QRIS toko Anda. Tidak ada penahanan dana ataupun potongan perantara sistem.
+            </Text>
           </View>
         </View>
 
@@ -325,7 +301,8 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
                     year: "numeric",
                   })
                 : "Hari ini";
-              const cost = ord.laundryCost || ord.totalAmount || 0;
+              const laundryCost = ord.laundryCost || (ord.pricePerUnit && ord.actualWeightOrQty ? Math.round(ord.pricePerUnit * ord.actualWeightOrQty) : ord.totalAmount) || 0;
+              const ongkir = (ord.deliveryFeePickup || 0) + (ord.deliveryFeeDrop || 0);
 
               return (
                 <View key={ord._id || ord.id || idx} style={[styles.itemRow, isLast && { borderBottomWidth: 0 }]}>
@@ -335,10 +312,16 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
                   <View style={{ flex: 1 }}>
                     <Text style={styles.itemTitle}>{ord.serviceName || "Layanan Laundry"}</Text>
                     <Text style={styles.itemSub}>
-                      {ord.customerName || "Customer"} • {ord.orderCode} • {dateStr}
+                      {ord.customerName || "Customer"} • #{ord.orderCode} • {dateStr}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: "#6B7280", marginTop: 2 }}>
+                      Cuci: Rp {laundryCost.toLocaleString("id-ID")} {ongkir > 0 ? `• Ongkir Kurir: Rp ${ongkir.toLocaleString("id-ID")}` : ""}
                     </Text>
                   </View>
-                  <Text style={styles.incomeText}>+ Rp {cost.toLocaleString("id-ID")}</Text>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={styles.incomeText}>+ Rp {laundryCost.toLocaleString("id-ID")}</Text>
+                    <Text style={{ fontSize: 9, color: "#0D7A53", fontWeight: "700" }}>Laba Bersih</Text>
+                  </View>
                 </View>
               );
             })
@@ -347,71 +330,6 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
 
         <View style={{ height: 90 }} />
       </ScrollView>
-
-      {/* Modal Tarik Dana */}
-      <Modal visible={isWithdrawModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Tarik Saldo Pendapatan</Text>
-              <TouchableOpacity onPress={() => setIsWithdrawModalOpen(false)}>
-                <X size={20} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalSub}>
-              Saldo tersedia: <Text style={{ fontWeight: "800", color: "#0E6641" }}>Rp {labaBersih.toLocaleString("id-ID")}</Text>
-            </Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Jumlah Penarikan (Rp)</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Contoh: 100000"
-                keyboardType="numeric"
-                value={withdrawAmount}
-                onChangeText={setWithdrawAmount}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Bank Tujuan</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="BCA / BRI / Mandiri / BNI"
-                value={withdrawBank}
-                onChangeText={setWithdrawBank}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Nomor Rekening</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Nomor rekening tujuan transfer"
-                keyboardType="numeric"
-                value={withdrawAccountNo}
-                onChangeText={setWithdrawAccountNo}
-              />
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setIsWithdrawModalOpen(false)}
-              >
-                <Text style={styles.cancelBtnText}>Batal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.submitBtn}
-                onPress={handleWithdraw}
-              >
-                <Text style={styles.submitBtnText}>Ajukan Penarikan</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Bottom Nav */}
       <View style={styles.bottomNav}>
