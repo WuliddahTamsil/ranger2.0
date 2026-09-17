@@ -7,6 +7,7 @@ export type Screen =
   | "c_catering_detail" | "c_catering_payment" | "c_catering_qris"
   | "c_catering_tracking"
   | "c_kos_detail" | "c_laundry_tracking"
+  | "c_ride" | "c_ride_tracking"
   | "d_home"
   | "pemilik_catering_home"
   | "pemilik_marketplace_home"
@@ -129,6 +130,8 @@ export type CateringPaymentOption = "lunas" | "dp30" | "dp50";
 
 export interface OrderItem {
   id: string;
+  orderCode?: string;
+  createdAt?: string;
   type: string;
   iconName: string;
   color: string;
@@ -148,6 +151,10 @@ export interface OrderItem {
   remainingAmount?: number;
   paymentDueDate?: string;
   paymentReminder?: string;
+  paymentBankName?: string;
+  paymentAccountNumber?: string;
+  paymentAccountHolder?: string;
+  paymentQrisImageUrl?: string;
   paymentReference?: string;
   paymentHistory?: any[];
   deliveryProofUrl?: string;
@@ -157,6 +164,19 @@ export interface OrderItem {
   notes?: string;
   address?: any;
   items?: any[];
+  // Ride specific
+  pickup?: { address: string; latitude?: number; longitude?: number; placeName?: string };
+  destination?: { address: string; latitude?: number; longitude?: number; placeName?: string };
+  customerNote?: string;
+  driverName?: string;
+  driverPhone?: string;
+  driverPhoto?: string;
+  driverRating?: number;
+  driverVehicle?: string;
+  driverPlate?: string;
+  estimatedDistance?: number;
+  estimatedDuration?: number;
+  estimatedFare?: number;
 }
 
 export interface NotifItem {

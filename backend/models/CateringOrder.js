@@ -40,6 +40,7 @@ const cateringOrderSchema = new mongoose.Schema(
     driverId: { type: String, default: "", index: true },
     driverName: { type: String, default: "" },
     driverPhone: { type: String, default: "" },
+    declinedByDrivers: { type: [String], default: [] },
     menuName: {
       type: String,
       required: true,
@@ -77,6 +78,12 @@ const cateringOrderSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    paymentBankName: { type: String, default: "" },
+    paymentAccountNumber: { type: String, default: "" },
+    paymentAccountHolder: { type: String, default: "" },
+    paymentQrisImageUrl: { type: String, default: "" },
+    paymentProofUrl: { type: String, default: "" },
+    paymentRejectionReason: { type: String, default: "" },
     paymentStatus: {
       type: String,
       required: true,
@@ -88,6 +95,31 @@ const cateringOrderSchema = new mongoose.Schema(
     remainingAmount: {
       type: Number,
       required: true,
+    },
+    paymentDueAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    paymentReminder: {
+      type: String,
+      default: "",
+    },
+    paymentHistory: {
+      type: [{
+        paymentId: { type: String, required: true },
+        type: { type: String, enum: ["DP", "PELUNASAN", "COD"], required: true },
+        amount: { type: Number, required: true, min: 0 },
+        method: { type: String, required: true },
+        status: { type: String, enum: ["MENUNGGU_VERIFIKASI", "TERVERIFIKASI", "DITOLAK"], default: "MENUNGGU_VERIFIKASI" },
+        reference: { type: String, default: "" },
+        proofUrl: { type: String, default: "" },
+        rejectionReason: { type: String, default: "" },
+        verifiedBy: { type: String, default: "" },
+        verifiedAt: { type: Date, default: null },
+        createdAt: { type: Date, default: Date.now },
+      }],
+      default: [],
     },
     cateringDate: {
       type: String,

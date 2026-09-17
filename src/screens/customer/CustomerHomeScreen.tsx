@@ -25,6 +25,7 @@ import {
   Building2,
   ChevronRight,
   LogOut,
+  Bike,
 } from "lucide-react-native";
 
 interface CustomerHomeProps extends Nav {
@@ -37,6 +38,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
     { id: "c_catering", name: "Kanyaah\nCatering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5" },
     { id: "c_laundry", name: "Kanyaah\nLaundry", icon: Wind, color: "#0284C7", bg: "#E0F2FE" },
     { id: "c_kos", name: "Kanyaah\nHomestay", icon: Building2, color: "#9333EA", bg: "#F3E8FF" },
+    { id: "c_ride", name: "Kanyaah\nRide", icon: Bike, color: "#1B7A4E", bg: "#E8F5EE" },
   ] as const;
 
   return (

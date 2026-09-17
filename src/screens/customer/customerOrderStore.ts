@@ -47,6 +47,14 @@ export const addCustomerOrder = (order: OrderItem) => {
   void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(customerOrders));
 };
 
+export const updateCustomerOrder = (updatedOrder: OrderItem) => {
+  customerOrders = customerOrders.map((order) =>
+    order.id === updatedOrder.id ? { ...order, ...updatedOrder } : order
+  );
+  notify();
+  void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(customerOrders));
+};
+
 export const getLatestCateringOrder = () =>
   customerOrders.find((order) => order.type.toLowerCase().includes("cater"));
 

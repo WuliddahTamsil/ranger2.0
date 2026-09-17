@@ -11,104 +11,23 @@ export interface HistoryItem {
   itemSummary: string;
   total: number;
   time: string;
-  status: "Selesai" | "Dibatalkan";
+  status: string;
   rawOrder?: any;
 }
 
 interface RiwayatProps {
   orders: any[]; // dynamic orders from parent
+  loadError?: string;
+  onRetry?: () => void;
 }
 
-export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
+export const Riwayat: React.FC<RiwayatProps> = ({ orders, loadError, onRetry }) => {
   const [filter, setFilter] = useState<"Semua" | "Selesai" | "Dibatalkan">("Semua");
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(null);
   const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
 
-  // 1. Mock fallback history data with rich invoice details
-  const mockHistory: HistoryItem[] = [
-    {
-      id: "CAT-2401",
-      customerName: "Deni Kurniawan",
-      itemSummary: "Box Nasi Timbel Komplit (10x)",
-      total: 250000,
-      time: "Hari ini, 08:30",
-      status: "Selesai",
-      rawOrder: {
-        id: "CAT-2401",
-        customer: "Deni Kurniawan",
-        customerPhone: "0812-3456-7890",
-        address: "Perum Telang Indah Blok C No. 14, Kamal, Bangkalan",
-        storeName: "Dapur Barokah Catering Bangkalan",
-        storeAddress: "Jl. Raya Telang No. 45, Kamal, Bangkalan",
-        driver: { name: "Wuwu", vehicle: "Motor", plateNumber: "M 4128 AA" },
-        items: [{ name: "Box Nasi Timbel Komplit", quantity: 10, price: 25000, total: 250000 }],
-        subtotal: 235000,
-        deliveryFee: 12000,
-        serviceFee: 3000,
-        total: 250000,
-        paymentMethod: "QRIS / Transfer Bank BCA",
-        paymentStatus: "Lunas",
-        time: "08:30 WIB",
-      },
-    },
-    {
-      id: "CAT-2399",
-      customerName: "Ayu Lestari",
-      itemSummary: "Nasi Tumpeng Mini (2x) & Es Jeruk (20x)",
-      total: 460000,
-      time: "Kemarin, 16:10",
-      status: "Selesai",
-      rawOrder: {
-        id: "CAT-2399",
-        customer: "Ayu Lestari",
-        customerPhone: "0857-9876-1122",
-        address: "Gedung Pertemuan Rato Ebu, Bangkalan",
-        storeName: "Dapur Barokah Catering Bangkalan",
-        storeAddress: "Jl. Raya Telang No. 45, Kamal, Bangkalan",
-        driver: { name: "Wuwu", vehicle: "Motor", plateNumber: "M 4128 AA" },
-        items: [
-          { name: "Nasi Tumpeng Mini", quantity: 2, price: 150000, total: 300000 },
-          { name: "Es Jeruk Segar", quantity: 20, price: 8000, total: 160000 },
-        ],
-        subtotal: 445000,
-        deliveryFee: 12000,
-        serviceFee: 3000,
-        total: 460000,
-        paymentMethod: "Transfer Bank Mandiri",
-        paymentStatus: "Lunas",
-        time: "16:10 WIB",
-      },
-    },
-    {
-      id: "CAT-2394",
-      customerName: "Rizky Maulana",
-      itemSummary: "Box Ayam Bakar Madu (30x)",
-      total: 840000,
-      time: "05 Agu, 11:30",
-      status: "Dibatalkan",
-      rawOrder: {
-        id: "CAT-2394",
-        customer: "Rizky Maulana",
-        customerPhone: "0877-2233-4455",
-        address: "Jl. Soekarno Hatta No. 88, Bangkalan",
-        storeName: "Dapur Barokah Catering Bangkalan",
-        storeAddress: "Jl. Raya Telang No. 45, Kamal, Bangkalan",
-        items: [{ name: "Box Ayam Bakar Madu", quantity: 30, price: 28000, total: 840000 }],
-        subtotal: 825000,
-        deliveryFee: 12000,
-        serviceFee: 3000,
-        total: 840000,
-        paymentMethod: "Saldo Dompet GEOVERSE",
-        paymentStatus: "Dibatalkan",
-        time: "11:30 WIB",
-      },
-    },
-  ];
-
-  // 2. Parse completed/cancelled orders from parent
-  const completedOrCancelledOrders: HistoryItem[] = orders
-    .filter((o) => o.status === "Selesai" || o.status === "Dibatalkan")
-    .map((o) => {
+  // Show backend orders as soon as they are created; filters can isolate terminal states.
+  const historyOrders: HistoryItem[] = orders.map((o) => {
       const itemSummary = o.items
         ? o.items.map((item: any) => `${item.name} (${item.quantity}x)`).join(" & ")
         : "Menu Catering";
@@ -117,17 +36,16 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
         customerName: o.customer,
         itemSummary: itemSummary || "Menu Catering",
         total: o.total,
-        time: `Hari ini, ${o.time}`,
-        status: o.status as "Selesai" | "Dibatalkan",
+        time: o.createdAt
+          ? new Date(o.createdAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })
+          : o.time,
+        status: o.status,
         rawOrder: o,
       };
     });
 
-  // Combine both sets of data
-  const combinedHistory = [...completedOrCancelledOrders, ...mockHistory];
-
   // Filter based on active filter tab
-  const visibleHistory = combinedHistory.filter(
+  const visibleHistory = historyOrders.filter(
     (item) => filter === "Semua" || item.status === filter
   );
 
@@ -163,22 +81,22 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
       time: item.time?.includes(",") ? item.time.split(",")[1].trim() : "14:45 WIB",
       status: item.status,
       orderType: "Catering",
-      storeName: raw.storeName || "Dapur Barokah Catering Bangkalan",
-      storeAddress: raw.storeAddress || "Jl. Raya Telang No. 45, Kamal, Bangkalan",
+      storeName: raw.storeName || "Dapur Catering",
+      storeAddress: raw.storeAddress || "Alamat dapur belum tersedia",
       customerName: item.customerName || raw.customer || "Pemesan",
-      customerPhone: raw.customerPhone || "0812-3456-7890",
-      customerAddress: raw.address || "Area Kampus UTM, Bangkalan",
-      driverName: raw.driver?.name || "Wuwu (Kurir GEOVERSE)",
-      driverVehicle: raw.driver?.vehicle || "Motor",
-      driverPlate: raw.driver?.plateNumber || "M 4128 AA",
+      customerPhone: raw.customerPhone || "Tidak tersedia",
+      customerAddress: raw.address || "Alamat pengiriman belum tersedia",
+      driverName: raw.driver?.name || (raw.driverId ? "Driver GEOVERSE" : "Belum ditugaskan"),
+      driverVehicle: raw.driver?.vehicle || undefined,
+      driverPlate: raw.driver?.plateNumber || undefined,
       items: parsedItems,
       subtotal: raw.subtotal || item.total,
       deliveryFee: raw.deliveryFee ?? 5000,
       serviceFee: raw.serviceFee ?? 1000,
       discount: raw.discount || 0,
       total: item.total,
-      paymentMethod: raw.paymentMethod || "QRIS / Transfer Bank BCA",
-      paymentStatus: item.status === "Dibatalkan" ? "Dibatalkan" : "Lunas",
+      paymentMethod: raw.paymentMethod || "Belum dipilih",
+      paymentStatus: raw.paymentStatus || (item.status === "Dibatalkan" ? "Dibatalkan" : item.status === "Selesai" ? "Menunggu konfirmasi" : "Belum dikonfirmasi"),
     };
 
     setSelectedInvoice(invoiceData);
@@ -189,7 +107,13 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
     <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Riwayat Transaksi</Text>
-        <Text style={styles.subtitle}>Temukan pesanan catering selesai dan dibatalkan.</Text>
+        <Text style={styles.subtitle}>Semua pesanan Catering yang tercatat di akun Anda.</Text>
+        {loadError ? (
+          <View style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" }}>
+            <Text style={{ color: "#9A3412", fontSize: 12, lineHeight: 17 }}>{loadError}</Text>
+            {onRetry ? <TouchableOpacity onPress={onRetry} style={{ alignSelf: "flex-start", marginTop: 8 }}><Text style={{ color: "#C2410C", fontSize: 12, fontWeight: "700" }}>Coba lagi</Text></TouchableOpacity> : null}
+          </View>
+        ) : null}
 
         {/* Filter Tab Row */}
         <View style={styles.filterRow}>
@@ -223,13 +147,14 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders }) => {
           {visibleHistory.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyTitle}>Tidak ada riwayat</Text>
-              <Text style={styles.emptySubtitle}>Belum ada transaksi dengan status ini.</Text>
+              <Text style={styles.emptySubtitle}>{loadError ? "Periksa koneksi dan muat ulang untuk mengambil pesanan dari server." : "Pesanan Catering yang tercatat akan muncul di sini."}</Text>
             </View>
           ) : (
             visibleHistory.map((item) => {
               const isCanceled = item.status === "Dibatalkan";
-              const statusBg = isCanceled ? "#FEE2E2" : "#E8F5EE";
-              const statusColor = isCanceled ? "#B91C1C" : "#1B7A4E";
+              const isCompleted = item.status === "Selesai";
+              const statusBg = isCanceled ? "#FEE2E2" : isCompleted ? "#E8F5EE" : "#FEF3C7";
+              const statusColor = isCanceled ? "#B91C1C" : isCompleted ? "#1B7A4E" : "#B45309";
 
               return (
                 <TouchableOpacity

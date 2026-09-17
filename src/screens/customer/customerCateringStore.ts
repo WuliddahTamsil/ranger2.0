@@ -7,6 +7,12 @@ export interface SelectedCateringShop {
   phone: string;
   profilePhoto?: string;
   description?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolder?: string;
+  qrisImageUrl?: string;
+  bankTransferEnabled?: boolean;
+  qrisEnabled?: boolean;
 }
 
 let selectedCateringShop: SelectedCateringShop | null = null;

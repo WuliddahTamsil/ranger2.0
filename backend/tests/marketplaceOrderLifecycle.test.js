@@ -2,6 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { getMarketplaceOrderActorRole, getMarketplaceTransition, getMarketplaceStatusNotification, isValidDeliveryProofUrl } = require("../utils/marketplaceOrderLifecycle");
 const { requireRole } = require("../middleware/requireRole");
+const { requireCustomerOrderOwner } = require("../middleware/requireCustomerOrderOwner");
+const { getRoleDataValue } = require("../utils/roleData");
 
 test("role middleware distinguishes unauthenticated and unauthorized callers", () => {
   const driverOnly = requireRole("driver");
@@ -18,6 +20,33 @@ test("role middleware distinguishes unauthenticated and unauthorized callers", (
   let nextCalled = false;
   driverOnly({ authUser: { role: "driver" } }, response(), () => { nextCalled = true; });
   assert.equal(nextCalled, true);
+});
+
+test("customer order middleware accepts customer role variants and rejects other roles", () => {
+  const response = () => ({ statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
+  const owner = { _id: "customer-1", role: " CUSTOMER " };
+  let nextCalled = false;
+
+  requireCustomerOrderOwner({ authUser: owner, params: { customerId: "customer-1" }, body: {} }, response(), () => { nextCalled = true; });
+  assert.equal(nextCalled, true);
+
+  const indonesianRoleResponse = response();
+  requireCustomerOrderOwner({ authUser: { _id: "customer-1", role: "pelanggan" }, params: { customerId: "customer-1" } }, indonesianRoleResponse, () => {});
+  assert.equal(indonesianRoleResponse.statusCode, 200);
+
+  const partnerResponse = response();
+  requireCustomerOrderOwner({ authUser: { _id: "owner-1", role: "pemilik_marketplace" }, params: { customerId: "owner-1" } }, partnerResponse, () => assert.fail("next must not run"));
+  assert.equal(partnerResponse.statusCode, 403);
+
+  const mismatchResponse = response();
+  requireCustomerOrderOwner({ authUser: owner, params: { customerId: "another-customer" } }, mismatchResponse, () => assert.fail("next must not run"));
+  assert.equal(mismatchResponse.statusCode, 403);
+});
+
+test("role data lookup reads Mongoose maps and serialized objects", () => {
+  assert.equal(getRoleDataValue({ roleData: new Map([["isDapurOpen", "true"]]) }, "isDapurOpen"), "true");
+  assert.equal(getRoleDataValue({ roleData: { isDapurOpen: "true" } }, "isDapurOpen"), "true");
+  assert.equal(getRoleDataValue({ roleData: new Map() }, "isDapurOpen"), undefined);
 });
 
 test("driver can only move through the marketplace delivery lifecycle", () => {

@@ -4,6 +4,7 @@ const MarketplaceOrder = require("../models/MarketplaceOrder");
 const CateringOrder = require("../models/CateringOrder");
 const LaundryOrder = require("../models/LaundryOrder");
 const Booking = require("../models/Booking");
+const RideOrder = require("../models/RideOrder");
 
 const ownerRoles = new Set([
   "pemilik_marketplace",
@@ -20,6 +21,7 @@ const findOrderByIdentifier = async (identifier) => {
     [CateringOrder, "catering", "orderCode"],
     [LaundryOrder, "laundry", "orderCode"],
     [Booking, "kos", "bookingCode"],
+    [RideOrder, "ride", "orderCode"],
   ];
 
   for (const [Model, orderType, codeField] of models) {

@@ -34,7 +34,9 @@ import {
   CheckCircle,
   Heart,
   PlayCircle,
+  Bike,
 } from "lucide-react-native";
+import { fetchCustomerRides } from "../../services/rideService";
 import { rp } from "../../utils/formatters";
 import { RESTAURANTS, LAUNDRIES, KOS_LIST } from "../../constants/mockData";
 import { Nav, OrderItem } from "../../types";
@@ -170,9 +172,10 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       if (loading) return;
       loading = true;
       try {
-        const [marketplaceResult, cateringResult] = await Promise.all([
+        const [marketplaceResult, cateringResult, rideResult] = await Promise.all([
           getMarketplaceOrdersForCustomer(authAccount.id),
           getCateringOrdersForCustomer(authAccount.id),
+          fetchCustomerRides(authAccount.id),
         ]);
         if (!activeOrderLoader) return;
         const marketplaceLoadFailed = !marketplaceResult.success || !Array.isArray(marketplaceResult.data);
@@ -202,6 +205,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         discount: order.discount,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
+        paymentBankName: order.paymentBankName,
+        paymentAccountNumber: order.paymentAccountNumber,
+        paymentAccountHolder: order.paymentAccountHolder,
+        paymentQrisImageUrl: order.paymentQrisImageUrl,
+        paymentReminder: order.paymentReminder,
         items: order.items,
         notes: order.notes,
         address: order.address,
@@ -235,6 +243,13 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         paymentOption: order.paymentOption,
         paidAmount: order.paidAmount,
         remainingAmount: order.remainingAmount,
+        paymentBankName: order.paymentBankName,
+        paymentAccountNumber: order.paymentAccountNumber,
+        paymentAccountHolder: order.paymentAccountHolder,
+        paymentQrisImageUrl: order.paymentQrisImageUrl,
+        paymentHistory: order.paymentHistory || [],
+        paymentReminder: order.paymentReminder,
+        paymentDueDate: order.paymentDueAt,
         cateringDate: order.cateringDate,
         cateringTime: order.cateringTime,
         cateringPortions: order.portions,
@@ -251,37 +266,81 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         storeAddress: order.storeAddress,
       })) : null;
 
+        const rideOrders: OrderItem[] | null = rideResult.success && Array.isArray(rideResult.data) ? rideResult.data.map((order: any) => ({
+          id: order._id,
+          orderCode: order.orderCode || `#RNG-RIDE-${order._id.slice(-8).toUpperCase()}`,
+          type: "Kanyaah Ride",
+          iconName: "Bike",
+          color: "#1B7A4E",
+          item: "Kanyaah Ride",
+          detail: `${order.pickup?.address || "Penjemputan"} → ${order.destination?.address || "Tujuan"}`,
+          status: order.status === "SEARCHING_DRIVER" ? "Mencari Driver"
+            : order.status === "DRIVER_ASSIGNED" || order.status === "DRIVER_ON_THE_WAY" ? "Menuju Penjemputan"
+            : order.status === "DRIVER_ARRIVED" ? "Driver Sampai"
+            : order.status === "TRIP_STARTED" ? "Dalam Perjalanan"
+            : order.status === "COMPLETED" ? "Selesai" : "Dibatalkan",
+          statusColor: order.status === "COMPLETED" ? "green" : order.status === "CANCELLED" ? "red" : "orange",
+          date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+          createdAt: order.createdAt || new Date().toISOString(),
+          total: order.totalAmount,
+          paymentMethod: order.paymentMethod,
+          paymentStatus: order.paymentStatus,
+          driverId: order.driverId,
+          driverName: order.driverName,
+          driverPhone: order.driverPhone,
+          driverPhoto: order.driverPhoto,
+          driverRating: order.driverRating,
+          driverVehicle: order.driverVehicle,
+          driverPlate: order.driverPlate,
+          pickup: order.pickup,
+          destination: order.destination,
+          customerNote: order.customerNote,
+          estimatedDistance: order.estimatedDistance,
+          estimatedDuration: order.estimatedDuration,
+          estimatedFare: order.estimatedFare,
+        })) : null;
+
         const currentOrders = ordersRef.current;
         const allCustomerOrders = [
           ...(marketplaceOrders ?? currentOrders.filter((order) => order.type === "Marketplace")),
           ...(cateringOrders ?? currentOrders.filter((order) => order.type === "Catering")),
+          ...(rideOrders ?? currentOrders.filter((order) => order.type === "Kanyaah Ride")),
         ];
+
+        allCustomerOrders.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeB - timeA;
+        });
+
         ordersRef.current = allCustomerOrders;
         setOrders(allCustomerOrders);
 
         // Dynamically build chat threads for persisted orders.
         const dynamicThreads: CustomerChatThread[] = [];
         allCustomerOrders.forEach((o: any) => {
-        if (o.driverName) {
-          dynamicThreads.push({
-            id: `driver_${o.id}`,
-            orderId: o.id,
-            participantType: "driver",
-            participantName: `${o.driverName} (Kurir)`,
-            lastMessage: `Kurir mengantar pesanan #${o.id.slice(-5)}.`,
-            updatedAt: "Baru saja",
-            unreadCount: 0,
-          });
-        }
-        dynamicThreads.push({
-          id: `merchant_${o.id}`,
-          orderId: o.id,
-          participantType: "merchant",
-          participantName: o.storeName || o.detail?.split(" • ")[0] || "Mitra Toko",
-          lastMessage: `Status pesanan: ${o.status}.`,
-          updatedAt: "Hari ini",
-          unreadCount: 0,
-        });
+          if (o.driverName) {
+            dynamicThreads.push({
+              id: `driver_${o.id}`,
+              orderId: o.id,
+              participantType: "driver",
+              participantName: o.type === "Kanyaah Ride" ? `${o.driverName} (Driver Kanyaah Ride)` : `${o.driverName} (Kurir)`,
+              lastMessage: o.type === "Kanyaah Ride" ? `Driver Kanyaah Ride ${o.orderCode || `#${o.id.slice(-5)}`}.` : `Kurir mengantar pesanan #${o.id.slice(-5)}.`,
+              updatedAt: "Baru saja",
+              unreadCount: 0,
+            });
+          }
+          if (o.type !== "Kanyaah Ride" && o.storeName) {
+            dynamicThreads.push({
+              id: `merchant_${o.id}`,
+              orderId: o.id,
+              participantType: "merchant",
+              participantName: o.storeName,
+              lastMessage: `Status pesanan: ${o.status}.`,
+              updatedAt: "Hari ini",
+              unreadCount: 0,
+            });
+          }
         });
         setChatThreads(dynamicThreads);
       } catch {
@@ -518,6 +577,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             onOpenCatering={() => navigate("c_catering")}
             onOpenLaundry={() => navigate("c_laundry")}
             onOpenKos={() => navigate("c_kos")}
+            onOpenRide={() => navigate("c_ride")}
           />
         );
       case 2:
@@ -531,6 +591,10 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             ordersLoading={ordersLoading}
             ordersLoadError={ordersLoadError}
             onRetryOrders={() => setOrdersReloadKey((key) => key + 1)}
+            onOpenRideTracking={() => navigate("c_ride_tracking")}
+            onOpenCateringTracking={() => navigate("c_catering_tracking")}
+            onOpenCateringQris={() => navigate("c_catering_qris")}
+            navigate={navigate}
           />
         );
       case 3:
@@ -638,7 +702,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
 
         {/* Service grid row */}
         <Text style={styles.sectionTitle}>Layanan Utama</Text>
-        <View style={styles.servicesGrid}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.servicesScrollList}
+        >
           {/* Marketplace -> Kanyaah Mart */}
           <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_marketplace")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5EE" }]}>
@@ -670,7 +738,15 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             </View>
             <Text style={styles.serviceText}>Kanyaah{"\n"}Homestay</Text>
           </TouchableOpacity>
-        </View>
+
+          {/* Ride -> Kanyaah Ride */}
+          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_ride")} activeOpacity={0.75}>
+            <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5EE" }]}>
+              <Bike size={22} color="#1B7A4E" />
+            </View>
+            <Text style={styles.serviceText}>Kanyaah{"\n"}Ride</Text>
+          </TouchableOpacity>
+        </ScrollView>
 
         {/* Nearby Stores horizontal lists */}
         <Text style={styles.sectionTitle}>Toko Marketplace</Text>
@@ -1263,14 +1339,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 10,
   },
+  servicesScrollList: {
+    paddingHorizontal: 20,
+    gap: 10,
+  },
   serviceItem: {
-    flex: 1,
+    minWidth: 72,
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     paddingVertical: 14,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     alignItems: "center",
     justifyContent: "center",
     minHeight: 112,

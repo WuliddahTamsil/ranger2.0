@@ -77,6 +77,16 @@ interface CateringHomeProps extends Nav {
   onUpdateAccount?: (account: AuthAccount) => void;
 }
 
+const resolveCateringPaymentFlag = (explicitValue: unknown, fallback: boolean) => {
+  if (typeof explicitValue === "boolean") return explicitValue;
+  if (typeof explicitValue === "string") {
+    const normalized = explicitValue.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return fallback;
+};
+
 export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, onUpdateAccount }) => {
   const [currentTab, setCurrentTab] = useState<number>(0);
 
@@ -101,20 +111,34 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
   };
 
   // 1. Global Store Info State
-  const [storeInfo, setStoreInfo] = useState(() => ({
-    ownerName: authAccount?.name || "",
-    storeName: authAccount?.roleData.businessName || "Nama catering belum diatur",
-    phone: authAccount?.phone || "",
-    email: authAccount?.email || "",
-    address: authAccount?.roleData.businessAddress || authAccount?.address || "",
-    description: "Menyediakan layanan catering prasmanan dan nasi box tumpeng berkualitas di Kamojang.",
-    isOpen: authAccount?.roleData.isDapurOpen === "true",
-    isVerified: true,
-    profileImage: authAccount?.profilePhoto || null,
-  }));
+  const [storeInfo, setStoreInfo] = useState(() => {
+    const hasBankTransferDetails = Boolean(authAccount?.roleData.cateringBankName && authAccount?.roleData.cateringBankAccountNumber && authAccount?.roleData.cateringBankAccountHolder);
+    const hasQrisImage = Boolean(authAccount?.roleData.cateringQrisImageUrl);
+
+    return {
+      ownerName: authAccount?.name || "",
+      storeName: authAccount?.roleData.businessName || "Nama catering belum diatur",
+      phone: authAccount?.phone || "",
+      email: authAccount?.email || "",
+      address: authAccount?.roleData.businessAddress || authAccount?.address || "",
+      description: "Menyediakan layanan catering prasmanan dan nasi box tumpeng berkualitas di Kamojang.",
+      isOpen: authAccount?.roleData.isDapurOpen === "true",
+      isVerified: true,
+      profileImage: authAccount?.profilePhoto || null,
+      bankName: authAccount?.roleData.cateringBankName || "",
+      bankAccountNumber: authAccount?.roleData.cateringBankAccountNumber || "",
+      bankAccountHolder: authAccount?.roleData.cateringBankAccountHolder || "",
+      qrisImageUrl: authAccount?.roleData.cateringQrisImageUrl || "",
+      bankTransferEnabled: resolveCateringPaymentFlag(authAccount?.roleData.cateringBankTransferEnabled, hasBankTransferDetails),
+      qrisEnabled: resolveCateringPaymentFlag(authAccount?.roleData.cateringQrisEnabled, hasQrisImage),
+    };
+  });
 
   useEffect(() => {
     if (!authAccount) return;
+    const hasBankTransferDetails = Boolean(authAccount.roleData.cateringBankName && authAccount.roleData.cateringBankAccountNumber && authAccount.roleData.cateringBankAccountHolder);
+    const hasQrisImage = Boolean(authAccount.roleData.cateringQrisImageUrl);
+
     setStoreInfo((current) => ({
       ...current,
       ownerName: authAccount.name,
@@ -125,6 +149,12 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
       description: authAccount.roleData.menuSpecialty || current.description,
       isOpen: authAccount.roleData.isDapurOpen === "true",
       profileImage: authAccount.profilePhoto || null,
+      bankName: authAccount.roleData.cateringBankName || current.bankName,
+      bankAccountNumber: authAccount.roleData.cateringBankAccountNumber || current.bankAccountNumber,
+      bankAccountHolder: authAccount.roleData.cateringBankAccountHolder || current.bankAccountHolder,
+      qrisImageUrl: authAccount.roleData.cateringQrisImageUrl || current.qrisImageUrl,
+      bankTransferEnabled: resolveCateringPaymentFlag(authAccount.roleData.cateringBankTransferEnabled, hasBankTransferDetails),
+      qrisEnabled: resolveCateringPaymentFlag(authAccount.roleData.cateringQrisEnabled, hasQrisImage),
     }));
   }, [authAccount]);
 
@@ -158,6 +188,8 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
 
   // 3. Global Orders State
   const [orders, setOrders] = useState<OrderData[]>([]);
+  const [ordersLoadError, setOrdersLoadError] = useState("");
+  const [ordersReloadKey, setOrdersReloadKey] = useState(0);
   const [drivers, setDrivers] = useState<{ id: string; name: string; phone: string; vehicleType?: string; plateNumber?: string }[]>([]);
 
   useEffect(() => {
@@ -175,10 +207,21 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
   }, []);
 
   useEffect(() => {
-    if (!authAccount) return;
+    if (!authAccount?.id) {
+      setOrders([]);
+      setOrdersLoadError("");
+      return;
+    }
+    let active = true;
     const fetchOrders = async () => {
-      const result = await getCateringOrdersForOwner(authAccount.id);
-      if (result.success && result.data) {
+      try {
+        const result = await getCateringOrdersForOwner(authAccount.id);
+        if (!active) return;
+        if (!result.success || !Array.isArray(result.data)) {
+          setOrdersLoadError(result.message || "Pesanan Catering belum berhasil dimuat. Coba lagi.");
+          return;
+        }
+        setOrdersLoadError("");
         const mapped = result.data.map((o: any) => {
           let frontendStatus = o.status;
           if (o.status === "Dikirim" || o.status === "Mengantar") {
@@ -196,6 +239,20 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             total: o.totalAmount,
             subtotal: o.totalAmount - (o.deliveryFee || 0) - (o.serviceFee || 0),
             deliveryFee: o.deliveryFee || 0,
+            paymentMethod: o.paymentMethod,
+            paymentStatus: o.paymentStatus,
+            paymentOption: o.paymentOption,
+            paidAmount: o.paidAmount,
+            remainingAmount: o.remainingAmount,
+            paymentBankName: o.paymentBankName,
+            paymentAccountNumber: o.paymentAccountNumber,
+            paymentAccountHolder: o.paymentAccountHolder,
+            paymentQrisImageUrl: o.paymentQrisImageUrl,
+            paymentProofUrl: o.paymentProofUrl || (o.paymentHistory && o.paymentHistory[o.paymentHistory.length - 1]?.proofUrl) || "",
+            paymentRejectionReason: o.paymentRejectionReason || "",
+            paymentHistory: o.paymentHistory || [],
+            paymentDueAt: o.paymentDueAt,
+            paymentReminder: o.paymentReminder,
             time: new Date(o.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
             status: frontendStatus,
             address: o.address || "Jl. Telang Indah, Kamal",
@@ -215,12 +272,14 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           };
         });
         setOrders(mapped);
+      } catch {
+        if (active) setOrdersLoadError("Pesanan Catering belum berhasil dimuat. Periksa koneksi lalu coba lagi.");
       }
     };
     void fetchOrders();
     const interval = setInterval(() => void fetchOrders(), 3500);
-    return () => clearInterval(interval);
-  }, [authAccount]);
+    return () => { active = false; clearInterval(interval); };
+  }, [authAccount?.id, ordersReloadKey]);
 
   // 4. Global Withdrawals State
   const [withdrawals, setWithdrawals] = useState<any[]>([
@@ -435,7 +494,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           />
         );
       case 2:
-        return <Riwayat orders={orders} />;
+        return <Riwayat orders={orders} loadError={ordersLoadError} onRetry={() => setOrdersReloadKey((key) => key + 1)} />;
       case 3:
         return (
           <Pendapatan
@@ -446,7 +505,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           />
         );
       case 4:
-        return <Profile storeInfo={storeInfo} setStoreInfo={setStoreInfo} userId={authAccount?.id} navigate={navigate} />;
+        return <Profile storeInfo={storeInfo} setStoreInfo={setStoreInfo} userId={authAccount?.id} authAccount={authAccount} onUpdateAccount={onUpdateAccount} navigate={navigate} />;
       default:
         return renderBerandaContent();
     }

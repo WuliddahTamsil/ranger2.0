@@ -51,12 +51,22 @@ import { rp } from "../../utils/formatters";
 import { getChatMessages, sendChatMessage, uploadFileToBackend } from "../../services/api";
 import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
+import { SafeCallModal } from "../../components/SafeCallModal";
 
 export interface DriverOrder {
   id: string;
+  orderCode?: string;
+  orderCategory?: "RIDE" | "DELIVERY";
+  serviceType?: string;
+  vehicleType?: "MOTOR" | "CAR" | string;
+  estimatedDuration?: number;
+  driverId?: string | null;
+  rawStatus?: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
   customer: string;
   phone: string;
-  type: "Catering" | "Marketplace" | "Laundry";
+  type: "Catering" | "Marketplace" | "Laundry" | "Kanyaah Ride";
   time: string;
   createdAt?: string;
   completedAt?: string;
@@ -73,6 +83,9 @@ export interface DriverOrder {
   storePhone?: string;
   ownerId?: string;
   deliveryProofUrl?: string;
+  notes?: string;
+  pickup?: { address: string; latitude: number; longitude: number };
+  destination?: { address: string; latitude: number; longitude: number };
   addressSnapshot?: {
     label?: string;
     fullAddress?: string;
@@ -95,10 +108,13 @@ interface OrderProps {
   onAcceptOrder?: (orderId: string) => Promise<boolean | DriverOrder>;
   onDeclineOrder?: (orderId: string) => Promise<boolean>;
   driverId?: string;
+  driverName?: string;
+  driverVehicle?: string;
+  driverPlate?: string;
 }
 
 interface ChatAttachment {
-  type: "image" | "file";
+  type: "image" | "file" | "video";
   uri: string;
   name?: string;
   size?: string;
@@ -124,8 +140,14 @@ export const Order: React.FC<OrderProps> = ({
   onAcceptOrder,
   onDeclineOrder,
   driverId,
+  driverName,
+  driverVehicle,
+  driverPlate,
 }) => {
-  const [activeTab, setActiveTab] = useState<"Masuk" | "Aktif" | "Selesai" | "Batal">("Masuk");
+  const effectiveDriverName = driverName || "Driver Rangers";
+  const effectiveDriverVehicle = [driverVehicle, driverPlate].filter(Boolean).join(" • ") || "Sepeda Motor";
+
+  const [activeTab, setActiveTab] = useState<"Semua" | "Ride" | "Delivery" | "Aktif" | "Selesai">("Semua");
   const [selectedOrder, setSelectedOrder] = useState<DriverOrder | null>(null);
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [chatTarget, setChatTarget] = useState<"owner" | "customer">("owner");
@@ -142,6 +164,9 @@ export const Order: React.FC<OrderProps> = ({
   const [proofUploadOrderId, setProofUploadOrderId] = useState<string | null>(null);
   const [proofUploadError, setProofUploadError] = useState<{ orderId: string; message: string } | null>(null);
   const [deliveryProofOrder, setDeliveryProofOrder] = useState<DriverOrder | null>(null);
+  const [safeCallVisible, setSafeCallVisible] = useState(false);
+  const [safeCallTarget, setSafeCallTarget] = useState<{ name: string; role: string; phone: string; orderCode: string } | null>(null);
+  const [dismissedIncomingId, setDismissedIncomingId] = useState<string | null>(null);
   const mutationLockRef = useRef(new Set<string>());
   const proofUploadLockRef = useRef(new Set<string>());
 
@@ -236,6 +261,36 @@ export const Order: React.FC<OrderProps> = ({
       }
     } catch (err) {
       console.log("Image picker error:", err);
+    }
+  };
+
+    const handlePickVideo = async () => {
+    try {
+      if (Platform.OS !== "web") {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Akses", "Mohon izinkan akses galeri untuk memilih video.");
+          return;
+        }
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["videos"],
+        quality: 0.8,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        const fileSize = asset.fileSize ? `${(asset.fileSize / (1024 * 1024)).toFixed(1)} MB` : "Video";
+        setSelectedAttachment({
+          type: "video",
+          uri: asset.uri,
+          name: asset.fileName || `video_${Date.now()}.mp4`,
+          size: fileSize,
+        });
+      }
+    } catch (err) {
+      console.log("Video picker error:", err);
     }
   };
 
@@ -357,6 +412,22 @@ export const Order: React.FC<OrderProps> = ({
       setDeliveryProofOrder(order);
       return;
     }
+    if (order.type === "Kanyaah Ride" && nextStatus === "Selesai") {
+      Alert.alert(
+        "Selesaikan Perjalanan",
+        "Pastikan penumpang telah sampai di lokasi tujuan dengan selamat. Selesaikan perjalanan?",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Selesai",
+            onPress: () => {
+              void handleUpdateStatus(order.id, "Selesai");
+            },
+          },
+        ]
+      );
+      return;
+    }
     void handleUpdateStatus(order.id, nextStatus);
   };
 
@@ -424,7 +495,7 @@ export const Order: React.FC<OrderProps> = ({
     try {
       const result = onAcceptOrder ? await onAcceptOrder(orderId) : true;
       if (result === false) return;
-      if (order.type === "Marketplace") {
+      if (order.type === "Marketplace" || order.type === "Catering") {
         if (typeof result !== "object") {
           Alert.alert("Pesanan belum diterima", "Server belum mengirim status pesanan terbaru. Coba muat ulang lalu ulangi.");
           return;
@@ -460,7 +531,7 @@ export const Order: React.FC<OrderProps> = ({
           style: "destructive",
           onPress: async () => {
             const order = orders.find((item) => item.id === orderId);
-            if (order?.type === "Marketplace" && onDeclineOrder) {
+            if ((order?.type === "Marketplace" || order?.type === "Catering") && onDeclineOrder) {
               const success = await onDeclineOrder(orderId);
               if (!success) return;
               setOrders((current) => current.filter((item) => item.id !== orderId));
@@ -490,7 +561,7 @@ export const Order: React.FC<OrderProps> = ({
     const chatKey = `${selectedOrder.id}-${chatTarget}`;
     const newMsg: DriverChatMessage = {
       sender: "driver",
-      text: textToSend || (selectedAttachment?.type === "image" ? "Foto terkirim" : "File terlampir"),
+      text: textToSend || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : selectedAttachment?.type === "video" ? "🎥 Video terkirim" : "📎 File terlampir"),
       time: "Baru saja",
       attachment: selectedAttachment ? { ...selectedAttachment } : undefined,
     };
@@ -523,19 +594,16 @@ export const Order: React.FC<OrderProps> = ({
 
   // Filter tab
   const filteredOrders = orders.filter((order) => {
-    if (activeTab === "Masuk") {
-      return order.type === "Marketplace" ? order.status === "Siap" : order.status === "Menunggu";
+    if (activeTab === "Ride") {
+      return order.type === "Kanyaah Ride";
+    } else if (activeTab === "Delivery") {
+      return order.type !== "Kanyaah Ride";
     } else if (activeTab === "Aktif") {
-      return (
-        order.status === "Menuju Pickup" ||
-        order.status === "Sampai Pickup" ||
-        order.status === "Mengantar"
-      );
+      return ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(order.status);
     } else if (activeTab === "Selesai") {
       return order.status === "Selesai";
-    } else {
-      return order.status === "Dibatalkan";
     }
+    return true; // "Semua"
   });
 
   const getStatusColor = (status: string) => {
@@ -563,6 +631,16 @@ export const Order: React.FC<OrderProps> = ({
   };
 
   const getStatusBadgeLabel = (status: string, order?: DriverOrder) => {
+    if (order?.type === "Kanyaah Ride") {
+      switch (status) {
+        case "Menunggu": return "Order Penumpang Masuk";
+        case "Menuju Pickup": return "Menuju Titik Jemput";
+        case "Sampai Pickup": return "Sampai di Penjemputan";
+        case "Mengantar": return "Sedang Mengantar Penumpang";
+        case "Selesai": return "Perjalanan Selesai";
+        default: return "Dibatalkan";
+      }
+    }
     if (order?.type === "Laundry") {
       const isJemput = order.items?.[0]?.name?.includes("Jemput");
       if (isJemput) {
@@ -668,7 +746,7 @@ export const Order: React.FC<OrderProps> = ({
             <AlertCircle size={18} color={getStatusColor(selectedOrder.status)} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.statusNoticeTitle, { color: getStatusColor(selectedOrder.status) }]}>
-                {getStatusBadgeLabel(selectedOrder.status)} • {selectedOrder.type} Delivery
+                {selectedOrder.type === "Kanyaah Ride" ? `${getStatusBadgeLabel(selectedOrder.status, selectedOrder)} • Antar Jemput Penumpang` : `${getStatusBadgeLabel(selectedOrder.status, selectedOrder)} • ${selectedOrder.type} Delivery`}
               </Text>
               <Text style={styles.statusNoticeText}>
                 {selectedOrder.status === "Siap"
@@ -700,12 +778,12 @@ export const Order: React.FC<OrderProps> = ({
 
             <View style={{ padding: 12 }}>
               <LiveOrderTrackingMap
-                storeName={selectedOrder.storeName || selectedOrder.from}
-                storeAddress={selectedOrder.storeAddress || selectedOrder.from}
+                storeName={selectedOrder.type === "Kanyaah Ride" ? "Titik Penjemputan" : (selectedOrder.storeName || selectedOrder.from)}
+                storeAddress={selectedOrder.type === "Kanyaah Ride" ? (selectedOrder.pickup?.address || selectedOrder.from) : (selectedOrder.storeAddress || selectedOrder.from)}
                 customerAddress={selectedOrder.to}
                 marketplaceMode={selectedOrder.type === "Marketplace"}
-                driverName="Anda (Kurir)"
-                driverVehicle="Motor Kurir"
+                driverName={effectiveDriverName}
+                driverVehicle={effectiveDriverVehicle}
                 orderStatus={selectedOrder.status}
                 height={260}
                 navigationMode={navMode}
@@ -842,14 +920,20 @@ export const Order: React.FC<OrderProps> = ({
 
           {/* Stepper Progress */}
           <View style={styles.stepperCard}>
-            <Text style={styles.sectionLabel}>TAHAPAN PENGANTARAN</Text>
+            <Text style={styles.sectionLabel}>
+              {selectedOrder.type === "Kanyaah Ride" ? "TAHAPAN PERJALANAN" : "TAHAPAN PENGANTARAN"}
+            </Text>
             <View style={styles.stepperRow}>
               <View style={[styles.stepperDot, step >= 1 && styles.stepperDotActive]}>
                 <Bike size={12} color={step >= 1 ? "#FFFFFF" : "#94A3B8"} />
               </View>
               <View style={[styles.stepperLine, step >= 2 && styles.stepperLineActive]} />
               <View style={[styles.stepperDot, step >= 2 && styles.stepperDotActive]}>
-                <Store size={12} color={step >= 2 ? "#FFFFFF" : "#94A3B8"} />
+                {selectedOrder.type === "Kanyaah Ride" ? (
+                  <MapPin size={12} color={step >= 2 ? "#FFFFFF" : "#94A3B8"} />
+                ) : (
+                  <Store size={12} color={step >= 2 ? "#FFFFFF" : "#94A3B8"} />
+                )}
               </View>
               <View style={[styles.stepperLine, step >= 3 && styles.stepperLineActive]} />
               <View style={[styles.stepperDot, step >= 3 && styles.stepperDotActive]}>
@@ -863,17 +947,17 @@ export const Order: React.FC<OrderProps> = ({
             <View style={styles.stepperLabelsRow}>
               <View style={styles.stepperLabelCol}>
                 <Text style={[styles.stepperLabel, step === 1 && styles.stepperLabelHighlight]} numberOfLines={1}>
-                  Ke Toko
+                  {selectedOrder.type === "Kanyaah Ride" ? "Menuju Penumpang" : "Ke Toko"}
                 </Text>
               </View>
               <View style={styles.stepperLabelCol}>
                 <Text style={[styles.stepperLabel, step === 2 && styles.stepperLabelHighlight]} numberOfLines={1}>
-                  Di Toko
+                  {selectedOrder.type === "Kanyaah Ride" ? "Driver Tiba" : "Di Toko"}
                 </Text>
               </View>
               <View style={styles.stepperLabelCol}>
                 <Text style={[styles.stepperLabel, step === 3 && styles.stepperLabelHighlight]} numberOfLines={1}>
-                  Ke Customer
+                  {selectedOrder.type === "Kanyaah Ride" ? "Mulai Perjalanan" : "Ke Customer"}
                 </Text>
               </View>
               <View style={styles.stepperLabelCol}>
@@ -884,84 +968,128 @@ export const Order: React.FC<OrderProps> = ({
             </View>
           </View>
 
-          {/* Section 1: Lokasi Toko (Pickup) */}
+          {/* Section 1: Lokasi Pickup */}
           <View style={styles.infoCard}>
             <View style={styles.infoCardHeader}>
               <View style={styles.infoIconBox}>
-                <Store size={18} color="#0D7A53" />
+                {selectedOrder.type === "Kanyaah Ride" ? (
+                  <Bike size={18} color="#15803D" />
+                ) : (
+                  <Store size={18} color="#0D7A53" />
+                )}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.infoCardType}>LOKASI PENJEMPUTAN (TOKO)</Text>
-                <Text style={styles.infoCardTitle}>{selectedOrder.storeName || selectedOrder.from}</Text>
+                <Text style={styles.infoCardType}>
+                  {selectedOrder.type === "Kanyaah Ride" ? "LOKASI PENJEMPUTAN (PENUMPANG)" : "LOKASI PENJEMPUTAN (TOKO)"}
+                </Text>
+                <Text style={styles.infoCardTitle}>
+                  {selectedOrder.type === "Kanyaah Ride" ? selectedOrder.customer : (selectedOrder.storeName || selectedOrder.from)}
+                </Text>
               </View>
             </View>
 
-            <Text style={styles.infoCardAddress}>{selectedOrder.storeAddress || selectedOrder.from}</Text>
+            <Text style={styles.infoCardAddress}>
+              {selectedOrder.type === "Kanyaah Ride" ? selectedOrder.from : (selectedOrder.storeAddress || selectedOrder.from)}
+            </Text>
 
             <View style={styles.infoCardActionsRow}>
-              <TouchableOpacity
-                style={styles.actionPill}
-                onPress={() => openChatRoom(selectedOrder, "owner")}
-                activeOpacity={0.8}
-              >
-                <MessageSquare size={14} color="#0D7A53" />
-                <Text style={styles.actionPillText}>Chat Toko</Text>
-              </TouchableOpacity>
+              {selectedOrder.type === "Kanyaah Ride" ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.actionPill}
+                    onPress={() => openChatRoom(selectedOrder, "customer")}
+                    activeOpacity={0.8}
+                  >
+                    <MessageSquare size={14} color="#0D7A53" />
+                    <Text style={styles.actionPillText}>Chat Penumpang</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.actionPillOutline}
-                onPress={() => openPhoneCall(selectedOrder.storePhone, selectedOrder.storeName)}
-                activeOpacity={0.8}
-              >
-                <Phone size={14} color="#334155" />
-                <Text style={styles.actionPillOutlineText}>Telepon Toko</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.actionPillOutline}
+                    onPress={() => openPhoneCall(selectedOrder.phone, selectedOrder.customer)}
+                    activeOpacity={0.8}
+                  >
+                    <Phone size={14} color="#334155" />
+                    <Text style={styles.actionPillOutlineText}>Telepon Penumpang</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.actionPill}
+                    onPress={() => openChatRoom(selectedOrder, "owner")}
+                    activeOpacity={0.8}
+                  >
+                    <MessageSquare size={14} color="#0D7A53" />
+                    <Text style={styles.actionPillText}>Chat Toko</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionPillOutline}
+                    onPress={() => openPhoneCall(selectedOrder.storePhone, selectedOrder.storeName)}
+                    activeOpacity={0.8}
+                  >
+                    <Phone size={14} color="#334155" />
+                    <Text style={styles.actionPillOutlineText}>Telepon Toko</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
 
-          {/* Section 2: Lokasi Customer (Delivery) */}
+          {/* Section 2: Lokasi Tujuan / Pengantaran */}
           <View style={styles.infoCard}>
             <View style={styles.infoCardHeader}>
               <View style={[styles.infoIconBox, { backgroundColor: "#EFF6FF" }]}>
-                <User size={18} color="#2563EB" />
+                {selectedOrder.type === "Kanyaah Ride" ? (
+                  <MapPin size={18} color="#D97706" />
+                ) : (
+                  <User size={18} color="#2563EB" />
+                )}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.infoCardType, { color: "#2563EB" }]}>LOKASI PENGANTARAN (CUSTOMER)</Text>
-                <Text style={styles.infoCardTitle}>{selectedOrder.customer}</Text>
+                <Text style={[styles.infoCardType, { color: selectedOrder.type === "Kanyaah Ride" ? "#D97706" : "#2563EB" }]}>
+                  {selectedOrder.type === "Kanyaah Ride" ? "LOKASI TUJUAN PENUMPANG" : "LOKASI PENGANTARAN (CUSTOMER)"}
+                </Text>
+                <Text style={styles.infoCardTitle}>
+                  {selectedOrder.type === "Kanyaah Ride" ? selectedOrder.to : selectedOrder.customer}
+                </Text>
               </View>
             </View>
 
-                <Text style={styles.infoCardAddress}>{selectedOrder.to}</Text>
-                {selectedOrder.addressSnapshot && (
-                  <View style={styles.addressDetailBox}>
-                    <Text style={styles.addressDetailTitle}>Detail pengantaran</Text>
-                    {!!selectedOrder.addressSnapshot.accessType && <Text style={styles.addressDetailText}>Akses: {selectedOrder.addressSnapshot.accessType}</Text>}
-                    {!!selectedOrder.addressSnapshot.notes && <Text style={styles.addressDetailText}>Catatan: {selectedOrder.addressSnapshot.notes}</Text>}
-                    {selectedOrder.addressSnapshot.latitude !== undefined && selectedOrder.addressSnapshot.longitude !== undefined && (
-                      <Text style={styles.addressDetailText}>Pin: {selectedOrder.addressSnapshot.latitude.toFixed(5)}, {selectedOrder.addressSnapshot.longitude.toFixed(5)}</Text>
-                    )}
-                  </View>
+            <Text style={styles.infoCardAddress}>{selectedOrder.to}</Text>
+            {selectedOrder.addressSnapshot && (
+              <View style={styles.addressDetailBox}>
+                <Text style={styles.addressDetailTitle}>Detail pengantaran</Text>
+                {!!selectedOrder.addressSnapshot.accessType && <Text style={styles.addressDetailText}>Akses: {selectedOrder.addressSnapshot.accessType}</Text>}
+                {!!selectedOrder.addressSnapshot.notes && <Text style={styles.addressDetailText}>Catatan: {selectedOrder.addressSnapshot.notes}</Text>}
+                {selectedOrder.addressSnapshot.latitude !== undefined && selectedOrder.addressSnapshot.longitude !== undefined && (
+                  <Text style={styles.addressDetailText}>Pin: {selectedOrder.addressSnapshot.latitude.toFixed(5)}, {selectedOrder.addressSnapshot.longitude.toFixed(5)}</Text>
                 )}
+              </View>
+            )}
 
-            <View style={styles.infoCardActionsRow}>
-              <TouchableOpacity
-                style={styles.actionPill}
-                onPress={() => openChatRoom(selectedOrder, "customer")}
-                activeOpacity={0.8}
-              >
-                <MessageSquare size={14} color="#0D7A53" />
-                <Text style={styles.actionPillText}>Chat Customer</Text>
-              </TouchableOpacity>
+            {selectedOrder.type !== "Kanyaah Ride" && (
+              <View style={styles.infoCardActionsRow}>
+                <TouchableOpacity
+                  style={styles.actionPill}
+                  onPress={() => openChatRoom(selectedOrder, "customer")}
+                  activeOpacity={0.8}
+                >
+                  <MessageSquare size={14} color="#0D7A53" />
+                  <Text style={styles.actionPillText}>Chat Customer</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.actionPillOutline}
-                onPress={() => openPhoneCall(selectedOrder.phone, selectedOrder.customer)}
-                activeOpacity={0.8}
-              >
-                <Phone size={14} color="#334155" />
-                <Text style={styles.actionPillOutlineText}>Telepon Customer</Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={styles.actionPillOutline}
+                  onPress={() => openPhoneCall(selectedOrder.phone, selectedOrder.customer)}
+                  activeOpacity={0.8}
+                >
+                  <Phone size={14} color="#334155" />
+                  <Text style={styles.actionPillOutlineText}>Telepon Customer</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           {/* Section 3: Rincian Pesanan */}
@@ -985,9 +1113,13 @@ export const Order: React.FC<OrderProps> = ({
 
           {/* Section 4: Rincian Pendapatan Driver */}
           <View style={styles.infoCard}>
-            <Text style={styles.sectionLabel}>RINCIAN TARIF & PENDAPATAN</Text>
+            <Text style={styles.sectionLabel}>
+              {selectedOrder.type === "Kanyaah Ride" ? "RINCIAN TARIF PERJALANAN" : "RINCIAN TARIF & PENDAPATAN"}
+            </Text>
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Nilai Belanja Pesanan</Text>
+              <Text style={styles.priceLabel}>
+                {selectedOrder.type === "Kanyaah Ride" ? "Tarif Perjalanan" : "Nilai Belanja Pesanan"}
+              </Text>
               <Text style={styles.priceVal}>{rp(selectedOrder.pay)}</Text>
             </View>
             <View style={styles.priceRow}>
@@ -996,7 +1128,9 @@ export const Order: React.FC<OrderProps> = ({
             </View>
             <View style={styles.detailDivider} />
             <View style={styles.priceRow}>
-              <Text style={styles.emphasizedText}>Pendapatan Bersih Kurir</Text>
+              <Text style={styles.emphasizedText}>
+                {selectedOrder.type === "Kanyaah Ride" ? "Pendapatan Bersih Driver" : "Pendapatan Bersih Kurir"}
+              </Text>
               <Text style={styles.earningsHighlight}>{rp(selectedOrder.driverShare)}</Text>
             </View>
           </View>
@@ -1030,7 +1164,7 @@ export const Order: React.FC<OrderProps> = ({
               onPress={() => handleDriverTransition(selectedOrder, "Sampai Pickup")}
               activeOpacity={0.85}
             >
-              {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><Store size={18} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Saya Sudah Sampai" : "Tiba di Toko / Outlet"}</Text></>}
+              {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><MapPin size={18} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Kanyaah Ride" ? "Saya Sudah Sampai di Titik Jemput" : selectedOrder.type === "Marketplace" ? "Saya Sudah Sampai" : "Tiba di Toko / Outlet"}</Text></>}
             </TouchableOpacity>
           )}
 
@@ -1041,7 +1175,7 @@ export const Order: React.FC<OrderProps> = ({
               onPress={() => handleDriverTransition(selectedOrder, "Mengantar")}
               activeOpacity={0.85}
             >
-              {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><Bike size={20} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Pesanan Sudah Diambil" : "Konfirmasi Ambil & OTW ke Customer"}</Text></>}
+              {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><Bike size={20} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Kanyaah Ride" ? "Mulai Perjalanan" : selectedOrder.type === "Marketplace" ? "Pesanan Sudah Diambil" : "Konfirmasi Ambil & OTW ke Customer"}</Text></>}
             </TouchableOpacity>
           )}
 
@@ -1051,10 +1185,10 @@ export const Order: React.FC<OrderProps> = ({
               disabled={mutatingOrderId === selectedOrder.id || proofUploadOrderId === selectedOrder.id}
               onPress={() => handleDriverTransition(selectedOrder, "Selesai")}
               accessibilityRole="button"
-              accessibilityLabel="Pesanan sudah diterima customer"
+              accessibilityLabel="Selesaikan perjalanan"
               hitSlop={8}
             >
-              {mutatingOrderId === selectedOrder.id || proofUploadOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><CheckCircle size={20} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Marketplace" ? "Pesanan Sudah Diterima Customer" : "Selesaikan Pengantaran"}</Text></>}
+              {mutatingOrderId === selectedOrder.id || proofUploadOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <><CheckCircle size={20} color="#FFFFFF" /><Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Kanyaah Ride" ? "Selesaikan Perjalanan" : selectedOrder.type === "Marketplace" ? "Pesanan Sudah Diterima Customer" : "Selesaikan Pengantaran"}</Text></>}
             </Pressable>
           )}
 
@@ -1108,12 +1242,12 @@ export const Order: React.FC<OrderProps> = ({
 
             <View style={styles.fsGpsMapFrame}>
               <LiveOrderTrackingMap
-                storeName={selectedOrder?.storeName || selectedOrder?.from}
-                storeAddress={selectedOrder?.storeAddress || selectedOrder?.from}
+                storeName={selectedOrder?.type === "Kanyaah Ride" ? "Titik Penjemputan" : (selectedOrder?.storeName || selectedOrder?.from)}
+                storeAddress={selectedOrder?.type === "Kanyaah Ride" ? (selectedOrder?.pickup?.address || selectedOrder?.from) : (selectedOrder?.storeAddress || selectedOrder?.from)}
                 customerAddress={selectedOrder?.to}
                 marketplaceMode={selectedOrder?.type === "Marketplace"}
-                driverName="Anda (Kurir)"
-                driverVehicle="Motor Kurir"
+                driverName={effectiveDriverName}
+                driverVehicle={effectiveDriverVehicle}
                 orderStatus={selectedOrder?.status || "Mengantar"}
                 height={Platform.OS === "web" ? 480 : 420}
                 navigationMode={navMode}
@@ -1184,7 +1318,8 @@ export const Order: React.FC<OrderProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* Target Channel Segment Switcher */}
+            {/* Target Channel Segment Switcher (Delivery only) */}
+            {selectedOrder?.type !== "Kanyaah Ride" && (
             <View style={styles.channelSwitcherRow}>
               <TouchableOpacity
                 style={[
@@ -1224,6 +1359,7 @@ export const Order: React.FC<OrderProps> = ({
                 </Text>
               </TouchableOpacity>
             </View>
+            )}
 
             {/* Quick Preset Message Chips */}
             <View style={styles.quickChipsWrap}>
@@ -1414,29 +1550,32 @@ export const Order: React.FC<OrderProps> = ({
         </View>
       </View>
 
-      {/* Tabs Row */}
+      {/* Tabs Row (Semua, Ride, Delivery, Aktif, Selesai) */}
       <View style={styles.tabsRow}>
-        {(["Masuk", "Aktif", "Selesai", "Batal"] as const).map((tab) => {
-          const isSelected = activeTab === tab;
-          const count =
-            tab === "Masuk" ? orders.filter((o) => o.type === "Marketplace" ? o.status === "Siap" : o.status === "Menunggu").length :
-            tab === "Aktif" ? orders.filter((o) => ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status)).length :
-            tab === "Selesai" ? orders.filter((o) => o.status === "Selesai").length :
-            orders.filter((o) => o.status === "Dibatalkan").length;
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+          {(["Semua", "Ride", "Delivery", "Aktif", "Selesai"] as const).map((tab) => {
+            const isSelected = activeTab === tab;
+            const count =
+              tab === "Semua" ? orders.length :
+              tab === "Ride" ? orders.filter((o) => o.type === "Kanyaah Ride").length :
+              tab === "Delivery" ? orders.filter((o) => o.type !== "Kanyaah Ride").length :
+              tab === "Aktif" ? orders.filter((o) => ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status)).length :
+              orders.filter((o) => o.status === "Selesai").length;
 
-          return (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tabBtn, isSelected ? styles.tabBtnSelected : styles.tabBtnUnselected]}
-              onPress={() => setActiveTab(tab)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabBtnText, isSelected ? styles.tabBtnTextSelected : styles.tabBtnTextUnselected]}>
-                {tab} ({count})
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.tabBtn, isSelected ? styles.tabBtnSelected : styles.tabBtnUnselected, { paddingHorizontal: 14 }]}
+                onPress={() => setActiveTab(tab)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabBtnText, isSelected ? styles.tabBtnTextSelected : styles.tabBtnTextUnselected]}>
+                  {tab} ({count})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* List content */}
@@ -1494,16 +1633,16 @@ export const Order: React.FC<OrderProps> = ({
                     </View>
                     <View style={styles.stepperLabelsRow}>
                       <Text style={[styles.stepperLabel, step === 1 && styles.stepperLabelHighlight]}>
-                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Customer" : "Menuju Toko"}
+                        {item.type === "Kanyaah Ride" ? "Jemput" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Customer" : "Menuju Toko"}
                       </Text>
                       <Text style={[styles.stepperLabel, step === 2 && styles.stepperLabelHighlight]}>
-                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Cust" : "Tiba di Toko"}
+                        {item.type === "Kanyaah Ride" ? "Tiba Jemput" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Cust" : "Tiba di Toko"}
                       </Text>
                       <Text style={[styles.stepperLabel, step === 3 && styles.stepperLabelHighlight]}>
-                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Laundry" : "Ke Customer"}
+                        {item.type === "Kanyaah Ride" ? "Antar" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Laundry" : "Ke Customer"}
                       </Text>
                       <Text style={[styles.stepperLabel, step === 4 && styles.stepperLabelHighlight]}>
-                        {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Toko" : "Selesai"}
+                        {item.type === "Kanyaah Ride" ? "Selesai" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Toko" : "Selesai"}
                       </Text>
                     </View>
                   </View>
@@ -1727,7 +1866,7 @@ export const Order: React.FC<OrderProps> = ({
                     disabled={mutatingOrderId === item.id}
                     onPress={() => handleAcceptOrder(item.id)}
                   >
-                    {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.actionBtnTextSolid}>Terima Pesanan</Text>}
+                    {mutatingOrderId === item.id ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.actionBtnTextSolid}>{item.type === "Kanyaah Ride" ? "Terima Ride" : "Terima Pesanan"}</Text>}
                   </TouchableOpacity>
                 </View>
               )}
@@ -1735,26 +1874,48 @@ export const Order: React.FC<OrderProps> = ({
               {/* Action Buttons & Flow Buttons for Ongoing Orders */}
               {isOngoing && (
                 <View style={styles.ongoingActionsColumn}>
-                  {/* Quick Chat Row: Toko and Customer */}
-                  <View style={styles.dualChatRow}>
-                    <TouchableOpacity
-                      style={styles.chatShortcutBtn}
-                      onPress={() => openChatRoom(item, "owner")}
-                      activeOpacity={0.8}
-                    >
-                      <Store size={14} color="#0D7A53" />
-                      <Text style={styles.chatShortcutText}>Chat Toko</Text>
-                    </TouchableOpacity>
+                  {/* Quick Chat Row */}
+                  {item.type === "Kanyaah Ride" ? (
+                    <View style={styles.dualChatRow}>
+                      <TouchableOpacity
+                        style={styles.chatShortcutBtn}
+                        onPress={() => openChatRoom(item, "customer")}
+                        activeOpacity={0.8}
+                      >
+                        <MessageSquare size={14} color="#15803D" />
+                        <Text style={[styles.chatShortcutText, { color: "#15803D" }]}>Chat Penumpang</Text>
+                      </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.chatShortcutBtn}
-                      onPress={() => openChatRoom(item, "customer")}
-                      activeOpacity={0.8}
-                    >
-                      <MessageSquare size={14} color="#2563EB" />
-                      <Text style={[styles.chatShortcutText, { color: "#2563EB" }]}>Chat Customer</Text>
-                    </TouchableOpacity>
-                  </View>
+                      <TouchableOpacity
+                        style={[styles.chatShortcutBtn, { borderColor: "#BAE6FD" }]}
+                        onPress={() => openPhoneCall(item.phone, item.customer)}
+                        activeOpacity={0.8}
+                      >
+                        <Phone size={14} color="#0284C7" />
+                        <Text style={[styles.chatShortcutText, { color: "#0284C7" }]}>Telepon Penumpang</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.dualChatRow}>
+                      <TouchableOpacity
+                        style={styles.chatShortcutBtn}
+                        onPress={() => openChatRoom(item, "owner")}
+                        activeOpacity={0.8}
+                      >
+                        <Store size={14} color="#0D7A53" />
+                        <Text style={styles.chatShortcutText}>Chat Toko</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.chatShortcutBtn}
+                        onPress={() => openChatRoom(item, "customer")}
+                        activeOpacity={0.8}
+                      >
+                        <MessageSquare size={14} color="#2563EB" />
+                        <Text style={[styles.chatShortcutText, { color: "#2563EB" }]}>Chat Customer</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
 
                   {/* Step 0: Ready / Menunggu / Siap -> Action: Mulai Jalan ke Toko */}
                   {/* Step 0: Ready / Menunggu / Siap -> Action: Mulai Jalan */}
@@ -1785,13 +1946,11 @@ export const Order: React.FC<OrderProps> = ({
                         <ActivityIndicator color="#FFFFFF" />
                       ) : (
                         <>
-                          {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? (
-                            <MapPin size={16} color="#FFFFFF" />
-                          ) : (
-                            <Store size={16} color="#FFFFFF" />
-                          )}
+                          <MapPin size={16} color="#FFFFFF" />
                           <Text style={styles.primaryFlowBtnText}>
-                            {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                            {item.type === "Kanyaah Ride"
+                              ? "Saya Sudah Sampai di Penjemputan"
+                              : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
                               ? "Tiba di Rumah Customer"
                               : item.type === "Marketplace"
                               ? "Saya Sudah Sampai"
@@ -1816,7 +1975,9 @@ export const Order: React.FC<OrderProps> = ({
                         <>
                           <Bike size={18} color="#FFFFFF" />
                           <Text style={styles.primaryFlowBtnText}>
-                            {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                            {item.type === "Kanyaah Ride"
+                              ? "Mulai Perjalanan dengan Penumpang"
+                              : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
                               ? "Baju Kotor Diterima & OTW ke Toko Laundry"
                               : item.type === "Marketplace"
                               ? "Pesanan Sudah Diambil"
@@ -1827,7 +1988,7 @@ export const Order: React.FC<OrderProps> = ({
                     </TouchableOpacity>
                   )}
 
-                  {/* Step 3: Mengantar -> Action: Tiba di Tujuan (Toko Laundry atau Customer) */}
+                  {/* Step 3: Mengantar -> Action: Tiba di Tujuan */}
                   {item.status === "Mengantar" && (
                     <TouchableOpacity
                       style={[styles.primaryFlowBtn, { backgroundColor: "#15803D" }]}
@@ -1841,7 +2002,9 @@ export const Order: React.FC<OrderProps> = ({
                         <>
                           <CheckCircle size={18} color="#FFFFFF" />
                           <Text style={styles.primaryFlowBtnText}>
-                            {item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
+                            {item.type === "Kanyaah Ride"
+                              ? "Selesaikan Perjalanan (Tiba di Tujuan)"
+                              : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
                               ? "Tiba di Toko Laundry & Serahkan Cucian"
                               : item.type === "Marketplace"
                               ? "Upload Bukti & Selesaikan"
@@ -1864,13 +2027,13 @@ export const Order: React.FC<OrderProps> = ({
           <View style={styles.emptyContainer}>
             <ShoppingBag size={42} color="#94A3B8" />
             <Text style={styles.emptyTitle}>
-              {activeTab === "Masuk" && !isOnline
+              {!isOnline
                 ? "Aktifkan status ONLINE untuk menerima pesanan baru"
-                : "Tidak ada orderan pada status ini"}
+                : "Tidak ada orderan pada kategori ini"}
             </Text>
             <Text style={styles.emptySubtitle}>
-              {activeTab === "Masuk" && !isOnline
-                ? "Buka tab Beranda dan nyalakan tombol online untuk mulai menerima pengantaran."
+              {!isOnline
+                ? "Buka tab Beranda dan nyalakan tombol online untuk mulai menerima orderan."
                 : "Pesanan yang masuk atau aktif akan ditampilkan secara real-time di sini."}
             </Text>
           </View>

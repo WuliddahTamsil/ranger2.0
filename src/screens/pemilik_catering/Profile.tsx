@@ -30,10 +30,15 @@ import {
   ChevronRight,
   Camera,
   X,
+  CreditCard,
 } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import { Nav } from "../../types";
 import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
+import { updateUserProfile, uploadFileToBackend } from "../../services/api";
+import { AuthAccount } from "../auth/authTypes";
+import { updateCachedAccount } from "../auth/authService";
 
 interface ProfileProps {
   storeInfo: {
@@ -46,19 +51,28 @@ interface ProfileProps {
     isOpen: boolean;
     isVerified: boolean;
     profileImage: string | null;
-  };
+    bankName?: string;
+    bankAccountNumber?: string;
+    bankAccountHolder?: string;
+    qrisImageUrl?: string;
+  bankTransferEnabled?: boolean;
+  qrisEnabled?: boolean;
+};
   setStoreInfo: (info: any) => void;
   userId?: string;
+  authAccount?: AuthAccount | null;
+  onUpdateAccount?: (account: AuthAccount) => void;
   navigate: (screen: any) => void;
 }
 
-export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userId, navigate }) => {
+export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userId, authAccount, onUpdateAccount, navigate }) => {
   // Modal states
   const [avatarPreviewVisible, setAvatarPreviewVisible] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
   const [storeModalVisible, setStoreModalVisible] = useState(false);
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [verifyModalVisible, setVerifyModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
@@ -73,6 +87,14 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
   const [editStoreName, setEditStoreName] = useState(storeInfo.storeName);
   const [editStoreDesc, setEditStoreDesc] = useState(storeInfo.description);
   const [editStoreAddr, setEditStoreAddr] = useState(storeInfo.address);
+  const [bankName, setBankName] = useState(storeInfo.bankName || "");
+  const [bankAccountNumber, setBankAccountNumber] = useState(storeInfo.bankAccountNumber || "");
+  const [bankAccountHolder, setBankAccountHolder] = useState(storeInfo.bankAccountHolder || "");
+  const [qrisImageUrl, setQrisImageUrl] = useState(storeInfo.qrisImageUrl || "");
+  const [bankTransferEnabled, setBankTransferEnabled] = useState(storeInfo.bankTransferEnabled ?? Boolean(storeInfo.bankAccountNumber && storeInfo.bankName && storeInfo.bankAccountHolder));
+  const [qrisEnabled, setQrisEnabled] = useState(storeInfo.qrisEnabled ?? Boolean(storeInfo.qrisImageUrl));
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [uploadingQris, setUploadingQris] = useState(false);
 
   // Notification toggles
   const [orderNotif, setOrderNotif] = useState(true);
@@ -166,6 +188,85 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
   const handleLogout = () => {
     setLogoutModalVisible(false);
     navigate("login");
+  };
+
+  const handlePickQris = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setUploadingQris(true);
+      const uploaded = await uploadFileToBackend(
+        asset.uri,
+        asset.fileName || `catering-qris-${Date.now()}.jpg`,
+        asset.mimeType || "image/jpeg",
+      );
+      if (!uploaded?.success || !uploaded.data?.url) throw new Error("QRIS gagal diunggah.");
+      setQrisImageUrl(uploaded.data.url);
+    } catch (error) {
+      Alert.alert("Gagal mengunggah QRIS", error instanceof Error ? error.message : "Coba lagi.");
+    } finally {
+      setUploadingQris(false);
+    }
+  };
+
+  const handleSavePayment = async () => {
+    if (bankTransferEnabled && bankAccountNumber.trim() && (!bankName.trim() || !bankAccountHolder.trim())) {
+      Alert.alert("Data rekening belum lengkap", "Isi nama bank dan nama pemilik rekening.");
+      return;
+    }
+    if (bankTransferEnabled && !bankAccountNumber.trim() && !qrisEnabled) {
+      Alert.alert("Metode pembayaran belum aktif", "Aktifkan minimal satu metode pembayaran, lalu isi data yang dibutuhkan.");
+      return;
+    }
+    if (qrisEnabled && !qrisImageUrl.trim()) {
+      Alert.alert("QRIS belum siap", "Unggah gambar QRIS sebelum mengaktifkan metode QRIS.");
+      return;
+    }
+    if (!userId) {
+      Alert.alert("Akun belum tersinkron", "Masuk kembali ke akun pemilik Catering lalu coba lagi.");
+      return;
+    }
+    setSavingPayment(true);
+    try {
+      const roleData = {
+        cateringBankTransferEnabled: String(bankTransferEnabled),
+        cateringQrisEnabled: String(qrisEnabled),
+        cateringBankName: bankTransferEnabled && bankAccountNumber.trim() ? bankName.trim() : "",
+        cateringBankAccountNumber: bankTransferEnabled ? bankAccountNumber.trim() : "",
+        cateringBankAccountHolder: bankTransferEnabled && bankAccountNumber.trim() ? bankAccountHolder.trim() : "",
+        cateringQrisImageUrl: qrisEnabled ? qrisImageUrl.trim() : "",
+      };
+      const result = await updateUserProfile(userId, { roleData });
+      if (!result?.success) throw new Error(result?.message || "Metode pembayaran gagal disimpan.");
+      if (authAccount) {
+        const updatedAccount: AuthAccount = {
+          ...authAccount,
+          roleData: { ...authAccount.roleData, ...roleData },
+          updatedAt: new Date().toISOString(),
+        };
+        await updateCachedAccount(updatedAccount);
+        onUpdateAccount?.(updatedAccount);
+      }
+      setStoreInfo({ ...storeInfo, ...{
+        bankName: roleData.cateringBankName,
+        bankAccountNumber: roleData.cateringBankAccountNumber,
+        bankAccountHolder: roleData.cateringBankAccountHolder,
+        qrisImageUrl: roleData.cateringQrisImageUrl,
+        bankTransferEnabled,
+        qrisEnabled,
+      } });
+      setPaymentModalVisible(false);
+      Alert.alert("Metode pembayaran tersimpan", bankTransferEnabled || qrisEnabled ? "Customer sekarang dapat memilih metode pembayaran yang Anda aktifkan." : "Semua metode pembayaran telah dinonaktifkan. Customer tidak dapat checkout melalui pembayaran digital.");
+    } catch (error) {
+      Alert.alert("Gagal menyimpan", error instanceof Error ? error.message : "Coba lagi.");
+    } finally {
+      setSavingPayment(false);
+    }
   };
 
   const renderMenuIcon = (icon: React.ReactNode, backgroundColor: string) => (
@@ -282,6 +383,27 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
               <Text style={styles.menuItemTitle}>Informasi Catering</Text>
               <Text style={styles.menuItemSubtitle} numberOfLines={1}>
                 {displayVal(storeInfo.storeName, "Nama catering belum diisi")}
+              </Text>
+            </View>
+            <ChevronRight size={16} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity style={styles.menuItem} onPress={() => {
+            setBankName(storeInfo.bankName || "");
+            setBankAccountNumber(storeInfo.bankAccountNumber || "");
+            setBankAccountHolder(storeInfo.bankAccountHolder || "");
+            setQrisImageUrl(storeInfo.qrisImageUrl || "");
+            setBankTransferEnabled(storeInfo.bankTransferEnabled ?? Boolean(storeInfo.bankAccountNumber && storeInfo.bankName && storeInfo.bankAccountHolder));
+            setQrisEnabled(storeInfo.qrisEnabled ?? Boolean(storeInfo.qrisImageUrl));
+            setPaymentModalVisible(true);
+          }}>
+            {renderMenuIcon(<CreditCard size={16} color="#1B7A4E" />, "#E8F5EE")}
+            <View style={styles.menuItemBody}>
+              <Text style={styles.menuItemTitle}>Metode Pembayaran</Text>
+              <Text style={styles.menuItemSubtitle} numberOfLines={1}>
+                {storeInfo.bankTransferEnabled || storeInfo.qrisEnabled ? `${storeInfo.bankTransferEnabled ? "Transfer aktif" : "Transfer nonaktif"}${storeInfo.bankTransferEnabled && storeInfo.qrisEnabled ? " • " : ""}${storeInfo.qrisEnabled ? "QRIS aktif" : "QRIS nonaktif"}` : "Atur rekening bank dan QRIS"}
               </Text>
             </View>
             <ChevronRight size={16} color="#9CA3AF" />
@@ -612,6 +734,75 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
                 >
                   <Text style={styles.sheetBtnTextSolid}>Simpan</Text>
                 </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={paymentModalVisible} transparent animationType="slide" onRequestClose={() => setPaymentModalVisible(false)}>
+        <View style={styles.modalBgBottom}>
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Metode Pembayaran Catering</Text>
+              <TouchableOpacity onPress={() => setPaymentModalVisible(false)}><X size={20} color="#111827" /></TouchableOpacity>
+            </View>
+            <ScrollView style={styles.formScrollContainer} keyboardShouldPersistTaps="handled">
+              <Text style={styles.verifySummaryDesc}>Customer membayar langsung ke rekening atau QRIS yang Anda atur. Pembayaran tidak diproses oleh GEOVERSE.</Text>
+
+              <View style={styles.switchList}>
+                <View style={styles.switchRow}>
+                  <View style={styles.switchRowInfo}>
+                    <Text style={styles.switchTitle}>Transfer Bank</Text>
+                    <Text style={styles.switchDesc}>Aktifkan jika mitra menerima transfer bank</Text>
+                  </View>
+                  <Switch
+                    value={bankTransferEnabled}
+                    onValueChange={setBankTransferEnabled}
+                    trackColor={{ false: "#D1D5DB", true: "#E8F5EE" }}
+                    thumbColor={bankTransferEnabled ? "#1B7A4E" : "#9CA3AF"}
+                  />
+                </View>
+
+                <View style={styles.switchRow}>
+                  <View style={styles.switchRowInfo}>
+                    <Text style={styles.switchTitle}>QRIS</Text>
+                    <Text style={styles.switchDesc}>Aktifkan jika mitra menerima pembayaran QRIS</Text>
+                  </View>
+                  <Switch
+                    value={qrisEnabled}
+                    onValueChange={setQrisEnabled}
+                    trackColor={{ false: "#D1D5DB", true: "#E8F5EE" }}
+                    thumbColor={qrisEnabled ? "#1B7A4E" : "#9CA3AF"}
+                  />
+                </View>
+              </View>
+
+              {bankTransferEnabled ? (
+                <>
+                  <Text style={styles.inputLabel}>Nama Bank</Text>
+                  <TextInput style={styles.textInput} value={bankName} onChangeText={setBankName} placeholder="Contoh: BCA" />
+                  <Text style={styles.inputLabel}>Nomor Rekening</Text>
+                  <TextInput style={styles.textInput} value={bankAccountNumber} onChangeText={setBankAccountNumber} placeholder="Nomor rekening" keyboardType="number-pad" />
+                  <Text style={styles.inputLabel}>Nama Pemilik Rekening</Text>
+                  <TextInput style={styles.textInput} value={bankAccountHolder} onChangeText={setBankAccountHolder} placeholder="Sesuai nama di rekening" />
+                </>
+              ) : null}
+
+              {qrisEnabled ? (
+                <>
+                  <Text style={styles.inputLabel}>QRIS Toko</Text>
+                  <TouchableOpacity style={[styles.sheetBtn, styles.sheetBtnOutline]} onPress={() => void handlePickQris()} disabled={uploadingQris}>
+                    <Text style={styles.sheetBtnTextOutline}>{uploadingQris ? "Mengunggah QRIS…" : qrisImageUrl ? "Ganti gambar QRIS" : "Pilih dan unggah gambar QRIS"}</Text>
+                  </TouchableOpacity>
+                  {qrisImageUrl ? <Image source={{ uri: qrisImageUrl }} style={{ width: 170, height: 170, alignSelf: "center", marginTop: 12, borderRadius: 12 }} resizeMode="contain" /> : null}
+                  {qrisImageUrl ? <TouchableOpacity onPress={() => setQrisImageUrl("")}><Text style={{ color: "#B91C1C", textAlign: "center", marginTop: 8, fontWeight: "700" }}>Hapus QRIS</Text></TouchableOpacity> : null}
+                </>
+              ) : null}
+
+              <View style={styles.sheetActions}>
+                <TouchableOpacity style={[styles.sheetBtn, styles.sheetBtnOutline]} onPress={() => setPaymentModalVisible(false)}><Text style={styles.sheetBtnTextOutline}>Batal</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.sheetBtn, styles.sheetBtnSolid]} onPress={() => void handleSavePayment()} disabled={savingPayment || uploadingQris}><Text style={styles.sheetBtnTextSolid}>{savingPayment ? "Menyimpan…" : "Simpan"}</Text></TouchableOpacity>
               </View>
             </ScrollView>
           </View>

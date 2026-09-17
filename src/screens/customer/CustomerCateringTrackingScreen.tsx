@@ -2,6 +2,7 @@ import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-c
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -18,16 +19,18 @@ import {
   MapPin,
   MessageCircle,
   ReceiptText,
-  ShieldAlert,
   Truck,
   User,
   Wallet,
   Store,
   Phone,
   Bike,
+  ChevronRight,
+  QrCode,
 } from "lucide-react-native";
 import { BackHeader } from "../../components/BackHeader";
 import { rp } from "../../utils/formatters";
+import { isCateringPaymentFullyPaid } from "../../utils/cateringPayment";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { CustomerChatModal } from "./CustomerChatModal";
@@ -97,6 +100,15 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
           storeName: live.storeName,
           storeAddress: live.storeAddress,
           paymentStatus: live.paymentStatus,
+          paymentMethod: live.paymentMethod || prev?.paymentMethod,
+          paymentBankName: live.paymentBankName || prev?.paymentBankName,
+          paymentAccountNumber: live.paymentAccountNumber || prev?.paymentAccountNumber,
+          paymentAccountHolder: live.paymentAccountHolder || prev?.paymentAccountHolder,
+          paymentQrisImageUrl: live.paymentQrisImageUrl || prev?.paymentQrisImageUrl,
+          paymentReminder: live.paymentReminder || prev?.paymentReminder,
+          paymentOption: live.paymentOption || prev?.paymentOption,
+          paymentDueAt: live.paymentDueAt || prev?.paymentDueAt,
+          paymentHistory: live.paymentHistory || prev?.paymentHistory,
         }));
         }
         setLoading(false);
@@ -122,6 +134,28 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
   const isDelivering = ["Diambil", "Mengantar", "Dikirim"].includes(currentStatus);
   const isFinished = currentStatus === "Selesai";
   const isCanceled = currentStatus === "Dibatalkan";
+  const paidAmount = Number(order?.paidAmount || 0);
+  const totalAmount = Number(order?.total || 0);
+  const isPaymentComplete = isCateringPaymentFullyPaid(remaining, order?.paymentStatus, paidAmount, totalAmount);
+  const paymentDueLabel = order?.paymentDueAt
+    ? new Date(order.paymentDueAt).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" })
+    : "H-1 sebelum pengiriman";
+  const paymentMethodLabel = (value?: string) => {
+    switch (value) {
+      case "bank_transfer": return "Transfer Bank";
+      case "qris": return "QRIS";
+      case "gopay": return "GoPay";
+      case "dana": return "DANA";
+      case "ovo": return "OVO";
+      case "shopeepay": return "ShopeePay";
+      case "bank_va": return "BANK VA";
+      case "cash": return "Tunai";
+      default: return "Pembayaran";
+    }
+  };
+
+  const verifiedPayments = (order?.paymentHistory || []).filter((item: any) => item.status === "TERVERIFIKASI");
+  const latestVerifiedPayment = verifiedPayments[verifiedPayments.length - 1];
 
   const progress = [
     { title: "Pesanan tercatat", text: "Permintaan pesanan tersimpan dan menunggu proses mitra", icon: CheckCircle2, active: isReceived },
@@ -226,13 +260,83 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
           <Text style={styles.mapSubtitle}>Lokasi driver belum tersedia. Status pesanan diperbarui berkala.</Text>
         </View>
 
+        <View style={styles.paymentCard}>
+          <View style={styles.paymentHeaderRow}>
+            <View style={styles.paymentHeaderTitle}><View style={styles.paymentIcon}><Wallet size={17} color="#1B7A4E" /></View><View style={styles.paymentHeaderCopy}><Text style={styles.paymentTitle}>Pembayaran</Text><Text style={styles.paymentMethod}>{paymentMethodLabel(order.paymentMethod)}</Text></View></View>
+            <View style={[styles.paymentStatusPill, isPaymentComplete ? styles.paymentStatusPillDone : styles.paymentStatusPillPending]}><Text style={[styles.paymentStatusText, { color: isPaymentComplete ? "#166534" : "#9A3412" }]} numberOfLines={1}>{isPaymentComplete ? "LUNAS" : (order.paymentStatus || "MENUNGGU")}</Text></View>
+          </View>
+          <View style={styles.paymentProgressTrack}><View style={[styles.paymentProgressFill, { width: `${Math.min(100, totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0)}%` }]} /></View>
+          <View style={styles.paymentAmountRow}><View style={styles.paymentAmountColumn}><Text style={styles.paymentAmountLabel}>Sudah dibayar</Text><Text style={styles.paymentAmountValue}>{rp(paidAmount)}</Text></View><View style={[styles.paymentAmountColumn, styles.paymentAmountColumnRight]}><Text style={styles.paymentAmountLabel}>Total pesanan</Text><Text style={styles.paymentAmountValue}>{rp(totalAmount)}</Text></View></View>
+          {Number(order.remainingAmount || 0) > 0 ? (
+            <View style={styles.paymentReminderBox}>
+              <Text style={styles.paymentReminderTitle}>Pelunasan diperlukan · {rp(remaining)}</Text>
+              <Text style={styles.paymentReminderText}>{order.paymentReminder || `Lunasi paling lambat ${paymentDueLabel}.`}</Text>
+              <Text style={styles.paymentReminderDue}>Metode pelunasan: {paymentMethodLabel(order.paymentMethod)}. Selesaikan pembayaran dan unggah bukti transfer melalui halaman pembayaran QRIS.</Text>
+              <TouchableOpacity
+                style={{
+                  width: "100%",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: "#FFFFFF",
+                  borderWidth: 1.5,
+                  borderColor: "#15803D",
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  marginTop: 12,
+                  shadowColor: "#0D7A53",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+                onPress={() => navigate("c_catering_qris")}
+                activeOpacity={0.8}
+              >
+                <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ backgroundColor: "#DCFCE7", padding: 6, borderRadius: 8 }}>
+                    <QrCode size={20} color="#15803D" />
+                  </View>
+                  <View style={styles.qrisButtonCopy}>
+                    <Text style={{ fontSize: 13.5, fontWeight: "800", color: "#0F172A" }}>
+                      Buka Halaman Pembayaran QRIS
+                    </Text>
+                    <Text style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
+                      Scan barcode, ajukan pelunasan & upload bukti
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={18} color="#15803D" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.paidInvoiceCard}>
+              <View style={styles.paidInvoiceHeader}>
+                <View style={styles.paidInvoiceIcon}><CheckCircle2 size={19} color="#166534" /></View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.paidInvoiceTitle}>Invoice Lunas 100%</Text>
+                  <Text style={styles.paidInvoiceSubtitle}>Pembayaran terverifikasi oleh pemilik Catering</Text>
+                </View>
+                <Text style={styles.paidInvoiceStamp}>LUNAS</Text>
+              </View>
+              <View style={styles.paidInvoiceDivider} />
+              <View style={styles.paidInvoiceRow}><Text style={styles.paidInvoiceLabel}>Nomor pesanan</Text><Text style={styles.paidInvoiceValue} numberOfLines={2}>{order.orderCode || `#${String(order.id).slice(-8).toUpperCase()}`}</Text></View>
+              <View style={styles.paidInvoiceRow}><Text style={styles.paidInvoiceLabel}>Total pembayaran</Text><Text style={styles.paidInvoiceValue}>{rp(totalAmount)}</Text></View>
+              <View style={styles.paidInvoiceRow}><Text style={styles.paidInvoiceLabel}>Metode</Text><Text style={styles.paidInvoiceValue}>{paymentMethodLabel(order.paymentMethod)}</Text></View>
+              {latestVerifiedPayment?.verifiedAt ? <Text style={styles.paidInvoiceDate}>Diverifikasi {new Date(latestVerifiedPayment.verifiedAt).toLocaleString("id-ID")}</Text> : null}
+              <Text style={styles.paymentCompleteNote}>Pembayaran sudah lunas. Pemilik Catering telah menerima notifikasi untuk menyelesaikan masakan, lalu menandai pesanan siap agar driver dapat mengantar.</Text>
+            </View>
+          )}
+        </View>
+
         {/* Kurir Card / Waiting Driver Info */}
         {order?.driverName ? (
           <View style={styles.driverCard}>
             <View style={styles.driverAvatar}>
               <Bike size={22} color="#FFFFFF" />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.driverLabel}>KURIR PENGANTAR GEOVERSE</Text>
               <Text style={styles.driverName}>{order.driverName}</Text>
               <Text style={styles.driverPhone}>
@@ -262,7 +366,7 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
         ) : isReady ? (
           <View style={styles.waitingDriverCard}>
             <Bike size={20} color="#7E22CE" />
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.waitingDriverTitle}>Menugaskan Kurir</Text>
               <Text style={styles.waitingDriverSub}>
                 Makanan telah siap! Sistem sedang mencarikan kurir terdekat untuk mengambil pesanan di dapur.
@@ -276,7 +380,7 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
           <View style={styles.storeAvatar}>
             <Store size={20} color="#EA580C" />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.storeLabel}>MITRA DAPUR CATERING</Text>
             <Text style={styles.storeName}>{order?.storeName || "Nama mitra belum tersedia"}</Text>
             <Text style={styles.storeSub} numberOfLines={1}>{order?.storeAddress || "Alamat mitra belum tersedia"}</Text>
@@ -372,11 +476,11 @@ const styles = StyleSheet.create({
   emptyStateButton: { backgroundColor: "#1B7A4E", borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12, marginTop: 6 },
   emptyStateButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   locationNotice: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFFFFF", borderRadius: 12, padding: 12, marginTop: 16 },
-  content: { padding: 16, paddingBottom: 32 },
-  statusHero: { alignItems: "center", backgroundColor: "#E8F5EE", borderRadius: 18, padding: 20 },
+  content: { width: "100%", paddingHorizontal: 12, paddingTop: 12, paddingBottom: 32 },
+  statusHero: { width: "100%", alignItems: "center", backgroundColor: "#E8F5EE", borderRadius: 18, padding: 16 },
   statusIcon: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#1B7A4E", alignItems: "center", justifyContent: "center" },
-  statusTitle: { color: "#064E3B", fontSize: 18, fontWeight: "900", marginTop: 12 },
-  statusSubtitle: { color: "#166534", fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 5 },
+  statusTitle: { alignSelf: "stretch", color: "#064E3B", fontSize: 18, fontWeight: "900", marginTop: 12, textAlign: "center" },
+  statusSubtitle: { alignSelf: "stretch", color: "#166534", fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 5 },
   orderCard: { backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E5E7EB", padding: 15, marginTop: 14 },
   orderHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   orderLabel: { color: "#9CA3AF", fontSize: 9, fontWeight: "800", letterSpacing: 0.6 },
@@ -385,7 +489,7 @@ const styles = StyleSheet.create({
   itemTitle: { color: "#111827", fontSize: 14, fontWeight: "900" },
   itemSub: { color: "#6B7280", fontSize: 11, marginTop: 3 },
   detailRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
-  detailText: { flex: 1, color: "#4B5563", fontSize: 11 },
+  detailText: { flex: 1, minWidth: 0, color: "#4B5563", fontSize: 11 },
   sectionTitle: { color: "#111827", fontSize: 16, fontWeight: "900", marginTop: 22, marginBottom: 10 },
   sectionTitleNoMargin: { color: "#111827", fontSize: 14, fontWeight: "900" },
   timeline: { backgroundColor: "#FFFFFF", borderRadius: 16, padding: 15, borderWidth: 1, borderColor: "#E5E7EB" },
@@ -395,11 +499,46 @@ const styles = StyleSheet.create({
   timelineDotActive: { backgroundColor: "#1B7A4E" },
   timelineLine: { flex: 1, width: 2, backgroundColor: "#E5E7EB", marginVertical: 2 },
   timelineLineActive: { backgroundColor: "#86EFAC" },
-  timelineCopy: { flex: 1, paddingLeft: 10, paddingBottom: 13 },
-  timelineTitle: { color: "#111827", fontSize: 12, fontWeight: "800" },
-  timelineText: { color: "#6B7280", fontSize: 11, marginTop: 3 },
+  timelineCopy: { flex: 1, minWidth: 0, paddingLeft: 10, paddingBottom: 13 },
+  timelineTitle: { color: "#111827", fontSize: 12, fontWeight: "800", flexWrap: "wrap" },
+  timelineText: { color: "#6B7280", fontSize: 11, marginTop: 3, flexWrap: "wrap" },
   inactiveText: { color: "#9CA3AF" },
   paymentCard: { backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E5E7EB", padding: 15, marginTop: 14 },
+  paymentHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  paymentHeaderTitle: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
+  paymentHeaderCopy: { flex: 1, minWidth: 0 },
+  paymentIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
+  paymentTitle: { color: "#0F172A", fontSize: 15, fontWeight: "900" },
+  paymentMethod: { color: "#1B7A4E", fontSize: 11, fontWeight: "800", marginTop: 2 },
+  paymentStatusPill: { maxWidth: "45%", borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 },
+  paymentStatusPillDone: { backgroundColor: "#DCFCE7" },
+  paymentStatusPillPending: { backgroundColor: "#FFEDD5" },
+  paymentStatusText: { fontSize: 9, fontWeight: "900" },
+  paymentProgressTrack: { height: 8, backgroundColor: "#E5E7EB", borderRadius: 99, overflow: "hidden", marginTop: 15 },
+  paymentProgressFill: { height: "100%", backgroundColor: "#1B7A4E", borderRadius: 99 },
+  paymentAmountRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, marginTop: 12 },
+  paymentAmountColumn: { flex: 1, minWidth: 0 },
+  paymentAmountColumnRight: { alignItems: "flex-end" },
+  paymentAmountLabel: { color: "#64748B", fontSize: 10 },
+  paymentAmountValue: { color: "#0F172A", fontSize: 13, fontWeight: "900", marginTop: 3 },
+  paymentAccountBox: { backgroundColor: "#F8FAFC", borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", padding: 11, marginTop: 12 },
+  paymentAccountText: { color: "#334155", fontSize: 11, lineHeight: 18 },
+  paymentReminderBox: { backgroundColor: "#FFF7ED", borderRadius: 12, borderWidth: 1, borderColor: "#FED7AA", padding: 11, marginTop: 12 },
+  paymentReminderTitle: { color: "#9A3412", fontSize: 12, fontWeight: "900" },
+  paymentReminderText: { color: "#9A3412", fontSize: 11, lineHeight: 16, marginTop: 4 },
+  paymentReminderDue: { color: "#C2410C", fontSize: 10, fontWeight: "800", marginTop: 6 },
+  paymentCompleteNote: { color: "#166534", backgroundColor: "#E8F5EE", borderRadius: 12, padding: 11, marginTop: 12, fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  paidInvoiceCard: { backgroundColor: "#F0FDF4", borderRadius: 14, borderWidth: 1, borderColor: "#BBF7D0", padding: 12, marginTop: 12 },
+  paidInvoiceHeader: { flexDirection: "row", alignItems: "center", gap: 9 },
+  paidInvoiceIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#DCFCE7", alignItems: "center", justifyContent: "center" },
+  paidInvoiceTitle: { color: "#14532D", fontSize: 13, fontWeight: "900" },
+  paidInvoiceSubtitle: { color: "#166534", fontSize: 10, marginTop: 2 },
+  paidInvoiceStamp: { color: "#15803D", fontSize: 10, fontWeight: "900", borderWidth: 1, borderColor: "#86EFAC", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4 },
+  paidInvoiceDivider: { height: 1, backgroundColor: "#BBF7D0", marginVertical: 10 },
+  paidInvoiceRow: { flexDirection: "row", justifyContent: "space-between", gap: 10, marginTop: 6 },
+  paidInvoiceLabel: { flex: 1, minWidth: 0, color: "#4B5563", fontSize: 10 },
+  paidInvoiceValue: { flex: 1, minWidth: 0, color: "#14532D", fontSize: 10, fontWeight: "900", textAlign: "right" },
+  paidInvoiceDate: { color: "#166534", fontSize: 9, marginTop: 9 },
   paymentHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
   paymentRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 5 },
   paymentLabel: { color: "#6B7280", fontSize: 12 },
@@ -418,14 +557,15 @@ const styles = StyleSheet.create({
   chatButtonText: { color: "#1B7A4E", fontSize: 13, fontWeight: "900" },
   driverCard: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
     padding: 14,
     marginTop: 14,
-    gap: 12,
+    gap: 10,
   },
   driverAvatar: {
     width: 44,
@@ -467,6 +607,8 @@ const styles = StyleSheet.create({
   driverActionBtns: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    marginLeft: "auto",
     gap: 8,
   },
   driverBtnText: {
@@ -484,7 +626,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  qrisButtonCopy: { flex: 1, minWidth: 0 },
   mapSubtitle: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 11,
     color: "#6B7280",
     marginTop: 2,
@@ -514,14 +659,15 @@ const styles = StyleSheet.create({
   },
   storeCard: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
     padding: 14,
     marginTop: 12,
-    gap: 12,
+    gap: 10,
   },
   storeAvatar: {
     width: 42,
@@ -551,6 +697,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   storeChatBtn: {
+    marginLeft: "auto",
     flexDirection: "row",
     alignItems: "center",
     gap: 5,

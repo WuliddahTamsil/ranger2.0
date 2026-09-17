@@ -14,6 +14,20 @@ interface CustomerCateringProps extends Nav {
   authAccount?: AuthAccount | null;
 }
 
+const resolveCateringPaymentFlag = (explicitValue: unknown, fallback: boolean) => {
+  if (typeof explicitValue === "boolean") {
+    return explicitValue;
+  }
+
+  if (typeof explicitValue === "string") {
+    const normalized = explicitValue.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+
+  return fallback;
+};
+
 export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ navigate }) => {
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +61,9 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
   }, [reloadKey]);
 
   const handleSelectShop = (shop: any) => {
+    const hasBankDetails = Boolean(shop.roleData?.cateringBankName && shop.roleData?.cateringBankAccountNumber && shop.roleData?.cateringBankAccountHolder);
+    const hasQris = Boolean(shop.roleData?.cateringQrisImageUrl);
+
     setSelectedCateringShop({
       id: shop._id,
       name: shop.roleData?.businessName || shop.name || "Mitra Catering",
@@ -56,6 +73,12 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
       phone: shop.phone || "",
       profilePhoto: shop.profilePhoto,
       description: shop.roleData?.menuSpecialty || "",
+      bankName: shop.roleData?.cateringBankName || "",
+      bankAccountNumber: shop.roleData?.cateringBankAccountNumber || "",
+      bankAccountHolder: shop.roleData?.cateringBankAccountHolder || "",
+      qrisImageUrl: shop.roleData?.cateringQrisImageUrl || "",
+      bankTransferEnabled: resolveCateringPaymentFlag(shop.roleData?.cateringBankTransferEnabled, hasBankDetails),
+      qrisEnabled: resolveCateringPaymentFlag(shop.roleData?.cateringQrisEnabled, hasQris),
     });
     navigate("c_catering_detail");
   };

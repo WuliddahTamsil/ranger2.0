@@ -7,6 +7,32 @@ export interface CateringPaymentBreakdown {
   optionLabel: string;
 }
 
+export const normalizeCateringPaymentStatus = (value?: string | null) =>
+  String(value ?? "").trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z_]/g, "");
+
+export const isCateringPaymentFullyPaid = (
+  remainingAmount?: number | string | null,
+  paymentStatus?: string | null,
+  paidAmount?: number | string | null,
+  totalAmount?: number | string | null,
+) => {
+  const normalizedStatus = normalizeCateringPaymentStatus(paymentStatus);
+  const remaining = Number(remainingAmount ?? 0);
+  const paid = Number(paidAmount ?? 0);
+  const total = Number(totalAmount ?? 0);
+
+  return (
+    remaining <= 0 ||
+    paid >= total ||
+    normalizedStatus === "lunas" ||
+    normalizedStatus === "paid" ||
+    normalizedStatus === "sudah_lunas" ||
+    normalizedStatus === "pembayaran_lunas" ||
+    normalizedStatus === "terverifikasi" ||
+    normalizedStatus === "verified"
+  );
+};
+
 export const getCateringPaymentBreakdown = (
   totalPrice: number,
   paymentOption: CateringPaymentOption,

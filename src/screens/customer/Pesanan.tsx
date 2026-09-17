@@ -33,6 +33,8 @@ import {
   Image as ImageIcon,
   PlayCircle,
   Plus,
+  Wallet,
+  QrCode,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -52,6 +54,10 @@ interface PesananProps {
   ordersLoading?: boolean;
   ordersLoadError?: string;
   onRetryOrders?: () => void;
+  onOpenRideTracking?: () => void;
+  onOpenCateringTracking?: () => void;
+  onOpenCateringQris?: () => void;
+  navigate?: (screen: any) => void;
 }
 
 interface ReviewMediaDraft {
@@ -70,6 +76,10 @@ export const Pesanan: React.FC<PesananProps> = ({
   ordersLoading = false,
   ordersLoadError = "",
   onRetryOrders,
+  onOpenRideTracking,
+  onOpenCateringTracking,
+  onOpenCateringQris,
+  navigate,
 }) => {
   const [activeTab, setActiveTab] = useState<number>(0);
   const [trackModalVisible, setTrackModalVisible] = useState(false);
@@ -118,6 +128,8 @@ export const Pesanan: React.FC<PesananProps> = ({
       return { icon: Wind, fg: "#0284C7", bg: "#E0F2FE" };
     } else if (normalized.includes("kos")) {
       return { icon: Building, fg: "#9333EA", bg: "#F3E8FF" };
+    } else if (normalized.includes("ride")) {
+      return { icon: Bike, fg: "#1B7A4E", bg: "#E8F5EE" };
     } else {
       return { icon: Truck, fg: "#D97706", bg: "#FEF3C7" };
     }
@@ -125,7 +137,7 @@ export const Pesanan: React.FC<PesananProps> = ({
 
   const getStatusColors = (status: string) => {
     const s = status.toLowerCase();
-    if (s === "dikirim") {
+    if (s === "dikirim" || s.includes("menuju") || s.includes("perjalanan") || s.includes("mencari") || s.includes("sampai")) {
       return { fg: "#2563EB", bg: "#EFF6FF" };
     } else if (s.includes("batal")) {
       return { fg: "#B91C1C", bg: "#FEE2E2" };
@@ -213,14 +225,15 @@ export const Pesanan: React.FC<PesananProps> = ({
 
   const handleOpenChat = (order: OrderItem, targetType: "driver" | "merchant" = "merchant") => {
     const normalizedType = order.type.toLowerCase();
+    const isRide = normalizedType.includes("ride");
     const isLaundryDriver = normalizedType.includes("laund") && order.status.toLowerCase().includes("kirim");
-    const resolvedType = targetType === "driver" || isLaundryDriver ? "driver" : "merchant";
+    const resolvedType = targetType === "driver" || isLaundryDriver || isRide ? "driver" : "merchant";
     
     let participantName = "";
     if (resolvedType === "driver") {
       participantName = (order as any).driverName
-        ? `${(order as any).driverName} (Kurir)`
-        : "Kurir GEOVERSE";
+        ? (isRide ? `${(order as any).driverName} (Driver Kanyaah Ride)` : `${(order as any).driverName} (Kurir)`)
+        : (isRide ? "Driver Kanyaah Ride" : "Kurir GEOVERSE");
     } else {
       participantName = normalizedType.includes("kos")
         ? "Pemilik Kos"
@@ -258,7 +271,7 @@ export const Pesanan: React.FC<PesananProps> = ({
       
       parsedItems = [
         {
-          name: order.item || "Pesanan GEOVERSE",
+          name: order.type.toLowerCase().includes("ride") ? "Layanan Kanyaah Ride" : order.item || "Pesanan GEOVERSE",
           quantity: qty,
           price: itemPrice > 0 ? itemPrice : order.total,
           total: itemPrice > 0 ? itemPrice * qty : order.total,
@@ -361,7 +374,13 @@ export const Pesanan: React.FC<PesananProps> = ({
             <TouchableOpacity
               style={styles.orderCard}
               activeOpacity={0.92}
-              onPress={() => handleOpenInvoice(item)}
+              onPress={() => {
+                if (item.type.toLowerCase().includes("ride") && !isCompleted && !item.status.toLowerCase().includes("batal") && onOpenRideTracking) {
+                  onOpenRideTracking();
+                } else {
+                  handleOpenInvoice(item);
+                }
+              }}
             >
               <View style={styles.cardHeader}>
                 <View style={[styles.serviceIconBg, { backgroundColor: config.bg }]}>
@@ -370,12 +389,12 @@ export const Pesanan: React.FC<PesananProps> = ({
 
                 <View style={styles.cardHeaderBody}>
                   <Text style={styles.orderTitle} numberOfLines={1}>
-                    #{item.id} · {item.type}
+                    {item.orderCode ? item.orderCode : `#${item.id}`} · {item.type}
                   </Text>
                   <Text style={styles.itemName} numberOfLines={1}>
                     {item.item}
                   </Text>
-                  <Text style={styles.itemDetail} numberOfLines={1}>
+                  <Text style={styles.itemDetail} numberOfLines={item.type.toLowerCase().includes("ride") ? 2 : 1}>
                     {item.detail}
                   </Text>
                 </View>
@@ -455,13 +474,45 @@ export const Pesanan: React.FC<PesananProps> = ({
                         </TouchableOpacity>
                       )}
 
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnOutlineGray]}
-                        onPress={() => handleOpenChat(item, "merchant")}
-                      >
-                        <Store size={13} color="#4B5563" />
-                        <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
-                      </TouchableOpacity>
+                      {item.type.toLowerCase().includes("cater") && (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnProof]}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            if (onOpenCateringQris) {
+                              onOpenCateringQris();
+                            } else if (navigate) {
+                              navigate("c_catering_qris");
+                            }
+                          }}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Buka halaman pembayaran QRIS"
+                        >
+                          <QrCode size={13} color="#0D7A53" />
+                          <Text style={styles.actionBtnTextInvoice}>Bayar QRIS</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {item.type.toLowerCase().includes("ride") ? (
+                        hasDriver && (
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnOutlineGray]}
+                            onPress={() => handleOpenChat(item, "driver")}
+                          >
+                            <Bike size={13} color="#4B5563" />
+                            <Text style={styles.actionBtnTextGray}>Chat Driver</Text>
+                          </TouchableOpacity>
+                        )
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnOutlineGray]}
+                          onPress={() => handleOpenChat(item, "merchant")}
+                        >
+                          <Store size={13} color="#4B5563" />
+                          <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
+                        </TouchableOpacity>
+                      )}
 
                       {!hasReviewed ? (
                         <TouchableOpacity
@@ -490,13 +541,25 @@ export const Pesanan: React.FC<PesananProps> = ({
                         <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnOutlineGray]}
-                        onPress={() => handleOpenChat(item, "merchant")}
-                      >
-                        <Store size={13} color="#4B5563" />
-                        <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
-                      </TouchableOpacity>
+                      {item.type.toLowerCase().includes("ride") ? (
+                        hasDriver && (
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnOutlineGray]}
+                            onPress={() => handleOpenChat(item, "driver")}
+                          >
+                            <Bike size={13} color="#4B5563" />
+                            <Text style={styles.actionBtnTextGray}>Chat Driver</Text>
+                          </TouchableOpacity>
+                        )
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnOutlineGray]}
+                          onPress={() => handleOpenChat(item, "merchant")}
+                        >
+                          <Store size={13} color="#4B5563" />
+                          <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
+                        </TouchableOpacity>
+                      )}
                     </>
                   ) : (
                     // === TAB AKTIF (Active Orders in Progress) ===
@@ -510,31 +573,73 @@ export const Pesanan: React.FC<PesananProps> = ({
                         <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
                       </TouchableOpacity>
 
-                      {hasDriver ? (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionBtnDriver]}
-                          onPress={() => handleOpenChat(item, "driver")}
-                        >
-                          <Bike size={13} color="#1B7A4E" />
-                          <Text style={styles.actionBtnTextDriver}>Chat Kurir</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionBtnMerchantActive]}
-                          onPress={() => handleOpenChat(item, "merchant")}
-                        >
-                          <Store size={13} color="#EA580C" />
-                          <Text style={styles.actionBtnTextMerchantActive}>Chat Toko</Text>
-                        </TouchableOpacity>
-                      )}
+                      {item.type.toLowerCase().includes("ride") ? (
+                        <>
+                          {hasDriver && (
+                            <TouchableOpacity
+                              style={[styles.actionBtn, styles.actionBtnDriver]}
+                              onPress={() => handleOpenChat(item, "driver")}
+                            >
+                              <Bike size={13} color="#1B7A4E" />
+                              <Text style={styles.actionBtnTextDriver}>Chat Driver</Text>
+                            </TouchableOpacity>
+                          )}
 
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnSolid]}
-                        onPress={() => handleOpenTracking(item)}
-                      >
-                        <Navigation size={13} color="#FFFFFF" />
-                        <Text style={styles.actionBtnTextSolid}>Lacak</Text>
-                      </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnSolid]}
+                            onPress={() => {
+                              if (onOpenRideTracking) {
+                                onOpenRideTracking();
+                              } else {
+                                handleOpenTracking(item);
+                              }
+                            }}
+                          >
+                            <Navigation size={13} color="#FFFFFF" />
+                            <Text style={styles.actionBtnTextSolid}>Lacak Perjalanan</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <>
+                          {hasDriver ? (
+                            <TouchableOpacity
+                              style={[styles.actionBtn, styles.actionBtnDriver]}
+                              onPress={() => handleOpenChat(item, "driver")}
+                            >
+                              <Bike size={13} color="#1B7A4E" />
+                              <Text style={styles.actionBtnTextDriver}>Chat Kurir</Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              style={[styles.actionBtn, styles.actionBtnMerchantActive]}
+                              onPress={() => handleOpenChat(item, "merchant")}
+                            >
+                              <Store size={13} color="#EA580C" />
+                              <Text style={styles.actionBtnTextMerchantActive}>Chat Toko</Text>
+                            </TouchableOpacity>
+                          )}
+
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnSolid]}
+                            onPress={() => {
+                              if (item.type.toLowerCase().includes("cater") && onOpenCateringTracking) {
+                                onOpenCateringTracking();
+                              } else {
+                                handleOpenTracking(item);
+                              }
+                            }}
+                          >
+                            {item.type.toLowerCase().includes("cater") && Number(item.remainingAmount || 0) > 0 ? (
+                              <Wallet size={13} color="#FFFFFF" />
+                            ) : (
+                              <Navigation size={13} color="#FFFFFF" />
+                            )}
+                            <Text style={styles.actionBtnTextSolid}>
+                              {item.type.toLowerCase().includes("cater") && Number(item.remainingAmount || 0) > 0 ? "Lunasi & Lacak" : "Lacak"}
+                            </Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
                     </>
                   )}
                 </View>
@@ -577,7 +682,7 @@ export const Pesanan: React.FC<PesananProps> = ({
               <View style={styles.fullPageHeaderCopy}>
                 <Text style={styles.fullPageHeaderTitle}>Lacak Pesanan</Text>
                 <Text style={styles.fullPageHeaderSubtitle} numberOfLines={1}>
-                  #{selectedOrder.id} • {selectedOrder.item}
+                  {(selectedOrder as any).orderCode || `#${selectedOrder.id}`} • {selectedOrder.item}
                 </Text>
               </View>
               <View style={[styles.statusBadge, { backgroundColor: getStatusColors(selectedOrder.status).bg }]}>
@@ -615,14 +720,16 @@ export const Pesanan: React.FC<PesananProps> = ({
                   <View style={styles.driverInfoBody}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       <Text style={styles.driverHighlightName}>
-                        {(selectedOrder as any).driverName || "Kurir GEOVERSE"}
+                        {(selectedOrder as any).driverName || (selectedOrder.type === "Kanyaah Ride" ? "Driver Kanyaah Ride" : "Kurir GEOVERSE")}
                       </Text>
                       <View style={styles.driverRoleTag}>
-                        <Text style={styles.driverRoleTagText}>Kurir</Text>
+                        <Text style={styles.driverRoleTagText}>
+                          {selectedOrder.type === "Kanyaah Ride" ? "Driver Ride" : "Kurir"}
+                        </Text>
                       </View>
                     </View>
                     <Text style={styles.driverHighlightSub}>
-                      {(selectedOrder as any).driverVehicle || "Honda Beat • M 4589 XZ"}
+                      {[(selectedOrder as any).driverVehicle, (selectedOrder as any).driverPlate].filter(Boolean).join(" • ") || "Kendaraan Driver"}
                     </Text>
                   </View>
                   <TouchableOpacity

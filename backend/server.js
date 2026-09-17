@@ -48,6 +48,8 @@ const marketplaceRoutes = require("./routes/marketplaceRoutes");
 const marketplaceOrderRoutes = require("./routes/marketplaceOrderRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
+const rideRoutes = require("./routes/rideRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -61,6 +63,8 @@ app.use("/api/marketplace", marketplaceRoutes);
 app.use("/api/marketplace/orders", marketplaceOrderRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/rides", rideRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {

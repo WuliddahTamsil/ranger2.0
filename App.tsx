@@ -23,6 +23,7 @@ import { Beranda as CustomerDashboardScreen } from "./src/screens/customer/Beran
 import { CustomerCateringScreen } from "./src/screens/customer/CustomerCateringScreen";
 import { CustomerCateringDetailScreen } from "./src/screens/customer/CustomerCateringDetailScreen";
 import { CustomerCateringTrackingScreen } from "./src/screens/customer/CustomerCateringTrackingScreen";
+import { CustomerCateringQrisPaymentScreen } from "./src/screens/customer/CustomerCateringQrisPaymentScreen";
 import { MarketplaceScreen } from "./src/screens/customer/MarketplaceScreen";
 import { CustomerLaundryScreen } from "./src/screens/customer/CustomerLaundryScreen";
 import { CustomerLaundryDetailScreen } from "./src/screens/customer/CustomerLaundryDetailScreen";
@@ -30,6 +31,8 @@ import { CustomerLaundryTrackingScreen } from "./src/screens/customer/CustomerLa
 import { CustomerKosScreen } from "./src/screens/customer/CustomerKosScreen";
 import { CustomerKosDetailScreen } from "./src/screens/customer/CustomerKosDetailScreen";
 import { CustomerAddressScreen } from "./src/screens/customer/CustomerAddressScreen";
+import { CustomerRideScreen } from "./src/screens/customer/CustomerRideScreen";
+import { CustomerRideTrackingScreen } from "./src/screens/customer/CustomerRideTrackingScreen";
 import { Beranda as DriverHomeScreen } from "./src/screens/driver/Beranda";
 import { Beranda as PemilikCateringHomeScreen } from "./src/screens/pemilik_catering/Beranda";
 import { Beranda as PemilikMarketplaceHomeScreen } from "./src/screens/pemilik_marketplace/Beranda";
@@ -222,6 +225,9 @@ export default function App() {
         return <CustomerCateringDetailScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_catering_tracking":
         return <CustomerCateringTrackingScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_catering_qris":
+      case "c_catering_payment":
+        return <CustomerCateringQrisPaymentScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_laundry":
         return <CustomerLaundryScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_laundry_detail":
@@ -232,6 +238,10 @@ export default function App() {
         return <CustomerKosScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_kos_detail":
         return <CustomerKosDetailScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_ride":
+        return <CustomerRideScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_ride_tracking":
+        return <CustomerRideTrackingScreen navigate={navigate} authAccount={currentAuthAccount} />;
 
       // 2. Driver
       case "d_home":

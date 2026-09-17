@@ -81,6 +81,23 @@ const userSchema = new mongoose.Schema(
       of: String,
       default: {},
     },
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
+    driverAvailability: {
+      type: String,
+      enum: ["OFFLINE", "AVAILABLE", "BUSY"],
+      default: "OFFLINE",
+    },
+    driverRating: {
+      type: Number,
+      default: 5.0,
+    },
+    driverRatingCount: {
+      type: Number,
+      default: 0,
+    },
     documents: {
       type: Map,
       of: documentSchema,

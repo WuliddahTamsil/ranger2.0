@@ -5,6 +5,8 @@ const CateringOrder = require("../models/CateringOrder");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { syncConversationForOrder } = require("../services/conversationService");
+const { getRoleDataValue } = require("../utils/roleData");
+const { getCateringDueAt, getPaymentPlan, getPaymentReminder } = require("../utils/cateringOrderLifecycle");
 
 const cateringMonths = new Map([
   ["januari", 1], ["februari", 2], ["maret", 3], ["april", 4],
@@ -39,6 +41,7 @@ const makeRequestHash = (body) => createHash("sha256").update(JSON.stringify({
   cateringDate: String(body.cateringDate || ""),
   cateringTime: String(body.cateringTime || ""),
   paymentOption: String(body.paymentOption || ""),
+  paymentMethod: String(body.paymentMethod || ""),
   notes: String(body.notes || "").trim().slice(0, 500),
 })).digest("hex");
 
@@ -62,10 +65,11 @@ const createCateringOrder = async (req, res) => {
   try {
     const {
       customerId, ownerId, productId, portions, address, addressSnapshot,
-      paymentOption, cateringDate, cateringTime, notes,
+      paymentOption, paymentMethod, cateringDate, cateringTime, notes,
     } = body;
     const portionCount = Number(portions);
     const allowedPaymentOptions = new Set(["dp30", "dp50", "lunas"]);
+    const allowedPaymentMethods = new Set(["bank_transfer", "qris"]);
 
     if (!idempotencyKey || idempotencyKey.length > 200) {
       return res.status(400).json({ success: false, message: "Kunci checkout tidak valid. Coba kirim pesanan lagi." });
@@ -75,6 +79,9 @@ const createCateringOrder = async (req, res) => {
     }
     if (!Number.isInteger(portionCount) || portionCount < 10 || !address?.trim() || !cateringDate?.trim() || !cateringTime?.trim() || !allowedPaymentOptions.has(paymentOption)) {
       return res.status(400).json({ success: false, message: "Periksa jumlah porsi, alamat, jadwal, dan skema pembayaran." });
+    }
+    if (!allowedPaymentMethods.has(paymentMethod)) {
+      return res.status(400).json({ success: false, message: "Pilih metode pembayaran Catering yang tersedia." });
     }
     if (!isValidCateringSchedule(cateringDate, cateringTime)) {
       return res.status(400).json({ success: false, message: "Pilih jadwal Catering minimal dua hari dari sekarang dan gunakan salah satu jam yang tersedia." });
@@ -91,8 +98,19 @@ const createCateringOrder = async (req, res) => {
     if (!owner || owner.role !== "pemilik_catering" || owner.status === "rejected") {
       return res.status(409).json({ success: false, message: "Mitra Catering tidak tersedia." });
     }
-    if (owner.roleData?.isDapurOpen !== "true") {
+    const isDapurOpen = String(getRoleDataValue(owner, "isDapurOpen") ?? "").trim().toLowerCase() === "true";
+    if (!isDapurOpen) {
       return res.status(409).json({ success: false, message: "Dapur Catering sedang tutup." });
+    }
+    const bankName = String(getRoleDataValue(owner, "cateringBankName") || "").trim();
+    const bankAccountNumber = String(getRoleDataValue(owner, "cateringBankAccountNumber") || "").trim();
+    const bankAccountHolder = String(getRoleDataValue(owner, "cateringBankAccountHolder") || "").trim();
+    const qrisImageUrl = String(getRoleDataValue(owner, "cateringQrisImageUrl") || "").trim();
+    if (paymentMethod === "bank_transfer" && (!bankName || !bankAccountNumber || !bankAccountHolder)) {
+      return res.status(409).json({ success: false, message: "Rekening transfer mitra belum tersedia. Pilih Tunai saat diterima atau hubungi pemilik Catering." });
+    }
+    if (paymentMethod === "qris" && !qrisImageUrl) {
+      return res.status(409).json({ success: false, message: "QRIS mitra belum tersedia. Pilih metode lain atau hubungi pemilik Catering." });
     }
 
     const product = await CateringProduct.findOne({ _id: productId, ownerId, isActive: true }).lean();
@@ -104,11 +122,12 @@ const createCateringOrder = async (req, res) => {
     const serviceFee = 5000;
     const subtotal = product.price * portionCount;
     const totalAmount = subtotal + deliveryFee + serviceFee;
-    // No payment provider/confirmation is wired. Never record the selected DP as money received.
+    const paymentPlan = getPaymentPlan(totalAmount, paymentOption);
     const paidAmount = 0;
     const remainingAmount = totalAmount;
-    const storeName = owner.roleData?.businessName || owner.name || "Mitra Catering";
-    const storeAddress = owner.roleData?.businessAddress || owner.roleData?.address || owner.address || "";
+    const paymentDueAt = getCateringDueAt(cateringDate);
+    const storeName = getRoleDataValue(owner, "businessName") || owner.name || "Mitra Catering";
+    const storeAddress = getRoleDataValue(owner, "businessAddress") || getRoleDataValue(owner, "address") || owner.address || "";
     let order;
 
     session = await mongoose.startSession();
@@ -145,10 +164,16 @@ const createCateringOrder = async (req, res) => {
         deliveryFee,
         serviceFee,
         paymentOption,
-        paymentMethod: "Belum ditentukan",
-        paymentStatus: "Menunggu konfirmasi pembayaran",
+        paymentMethod,
+        paymentBankName: paymentMethod === "bank_transfer" ? bankName : "",
+        paymentAccountNumber: paymentMethod === "bank_transfer" ? bankAccountNumber : "",
+        paymentAccountHolder: paymentMethod === "bank_transfer" ? bankAccountHolder : "",
+        paymentQrisImageUrl: paymentMethod === "qris" ? qrisImageUrl : "",
+        paymentStatus: "Menunggu Pembayaran",
         paidAmount,
         remainingAmount,
+        paymentDueAt,
+        paymentReminder: getPaymentReminder({ totalAmount, remainingAmount, paymentDueAt }),
         cateringDate: cateringDate.trim(),
         cateringTime: cateringTime.trim(),
         status: "Menunggu",
@@ -164,7 +189,7 @@ const createCateringOrder = async (req, res) => {
       Notification.create({
         userId: customerId,
         title: "Pesanan Catering dibuat",
-        message: `Pesanan ${order.orderCode} menunggu konfirmasi pembayaran. Belum ada pembayaran yang tercatat.`,
+        message: `Pesanan ${order.orderCode} tercatat. Bayar minimal ${paymentPlan.percent}% (${paymentPlan.depositAmount.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })}) lalu ajukan konfirmasi kepada pemilik Catering.`,
         type: "order_new",
         relatedId: order._id,
       }),

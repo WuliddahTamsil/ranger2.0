@@ -22,7 +22,9 @@ import {
   Truck,
   Tag,
   Star,
+  Flame,
   ShoppingBag,
+  Bike,
 } from "lucide-react-native";
 import { Product } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -34,6 +36,7 @@ interface JelajahProps {
   onOpenCatering: () => void;
   onOpenLaundry: () => void;
   onOpenKos: () => void;
+  onOpenRide?: () => void;
 }
 
 export const Jelajah: React.FC<JelajahProps> = ({
@@ -43,6 +46,7 @@ export const Jelajah: React.FC<JelajahProps> = ({
   onOpenCatering,
   onOpenLaundry,
   onOpenKos,
+  onOpenRide,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -132,6 +136,17 @@ export const Jelajah: React.FC<JelajahProps> = ({
               <Building size={22} color="#9333EA" />
             </View>
             <Text style={styles.serviceLabel}>Kanyaah Homestay</Text>
+          </TouchableOpacity>
+
+          {/* Ride -> Kanyaah Ride */}
+          <TouchableOpacity
+            style={styles.serviceCard}
+            onPress={onOpenRide}
+          >
+            <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5EE" }]}>
+              <Bike size={22} color="#1B7A4E" />
+            </View>
+            <Text style={styles.serviceLabel}>Kanyaah Ride</Text>
           </TouchableOpacity>
 
           {/* Delivery */}

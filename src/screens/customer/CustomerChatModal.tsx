@@ -14,6 +14,7 @@ import {
   ScrollView,
   SafeAreaView,
   KeyboardAvoidingView,
+  Linking,
 } from "react-native";
 import {
   Bike,
@@ -28,6 +29,8 @@ import {
   Download,
   CheckCheck,
   ArrowLeft,
+  Video,
+  Play,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -54,7 +57,7 @@ interface CustomerChatModalProps {
 }
 
 interface AttachmentItem {
-  type: "image" | "file";
+  type: "image" | "file" | "video";
   uri: string;
   name: string;
   size?: string;
@@ -233,6 +236,38 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     }
   };
 
+  
+  const handlePickVideo = async () => {
+    setIsAttachMenuOpen(false);
+    try {
+      if (Platform.OS !== "web") {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Ditolak", "Mohon izinkan akses galeri untuk mengirim video.");
+          return;
+        }
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["videos"],
+        quality: 0.8,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        const fileSizeMb = asset.fileSize ? `${(asset.fileSize / (1024 * 1024)).toFixed(1)} MB` : "Video";
+        setSelectedAttachment({
+          type: "video",
+          uri: asset.uri,
+          name: asset.fileName || `video_${Date.now()}.mp4`,
+          size: fileSizeMb,
+        });
+      }
+    } catch (err) {
+      console.log("Pick video err:", err);
+    }
+  };
+
   const handleSend = async () => {
     if (!canSend) return;
     const text = typedMessage.trim();
@@ -242,7 +277,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     const message: CustomerChatMessage = {
       id: `${threadId}_${Date.now()}`,
       sender: "customer",
-      text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : "📎 File terlampir"),
+      text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : selectedAttachment?.type === "video" ? "🎥 Video terkirim" : "📎 File terlampir"),
       time: "Baru saja",
       attachment: attachmentToSend ? { ...attachmentToSend } : undefined,
     };
@@ -253,7 +288,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
         const uploaded = await uploadFileToBackend(
           attachmentToSend.uri,
           attachmentToSend.name,
-          attachmentToSend.type === "image" ? "image/jpeg" : "application/octet-stream"
+          attachmentToSend.type === "image" ? "image/jpeg" : attachmentToSend.type === "video" ? "video/mp4" : "application/octet-stream"
         );
         if (uploaded?.success && uploaded.data?.url) {
           attachmentToSend = { ...attachmentToSend, uri: uploaded.data.url };

@@ -5,6 +5,11 @@ const User = require("../models/User");
 const CateringOrder = require("../models/CateringOrder");
 const Notification = require("../models/Notification");
 const { syncConversationForOrder } = require("../services/conversationService");
+const {
+  DRIVER_TRANSITIONS,
+  OWNER_TRANSITIONS,
+  isCateringPaymentComplete,
+} = require("../utils/cateringOrderLifecycle");
 
 // Create product (by Pemilik Catering)
 const createProduct = async (req, res) => {
@@ -336,6 +341,9 @@ const getCateringOrdersByCustomer = async (req, res) => {
 const getCateringOrdersByOwner = async (req, res) => {
   try {
     const { ownerId } = req.params;
+    if (String(req.authUser?._id || "") !== String(ownerId)) {
+      return res.status(403).json({ success: false, message: "Pemilik Catering hanya dapat melihat pesanan miliknya." });
+    }
     const orders = await CateringOrder.find({ ownerId }).sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -354,10 +362,40 @@ const updateCateringOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const actor = req.authUser;
 
     const order = await CateringOrder.findById(id);
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    }
+
+    const role = String(actor?.role || "").trim().toLowerCase();
+    const actorId = String(actor?._id || "");
+    const isOwner = (role === "pemilik_catering" || role === "admin" || role === "catering") && (String(order.ownerId) === actorId || role === "admin" || !order.ownerId);
+    const isDriver = role === "driver" && String(order.driverId) === actorId;
+    const normalizedCurrentStatus = Object.keys(OWNER_TRANSITIONS).find(
+      (k) => k.toLowerCase() === String(order.status || "").toLowerCase()
+    ) || order.status;
+    const isAllowedOwnerTransition = isOwner && (
+      (OWNER_TRANSITIONS[normalizedCurrentStatus] || []).some(
+        (s) => s.toLowerCase() === String(status || "").toLowerCase()
+      ) ||
+      status === "Diproses" ||
+      status === "Dibatalkan"
+    );
+    const isAllowedDriverTransition = isDriver && DRIVER_TRANSITIONS[order.status] === status;
+
+    if (!isAllowedOwnerTransition && !isAllowedDriverTransition) {
+      return res.status(403).json({ success: false, message: "Anda tidak memiliki akses atau transisi status ini tidak valid." });
+    }
+    // Pemilik boleh mulai menyiapkan pesanan sejak PO diterima, meskipun
+    // customer baru membayar DP atau pembayaran masih menunggu verifikasi.
+    // Namun pesanan tidak boleh dinyatakan siap diambil sebelum lunas 100%.
+    if (isAllowedOwnerTransition && order.status === "Diproses" && status === "Siap" && !isCateringPaymentComplete(order)) {
+      return res.status(409).json({ success: false, message: "Pesanan baru dapat ditandai siap setelah pembayaran lunas 100% dan terverifikasi." });
+    }
+    if (isAllowedDriverTransition && !isCateringPaymentComplete(order)) {
+      return res.status(409).json({ success: false, message: "Driver baru dapat mengantar setelah pelunasan Catering terverifikasi 100%." });
     }
 
     order.status = status;
@@ -441,6 +479,25 @@ const updateCateringOrderStatus = async (req, res) => {
           relatedId: order._id,
         });
       }
+    } else if (status === "Dibatalkan") {
+      if (mongoose.Types.ObjectId.isValid(order.customerId)) {
+        await Notification.create({
+          userId: order.customerId,
+          title: "Pesanan Catering Ditolak",
+          message: `Pesanan catering ${orderCode} tidak dapat diproses oleh pemilik catering.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
+      if (mongoose.Types.ObjectId.isValid(order.ownerId)) {
+        await Notification.create({
+          userId: order.ownerId,
+          title: "Pesanan Catering Ditolak",
+          message: `Pesanan ${orderCode} telah ditolak dan dibatalkan.`,
+          type: "order_status",
+          relatedId: order._id,
+        });
+      }
     } else {
       // General status notification
       if (mongoose.Types.ObjectId.isValid(order.customerId)) {
@@ -456,8 +513,11 @@ const updateCateringOrderStatus = async (req, res) => {
 
     req.io?.to(`owner:${order.ownerId}`).emit("order_status_updated", order);
     req.io?.to(`customer:${order.customerId}`).emit("order_status_updated", order);
+    req.io?.to(`user:${order.ownerId}`).emit("order_status_updated", order);
+    req.io?.to(`user:${order.customerId}`).emit("order_status_updated", order);
     if (order.driverId) {
       req.io?.to(`driver:${order.driverId}`).emit("order_status_updated", order);
+      req.io?.to(`user:${order.driverId}`).emit("order_status_updated", order);
     }
 
     // If order is ready and not yet assigned to driver, broadcast to all drivers
@@ -491,11 +551,15 @@ const updateCateringOrderStatus = async (req, res) => {
 // Get catering orders for driver (available orders or assigned to driver)
 const getOrdersByDriver = async (req, res) => {
   try {
+    const driverId = String(req.authUser?._id || "");
+    if (driverId !== String(req.params.driverId)) {
+      return res.status(403).json({ success: false, message: "Driver hanya dapat melihat order miliknya." });
+    }
     const orders = await CateringOrder.find({
       $or: [
-        { driverId: req.params.driverId },
-        { driverId: { $in: ["", null] }, status: "Siap" },
-        { driverId: { $exists: false }, status: "Siap" },
+        { driverId, status: { $nin: ["Selesai", "Dibatalkan"] }, paymentStatus: "Lunas" },
+        { driverId: { $in: ["", null] }, declinedByDrivers: { $nin: [driverId] }, status: "Siap", remainingAmount: { $lte: 0 }, paymentStatus: "Lunas" },
+        { driverId: { $exists: false }, declinedByDrivers: { $nin: [driverId] }, status: "Siap", remainingAmount: { $lte: 0 }, paymentStatus: "Lunas" },
       ],
       customerId: { $nin: ["", null] },
     }).sort({ createdAt: -1 }).lean();
@@ -507,10 +571,29 @@ const getOrdersByDriver = async (req, res) => {
   }
 };
 
+const declineDriver = async (req, res) => {
+  try {
+    const driverId = String(req.authUser?._id || "");
+    const order = await CateringOrder.findOneAndUpdate(
+      { _id: req.params.id, status: "Siap", driverId: { $in: ["", null] }, declinedByDrivers: { $nin: [driverId] } },
+      { $addToSet: { declinedByDrivers: driverId } },
+      { new: true },
+    );
+    if (!order) return res.status(409).json({ success: false, message: "Order Catering sudah diambil atau tidak tersedia." });
+    return res.json({ success: true, data: order });
+  } catch (error) {
+    console.error("Decline catering driver error:", error);
+    return res.status(500).json({ success: false, message: "Gagal menyembunyikan order Catering." });
+  }
+};
+
 // Driver accepts catering order
 const assignDriver = async (req, res) => {
   try {
     const { driverId } = req.body;
+    if (String(req.authUser?._id || "") !== String(driverId || "")) {
+      return res.status(403).json({ success: false, message: "Driver hanya dapat menerima order menggunakan akun sendiri." });
+    }
     const driver = await User.findOne({ _id: driverId, role: "driver" }).select("_id name phone");
     if (!driver) return res.status(400).json({ success: false, message: "Driver tidak valid" });
 
@@ -518,7 +601,7 @@ const assignDriver = async (req, res) => {
       {
         _id: req.params.id,
         $or: [
-          { driverId: { $in: ["", null] }, status: { $in: ["Menunggu", "Diproses", "Siap"] } },
+          { driverId: { $in: ["", null] }, status: "Siap", remainingAmount: { $lte: 0 }, paymentStatus: "Lunas" },
           { driverId: String(driver._id) },
         ],
       },
@@ -568,4 +651,5 @@ module.exports = {
   updateCateringOrderStatus,
   getOrdersByDriver,
   assignDriver,
+  declineDriver,
 };

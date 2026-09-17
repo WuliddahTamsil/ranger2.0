@@ -35,11 +35,14 @@ const chatMessageSchema = new mongoose.Schema(
     attachment: {
       type: {
         type: String,
-        enum: ["image", "file"],
+        enum: ["image", "video", "file"],
       },
       uri: String,
       name: String,
       size: String,
+      duration: Number,
+      thumbnailUrl: String,
+      mimeType: String,
     },
   },
   {

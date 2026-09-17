@@ -475,7 +475,7 @@ const updateUserProfile = async (req, res) => {
         message: "Gagal: Akun ini disimpan secara lokal di browser Anda." 
       });
     }
-    const { name, phone, address, profilePhoto, roleData } = req.body;
+    const { name, phone, address, profilePhoto, roleData, isOnline, driverAvailability } = req.body;
 
     const user = await User.findById(id);
     if (!user) {
@@ -486,6 +486,8 @@ const updateUserProfile = async (req, res) => {
     if (phone !== undefined) user.phone = phone.trim();
     if (address !== undefined) user.address = address.trim();
     if (profilePhoto !== undefined) user.profilePhoto = profilePhoto;
+    if (isOnline !== undefined) user.isOnline = Boolean(isOnline);
+    if (driverAvailability !== undefined) user.driverAvailability = driverAvailability;
 
     if (roleData) {
       Object.keys(roleData).forEach((key) => {

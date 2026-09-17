@@ -29,4 +29,16 @@ const requireAuth = async (req, res, next) => {
   return next();
 };
 
-module.exports = { getBearerToken, verifyAccessToken, requireAuth };
+const optionalAuth = async (req, res, next) => {
+  const token = getBearerToken(req);
+  if (token) {
+    const user = await verifyAccessToken(token);
+    if (user) {
+      req.authUser = user;
+      req.user = user;
+    }
+  }
+  return next();
+};
+
+module.exports = { getBearerToken, verifyAccessToken, requireAuth, optionalAuth };

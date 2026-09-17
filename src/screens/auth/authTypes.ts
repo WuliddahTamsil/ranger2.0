@@ -54,6 +54,8 @@ export interface AuthAccount {
   googleLinked?: boolean;
   status: AuthAccountStatus;
   rejectionReason?: string;
+  driverRating?: number;
+  driverAvailability?: "OFFLINE" | "AVAILABLE" | "BUSY";
   roleData: Record<string, string>;
   documents: Record<string, AuthDocument>;
   createdAt: string;

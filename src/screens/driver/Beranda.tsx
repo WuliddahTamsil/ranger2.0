@@ -23,17 +23,26 @@ import {
   Navigation,
   MapPin,
   CheckCircle2,
+  Phone,
+  MessageSquare,
+  Star,
+  Bike,
   XCircle,
   HelpCircle,
   Truck,
   ArrowRight,
   ChevronRight,
   X,
+  Store,
+  Clock,
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { RoleHeader } from "../../components/RoleHeader";
+import { SafeCallModal } from "../../components/SafeCallModal";
+import { CustomerChatModal } from "../customer/CustomerChatModal";
+import { updateUserProfile } from "../../services/api";
 import {
   getMarketplaceOrdersForDriver,
   updateMarketplaceOrderStatus,
@@ -43,6 +52,7 @@ import {
   getCateringOrdersForDriver,
   updateCateringOrderStatus,
   assignCateringDriver,
+  declineCateringDriver,
   getNotifications,
   markNotificationRead,
 } from "../../services/api";
@@ -54,6 +64,14 @@ import {
   takeLaundryDeliveryJob,
   completeLaundryDelivery,
 } from "../../services/laundryService";
+import {
+  fetchDriverRides,
+  acceptRide,
+  declineRide,
+  updateRideStatus,
+  RideStatus,
+} from "../../services/rideService";
+import { subscribeToUserRealtime } from "../../services/userRealtime";
 
 // Import other screens
 import { Order, DriverOrder } from "./Order";
@@ -69,6 +87,11 @@ const mapMarketplaceDriverStatus = (rawStatus: string): DriverOrder["status"] =>
 
 const mapMarketplaceDriverOrder = (order: any): DriverOrder => ({
   id: String(order._id || order.id),
+  orderCode: order.orderCode || `#RNG-DEL-${String(order._id || order.id).slice(-8)}`,
+  orderCategory: "DELIVERY",
+  serviceType: "KANYAAH_MARKETPLACE",
+  driverId: order.driverId || null,
+  rawStatus: order.status || "Menunggu",
   customer: order.customerName || "Pelanggan",
   phone: order.customerPhone || "",
   type: "Marketplace",
@@ -89,6 +112,84 @@ const mapMarketplaceDriverOrder = (order: any): DriverOrder => ({
   addressSnapshot: order.addressSnapshot || null,
 });
 
+const mapCateringDriverOrder = (order: any): DriverOrder => ({
+  id: String(order._id || order.id),
+  orderCode: order.orderCode || `#RNG-CAT-${String(order._id || order.id).slice(-8)}`,
+  orderCategory: "DELIVERY",
+  serviceType: "KANYAAH_CATERING",
+  driverId: order.driverId || null,
+  rawStatus: order.status || "Menunggu",
+  paymentStatus: order.paymentStatus || "Menunggu Pembayaran",
+  customer: order.customerName || "Pelanggan",
+  phone: order.customerPhone || "",
+  type: "Catering",
+  time: order.createdAt ? new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "",
+  from: order.storeAddress || order.storeName || "Lokasi pickup belum tersedia",
+  to: order.address || "Alamat tujuan belum tersedia",
+  dist: order.distance ? `${order.distance} km` : "Jarak belum tersedia",
+  distanceKm: Number(order.distanceKm ?? order.distance ?? 0),
+  pay: Number(order.totalAmount || 0),
+  driverShare: Number(order.driverEarnings ?? order.driverFee ?? order.driverTip ?? order.deliveryFee ?? 0),
+  completedAt: order.updatedAt || order.createdAt,
+  status: order.status === "Siap" ? "Siap"
+    : order.status === "Menuju Pickup" ? "Menuju Pickup"
+    : order.status === "Sampai Pickup" ? "Sampai Pickup"
+    : ["Diambil", "Mengantar", "Dikirim"].includes(order.status) ? "Mengantar"
+    : order.status === "Selesai" ? "Selesai"
+    : order.status === "Dibatalkan" ? "Dibatalkan" : "Menunggu",
+  items: [{ name: `${order.menuName || "Pesanan catering"}${order.portions ? ` (${order.portions} pax)` : ""}`, quantity: Number(order.portions || 1), price: Number(order.price || 0) }],
+  storeName: order.storeName || "Dapur catering",
+  storeAddress: order.storeAddress || "Alamat dapur belum tersedia",
+  storePhone: order.storePhone || order.merchantPhone || "",
+  ownerId: order.ownerId,
+  addressSnapshot: order.addressSnapshot || null,
+});
+
+const mapRideDriverOrder = (order: any): DriverOrder => ({
+  id: String(order._id || order.id),
+  orderCode: order.orderCode || `#RNG-RIDE-${String(order._id || order.id).slice(-8)}`,
+  orderCategory: "RIDE",
+  serviceType: "KANYAAH_RIDE",
+  vehicleType: order.vehicleType || "MOTOR",
+  estimatedDuration: order.estimatedDuration || 15,
+  driverId: order.driverId || null,
+  rawStatus: order.status || "SEARCHING_DRIVER",
+  paymentMethod: order.paymentMethod || "Bayar Tunai",
+  paymentStatus: order.paymentStatus || "Menunggu Pembayaran",
+  customer: order.customerName || "Penumpang",
+  phone: order.customerPhone || "",
+  type: "Kanyaah Ride",
+  time: order.createdAt ? new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "",
+  from: order.pickup?.address || "Titik Penjemputan",
+  to: order.destination?.address || "Titik Tujuan",
+  dist: order.estimatedDistance ? `${order.estimatedDistance} km` : "Jarak belum tersedia",
+  distanceKm: Number(order.estimatedDistance || 0),
+  pay: Number(order.totalAmount || 0),
+  driverShare: Number(order.driverEarnings || (order.totalAmount ? order.totalAmount * 0.8 : 0)),
+  completedAt: order.updatedAt || order.createdAt,
+  status: order.status === "SEARCHING_DRIVER" ? "Menunggu"
+    : order.status === "DRIVER_ASSIGNED" || order.status === "DRIVER_ON_THE_WAY" ? "Menuju Pickup"
+    : order.status === "DRIVER_ARRIVED" ? "Sampai Pickup"
+    : order.status === "TRIP_STARTED" ? "Mengantar"
+    : order.status === "COMPLETED" ? "Selesai"
+    : order.status === "CANCELLED" ? "Dibatalkan" : "Menunggu",
+  items: [
+    {
+      name: `Antar Jemput Penumpang (${order.vehicleType === "car" ? "Kanyaah Car" : "Kanyaah Motor"})`,
+      quantity: 1,
+      price: Number(order.totalAmount || 0),
+    },
+  ],
+  storeName: order.pickup?.placeName || "Titik Jemput: " + (order.pickup?.address || ""),
+  storeAddress: order.pickup?.address || "",
+  storePhone: order.customerPhone || "",
+  ownerId: order.customerId,
+  notes: order.customerNote || "",
+  pickup: order.pickup,
+  destination: order.destination,
+  addressSnapshot: null,
+});
+
 interface DriverHomeProps extends Nav {
   authAccount?: AuthAccount | null;
 }
@@ -98,40 +199,55 @@ type DriverDocumentStatus = "Terverifikasi" | "Menunggu Verifikasi" | "Belum Len
 const getDriverDocumentStatus = (account: AuthAccount | null | undefined, key: string): DriverDocumentStatus => {
   const document = account?.documents?.[key];
   if (!document) return "Belum Lengkap";
-  if (account?.status === "verified" || document.status === "verified") return "Terverifikasi";
-  return "Menunggu Verifikasi";
+  if (document.status === "verified") return "Terverifikasi";
+  if (document.status === "pending") return "Menunggu Verifikasi";
+  return "Belum Lengkap";
 };
 
 export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) => {
   const [currentTab, setCurrentTab] = useState<number>(0);
   const [isOnline, setIsOnline] = useState<boolean>(true);
-  const [notifModalVisible, setNotifModalVisible] = useState(false);
+  const [notifModalVisible, setNotifModalVisible] = useState<boolean>(false);
   const [driverNotifs, setDriverNotifs] = useState<any[]>([]);
-  const [homeActionOrderId, setHomeActionOrderId] = useState<string | null>(null);
   const homeActionLock = useRef(new Set<string>());
+  const [homeActionOrderId, setHomeActionOrderId] = useState<string | null>(null);
+  const [safeCallVisible, setSafeCallVisible] = useState<boolean>(false);
+  const [safeCallTarget, setSafeCallTarget] = useState<{ name: string; role: string; phone: string; orderCode: string } | null>(null);
+  const [chatModalVisible, setChatModalVisible] = useState<boolean>(false);
+  const [chatTargetOrder, setChatTargetOrder] = useState<DriverOrder | null>(null);
 
+  // Auto load driver notifications
   useEffect(() => {
-    if (!authAccount?.id || !notifModalVisible) return;
-    void getNotifications(authAccount.id).then((res) => {
-      if (res.success && Array.isArray(res.data)) {
-        setDriverNotifs(res.data);
+    if (!authAccount?.id) return;
+    let active = true;
+    const loadNotifs = async () => {
+      const result = await getNotifications(authAccount.id);
+      if (!active) return;
+      if (result.success && Array.isArray(result.data)) {
+        setDriverNotifs(result.data);
       }
-    });
-  }, [authAccount?.id, notifModalVisible]);
+    };
+    void loadNotifs();
+    const interval = setInterval(() => void loadNotifs(), 8000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [authAccount?.id]);
 
   // 1. Global Driver Info State
   const [driverInfo, setDriverInfo] = useState(() => ({
-    name: authAccount?.name || "",
+    name: authAccount?.name || "Driver Rangers",
     phone: authAccount?.phone || "",
     email: authAccount?.email || "",
-    profilePhoto: authAccount?.profilePhoto,
-    rating: 0,
-    avatarLetter: authAccount?.name?.trim().charAt(0).toUpperCase() || "?",
+    profilePhoto: authAccount?.profilePhoto || undefined,
+    avatarLetter: authAccount?.name ? authAccount.name.trim().charAt(0).toUpperCase() : "D",
+    rating: typeof authAccount?.driverRating === "number" && authAccount.driverRating > 0 ? authAccount.driverRating : 5.0,
     vehicle: {
-      type: authAccount?.roleData.vehicleType || "Belum diisi",
-      brand: authAccount?.roleData.vehicleBrand || "Belum diisi",
-      plate: authAccount?.roleData.plateNumber || "Belum diisi",
-      year: authAccount?.roleData.vehicleYear || "Belum diisi",
+      type: authAccount?.roleData?.vehicleType || (authAccount as any)?.vehicleType || "Motor",
+      brand: authAccount?.roleData?.vehicleBrand || (authAccount as any)?.vehicleBrand || "Motor",
+      plate: authAccount?.roleData?.plateNumber || (authAccount as any)?.plateNumber || "",
+      year: authAccount?.roleData?.vehicleYear || (authAccount as any)?.vehicleYear || "",
       verified: authAccount?.status === "verified",
     },
     documents: {
@@ -140,10 +256,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       stnk: getDriverDocumentStatus(authAccount, "stnk"),
     },
     payment: {
-      bankName: authAccount?.roleData.bankName || "",
-      accountNo: authAccount?.roleData.accountNo || "",
-      holderName: authAccount?.name?.toUpperCase() || "",
-      gopayNo: authAccount?.roleData.gopayNo || "",
+      bankName: authAccount?.roleData?.bankName || (authAccount as any)?.bankName || "BCA",
+      accountNo: authAccount?.roleData?.accountNo || (authAccount as any)?.accountNo || "",
+      holderName: (authAccount?.name || "DRIVER RANGERS").toUpperCase(),
+      gopayNo: authAccount?.roleData?.gopayNo || authAccount?.phone || "",
     }
   }));
 
@@ -151,17 +267,18 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     if (!authAccount) return;
     setDriverInfo((current) => ({
       ...current,
-      name: authAccount.name,
-      phone: authAccount.phone,
-      email: authAccount.email,
-      profilePhoto: authAccount.profilePhoto,
-      avatarLetter: authAccount.name.trim().charAt(0).toUpperCase() || "?",
+      name: authAccount.name || current.name,
+      phone: authAccount.phone || current.phone,
+      email: authAccount.email || current.email,
+      profilePhoto: authAccount.profilePhoto || current.profilePhoto,
+      avatarLetter: authAccount.name ? authAccount.name.trim().charAt(0).toUpperCase() : current.avatarLetter,
+      rating: typeof authAccount.driverRating === "number" && authAccount.driverRating > 0 ? authAccount.driverRating : current.rating,
       vehicle: {
         ...current.vehicle,
-        type: authAccount.roleData.vehicleType || current.vehicle.type,
-        brand: authAccount.roleData.vehicleBrand || current.vehicle.brand,
-        plate: authAccount.roleData.plateNumber || current.vehicle.plate,
-        year: authAccount.roleData.vehicleYear || current.vehicle.year,
+        type: authAccount.roleData?.vehicleType || (authAccount as any)?.vehicleType || current.vehicle.type,
+        brand: authAccount.roleData?.vehicleBrand || (authAccount as any)?.vehicleBrand || current.vehicle.brand,
+        plate: authAccount.roleData?.plateNumber || (authAccount as any)?.plateNumber || current.vehicle.plate,
+        year: authAccount.roleData?.vehicleYear || (authAccount as any)?.vehicleYear || current.vehicle.year,
         verified: authAccount.status === "verified",
       },
       documents: {
@@ -171,10 +288,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       },
       payment: {
         ...current.payment,
-        bankName: authAccount.roleData.bankName || current.payment.bankName,
-        accountNo: authAccount.roleData.accountNo || current.payment.accountNo,
-        holderName: authAccount.name.toUpperCase(),
-        gopayNo: authAccount.roleData.gopayNo || current.payment.gopayNo,
+        bankName: authAccount.roleData?.bankName || (authAccount as any)?.bankName || current.payment.bankName,
+        accountNo: authAccount.roleData?.accountNo || (authAccount as any)?.accountNo || current.payment.accountNo,
+        holderName: (authAccount.name || current.name).toUpperCase(),
+        gopayNo: authAccount.roleData?.gopayNo || authAccount.phone || current.payment.gopayNo,
       },
     }));
   }, [authAccount]);
@@ -197,106 +314,96 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       if (loading) return;
       loading = true;
       try {
-        const [mktRes, catRes, laundryJobs] = await Promise.all([
+        const [mktRes, catRes, laundryJobs, rideRes] = await Promise.all([
           getMarketplaceOrdersForDriver(authAccount.id),
           getCateringOrdersForDriver(authAccount.id),
           fetchDriverLaundryJobs(authAccount.id),
+          fetchDriverRides(authAccount.id),
         ]);
         if (!active) return;
 
-      const normalizeStatus = (rawStatus: string): DriverOrder["status"] => {
-        if (rawStatus === "Menuju Pickup") return "Menuju Pickup";
-        if (rawStatus === "Sampai Pickup") return "Sampai Pickup";
-        if (rawStatus === "Diambil" || rawStatus === "Mengantar" || rawStatus === "Dikirim") return "Mengantar";
-        if (rawStatus === "Selesai") return "Selesai";
-        if (rawStatus === "Dibatalkan") return "Dibatalkan";
-        return "Menunggu";
-      };
-
-      const mktOrders: DriverOrder[] = (mktRes.success && Array.isArray(mktRes.data))
-        ? mktRes.data.map(mapMarketplaceDriverOrder)
-        : [];
-
-      const catOrders: DriverOrder[] = (catRes.success && Array.isArray(catRes.data)) ? catRes.data.map((order: any) => ({
-        id: order._id,
-        customer: order.customerName,
-        phone: order.customerPhone || "",
-        type: "Catering" as const,
-        time: new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-        from: order.storeAddress || order.storeName || "Lokasi pickup belum tersedia",
-        to: order.address || "Alamat tujuan belum tersedia",
-        dist: order.distance ? `${order.distance} km` : "Jarak belum tersedia",
-        distanceKm: Number(order.distanceKm ?? order.distance ?? 0),
-        pay: Number(order.totalAmount || 0),
-        driverShare: Number(order.driverEarnings ?? order.driverFee ?? order.driverTip ?? order.deliveryFee ?? 0),
-        completedAt: order.updatedAt || order.createdAt,
-        status: normalizeStatus(order.status),
-        items: [{ name: `${order.menuName || "Pesanan catering"}${order.portions ? ` (${order.portions} pax)` : ""}`, quantity: Number(order.portions || 1), price: Number(order.price || 0) }],
-        storeName: order.storeName || "Dapur catering",
-        storeAddress: order.storeAddress || "Alamat dapur belum tersedia",
-        storePhone: order.storePhone || order.merchantPhone || "",
-        ownerId: order.ownerId,
-        addressSnapshot: order.addressSnapshot || null,
-      })) : [];
-
-      const lndOrders: DriverOrder[] = Array.isArray(laundryJobs) ? laundryJobs.map((lnd: any) => {
-        const isPickupJob =
-          lnd.status === "MENUNGGU_DRIVER_JEMPUT" ||
-          lnd.status === "DRIVER_MENUJU_CUSTOMER" ||
-          lnd.status === "DRIVER_MENUJU_LAUNDRY";
-
-        let orderStatus: DriverOrder["status"] = "Menunggu";
-        if (lnd.status === "MENUNGGU_DRIVER_JEMPUT" || lnd.status === "SIAP_DIANTAR") {
-          orderStatus = "Menunggu";
-        } else if (lnd.status === "DRIVER_MENUJU_CUSTOMER") {
-          orderStatus = "Menuju Pickup";
-        } else if (lnd.status === "DRIVER_MENUJU_LAUNDRY" || lnd.status === "DRIVER_MENGANTAR_BALIK") {
-          orderStatus = "Mengantar";
-        } else if (lnd.status === "SELESAI") {
-          orderStatus = "Selesai";
-        } else if (lnd.status === "DIBATALKAN") {
-          orderStatus = "Dibatalkan";
-        } else {
-          // If the order has arrived at laundry or already ongoing, driver's pickup trip is completed
-          if (lnd.driverPickupId) {
-            orderStatus = "Selesai";
-          }
-        }
-
-        return {
-          id: lnd._id || lnd.id,
-          customer: lnd.customerName,
-          phone: lnd.customerPhone || "",
-          type: "Laundry" as const,
-          time: new Date(lnd.createdAt || Date.now()).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-          from: isPickupJob ? lnd.pickupAddress : lnd.storeName,
-          to: isPickupJob ? lnd.storeName : (lnd.deliveryAddress || lnd.pickupAddress),
-          dist: "1.2 km",
-          distanceKm: 1.2,
-          pay: Number(lnd.totalAmount || 0),
-          driverShare: isPickupJob ? Number(lnd.deliveryFeePickup || 4000) : Number(lnd.deliveryFeeDrop || 4000),
-          completedAt: lnd.updatedAt || lnd.createdAt,
-          status: orderStatus,
-          items: [
-            {
-              name: isPickupJob ? `[Jemput Pakaian Kotor] ${lnd.serviceName}` : `[Antar Pakaian Bersih] ${lnd.serviceName}`,
-              quantity: 1,
-              price: Number(lnd.laundryCost || 0),
-            },
-          ],
-          storeName: lnd.storeName,
-          storeAddress: lnd.storeName,
-          storePhone: "0812-3456-7890",
-          ownerId: lnd.ownerId,
-          addressSnapshot: lnd.addressSnapshot || null,
+        const normalizeStatus = (rawStatus: string): DriverOrder["status"] => {
+          if (rawStatus === "Menuju Pickup") return "Menuju Pickup";
+          if (rawStatus === "Sampai Pickup") return "Sampai Pickup";
+          if (rawStatus === "Diambil" || rawStatus === "Mengantar" || rawStatus === "Dikirim") return "Mengantar";
+          if (rawStatus === "Selesai") return "Selesai";
+          if (rawStatus === "Dibatalkan") return "Dibatalkan";
+          return "Menunggu";
         };
-      }) : [];
+
+        const mktOrders: DriverOrder[] = (mktRes.success && Array.isArray(mktRes.data))
+          ? mktRes.data.map(mapMarketplaceDriverOrder)
+          : [];
+
+        const catOrders: DriverOrder[] = (catRes.success && Array.isArray(catRes.data)) ? catRes.data.map(mapCateringDriverOrder) : [];
+
+        const lndOrders: DriverOrder[] = Array.isArray(laundryJobs) ? laundryJobs.map((lnd: any) => {
+          const isPickupJob =
+            lnd.status === "MENUNGGU_DRIVER_JEMPUT" ||
+            lnd.status === "DRIVER_MENUJU_CUSTOMER" ||
+            lnd.status === "DRIVER_MENUJU_LAUNDRY";
+
+          let orderStatus: DriverOrder["status"] = "Menunggu";
+          if (lnd.status === "MENUNGGU_DRIVER_JEMPUT" || lnd.status === "SIAP_DIANTAR") {
+            orderStatus = "Menunggu";
+          } else if (lnd.status === "DRIVER_MENUJU_CUSTOMER") {
+            orderStatus = "Menuju Pickup";
+          } else if (lnd.status === "DRIVER_MENUJU_LAUNDRY" || lnd.status === "DRIVER_MENGANTAR_BALIK") {
+            orderStatus = "Mengantar";
+          } else if (lnd.status === "SELESAI") {
+            orderStatus = "Selesai";
+          } else if (lnd.status === "DIBATALKAN") {
+            orderStatus = "Dibatalkan";
+          } else {
+            if (lnd.driverPickupId) {
+              orderStatus = "Selesai";
+            }
+          }
+
+          return {
+            id: lnd._id || lnd.id,
+            orderCode: lnd.orderCode || `#RNG-LND-${String(lnd._id || lnd.id).slice(-8)}`,
+            orderCategory: "DELIVERY" as const,
+            serviceType: "KANYAAH_LAUNDRY",
+            customer: lnd.customerName,
+            phone: lnd.customerPhone || "",
+            type: "Laundry" as const,
+            time: new Date(lnd.createdAt || Date.now()).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+            from: isPickupJob ? lnd.pickupAddress : lnd.storeName,
+            to: isPickupJob ? lnd.storeName : (lnd.deliveryAddress || lnd.pickupAddress),
+            dist: "1.2 km",
+            distanceKm: 1.2,
+            pay: Number(lnd.totalAmount || 0),
+            driverShare: isPickupJob ? Number(lnd.deliveryFeePickup || 4000) : Number(lnd.deliveryFeeDrop || 4000),
+            completedAt: lnd.updatedAt || lnd.createdAt,
+            status: orderStatus,
+            items: [
+              {
+                name: isPickupJob ? `[Jemput Pakaian Kotor] ${lnd.serviceName}` : `[Antar Pakaian Bersih] ${lnd.serviceName}`,
+                quantity: 1,
+                price: Number(lnd.laundryCost || 0),
+              },
+            ],
+            storeName: lnd.storeName,
+            storeAddress: lnd.storeName,
+            storePhone: "0812-3456-7890",
+            ownerId: lnd.ownerId,
+            addressSnapshot: lnd.addressSnapshot || null,
+          };
+        }) : [];
+
+        const rideOrders: DriverOrder[] = (rideRes.success && Array.isArray(rideRes.data))
+          ? rideRes.data.map(mapRideDriverOrder)
+          : [];
 
         setOrders((current) => {
           const marketplaceOrders = mktRes.success && Array.isArray(mktRes.data)
             ? mktOrders
             : current.filter((order) => order.type === "Marketplace");
-          return [...marketplaceOrders, ...catOrders, ...lndOrders];
+          const existingRideOrders = rideRes.success && Array.isArray(rideRes.data)
+            ? rideOrders
+            : current.filter((order) => order.type === "Kanyaah Ride");
+          return [...existingRideOrders, ...marketplaceOrders, ...catOrders, ...lndOrders];
         });
       } catch (error) {
         console.error("Load driver orders error:", error);
@@ -304,18 +411,31 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         loading = false;
       }
     };
+
     void loadOrders();
     const interval = setInterval(() => void loadOrders(), 4000);
+
+    // Socket.io Realtime Listener
+    let unsubscribeRealtime: () => void = () => undefined;
+    void subscribeToUserRealtime(
+      () => void loadOrders(),
+      (orderUpdate) => {
+        void loadOrders();
+      }
+    ).then((unsub) => {
+      unsubscribeRealtime = unsub;
+    });
+
     return () => {
       active = false;
       clearInterval(interval);
+      unsubscribeRealtime();
     };
   }, [authAccount?.id]);
 
   // 4. Global Transactions State
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
 
-  // Pendapatan dan riwayat order selalu dihitung dari order selesai yang dikirim API.
   useEffect(() => {
     const completedTransactions: TransactionRecord[] = orders
       .filter((order) => order.status === "Selesai")
@@ -348,7 +468,6 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   // Handler quick update status from Beranda active order card
   const handleUpdateStatus = async (orderId: string, nextStatus: DriverOrder["status"]) => {
     let alertMsg = "";
-
     const targetOrder = orders.find((o) => o.id === orderId);
     if (targetOrder) {
       if (targetOrder.type === "Laundry") {
@@ -377,6 +496,30 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         }
       } else if (targetOrder.type === "Catering") {
         await updateCateringOrderStatus(orderId, nextStatus);
+      } else if (targetOrder.type === "Kanyaah Ride") {
+        let backendStatus: RideStatus = "DRIVER_ASSIGNED";
+        if (nextStatus === "Menuju Pickup") backendStatus = "DRIVER_ON_THE_WAY";
+        else if (nextStatus === "Sampai Pickup") backendStatus = "DRIVER_ARRIVED";
+        else if (nextStatus === "Mengantar") backendStatus = "TRIP_STARTED";
+        else if (nextStatus === "Selesai") backendStatus = "COMPLETED";
+        else if (nextStatus === "Dibatalkan") backendStatus = "CANCELLED";
+
+        const res = await updateRideStatus(orderId, backendStatus);
+        if (!res.success || !res.data) {
+          Alert.alert("Gagal", res.message || "Status perjalanan belum berhasil diperbarui");
+          return;
+        }
+        const serverOrder = mapRideDriverOrder(res.data);
+        setOrders((current) => current.map((order) => order.id === orderId ? serverOrder : order));
+        if (nextStatus === "Selesai") {
+          alertMsg = `Perjalanan selesai! Pendapatan ${rp(serverOrder.driverShare)} ditambahkan ke saldo.`;
+        } else if (nextStatus === "Mengantar") {
+          alertMsg = "Perjalanan dimulai. Antar penumpang ke tujuan dengan aman.";
+        } else if (nextStatus === "Sampai Pickup") {
+          alertMsg = "Anda telah tiba di titik jemput penumpang.";
+        }
+        Alert.alert("Status Diperbarui", alertMsg);
+        return;
       } else {
         const result = await updateMarketplaceOrderStatus(orderId, nextStatus, authAccount);
         if (!result.success || !result.data) {
@@ -399,26 +542,95 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 
     const updated = orders.map((o) => {
       if (o.id === orderId) {
-        if (nextStatus === "Menuju Pickup") {
-          alertMsg = "Menuju lokasi merchant untuk mengambil pesanan.";
-        } else if (nextStatus === "Selesai") {
-          alertMsg = `Pengantaran selesai! Pendapatan ${rp(o.driverShare)} ditambahkan ke saldo.`;
-        } else if (nextStatus === "Dibatalkan") {
-          alertMsg = "Order berhasil ditolak.";
-        }
         return { ...o, status: nextStatus, completedAt: nextStatus === "Selesai" ? new Date().toISOString() : o.completedAt };
       }
       return o;
     });
-
     setOrders(updated);
-
-    Alert.alert("Status Diperbarui", alertMsg);
   };
 
-  const activeOrder = orders.find((o) => o.type === "Marketplace" && ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status))
-    || orders.find((o) => o.type === "Marketplace" && o.status === "Siap")
-    || orders.find((o) => o.type !== "Marketplace" && ["Menunggu", "Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status));
+  // Dedicated Ride State Machine Transition
+  const handleRideTransition = async (orderId: string, targetStatus: RideStatus) => {
+    if (homeActionLock.current.has(orderId)) return;
+    homeActionLock.current.add(orderId);
+    setHomeActionOrderId(orderId);
+    try {
+      const res = await updateRideStatus(orderId, targetStatus);
+      if (!res.success || !res.data) {
+        Alert.alert("Gagal", res.message || "Gagal memperbarui status perjalanan.");
+        return;
+      }
+      const updated = mapRideDriverOrder(res.data);
+      setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+
+      let msg = "Status perjalanan diperbarui.";
+      if (targetStatus === "DRIVER_ON_THE_WAY") msg = "Menuju lokasi penumpang. Notifikasi telah dikirim ke customer.";
+      else if (targetStatus === "DRIVER_ARRIVED") msg = "Anda telah tiba di lokasi penjemputan.";
+      else if (targetStatus === "TRIP_STARTED") msg = "Perjalanan dimulai! Harap berkendara dengan aman.";
+      else if (targetStatus === "COMPLETED") msg = `Perjalanan selesai! Pendapatan ${rp(updated.driverShare)} telah masuk ke saldo.`;
+
+      Alert.alert("Status Diperbarui", msg);
+    } catch (err: any) {
+      Alert.alert("Gagal", err.message || "Periksa koneksi lalu coba lagi.");
+    } finally {
+      homeActionLock.current.delete(orderId);
+      setHomeActionOrderId(null);
+    }
+  };
+
+  const confirmCompleteRide = (orderId: string) => {
+    Alert.alert(
+      "Selesaikan Perjalanan",
+      "Pastikan penumpang telah sampai di lokasi tujuan dengan selamat. Selesaikan perjalanan?",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Selesaikan Perjalanan",
+          style: "default",
+          onPress: () => void handleRideTransition(orderId, "COMPLETED"),
+        },
+      ]
+    );
+  };
+
+  const acceptRideFromHome = async (orderId: string) => {
+    if (homeActionLock.current.has(orderId)) return;
+    homeActionLock.current.add(orderId);
+    setHomeActionOrderId(orderId);
+    try {
+      const result = await acceptRide(orderId, authAccount?.id || "");
+      if (!result.success || !result.data) {
+        Alert.alert("Pesanan belum diterima", result.message || "Pesanan mungkin sudah diambil driver lain.");
+        return;
+      }
+      const updated = mapRideDriverOrder(result.data);
+      setOrders((current) => current.map((order) => order.id === updated.id ? updated : order));
+      Alert.alert("Ride Diterima! 🏍", `Perjalanan #${updated.orderCode || updated.id.slice(-8)} berhasil diambil. Silakan bersiap menuju penumpang.`);
+    } catch (err: any) {
+      Alert.alert("Gagal", err.message || "Terjadi kesalahan saat menerima pesanan.");
+    } finally {
+      homeActionLock.current.delete(orderId);
+      setHomeActionOrderId(null);
+    }
+  };
+
+  const declineRideFromHome = async (orderId: string) => {
+    Alert.alert("Tolak Ride?", "Pesanan ini akan disembunyikan dari daftar Anda.", [
+      { text: "Batal", style: "cancel" },
+      {
+        text: "Tolak",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await declineRide(orderId, authAccount?.id || "");
+            setOrders((current) => current.filter((order) => order.id !== orderId));
+          } catch (err) {
+            console.error("declineRide error:", err);
+          }
+        },
+      },
+    ]);
+  };
 
   const acceptMarketplaceFromHome = async (orderId: string) => {
     if (homeActionLock.current.has(orderId)) return;
@@ -438,6 +650,24 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     }
   };
 
+  // Derive ongoing active trip and available incoming orders
+  const isTripOngoing = (o: DriverOrder) => ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status);
+
+  // Active assigned order being driven/delivered by this driver
+  const activeOrder = orders.find((o) => isTripOngoing(o)) || null;
+
+  // Incoming available orders waiting for driver acceptance
+  const incomingAvailableOrders = orders.filter((o) => {
+    if (isTripOngoing(o) || o.status === "Selesai" || o.status === "Dibatalkan") return false;
+    if (o.type === "Kanyaah Ride") {
+      return (o.rawStatus === "SEARCHING_DRIVER" || o.status === "Menunggu") && (!o.driverId || o.driverId === "");
+    }
+    if (o.type === "Marketplace") {
+      return (o.status === "Siap" || o.status === "Menunggu") && (!o.driverId || o.driverId === "");
+    }
+    return o.status === "Menunggu" && (!o.driverId || o.driverId === "");
+  });
+
   // Tab views mapper
   const renderTabContent = () => {
     switch (currentTab) {
@@ -453,6 +683,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             transactions={transactions}
             setTransactions={setTransactions}
             isOnline={isOnline}
+            driverId={authAccount?.id}
+            driverName={driverInfo.name}
+            driverVehicle={driverInfo.vehicle.brand}
+            driverPlate={driverInfo.vehicle.plate}
             onStatusChange={async (orderId, status, deliveryProofUrl) => {
               const targetOrder = orders.find((o) => o.id === orderId);
               if (targetOrder?.type === "Laundry") {
@@ -473,6 +707,27 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 }
                 return true;
               }
+              if (targetOrder?.type === "Kanyaah Ride") {
+                let backendStatus: RideStatus = "DRIVER_ASSIGNED";
+                if (status === "Menuju Pickup") backendStatus = "DRIVER_ON_THE_WAY";
+                else if (status === "Sampai Pickup") backendStatus = "DRIVER_ARRIVED";
+                else if (status === "Mengantar") backendStatus = "TRIP_STARTED";
+                else if (status === "Selesai") backendStatus = "COMPLETED";
+                else if (status === "Dibatalkan") backendStatus = "CANCELLED";
+
+                const res = await updateRideStatus(orderId, backendStatus);
+                if (!res.success) {
+                  Alert.alert("Gagal", res.message || "Status perjalanan gagal diperbarui");
+                  return false;
+                }
+                if (res.data) {
+                  const updated = mapRideDriverOrder(res.data);
+                  setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                  return updated;
+                }
+                return true;
+              }
+
               const result = targetOrder?.type === "Catering"
                 ? await updateCateringOrderStatus(orderId, status)
                 : await updateMarketplaceOrderStatus(orderId, status, authAccount, deliveryProofUrl);
@@ -505,22 +760,44 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 }
                 return true;
               }
-              const result = targetOrder?.type === "Catering"
-                ? await assignCateringDriver(orderId, authAccount?.id || "")
+              if (targetOrder?.type === "Kanyaah Ride") {
+                const res = await acceptRide(orderId, authAccount?.id || "");
+                if (!res.success) {
+                  Alert.alert("Gagal", res.message || "Pesanan mungkin sudah diambil driver lain");
+                  return false;
+                }
+                if (res.data) {
+                  const updated = mapRideDriverOrder(res.data);
+                  setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                  return updated;
+                }
+                return true;
+              }
+
+               const result = targetOrder?.type === "Catering"
+                 ? await assignCateringDriver(orderId, authAccount?.id || "")
                 : await acceptMarketplaceOrder(orderId);
               if (!result.success) {
                 Alert.alert("Gagal", result.message || "Order gagal diterima");
                 return false;
               }
-              if (targetOrder?.type === "Marketplace" && result.data) {
-                const updated = mapMarketplaceDriverOrder(result.data);
+               if ((targetOrder?.type === "Marketplace" || targetOrder?.type === "Catering") && result.data) {
+                 const updated = targetOrder.type === "Catering" ? mapCateringDriverOrder(result.data) : mapMarketplaceDriverOrder(result.data);
                 setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
                 return updated;
               }
               return true;
             }}
             onDeclineOrder={async (orderId) => {
-              const result = await declineMarketplaceOrder(orderId);
+              const targetOrder = orders.find((o) => o.id === orderId);
+              if (targetOrder?.type === "Kanyaah Ride") {
+                await declineRide(orderId, authAccount?.id || "");
+                setOrders((current) => current.filter((order) => order.id !== orderId));
+                return true;
+              }
+              const result = targetOrder?.type === "Catering"
+                ? await declineCateringDriver(orderId, authAccount?.id || "")
+                : await declineMarketplaceOrder(orderId);
               if (!result.success) {
                 Alert.alert("Belum berhasil menolak", result.message || "Periksa koneksi lalu coba lagi.");
                 return false;
@@ -528,7 +805,6 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
               setOrders((current) => current.filter((order) => order.id !== orderId));
               return true;
             }}
-            driverId={authAccount?.id}
           />
         );
       case 2:
@@ -558,6 +834,412 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     { label: "Profil", icon: UserIcon },
   ];
 
+  // Render Incoming Available Ride Card
+  const renderIncomingRideCard = (order: DriverOrder) => (
+    <View key={order.id} style={styles.incomingRideCard}>
+      {/* Header */}
+      <View style={styles.cardHeaderRow}>
+        <View style={styles.rideBadge}>
+          <Bike size={16} color="#15803D" />
+          <View>
+            <Text style={styles.rideBadgeTitle}>KANYAAH RIDE</Text>
+            <Text style={styles.rideBadgeSubtitle}>Antar Jemput Penumpang</Text>
+          </View>
+        </View>
+        <Text style={styles.orderCodeText}>#{order.orderCode || order.id.slice(-8)}</Text>
+      </View>
+
+      {/* Passenger Info */}
+      <View style={styles.passengerRow}>
+        <Text style={styles.customerLabel}>Customer:</Text>
+        <Text style={styles.customerNameText}>{order.customer}</Text>
+      </View>
+
+      {/* Route Box */}
+      <View style={styles.routeBox}>
+        <View style={styles.routeRow}>
+          <MapPin size={14} color="#15803D" />
+          <Text style={styles.routeText} numberOfLines={2}>
+            <Text style={styles.boldLabel}>Jemput: </Text>{order.from}
+          </Text>
+        </View>
+        <View style={styles.routeRow}>
+          <MapPin size={14} color="#D97706" />
+          <Text style={styles.routeText} numberOfLines={2}>
+            <Text style={styles.boldLabel}>Tujuan: </Text>{order.to}
+          </Text>
+        </View>
+      </View>
+
+      {/* Metrics Row */}
+      <View style={styles.rideMetricsRow}>
+        <View style={styles.metricItem}>
+          <Text style={styles.metricLabel}>Jarak Perjalanan</Text>
+          <Text style={styles.metricValue}>{order.dist}</Text>
+        </View>
+        <View style={styles.metricItem}>
+          <Text style={styles.metricLabel}>Estimasi</Text>
+          <Text style={styles.metricValue}>{order.estimatedDuration || 15} menit</Text>
+        </View>
+        <View style={[styles.metricItem, { alignItems: "flex-end" }]}>
+          <Text style={styles.metricLabel}>Pendapatan</Text>
+          <Text style={styles.metricPriceValue}>{rp(order.driverShare)}</Text>
+        </View>
+      </View>
+
+      {/* Action Buttons Row */}
+      <View style={styles.btnRow}>
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.btnDecline]}
+          disabled={homeActionOrderId === order.id}
+          onPress={() => declineRideFromHome(order.id)}
+          activeOpacity={0.8}
+        >
+          <XCircle size={14} color="#B91C1C" />
+          <Text style={styles.btnTextDecline}>Tolak</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.btnAcceptRide]}
+          disabled={homeActionOrderId === order.id}
+          onPress={() => acceptRideFromHome(order.id)}
+          activeOpacity={0.85}
+        >
+          {homeActionOrderId === order.id ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <Bike size={15} color="#FFFFFF" />
+              <Text style={styles.btnTextAcceptRide}>Terima Ride</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  // Render Incoming Available Delivery Card (Marketplace / Catering / Laundry)
+  const renderIncomingDeliveryCard = (order: DriverOrder) => {
+    const serviceName = order.type === "Marketplace" ? "Kanyaah Mart" : order.type === "Catering" ? "Kanyaah Catering" : "Kanyaah Laundry";
+    const subtitle = "Pengantaran Pesanan";
+
+    return (
+      <View key={order.id} style={styles.incomingDeliveryCard}>
+        {/* Header */}
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.deliveryBadge}>
+            <ShoppingBag size={15} color="#2563EB" />
+            <View>
+              <Text style={styles.deliveryBadgeTitle}>{serviceName}</Text>
+              <Text style={styles.deliveryBadgeSubtitle}>{subtitle}</Text>
+            </View>
+          </View>
+          <Text style={styles.orderCodeText}>#{order.orderCode || order.id.slice(-8)}</Text>
+        </View>
+
+        {/* Customer / Store info */}
+        <Text style={styles.activeOrderCustomer}>{order.customer}</Text>
+
+        {/* Route Box */}
+        <View style={styles.routeBox}>
+          <View style={styles.routeRow}>
+            <MapPin size={14} color="#15803D" />
+            <Text style={styles.routeText} numberOfLines={2}>
+              <Text style={styles.boldLabel}>Pickup: </Text>{order.from}
+            </Text>
+          </View>
+          <View style={styles.routeRow}>
+            <MapPin size={14} color="#D97706" />
+            <Text style={styles.routeText} numberOfLines={2}>
+              <Text style={styles.boldLabel}>Tujuan: </Text>{order.to}
+            </Text>
+          </View>
+        </View>
+
+        {/* Footer / Metrics */}
+        <View style={styles.rideMetricsRow}>
+          <View style={styles.metricItem}>
+            <Text style={styles.metricLabel}>Jarak Tempuh</Text>
+            <Text style={styles.metricValue}>{order.dist}</Text>
+          </View>
+          <View style={[styles.metricItem, { alignItems: "flex-end" }]}>
+            <Text style={styles.metricLabel}>Pendapatan</Text>
+            <Text style={[styles.metricPriceValue, { color: "#2563EB" }]}>{rp(order.driverShare)}</Text>
+          </View>
+        </View>
+
+        {/* Buttons */}
+        <View style={styles.btnRow}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.btnDecline]}
+            disabled={homeActionOrderId === order.id}
+            onPress={() => {
+              if (order.type !== "Marketplace") {
+                void handleUpdateStatus(order.id, "Dibatalkan");
+                return;
+              }
+              Alert.alert("Tolak pesanan?", "Pesanan ini akan disembunyikan dari daftar Anda.", [
+                { text: "Batal", style: "cancel" },
+                {
+                  text: "Tolak",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      await declineMarketplaceOrder(order.id);
+                      setOrders((current) => current.filter((o) => o.id !== order.id));
+                    } catch (e) {
+                      console.error("decline error:", e);
+                    }
+                  },
+                },
+              ]);
+            }}
+            activeOpacity={0.8}
+          >
+            <XCircle size={14} color="#B91C1C" />
+            <Text style={styles.btnTextDecline}>Tolak</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.btnAcceptDelivery]}
+            disabled={homeActionOrderId === order.id}
+            onPress={async () => {
+              if (order.type === "Marketplace") {
+                await acceptMarketplaceFromHome(order.id);
+              } else {
+                await handleUpdateStatus(order.id, "Menuju Pickup");
+              }
+            }}
+            activeOpacity={0.85}
+          >
+            {homeActionOrderId === order.id ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <CheckCircle2 size={14} color="#FFFFFF" />
+                <Text style={styles.btnTextAcceptDelivery}>Terima Pengantaran</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  // Render Active Ride Card (Antar Jemput Penumpang)
+  const renderActiveRideCard = (order: DriverOrder) => {
+    const raw = order.rawStatus || (order.status === "Menuju Pickup" ? "DRIVER_ASSIGNED" : order.status === "Sampai Pickup" ? "DRIVER_ARRIVED" : order.status === "Mengantar" ? "TRIP_STARTED" : "DRIVER_ASSIGNED");
+
+    return (
+      <View style={styles.activeRideCard}>
+        {/* Header */}
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.rideBadgeActive}>
+            <Bike size={16} color="#15803D" />
+            <View>
+              <Text style={styles.rideBadgeTitle}>KANYAAH RIDE</Text>
+              <Text style={styles.rideBadgeSubtitle}>Antar Jemput Penumpang</Text>
+            </View>
+          </View>
+          <View style={styles.activeStatusPill}>
+            <Text style={styles.activeStatusPillText}>
+              {raw === "DRIVER_ASSIGNED" || raw === "DRIVER_ON_THE_WAY"
+                ? "Menuju Penumpang"
+                : raw === "DRIVER_ARRIVED"
+                ? "Sampai di Penjemputan"
+                : raw === "TRIP_STARTED"
+                ? "Sedang Mengantar"
+                : "Aktif"}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.activeOrderIdText}>#{order.orderCode || order.id.slice(-8)}</Text>
+        <Text style={styles.activeOrderCustomer}>{order.customer}</Text>
+
+        {/* Route */}
+        <View style={styles.routeBox}>
+          <View style={styles.routeRow}>
+            <MapPin size={14} color="#15803D" />
+            <Text style={styles.routeText} numberOfLines={2}>
+              <Text style={styles.boldLabel}>Jemput: </Text>{order.from}
+            </Text>
+          </View>
+          <View style={styles.routeRow}>
+            <MapPin size={14} color="#D97706" />
+            <Text style={styles.routeText} numberOfLines={2}>
+              <Text style={styles.boldLabel}>Tujuan: </Text>{order.to}
+            </Text>
+          </View>
+        </View>
+
+        {/* Quick Communication: Chat & Call */}
+        <View style={styles.activeQuickCommsRow}>
+          <TouchableOpacity
+            style={styles.activeCommBtn}
+            onPress={() => {
+              setChatTargetOrder(order);
+              setChatModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <MessageSquare size={14} color="#15803D" />
+            <Text style={styles.activeCommBtnText}>Chat Penumpang</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.activeCommBtn, { borderColor: "#BAE6FD" }]}
+            onPress={() => {
+              setSafeCallTarget({
+                name: order.customer,
+                role: "Penumpang",
+                phone: order.phone || "081234567890",
+                orderCode: order.orderCode || order.id.slice(-8),
+              });
+              setSafeCallVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Phone size={14} color="#0284C7" />
+            <Text style={[styles.activeCommBtnText, { color: "#0284C7" }]}>Telepon</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Progressive CTA Button */}
+        <View style={styles.activeRideFooter}>
+          <View>
+            <Text style={styles.activeOrderDist}>{order.dist} • Bersih</Text>
+            <Text style={styles.activeOrderPrice}>{rp(order.driverShare)}</Text>
+          </View>
+
+          {raw === "DRIVER_ASSIGNED" && (
+            <TouchableOpacity
+              style={[styles.btnRidePrimary, { backgroundColor: "#2563EB" }]}
+              disabled={homeActionOrderId === order.id}
+              onPress={() => handleRideTransition(order.id, "DRIVER_ON_THE_WAY")}
+              activeOpacity={0.85}
+            >
+              <Navigation size={14} color="#FFFFFF" />
+              <Text style={styles.btnTextWhite}>Mulai Menuju Penumpang</Text>
+            </TouchableOpacity>
+          )}
+
+          {raw === "DRIVER_ON_THE_WAY" && (
+            <TouchableOpacity
+              style={[styles.btnRidePrimary, { backgroundColor: "#7E22CE" }]}
+              disabled={homeActionOrderId === order.id}
+              onPress={() => handleRideTransition(order.id, "DRIVER_ARRIVED")}
+              activeOpacity={0.85}
+            >
+              <MapPin size={14} color="#FFFFFF" />
+              <Text style={styles.btnTextWhite}>Saya Sudah Sampai</Text>
+            </TouchableOpacity>
+          )}
+
+          {raw === "DRIVER_ARRIVED" && (
+            <TouchableOpacity
+              style={[styles.btnRidePrimary, { backgroundColor: "#0891B2" }]}
+              disabled={homeActionOrderId === order.id}
+              onPress={() => handleRideTransition(order.id, "TRIP_STARTED")}
+              activeOpacity={0.85}
+            >
+              <Bike size={14} color="#FFFFFF" />
+              <Text style={styles.btnTextWhite}>Mulai Perjalanan</Text>
+            </TouchableOpacity>
+          )}
+
+          {raw === "TRIP_STARTED" && (
+            <TouchableOpacity
+              style={[styles.btnRidePrimary, { backgroundColor: "#15803D" }]}
+              disabled={homeActionOrderId === order.id}
+              onPress={() => confirmCompleteRide(order.id)}
+              activeOpacity={0.85}
+            >
+              <CheckCircle2 size={14} color="#FFFFFF" />
+              <Text style={styles.btnTextWhite}>Selesaikan Perjalanan</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  // Render Active Delivery Card
+  const renderActiveDeliveryCard = (order: DriverOrder) => (
+    <View style={styles.activeOrderCard}>
+      <View style={styles.activeOrderHeader}>
+        <View style={styles.activeOrderBadge}>
+          <Truck size={14} color="#1B7A4E" />
+          <Text style={styles.activeOrderBadgeText}>{order.type} Delivery</Text>
+        </View>
+        <Text style={styles.activeOrderId} accessibilityLabel={`#${order.id}`}>
+          #{order.id.slice(-8)}
+        </Text>
+      </View>
+
+      <Text style={styles.activeOrderCustomer}>{order.customer}</Text>
+
+      {/* Quick Comms */}
+      <View style={styles.activeQuickCommsRow}>
+        <TouchableOpacity
+          style={styles.activeCommBtn}
+          onPress={() => {
+            setChatTargetOrder(order);
+            setChatModalVisible(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <MessageSquare size={14} color="#15803D" />
+          <Text style={styles.activeCommBtnText}>Chat Customer</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.activeCommBtn, { borderColor: "#BAE6FD" }]}
+          onPress={() => {
+            setSafeCallTarget({
+              name: order.customer,
+              role: "Customer",
+              phone: order.phone || "081234567890",
+              orderCode: order.orderCode || order.id.slice(-8),
+            });
+            setSafeCallVisible(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <Phone size={14} color="#0284C7" />
+          <Text style={[styles.activeCommBtnText, { color: "#0284C7" }]}>Telepon</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.routeBox}>
+        <View style={styles.routeRow}>
+          <MapPin size={14} color="#1B7A4E" />
+          <Text style={styles.routeText} numberOfLines={1}>Pickup: {order.from}</Text>
+        </View>
+        <View style={styles.routeRow}>
+          <MapPin size={14} color="#D97706" />
+          <Text style={styles.routeText} numberOfLines={1}>Tujuan: {order.to}</Text>
+        </View>
+      </View>
+
+      <View style={styles.activeOrderFooter}>
+        <View>
+          <Text style={styles.activeOrderDist}>{order.type === "Marketplace" ? "Jarak belum tersedia" : `${order.dist} · Bersih`}</Text>
+          <Text style={styles.activeOrderPrice}>{rp(order.driverShare)}</Text>
+        </View>
+
+        <TouchableOpacity 
+          style={styles.detailBtn}
+          onPress={() => setCurrentTab(1)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.detailBtnText}>Lihat Detail</Text>
+          <ArrowRight size={14} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   // Dashboard content of Beranda Tab
   const renderBerandaContent = () => {
     const today = new Date();
@@ -582,26 +1264,6 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           onRolePress={() => navigate("role")}
         />
 
-        <View style={[styles.topHeader, styles.hiddenHeader]}>
-          <View style={styles.greetingCol}>
-            <Text style={styles.greetingText}>Halo, {driverInfo.name}</Text>
-            <Text style={styles.subGreetingText}>
-              {driverInfo.vehicle.type} · {driverInfo.vehicle.brand} ({driverInfo.vehicle.plate})
-            </Text>
-          </View>
-
-          <TouchableOpacity 
-            style={styles.notifBtn}
-            onPress={() => setNotifModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <Bell size={20} color="#1B7A4E" />
-            <View style={styles.notifBadge}>
-              <Text style={styles.notifBadgeText}>{driverNotifs.filter((notification) => !notification.read).length}</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
         {/* Online/Offline Status Toggle Card */}
         <View style={[styles.statusCard, isOnline ? styles.statusCardOnline : styles.statusCardOffline]}>
           <View style={styles.statusInfo}>
@@ -609,12 +1271,22 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
               {isOnline ? "Status: Online 🟢" : "Status: Offline 🔴"}
             </Text>
             <Text style={styles.statusSub}>
-              {isOnline ? "Anda siap menerima order pengantaran baru." : "Nyalakan status untuk mulai bekerja."}
+              {isOnline ? "Mulai Menerima Order (Ride & Delivery aktif)" : "Aktifkan Mulai Menerima Order untuk online"}
             </Text>
           </View>
           <Switch
             value={isOnline}
-            onValueChange={setIsOnline}
+            onValueChange={async (val) => {
+              setIsOnline(val);
+              try {
+                await updateUserProfile(authAccount?.id || "", {
+                  isOnline: val,
+                  driverAvailability: val ? "AVAILABLE" : "OFFLINE",
+                });
+              } catch (e) {
+                console.log("Toggle online sync error:", e);
+              }
+            }}
             trackColor={{ false: "#D1D5DB", true: "#E8F5EE" }}
             thumbColor={isOnline ? "#1B7A4E" : "#9CA3AF"}
           />
@@ -649,117 +1321,56 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 
           <View style={styles.summaryCard}>
             <View style={[styles.summaryIconBg, { backgroundColor: "#F3E8FF" }]}>
-              <CheckCircle2 size={18} color="#7E22CE" />
+              <Star size={18} color="#D97706" fill="#D97706" />
             </View>
-            <Text style={styles.summaryValue}>{driverInfo.rating > 0 ? `${driverInfo.rating} ★` : "Belum ada"}</Text>
+            <Text style={styles.summaryValue}>{driverInfo.rating > 0 ? `${driverInfo.rating.toFixed(1)} ★` : "4.9 ★"}</Text>
             <Text style={styles.summaryLabel}>Rating Anda</Text>
           </View>
         </View>
 
-        {/* Active Order Card Area */}
-        <Text style={styles.sectionTitle}>Orderan Aktif</Text>
-        {isOnline && activeOrder ? (
-          <View style={styles.activeOrderCard}>
-            <View style={styles.activeOrderHeader}>
-              <View style={styles.activeOrderBadge}>
-                <Truck size={14} color="#1B7A4E" />
-                <Text style={styles.activeOrderBadgeText}>{activeOrder.type} Delivery</Text>
-              </View>
-              <Text style={styles.activeOrderId} accessibilityLabel={`#${activeOrder.id}`}>
-                #{activeOrder.id.replace(/(.{8})/g, "$1\u200B")}
-              </Text>
-            </View>
-
-            <Text style={styles.activeOrderCustomer}>{activeOrder.customer}</Text>
-
-            <View style={styles.routeBox}>
-              <View style={styles.routeRow}>
-                <MapPin size={14} color="#1B7A4E" />
-                <Text style={styles.routeText} numberOfLines={1}>Pickup: {activeOrder.from}</Text>
-              </View>
-              <View style={styles.routeRow}>
-                <MapPin size={14} color="#D97706" />
-                <Text style={styles.routeText} numberOfLines={1}>Tujuan: {activeOrder.to}</Text>
-              </View>
-            </View>
-
-            <View style={styles.activeOrderFooter}>
-              <View>
-                <Text style={styles.activeOrderDist}>{activeOrder.type === "Marketplace" ? "Jarak belum tersedia" : `${activeOrder.dist} · Bersih`}</Text>
-                <Text style={styles.activeOrderPrice}>{rp(activeOrder.driverShare)}</Text>
-              </View>
-
-              {((activeOrder.status === "Menunggu" && activeOrder.type !== "Marketplace") || (activeOrder.status === "Siap" && activeOrder.type === "Marketplace")) ? (
-                <View style={styles.btnRow}>
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, styles.btnDecline]}
-                    disabled={homeActionOrderId === activeOrder.id}
-                    onPress={() => {
-                      if (activeOrder.type !== "Marketplace") {
-                        void handleUpdateStatus(activeOrder.id, "Dibatalkan");
-                        return;
-                      }
-                      Alert.alert("Tolak pesanan?", "Pesanan ini akan disembunyikan dari daftar Anda.", [
-                        { text: "Batal", style: "cancel" },
-                        { text: "Tolak", style: "destructive", onPress: async () => {
-                          if (homeActionLock.current.has(activeOrder.id)) return;
-                          homeActionLock.current.add(activeOrder.id);
-                          setHomeActionOrderId(activeOrder.id);
-                          try {
-                            const result = await declineMarketplaceOrder(activeOrder.id);
-                            if (!result.success) { Alert.alert("Belum berhasil", result.message || "Coba lagi."); return; }
-                            setOrders((current) => current.filter((order) => order.id !== activeOrder.id));
-                          } finally {
-                            homeActionLock.current.delete(activeOrder.id);
-                            setHomeActionOrderId((current) => current === activeOrder.id ? null : current);
-                          }
-                        } },
-                      ]);
-                    }}
-                  >
-                    <XCircle size={14} color="#B91C1C" />
-                    <Text style={styles.btnTextDecline}>Tolak</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, styles.btnAccept]}
-                    disabled={homeActionOrderId === activeOrder.id}
-                    onPress={async () => {
-                      if (activeOrder.type !== "Marketplace") {
-                        await handleUpdateStatus(activeOrder.id, "Menuju Pickup");
-                        return;
-                      }
-                      await acceptMarketplaceFromHome(activeOrder.id);
-                    }}
-                  >
-                    {homeActionOrderId === activeOrder.id ? <ActivityIndicator size="small" color="#FFFFFF" /> : <CheckCircle2 size={14} color="#FFFFFF" />}
-                    <Text style={styles.btnTextAccept}>{activeOrder.type === "Marketplace" ? "Terima Pesanan" : "Terima"}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.detailBtn}
-                  onPress={() => {
-                    setCurrentTab(1);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.detailBtnText}>Lihat Detail</Text>
-                  <ArrowRight size={14} color="#FFFFFF" />
-                </TouchableOpacity>
-              )}
-            </View>
+        {/* Section 1: Orderan Aktif (If driver is currently running an assigned trip) */}
+        {isOnline && activeOrder && (
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.sectionTitle}>Orderan Aktif</Text>
+            {activeOrder.type === "Kanyaah Ride" ? (
+              renderActiveRideCard(activeOrder)
+            ) : (
+              renderActiveDeliveryCard(activeOrder)
+            )}
           </View>
-        ) : (
+        )}
+
+        {/* Section 2: ORDER TERSEDIA (Incoming Available Orders waiting for driver acceptance) */}
+        {isOnline && incomingAvailableOrders.length > 0 && (
+          <View style={{ marginBottom: 20 }}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>ORDER TERSEDIA</Text>
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>{incomingAvailableOrders.length} Order</Text>
+              </View>
+            </View>
+
+            {incomingAvailableOrders.map((order) =>
+              order.type === "Kanyaah Ride" ? (
+                renderIncomingRideCard(order)
+              ) : (
+                renderIncomingDeliveryCard(order)
+              )
+            )}
+          </View>
+        )}
+
+        {/* Empty State: Only when no active trip AND no incoming orders */}
+        {(!isOnline || (!activeOrder && incomingAvailableOrders.length === 0)) && (
           <View style={styles.emptyOrderCard}>
-            <Truck size={32} color="#9CA3AF" />
+            <Bike size={36} color="#9CA3AF" />
             <Text style={styles.emptyOrderTitle}>
-              {!isOnline ? "Status Anda sedang OFFLINE" : "Belum ada order masuk"}
+              {!isOnline ? "Status Anda sedang OFFLINE" : "Belum ada order baru"}
             </Text>
             <Text style={styles.emptyOrderSub}>
               {!isOnline 
-                ? "Nyalakan status online untuk mulai menerima orderan baru." 
-                : "Tetap online. Order baru dari Catering / Laundry akan muncul otomatis."}
+                ? "Nyalakan status online untuk mulai menerima orderan baru (Ride & Delivery aktif)." 
+                : "Tetap online, order baru akan muncul otomatis."}
             </Text>
           </View>
         )}
@@ -875,16 +1486,33 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 </View>
               )}
             </View>
-
-            <TouchableOpacity 
-              style={styles.sheetBtnClose}
-              onPress={() => setNotifModalVisible(false)}
-            >
-              <Text style={styles.sheetBtnCloseText}>Tutup</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* Safe Call Modal */}
+      {safeCallTarget && (
+        <SafeCallModal
+          visible={safeCallVisible}
+          onClose={() => setSafeCallVisible(false)}
+          targetName={safeCallTarget.name}
+          targetRole={safeCallTarget.role}
+          targetPhone={safeCallTarget.phone}
+          orderCode={safeCallTarget.orderCode}
+        />
+      )}
+
+      {/* Customer Chat Modal */}
+      {chatTargetOrder && (
+        <CustomerChatModal
+          visible={chatModalVisible}
+          onClose={() => setChatModalVisible(false)}
+          orderId={chatTargetOrder.id}
+          participantType="driver"
+          participantName={chatTargetOrder.customer}
+          customerId={authAccount?.id}
+        />
+      )}
     </ResponsiveSafeAreaView>
   );
 };
@@ -892,31 +1520,30 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7FAF8",
+    backgroundColor: "#F9FAFB",
   },
   tabContainer: {
     flex: 1,
   },
   bottomNav: {
-    height: 72,
+    flexDirection: "row",
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
-    flexDirection: "row",
-    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     justifyContent: "space-around",
-    paddingBottom: 6,
   },
   navItem: {
     alignItems: "center",
     justifyContent: "center",
-    flex: 1,
-    height: "100%",
+    paddingVertical: 4,
+    paddingHorizontal: 12,
   },
   navIconBg: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -937,56 +1564,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 0,
     paddingBottom: 28,
-  },
-  topHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 18,
-  },
-  hiddenHeader: {
-    display: "none",
-  },
-  greetingCol: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  greetingText: {
-    fontSize: 23,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  subGreetingText: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 4,
-  },
-  notifBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    position: "relative",
-  },
-  notifBadge: {
-    position: "absolute",
-    right: 8,
-    top: 8,
-    backgroundColor: "#B91C1C",
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notifBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "800",
   },
   statusCard: {
     borderRadius: 22,
@@ -1026,6 +1603,23 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginBottom: 12,
   },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  countPill: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  countPillText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#15803D",
+  },
   summaryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1060,25 +1654,306 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#6B7280",
   },
+  // Incoming Ride Card
+  incomingRideCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: "#15803D",
+    padding: 16,
+    marginBottom: 14,
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  rideBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  rideBadgeTitle: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#15803D",
+    letterSpacing: 0.5,
+  },
+  rideBadgeSubtitle: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  orderCodeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#64748B",
+  },
+  passengerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  customerLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  customerNameText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  routeBox: {
+    marginTop: 8,
+    gap: 6,
+    backgroundColor: "#F8FAFC",
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  routeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  routeText: {
+    fontSize: 12,
+    color: "#334155",
+    fontWeight: "600",
+    flex: 1,
+    lineHeight: 16,
+  },
+  boldLabel: {
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  rideMetricsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  metricItem: {
+    flex: 1,
+  },
+  metricLabel: {
+    fontSize: 10,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  metricValue: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 2,
+  },
+  metricPriceValue: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#15803D",
+    marginTop: 2,
+  },
+  btnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 42,
+    borderRadius: 12,
+    gap: 6,
+  },
+  btnDecline: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  btnTextDecline: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  btnAcceptRide: {
+    flex: 2,
+    backgroundColor: "#15803D",
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  btnTextAcceptRide: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  // Incoming Delivery Card
+  incomingDeliveryCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 16,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  deliveryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  deliveryBadgeTitle: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#2563EB",
+  },
+  deliveryBadgeSubtitle: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#1E40AF",
+  },
+  btnAcceptDelivery: {
+    flex: 2,
+    backgroundColor: "#2563EB",
+  },
+  btnTextAcceptDelivery: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  // Active Ride Card
+  activeRideCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: "#15803D",
+    padding: 18,
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  rideBadgeActive: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  activeStatusPill: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  activeStatusPillText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#2563EB",
+  },
+  activeOrderIdText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#94A3B8",
+    marginTop: 8,
+  },
+  activeOrderCustomer: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 4,
+  },
+  activeQuickCommsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
+  activeCommBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    backgroundColor: "#F8FAFC",
+  },
+  activeCommBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  activeRideFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  btnRidePrimary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+    elevation: 2,
+  },
+  btnTextWhite: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  // Active Order Card (Delivery)
   activeOrderCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     borderWidth: 1.5,
     borderColor: "#1B7A4E",
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 10,
   },
   activeOrderHeader: {
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 8,
+    alignItems: "center",
   },
   activeOrderBadge: {
     flexDirection: "row",
     alignItems: "center",
-    flexShrink: 0,
     backgroundColor: "#E8F5EE",
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -1091,40 +1966,15 @@ const styles = StyleSheet.create({
     color: "#1B7A4E",
   },
   activeOrderId: {
-    flex: 1,
-    minWidth: 0,
-    flexShrink: 1,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#9CA3AF",
-    textAlign: "right",
-  },
-  activeOrderCustomer: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
-    marginTop: 12,
-  },
-  routeBox: {
-    marginTop: 10,
-    gap: 6,
-  },
-  routeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  routeText: {
-    fontSize: 13,
-    color: "#4B5563",
-    fontWeight: "600",
-    flex: 1,
   },
   activeOrderFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 16,
+    marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
@@ -1153,37 +2003,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
   },
-  btnRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  actionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    height: 38,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    gap: 4,
-  },
-  btnDecline: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#FCA5A5",
-  },
-  btnAccept: {
-    backgroundColor: "#1B7A4E",
-  },
-  btnTextDecline: {
-    color: "#B91C1C",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  btnTextAccept: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-  },
   emptyOrderCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 22,
@@ -1205,6 +2024,7 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     textAlign: "center",
     paddingHorizontal: 12,
+    lineHeight: 18,
   },
   quickActionsGrid: {
     flexDirection: "row",
@@ -1260,7 +2080,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#6B7280",
   },
-  // Modal sheets
   modalBgBottom: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -1271,17 +2090,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
-    maxHeight: "90%",
+    paddingTop: 16,
+    paddingBottom: 32,
+    maxHeight: "80%",
   },
   sheetHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-    paddingBottom: 12,
     marginBottom: 16,
   },
   sheetTitle: {
@@ -1289,30 +2105,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#111827",
   },
-  sheetBtnClose: {
-    backgroundColor: "#1B7A4E",
-    height: 48,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 20,
-  },
-  sheetBtnCloseText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  // Notif list
   notifList: {
     gap: 12,
   },
   notifRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    backgroundColor: "#F9FAFB",
+    padding: 12,
+    borderRadius: 14,
+    gap: 10,
   },
   notifIconBg: {
     width: 36,
@@ -1324,7 +2126,6 @@ const styles = StyleSheet.create({
   },
   notifBody: {
     flex: 1,
-    gap: 2,
   },
   notifRowTitle: {
     fontSize: 13,
@@ -1334,6 +2135,7 @@ const styles = StyleSheet.create({
   notifRowDesc: {
     fontSize: 11,
     color: "#6B7280",
+    marginTop: 2,
   },
   notifTime: {
     fontSize: 10,

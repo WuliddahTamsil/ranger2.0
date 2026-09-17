@@ -5,7 +5,7 @@ import type { AuthAccount } from "../screens/auth/authTypes";
 const AUTH_ACCOUNTS_KEY = "rangers.auth.accounts.v1";
 const AUTH_SESSION_KEY = "rangers.auth.session.v1";
 
-const getAuthHeaders = async (): Promise<Record<string, string>> => {
+const getAuthHeaders = async (accountId?: string): Promise<Record<string, string>> => {
   try {
     const [accountsRaw, sessionRaw] = await Promise.all([
       AsyncStorage.getItem(AUTH_ACCOUNTS_KEY),
@@ -13,8 +13,9 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
     ]);
     const session = sessionRaw ? JSON.parse(sessionRaw) : null;
     const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
+    const requestedAccountId = accountId || session?.accountId;
     const account = Array.isArray(accounts)
-      ? accounts.find((item: any) => item.id === session?.accountId)
+      ? accounts.find((item: any) => String(item.id) === String(requestedAccountId))
       : null;
     return account?.token ? { Authorization: `Bearer ${account.token}` } : {};
   } catch {
@@ -107,18 +108,22 @@ const readApiJson = async (response: Response) => {
 export const uploadFileToBackend = async (fileUri: string, fileName: string, mimeType: string) => {
   try {
     const formData = new FormData();
+    const safeFileName = fileName || `upload-${Date.now()}.jpg`;
 
     if (Platform.OS === "web") {
       // In web, fetch blob from uri and append
       const res = await fetch(fileUri);
+      if (!res.ok) {
+        throw new Error(`File gambar tidak dapat dibaca (HTTP ${res.status}).`);
+      }
       const blob = await res.blob();
-      formData.append("file", blob, fileName);
+      formData.append("file", blob, safeFileName);
     } else {
       // In native React Native
       formData.append("file", {
         uri: fileUri,
-        name: fileName,
-        type: mimeType,
+        name: safeFileName,
+        type: mimeType || "image/jpeg",
       } as any);
     }
 
@@ -127,8 +132,7 @@ export const uploadFileToBackend = async (fileUri: string, fileName: string, mim
       body: formData,
     });
 
-    const data = await response.json();
-    return data;
+    return await readApiJson(response);
   } catch (error) {
     console.error("❌ Upload file error:", error);
     throw error;
@@ -182,10 +186,15 @@ export const createCateringProduct = async (productData: any) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(productData),
     });
-    return await res.json();
+    return await readApiJson(res);
   } catch (err) {
     console.error("❌ createCateringProduct error:", err);
-    return { success: false, message: "Gagal menyambung ke server" };
+    return {
+      success: false,
+      message: err instanceof TypeError
+        ? "Server Backend tidak terhubung. Pastikan backend berjalan di port 5000 lalu coba lagi."
+        : err instanceof Error ? err.message : "Gagal menyimpan produk Catering.",
+    };
   }
 };
 
@@ -310,7 +319,7 @@ export const getMarketplaceOrdersForOwner = async (ownerId: string) => {
 
 export const getMarketplaceOrdersForCustomer = async (customerId: string) => {
   try {
-    const authHeaders = await getAuthHeaders();
+    const authHeaders = await getAuthHeaders(customerId);
     const res = await fetch(getApiUrl(`/marketplace/orders/customer/${customerId}?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
   } catch (err) {
@@ -519,19 +528,21 @@ export const createCateringOrder = async (orderData: any, idempotencyKey?: strin
 
 export const getCateringOrdersForOwner = async (ownerId: string) => {
   try {
-    const res = await fetch(getApiUrl(`/catering/orders/owner/${ownerId}`));
-    return await res.json();
+    const authHeaders = await getAuthHeaders(ownerId);
+    const res = await fetch(getApiUrl(`/catering/orders/owner/${ownerId}?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
+    return await readApiJson(res);
   } catch (err) {
     console.error("❌ getCateringOrdersForOwner error:", err);
-    return { success: false, data: [] };
+    return { success: false, data: [], message: err instanceof Error ? err.message : "Gagal mengambil pesanan Catering" };
   }
 };
 
 export const updateCateringOrderStatus = async (id: string | number, status: string) => {
   try {
+    const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/catering/orders/${id}/status`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ status }),
     });
     return await res.json();
@@ -543,7 +554,7 @@ export const updateCateringOrderStatus = async (id: string | number, status: str
 
 export const getCateringOrdersForCustomer = async (customerId: string) => {
   try {
-    const authHeaders = await getAuthHeaders();
+    const authHeaders = await getAuthHeaders(customerId);
     const res = await fetch(getApiUrl(`/catering/orders/customer/${customerId}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
   } catch (err) {
@@ -554,7 +565,8 @@ export const getCateringOrdersForCustomer = async (customerId: string) => {
 
 export const getCateringOrdersForDriver = async (driverId: string) => {
   try {
-    const res = await fetch(getApiUrl(`/catering/orders/driver/${driverId}?t=${Date.now()}`), { cache: "no-store" });
+    const authHeaders = await getAuthHeaders(driverId);
+    const res = await fetch(getApiUrl(`/catering/orders/driver/${driverId}?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
   } catch (err) {
     console.error("getCateringOrdersForDriver error:", err);
@@ -564,9 +576,10 @@ export const getCateringOrdersForDriver = async (driverId: string) => {
 
 export const assignCateringDriver = async (orderId: string, driverId: string) => {
   try {
+    const authHeaders = await getAuthHeaders(driverId);
     const res = await fetch(getApiUrl(`/catering/orders/${orderId}/assign-driver`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ driverId }),
     });
     return await readApiJson(res);
@@ -621,6 +634,20 @@ export const sendChatMessage = async (
   }
 };
 
+export const declineCateringDriver = async (orderId: string, driverId: string) => {
+  try {
+    const authHeaders = await getAuthHeaders(driverId);
+    const res = await fetch(getApiUrl(`/catering/orders/${orderId}/decline-driver`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("declineCateringDriver error:", err);
+    return { success: false, message: "Gagal menolak order Catering." };
+  }
+};
+
 export const getChatConversation = async (orderId: string) => {
   try {
     const authHeaders = await getAuthHeaders();
@@ -631,6 +658,60 @@ export const getChatConversation = async (orderId: string) => {
   } catch (err) {
     console.error("getChatConversation error:", err);
     return { success: false, data: null, message: "Sesi login tidak valid atau order belum memiliki akses chat." };
+  }
+};
+
+export const submitCateringPayment = async (
+  orderId: string,
+  amount: number,
+  reference = "",
+  proofUrl = "",
+) => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/catering/orders/${orderId}/payments`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ amount, reference, proofUrl }),
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("submitCateringPayment error:", err);
+    return { success: false, message: "Gagal mengajukan konfirmasi pembayaran." };
+  }
+};
+
+export const verifyCateringPayment = async (
+  orderId: string,
+  paymentId: string,
+  action: "verify" | "reject",
+  reason = "",
+) => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/catering/orders/${orderId}/payments/${paymentId}`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ action, reason }),
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("verifyCateringPayment error:", err);
+    return { success: false, message: "Gagal memproses verifikasi pembayaran." };
+  }
+};
+
+export const sendCateringPaymentReminder = async (orderId: string) => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/catering/orders/${orderId}/payment-reminder`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("sendCateringPaymentReminder error:", err);
+    return { success: false, message: "Gagal mengirim pengingat pembayaran." };
   }
 };
 

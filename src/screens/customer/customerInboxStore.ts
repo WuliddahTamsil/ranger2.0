@@ -8,10 +8,11 @@ export interface CustomerChatMessage {
   text: string;
   time: string;
   attachment?: {
-    type: "image" | "file";
+    type: "image" | "file" | "video";
     uri: string;
     name: string;
     size?: string;
+    duration?: number;
   };
 }
 
@@ -64,11 +65,12 @@ export const hydrateCustomerChatThreads = async () => {
       }
     }
   } catch {
-    // Gunakan thread bawaan jika data storage tidak dapat dibaca.
+    threads = [...defaultThreads];
+  } finally {
+    hydrated = true;
+    notify();
   }
 
-  hydrated = true;
-  notify();
   return getCustomerChatThreads();
 };
 
@@ -93,7 +95,12 @@ export const updateCustomerChatThread = (threadId: string, updates: Partial<Cust
 export const appendCustomerChatMessage = (threadId: string, message: CustomerChatMessage) => {
   threads = threads.map((thread) =>
     thread.id === threadId
-      ? { ...thread, messages: [...(thread.messages || []), message], lastMessage: message.text, updatedAt: message.time }
+      ? {
+          ...thread,
+          messages: [...(thread.messages || []), message],
+          lastMessage: message.text || (message.attachment?.type === "image" ? "📷 Foto" : message.attachment?.type === "video" ? "🎥 Video" : "📎 Dokumen"),
+          updatedAt: message.time,
+        }
       : thread
   );
   persist();
