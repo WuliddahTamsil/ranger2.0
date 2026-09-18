@@ -66,7 +66,7 @@ export interface DriverOrder {
   paymentStatus?: string;
   customer: string;
   phone: string;
-  type: "Catering" | "Marketplace" | "Laundry" | "Kanyaah Ride";
+  type: "Catering" | "Marketplace" | "Laundry" | "Kanyaah Ride" | "Kanyaah Send";
   time: string;
   createdAt?: string;
   completedAt?: string;
@@ -1134,6 +1134,64 @@ export const Order: React.FC<OrderProps> = ({
               <Text style={styles.earningsHighlight}>{rp(selectedOrder.driverShare)}</Text>
             </View>
           </View>
+
+          {/* Section 5: Instruksi Pembayaran untuk Driver */}
+          <View style={[
+            styles.infoCard,
+            (selectedOrder.paymentMethod === "COD" || (!selectedOrder.paymentMethod && selectedOrder.paymentStatus !== "Lunas"))
+              ? { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" }
+              : { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }
+          ]}>
+            <Text style={[
+              styles.sectionLabel,
+              (selectedOrder.paymentMethod === "COD" || (!selectedOrder.paymentMethod && selectedOrder.paymentStatus !== "Lunas"))
+                ? { color: "#92400E" }
+                : { color: "#15803D" }
+            ]}>
+              INSTRUKSI PEMBAYARAN KEPADA PELANGGAN
+            </Text>
+
+            {(selectedOrder.paymentMethod === "COD" || (!selectedOrder.paymentMethod && selectedOrder.paymentStatus !== "Lunas")) ? (
+              <View style={{ gap: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#B45309" }}>
+                    💵 TAGIH TUNAI (COD) KE PELANGGAN
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 13, color: "#78350F", lineHeight: 18 }}>
+                  Saat barang diserahkan ke pelanggan, tagih uang tunai sebesar:
+                </Text>
+                <View style={{ backgroundColor: "#FEF3C7", padding: 10, borderRadius: 10, alignItems: "center", marginVertical: 4 }}>
+                  <Text style={{ fontSize: 18, fontWeight: "900", color: "#B45309" }}>
+                    {rp(selectedOrder.pay)}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11, color: "#92400E" }}>
+                  * Pastikan jumlah uang tunai yang diterima pas atau berikan kembalian dengan benar.
+                </Text>
+              </View>
+            ) : (
+              <View style={{ gap: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <CheckCircle size={18} color="#15803D" />
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#15803D" }}>
+                    SUDAH LUNAS ({selectedOrder.paymentMethod || "NON-TUNAI"})
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 13, color: "#166534", lineHeight: 18 }}>
+                  Pelanggan sudah membayar lunas melalui metode digital.
+                </Text>
+                <View style={{ backgroundColor: "#DCFCE7", padding: 10, borderRadius: 10, marginVertical: 4 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D", textAlign: "center" }}>
+                    ⛔ DILARANG MENAGIH UANG TUNAI KEPADA PELANGGAN
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11, color: "#166534" }}>
+                  * Cukup serahkan pesanan dan konfirmasi penerimaan di aplikasi.
+                </Text>
+              </View>
+            )}
+          </View>
         </ScrollView>
 
         {/* Sticky Action Footer */}
@@ -1754,6 +1812,26 @@ export const Order: React.FC<OrderProps> = ({
                     <ChevronRight size={18} color="#94A3B8" />
                   </View>
                 </View>
+
+                {/* Driver Payment Instruction Banner */}
+                {(item.paymentMethod === "COD" || (!item.paymentMethod && item.paymentStatus !== "Lunas")) ? (
+                  <View style={styles.driverPaymentInstructionBoxCod}>
+                    <Text style={styles.driverPaymentInstructionTitleCod}>💵 TAGIH TUNAI (COD) KE PELANGGAN</Text>
+                    <Text style={styles.driverPaymentInstructionSubCod}>
+                      Tagih uang tunai sebesar <Text style={{ fontWeight: "800", color: "#92400E" }}>{rp(item.pay)}</Text> ke {item.customer}.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.driverPaymentInstructionBoxPaid}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <CheckCircle size={13} color="#15803D" />
+                      <Text style={styles.driverPaymentInstructionTitlePaid}>SUDAH LUNAS ({item.paymentMethod || "NON-TUNAI"})</Text>
+                    </View>
+                    <Text style={styles.driverPaymentInstructionSubPaid}>
+                      Pesanan dibayar online. <Text style={{ fontWeight: "800", color: "#15803D" }}>DILARANG</Text> menagih uang tunai!
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
 
               {/* Inline Map Accordion for Active Order */}
@@ -3351,5 +3429,44 @@ const styles = StyleSheet.create({
   fullPreviewImage: {
     width: "100%",
     height: "90%",
+  },
+
+  driverPaymentInstructionBoxCod: {
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 10,
+    padding: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  driverPaymentInstructionTitleCod: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#B45309",
+  },
+  driverPaymentInstructionSubCod: {
+    fontSize: 11,
+    color: "#78350F",
+    marginTop: 2,
+  },
+  driverPaymentInstructionBoxPaid: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 10,
+    padding: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  driverPaymentInstructionTitlePaid: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  driverPaymentInstructionSubPaid: {
+    fontSize: 11,
+    color: "#166534",
+    marginTop: 2,
   },
 });

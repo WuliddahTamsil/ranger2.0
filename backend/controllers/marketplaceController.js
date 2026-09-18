@@ -54,8 +54,13 @@ const getAllProducts = async (req, res) => {
 
 const createProduct = async (req, res) => {
   try {
-    const { ownerId, name, description, cat, price, stock, isActive, img, images } = req.body;
-    const owner = await validateOwner(ownerId);
+    const effectiveOwnerId = req.authUser ? req.authUser._id : req.body.ownerId;
+    if (req.authUser && req.body.ownerId && String(req.body.ownerId) !== String(req.authUser._id)) {
+      return res.status(403).json({ success: false, message: "Anda tidak dapat membuat produk atas nama toko lain." });
+    }
+
+    const { name, description, cat, price, stock, isActive, img, images } = req.body;
+    const owner = await validateOwner(effectiveOwnerId);
     if (!owner) return res.status(403).json({ success: false, message: "Akun pemilik marketplace tidak valid" });
     if (!name?.trim() || price === undefined) {
       return res.status(400).json({ success: false, message: "Nama produk dan harga wajib diisi" });
@@ -83,7 +88,16 @@ const createProduct = async (req, res) => {
 
 const updateProduct = async (req, res) => {
   try {
+    const existing = await MarketplaceProduct.findById(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: "Produk tidak ditemukan" });
+
+    if (req.authUser && String(existing.ownerId) !== String(req.authUser._id)) {
+      return res.status(403).json({ success: false, message: "Anda tidak memiliki hak akses untuk mengubah produk toko lain." });
+    }
+
     const updatePayload = { ...req.body };
+    delete updatePayload.ownerId; // Do not allow transferring ownership
+
     if (Array.isArray(updatePayload.images) && updatePayload.images.length > 0) {
       if (!updatePayload.img) {
         updatePayload.img = updatePayload.images[0];
@@ -96,7 +110,6 @@ const updateProduct = async (req, res) => {
       new: true,
       runValidators: true,
     });
-    if (!product) return res.status(404).json({ success: false, message: "Produk tidak ditemukan" });
     return res.json({ success: true, message: "Produk berhasil diperbarui", data: product });
   } catch (error) {
     console.error("Update marketplace product error:", error);
@@ -106,8 +119,14 @@ const updateProduct = async (req, res) => {
 
 const deleteProduct = async (req, res) => {
   try {
-    const product = await MarketplaceProduct.findByIdAndDelete(req.params.id);
-    if (!product) return res.status(404).json({ success: false, message: "Produk tidak ditemukan" });
+    const existing = await MarketplaceProduct.findById(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: "Produk tidak ditemukan" });
+
+    if (req.authUser && String(existing.ownerId) !== String(req.authUser._id)) {
+      return res.status(403).json({ success: false, message: "Anda tidak memiliki hak akses untuk menghapus produk toko lain." });
+    }
+
+    await MarketplaceProduct.findByIdAndDelete(req.params.id);
     return res.json({ success: true, message: "Produk berhasil dihapus" });
   } catch (error) {
     console.error("Delete marketplace product error:", error);

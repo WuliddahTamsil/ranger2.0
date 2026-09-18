@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const RideOrder = require("../models/RideOrder");
+const RideComplaint = require("../models/RideComplaint");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const Transaction = require("../models/Transaction");
@@ -9,6 +10,32 @@ const isValidUserId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
 
 const emitToUser = (io, userId, event, payload) => {
   if (userId) io?.to(`user:${String(userId)}`).emit(event, payload);
+};
+
+const emitToRideRoom = (io, orderId, event, payload) => {
+  if (orderId) {
+    io?.to(`ride:${String(orderId)}`).emit(event, payload);
+  }
+};
+
+// Master Fare Pricing Engine Configuration
+const RIDE_FARE_CONFIG = {
+  MOTOR: {
+    baseFare: 8000,
+    baseKm: 2,
+    pricePerKm: 2500,
+    pricePerMinute: 500,
+    minimumFare: 10000,
+    serviceFee: 1000,
+  },
+  MOBIL: {
+    baseFare: 15000,
+    baseKm: 2,
+    pricePerKm: 4500,
+    pricePerMinute: 800,
+    minimumFare: 20000,
+    serviceFee: 2000,
+  },
 };
 
 // Haversine formula to compute distance in km
@@ -28,64 +55,113 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   return Math.round(dist * 10) / 10;
 };
 
-// Calculate fare: Base Rp 8.000 for first 2 km, + Rp 2.500 per additional km
-const calculateRideFare = (distanceKm) => {
-  const safeDist = Math.max(0.5, Number(distanceKm) || 2);
-  const baseKm = 2;
-  const baseFare = 8000;
-  const ratePerKm = 2500;
+// Compute detailed fare breakdown according to platform formula
+const computeFareBreakdown = (distanceKm, durationMinutes, vehicleType = "MOTOR", discount = 0) => {
+  const safeType = vehicleType === "MOBIL" || vehicleType === "CAR" ? "MOBIL" : "MOTOR";
+  const cfg = RIDE_FARE_CONFIG[safeType];
+  const safeDist = Math.max(0.1, Number(distanceKm) || 2);
+  const safeDuration = Math.max(1, Number(durationMinutes) || Math.round(safeDist * 3.5) + 5);
 
-  let fare = baseFare;
-  if (safeDist > baseKm) {
-    fare += Math.round((safeDist - baseKm) * ratePerKm);
-  }
-  // Round to nearest 1000
-  fare = Math.ceil(fare / 1000) * 1000;
-  return fare;
+  const baseFare = cfg.baseFare;
+  const extraKm = Math.max(0, safeDist - cfg.baseKm);
+  const distanceFare = Math.round(extraKm * cfg.pricePerKm);
+  const timeFare = Math.round(safeDuration * cfg.pricePerMinute);
+  const serviceFee = cfg.serviceFee;
+  const rawFare = baseFare + distanceFare + timeFare + serviceFee - (Number(discount) || 0);
+  const estimatedFare = Math.max(cfg.minimumFare, Math.ceil(rawFare / 1000) * 1000);
+
+  return {
+    distanceKm: Math.round(safeDist * 10) / 10,
+    estimatedDurationMinutes: safeDuration,
+    baseFare,
+    distanceFare,
+    timeFare,
+    serviceFee,
+    discount: Number(discount) || 0,
+    minimumFare: cfg.minimumFare,
+    estimatedFare,
+    currency: "IDR",
+  };
 };
 
-// Create a new Kanyaah Ride Order
+// 1. Calculate & Estimate Fare
+const estimateRideFare = async (req, res) => {
+  try {
+    const { pickup, destination, vehicleType = "MOTOR", discount = 0 } = req.body;
+    let distanceKm = 0;
+    if (pickup?.latitude && pickup?.longitude && destination?.latitude && destination?.longitude) {
+      distanceKm = calculateDistanceKm(pickup.latitude, pickup.longitude, destination.latitude, destination.longitude);
+    }
+    if (!distanceKm || distanceKm <= 0) {
+      distanceKm = 2.5;
+    }
+    const estimatedDuration = Math.round(distanceKm * 3.5) + 5;
+    const breakdown = computeFareBreakdown(distanceKm, estimatedDuration, vehicleType, discount);
+
+    return res.json({
+      success: true,
+      data: {
+        ...breakdown,
+        estimatedDuration: breakdown.estimatedDurationMinutes,
+        estimatedDistance: breakdown.distanceKm,
+        formattedFare: `Rp ${breakdown.estimatedFare.toLocaleString("id-ID")}`,
+      },
+    });
+  } catch (error) {
+    console.error("estimateRideFare error:", error);
+    return res.status(500).json({ success: false, message: "Gagal menghitung estimasi tarif." });
+  }
+};
+
+// 2. Create a new Kanyaah Ride Order
 const createRideOrder = async (req, res) => {
   try {
-    const customerId = String(req.authUser?._id || req.body.customerId);
+    const customerId = String(req.authUser?._id || req.body.customerId || "");
+    if (!customerId) {
+      return res.status(401).json({ success: false, message: "Otentikasi pengguna diperlukan untuk memesan ride." });
+    }
+
     const customerName = req.authUser?.name || req.body.customerName || "Pelanggan Rangers";
     const customerPhone = req.authUser?.phone || req.body.customerPhone || "";
 
-    const { pickup, destination, customerNote, vehicleType = "MOTOR", paymentMethod = "Bayar Tunai" } = req.body;
+    const {
+      pickup,
+      destination,
+      customerNote,
+      vehicleType = "MOTOR",
+      paymentMethod = "Bayar Tunai",
+      discount = 0,
+    } = req.body;
 
     if (!pickup?.address || !destination?.address) {
       return res.status(400).json({
         success: false,
-        message: "Lokasi penjemputan dan tujuan wajib diisi.",
+        message: "Lokasi penjemputan dan tujuan perjalanan wajib diisi.",
       });
     }
 
-    // Vehicle check: Only MOTOR is allowed right now
-    if (vehicleType === "CAR") {
+    if (vehicleType === "CAR" || vehicleType === "MOBIL") {
       return res.status(400).json({
         success: false,
-        message: "Layanan Kanyaah Car sedang dalam tahap pengembangan (Coming Soon).",
+        message: "Layanan Kanyaah Mobil sedang dalam tahap pengembangan (Segera Hadir).",
       });
     }
 
-    // Compute distance
-    let distanceKm = Number(req.body.estimatedDistance || 0);
-    if (!distanceKm && pickup.latitude && pickup.longitude && destination.latitude && destination.longitude) {
-      distanceKm = calculateDistanceKm(
-        pickup.latitude,
-        pickup.longitude,
-        destination.latitude,
-        destination.longitude
-      );
+    // Compute verified distance on backend (cannot be spoofed from client)
+    let distanceKm = Number(req.body.estimatedDistance || req.body.estimatedDistanceKm || 0);
+    if (pickup.latitude && pickup.longitude && destination.latitude && destination.longitude) {
+      const computed = calculateDistanceKm(pickup.latitude, pickup.longitude, destination.latitude, destination.longitude);
+      if (computed > 0) distanceKm = computed;
     }
     if (!distanceKm || distanceKm <= 0) {
-      distanceKm = 2.5; // default fallback if coordinates are missing
+      distanceKm = 2.5;
     }
 
-    const estimatedDuration = Math.round(distanceKm * 3.5) + 5; // e.g. ~12 mins for 2 km
-    const estimatedFare = Number(req.body.estimatedFare) || calculateRideFare(distanceKm);
+    const estimatedDuration = Math.round(distanceKm * 3.5) + 5;
+    const breakdown = computeFareBreakdown(distanceKm, estimatedDuration, vehicleType, discount);
+    const estimatedFare = breakdown.estimatedFare;
     const totalAmount = estimatedFare;
-    // Driver share: 80%
+    // Driver gets 80% of total fare
     const driverEarnings = Math.round(totalAmount * 0.8);
 
     const orderCode = `RNG-RIDE-${Date.now().toString().slice(-8)}`;
@@ -93,7 +169,7 @@ const createRideOrder = async (req, res) => {
     const rideOrder = await RideOrder.create({
       orderCode,
       orderType: "KANYAAH_RIDE",
-      serviceType: "RIDE",
+      serviceType: "KANYAAH_RIDE",
       customerId,
       customerName,
       customerPhone,
@@ -103,22 +179,40 @@ const createRideOrder = async (req, res) => {
         latitude: pickup.latitude || null,
         longitude: pickup.longitude || null,
         placeName: pickup.placeName || "",
+        notes: pickup.notes || "",
       },
       destination: {
         address: destination.address,
         latitude: destination.latitude || null,
         longitude: destination.longitude || null,
         placeName: destination.placeName || "",
+        notes: destination.notes || "",
       },
-      customerNote: (customerNote || "").slice(0, 150),
-      estimatedDistance: distanceKm,
-      estimatedDuration,
+      customerNote: (customerNote || "").slice(0, 250),
+      estimatedDistanceKm: breakdown.distanceKm,
+      estimatedDurationMinutes: breakdown.estimatedDurationMinutes,
+      estimatedDistance: breakdown.distanceKm,
+      estimatedDuration: breakdown.estimatedDurationMinutes,
+      baseFare: breakdown.baseFare,
+      distanceFare: breakdown.distanceFare,
+      timeFare: breakdown.timeFare,
+      serviceFee: breakdown.serviceFee,
+      discount: breakdown.discount,
       estimatedFare,
       totalAmount,
       driverEarnings,
       paymentMethod,
       paymentStatus: "Menunggu Pembayaran",
       status: "SEARCHING_DRIVER",
+      statusHistory: [
+        {
+          status: "SEARCHING_DRIVER",
+          actorId: customerId,
+          actorRole: "customer",
+          note: "Pesanan Kanyaah Ride dibuat oleh customer",
+          createdAt: new Date(),
+        },
+      ],
     });
 
     // Create Notification for customer
@@ -129,27 +223,16 @@ const createRideOrder = async (req, res) => {
         message: `Mencari Driver Rangers untuk perjalanan Anda (${pickup.placeName || pickup.address} → ${destination.placeName || destination.address}).`,
         type: "order_new",
         relatedId: rideOrder._id,
-      });
+      }).catch(() => {});
     }
 
     // Broadcast to online drivers via socket.io
     req.io?.emit("ride:new_available", rideOrder);
     req.io?.emit("order_created", rideOrder);
 
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[Ride Created]", {
-        orderId: rideOrder.orderCode,
-        serviceType: rideOrder.serviceType,
-        orderCategory: rideOrder.orderType,
-        status: rideOrder.status,
-        customerId: rideOrder.customerId,
-        driverId: rideOrder.driverId,
-      });
-    }
-
     return res.status(201).json({
       success: true,
-      message: "Pesanan Kanyaah Ride berhasil dibuat. Sedang mencari driver.",
+      message: "Pesanan Kanyaah Ride berhasil dibuat. Sistem sedang mencari driver terdekat.",
       data: rideOrder,
     });
   } catch (error) {
@@ -161,17 +244,15 @@ const createRideOrder = async (req, res) => {
   }
 };
 
-// Get all ride orders for a customer
+// 3. Get customer ride orders history
 const getCustomerRideOrders = async (req, res) => {
   try {
-    const customerId = String(req.params.customerId || req.authUser?._id || "");
-    const authId = req.authUser?._id ? String(req.authUser._id) : "";
-    const candidateIds = [...new Set([customerId, authId].filter(Boolean))];
+    const customerId = String(req.authUser?._id || req.params.customerId || "");
+    if (!customerId) {
+      return res.status(401).json({ success: false, message: "Akses tidak diizinkan." });
+    }
 
-    const query = candidateIds.length > 0
-      ? { customerId: { $in: candidateIds } }
-      : {};
-    const orders = await RideOrder.find(query).sort({ createdAt: -1 }).lean();
+    const orders = await RideOrder.find({ customerId }).sort({ createdAt: -1 }).lean();
     return res.json({ success: true, data: orders });
   } catch (error) {
     console.error("getCustomerRideOrders error:", error);
@@ -179,15 +260,16 @@ const getCustomerRideOrders = async (req, res) => {
   }
 };
 
-// Get active ride for a customer (if any)
+// 4. Get currently active ride for customer
 const getActiveCustomerRide = async (req, res) => {
   try {
-    const customerId = String(req.params.customerId || req.authUser?._id || "");
-    const authId = req.authUser?._id ? String(req.authUser._id) : "";
-    const candidateIds = [...new Set([customerId, authId].filter(Boolean))];
+    const customerId = String(req.authUser?._id || req.params.customerId || "");
+    if (!customerId) {
+      return res.status(401).json({ success: false, message: "Akses tidak diizinkan." });
+    }
 
     const activeOrder = await RideOrder.findOne({
-      ...(candidateIds.length > 0 ? { customerId: { $in: candidateIds } } : {}),
+      customerId,
       status: { $in: ["SEARCHING_DRIVER", "DRIVER_ASSIGNED", "DRIVER_ON_THE_WAY", "DRIVER_ARRIVED", "TRIP_STARTED"] },
     })
       .sort({ createdAt: -1 })
@@ -200,36 +282,19 @@ const getActiveCustomerRide = async (req, res) => {
   }
 };
 
-// Get ride orders for Driver (both incoming available and assigned/completed)
+// 5. Get ride orders for Driver (available incoming and assigned)
 const getDriverRideOrders = async (req, res) => {
   try {
     const driverId = String(req.authUser?._id || req.params.driverId || "");
 
     const query = {
       $or: [
-        // Available incoming rides not declined by this driver
         { status: "SEARCHING_DRIVER", declinedByDrivers: { $nin: [driverId] } },
-        // Rides assigned to this driver
         ...(driverId ? [{ driverId }] : []),
       ],
     };
 
     const orders = await RideOrder.find(query).sort({ createdAt: -1 }).lean();
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[Driver Incoming Query]", {
-        driverId,
-        driverStatus: req.authUser?.driverAvailability || "AVAILABLE",
-        acceptedCategories: ["RIDE", "DELIVERY"],
-        orderCount: orders.length,
-      });
-      orders.forEach((o) => {
-        if (o.status === "SEARCHING_DRIVER") {
-          console.log("[Incoming Ride Found]", { orderId: o._id, orderCode: o.orderCode });
-        }
-      });
-    }
-
     return res.json({ success: true, data: orders });
   } catch (error) {
     console.error("getDriverRideOrders error:", error);
@@ -237,7 +302,7 @@ const getDriverRideOrders = async (req, res) => {
   }
 };
 
-// Get single ride order by ID
+// 6. Get single ride detail
 const getRideOrderById = async (req, res) => {
   try {
     const order = await RideOrder.findById(req.params.id).lean();
@@ -251,9 +316,8 @@ const getRideOrderById = async (req, res) => {
   }
 };
 
-// Accept a Ride Order (Driver accepts atomic)
+// 7. Atomic Driver Acceptance
 const acceptRideOrder = async (req, res) => {
-  let session;
   try {
     const driver = req.authUser;
     if (!driver || driver.role !== "driver") {
@@ -261,6 +325,21 @@ const acceptRideOrder = async (req, res) => {
     }
 
     const driverId = String(driver._id);
+
+    // Ensure driver does not already have another active ride in progress
+    const activeRide = await RideOrder.findOne({
+      driverId,
+      status: { $in: ["DRIVER_ASSIGNED", "DRIVER_ON_THE_WAY", "DRIVER_ARRIVED", "TRIP_STARTED"] },
+      _id: { $ne: req.params.id },
+    }).lean();
+
+    if (activeRide) {
+      return res.status(400).json({
+        success: false,
+        message: "Anda masih memiliki perjalanan aktif. Selesaikan perjalanan saat ini terlebih dahulu.",
+      });
+    }
+
     const vehicleBrand =
       driver.roleData?.get?.("vehicleBrand") ||
       driver.roleData?.vehicleBrand ||
@@ -277,124 +356,100 @@ const acceptRideOrder = async (req, res) => {
     const driverPhoto = driver.profilePhoto || "";
     const driverRating = typeof driver.driverRating === "number" && driver.driverRating > 0 ? driver.driverRating : 4.9;
 
-    // Atomic find and update to prevent race conditions
-    session = await mongoose.startSession();
-    let order;
-    let replay = false;
+    const driverSnapshot = {
+      name: driver.name,
+      phone: driverPhone,
+      photo: driverPhoto,
+      vehicleType: vehicleBrand,
+      vehiclePlate: plateNumber,
+      rating: driverRating,
+    };
 
-    await session.withTransaction(async () => {
-      order = await RideOrder.findOneAndUpdate(
-        {
-          _id: req.params.id,
-          status: "SEARCHING_DRIVER",
-          driverId: null,
-          declinedByDrivers: { $nin: [driverId] },
+    // Atomic conditional update
+    const order = await RideOrder.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        status: "SEARCHING_DRIVER",
+        driverId: null,
+        declinedByDrivers: { $nin: [driverId] },
+      },
+      {
+        $set: {
+          driverId,
+          driverName: driver.name,
+          driverPhone,
+          driverPhoto,
+          driverRating,
+          driverVehicle: vehicleBrand,
+          driverPlate: plateNumber,
+          driverSnapshot,
+          status: "DRIVER_ASSIGNED",
         },
-        {
-          $set: {
-            driverId,
-            driverName: driver.name,
-            driverPhone,
-            driverPhoto,
-            driverRating,
-            driverVehicle: vehicleBrand,
-            driverPlate: plateNumber,
+        $push: {
+          statusHistory: {
             status: "DRIVER_ASSIGNED",
+            actorId: driverId,
+            actorRole: "driver",
+            note: `Driver ${driver.name} menerima pesanan`,
+            createdAt: new Date(),
           },
         },
-        { new: true, runValidators: true, session }
-      );
-
-      if (!order) {
-        const existing = await RideOrder.findById(req.params.id).session(session);
-        if (!existing) {
-          const err = new Error("Pesanan tidak ditemukan.");
-          err.statusCode = 404;
-          throw err;
-        }
-        if (
-          String(existing.driverId) === driverId &&
-          ["DRIVER_ASSIGNED", "DRIVER_ON_THE_WAY", "DRIVER_ARRIVED", "TRIP_STARTED", "COMPLETED"].includes(existing.status)
-        ) {
-          order = existing;
-          replay = true;
-          return;
-        }
-        const err = new Error(existing.driverId ? "Pesanan sudah diambil oleh driver lain." : "Pesanan sudah tidak tersedia.");
-        err.statusCode = 409;
-        throw err;
-      }
-
-      // Notify customer
-      if (isValidUserId(order.customerId)) {
-        await Notification.create(
-          [
-            {
-              userId: order.customerId,
-              title: "Driver Ditemukan!",
-              message: `${driver.name} (${vehicleBrand} - ${plateNumber}) sedang bersiap menjemput Anda.`,
-              type: "order_status",
-              relatedId: order._id,
-            },
-          ],
-          { session, ordered: true }
-        );
-      }
-    });
-
-    await session.endSession();
-    session = null;
-
-    // Sync conversation for live in-app chat between customer and driver
-    void syncConversationForOrder(order, "ride").catch((err) =>
-      console.error("Sync conversation ride error:", err)
+      },
+      { new: true }
     );
 
-    // Update driver availability to BUSY
-    try {
-      await User.findByIdAndUpdate(driverId, { driverAvailability: "BUSY" });
-    } catch (err) {
-      console.warn("Could not update driver availability to BUSY:", err.message);
+    if (!order) {
+      const existing = await RideOrder.findById(req.params.id).lean();
+      if (!existing) {
+        return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
+      }
+      if (String(existing.driverId) === driverId) {
+        return res.json({ success: true, message: "Pesanan sudah ditugaskan kepada Anda.", data: existing });
+      }
+      return res.status(409).json({
+        success: false,
+        message: existing.driverId ? "Pesanan sudah diambil oleh driver lain." : "Pesanan sudah tidak tersedia.",
+      });
     }
 
-    // Broadcast realtime event
+    // Mark driver as BUSY
+    await User.findByIdAndUpdate(driverId, { driverAvailability: "BUSY" }).catch(() => {});
+
+    // Notify customer
+    if (isValidUserId(order.customerId)) {
+      await Notification.create({
+        userId: order.customerId,
+        title: "Driver Ditemukan!",
+        message: `${driver.name} (${vehicleBrand} - ${plateNumber}) sedang bersiap menjemput Anda.`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => {});
+    }
+
+    // Sync live in-app chat
+    void syncConversationForOrder(order, "ride").catch(() => {});
+
+    // Broadcast Realtime Events
     if (req.io) {
       req.io.emit("ride:status_changed", { orderId: order._id, status: order.status, driverId });
-      req.io.emit("order_status_updated", order);
-      emitToUser(req.io, order.customerId, "ride_driver_assigned", order);
+      emitToUser(req.io, order.customerId, "ride:driver_assigned", order);
       emitToUser(req.io, order.customerId, "ride_status_updated", order);
       emitToUser(req.io, order.customerId, "order_status_updated", order);
-    }
-    emitToUser(req.io, order.customerId, "notification:new", {
-      relatedId: String(order._id),
-      type: "order_status",
-    });
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[Driver Accepted Ride]", {
-        orderId: order.orderCode,
-        driverId,
-        driverName: driver.name,
-        status: order.status,
-      });
+      emitToRideRoom(req.io, order._id, "ride:status_changed", order);
     }
 
     return res.json({
       success: true,
-      message: replay ? "Pesanan sudah ditugaskan kepada Anda." : "Pesanan berhasil diterima!",
+      message: "Pesanan berhasil diterima!",
       data: order,
     });
   } catch (error) {
-    if (session) await session.endSession().catch(() => undefined);
     console.error("acceptRideOrder error:", error);
-    return res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.message || "Gagal menerima pesanan Kanyaah Ride",
-    });
+    return res.status(500).json({ success: false, message: error.message || "Gagal menerima pesanan" });
   }
 };
 
-// Decline a Ride Order (Driver declines)
+// 8. Driver declines an order
 const declineRideOrder = async (req, res) => {
   try {
     const driverId = String(req.authUser?._id || req.body.driverId || "");
@@ -406,14 +461,14 @@ const declineRideOrder = async (req, res) => {
     if (!order) {
       return res.status(409).json({ success: false, message: "Pesanan tidak lagi tersedia untuk ditolak." });
     }
-    return res.json({ success: true, message: "Pesanan dihapus dari daftar Anda.", data: order });
+    return res.json({ success: true, message: "Pesanan dilewati.", data: order });
   } catch (error) {
     console.error("declineRideOrder error:", error);
     return res.status(500).json({ success: false, message: "Gagal menolak pesanan" });
   }
 };
 
-// Update Ride Status (Driver transitions & Cancel)
+// 9. Update Ride Status (Operational Workflow)
 const updateRideStatus = async (req, res) => {
   try {
     const { status, cancelReason } = req.body;
@@ -425,45 +480,17 @@ const updateRideStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
     }
 
-    // Cancellation logic
+    // Cancellation delegate
     if (status === "CANCELLED") {
-      if (["COMPLETED", "CANCELLED"].includes(current.status)) {
-        return res.status(400).json({ success: false, message: "Perjalanan sudah selesai atau dibatalkan sebelumnya." });
-      }
-      const cancelledBy = authUser?.role === "driver" ? "driver" : "customer";
-      current.status = "CANCELLED";
-      current.paymentStatus = "Dibatalkan";
-      current.cancelledBy = cancelledBy;
-      current.cancelReason = cancelReason || "Dibatalkan oleh pengguna";
-      await current.save();
-
-      if (current.driverId && isValidUserId(current.driverId)) {
-        await User.findByIdAndUpdate(current.driverId, { driverAvailability: "AVAILABLE" }).catch(() => {});
-      }
-
-      // Notify other party
-      const notifyUserId = cancelledBy === "driver" ? current.customerId : current.driverId;
-      if (isValidUserId(notifyUserId)) {
-        await Notification.create({
-          userId: notifyUserId,
-          title: "Perjalanan Dibatalkan",
-          message: `Perjalanan ${current.orderCode} telah dibatalkan (${cancelledBy === "driver" ? "oleh driver" : "oleh customer"}).`,
-          type: "order_status",
-          relatedId: current._id,
-        });
-        emitToUser(req.io, notifyUserId, "ride_status_updated", current);
-        emitToUser(req.io, notifyUserId, "order_status_updated", current);
-      }
-
-      return res.json({ success: true, message: "Perjalanan berhasil dibatalkan", data: current });
+      return cancelRideOrder(req, res);
     }
 
-    // Driver workflow status transitions
+    // Valid state transitions machine
     const validTransitions = {
       DRIVER_ASSIGNED: ["DRIVER_ON_THE_WAY", "DRIVER_ARRIVED"],
       DRIVER_ON_THE_WAY: ["DRIVER_ARRIVED"],
       DRIVER_ARRIVED: ["TRIP_STARTED"],
-      TRIP_STARTED: ["COMPLETED"],
+      TRIP_STARTED: ["COMPLETED", "DISPUTED"],
     };
 
     const allowedNext = validTransitions[current.status] || [];
@@ -483,16 +510,21 @@ const updateRideStatus = async (req, res) => {
       notifMessage = `${current.driverName} sedang menuju ke lokasi penjemputan Anda.`;
     } else if (status === "DRIVER_ARRIVED") {
       notifTitle = "Driver Telah Sampai";
-      notifMessage = `Driver telah tiba di lokasi penjemputan. Silakan temui driver Anda.`;
+      notifMessage = `Driver telah tiba di titik penjemputan. Silakan temui driver Anda.`;
     } else if (status === "TRIP_STARTED") {
       notifTitle = "Perjalanan Dimulai";
-      notifMessage = `Perjalanan menuju ${current.destination.placeName || current.destination.address} sedang berlangsung. Selamat menikmati perjalanan!`;
+      notifMessage = `Perjalanan menuju ${current.destination.placeName || current.destination.address} sedang berlangsung. Hati-hati di jalan!`;
     } else if (status === "COMPLETED") {
       current.paymentStatus = "Lunas";
-      notifTitle = "Perjalanan Selesai";
-      notifMessage = `Terima kasih telah menggunakan Kanyaah Ride. Total pembayaran: Rp ${current.totalAmount.toLocaleString("id-ID")}.`;
+      current.completedAt = new Date();
+      current.finalFare = current.totalAmount;
+      current.actualDistanceKm = current.estimatedDistanceKm || current.estimatedDistance;
+      current.actualDurationMinutes = current.estimatedDurationMinutes || current.estimatedDuration;
 
-      // Record driver transaction
+      notifTitle = "Perjalanan Selesai";
+      notifMessage = `Terima kasih telah menggunakan Kanyaah Ride. Total tarif: Rp ${current.totalAmount.toLocaleString("id-ID")}.`;
+
+      // Record driver earnings
       try {
         if (isValidUserId(current.driverId)) {
           await Transaction.create({
@@ -507,13 +539,21 @@ const updateRideStatus = async (req, res) => {
           await User.findByIdAndUpdate(current.driverId, { driverAvailability: "AVAILABLE" });
         }
       } catch (txErr) {
-        console.warn("Failed to create transaction or reset driver availability for ride:", txErr);
+        console.warn("Driver transaction error:", txErr);
       }
     }
 
+    current.statusHistory.push({
+      status,
+      actorId: String(authUser?._id || current.driverId || ""),
+      actorRole: authUser?.role || "driver",
+      note: `Status diubah menjadi ${status}`,
+      createdAt: new Date(),
+    });
+
     await current.save();
 
-    // Create Notification for Customer
+    // Notify customer
     if (isValidUserId(current.customerId) && notifTitle) {
       await Notification.create({
         userId: current.customerId,
@@ -521,26 +561,11 @@ const updateRideStatus = async (req, res) => {
         message: notifMessage,
         type: "order_status",
         relatedId: current._id,
-      });
+      }).catch(() => {});
+
       emitToUser(req.io, current.customerId, "ride_status_updated", current);
       emitToUser(req.io, current.customerId, "order_status_updated", current);
-      emitToUser(req.io, current.customerId, "notification:new", {
-        relatedId: String(current._id),
-        type: "order_status",
-      });
-    }
-
-    if (req.io) {
-      req.io.emit("ride:status_changed", { orderId: current._id, status: current.status, driverId: current.driverId });
-      req.io.emit("order_status_updated", current);
-    }
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[Ride Status Updated]", {
-        orderId: current.orderCode,
-        status: current.status,
-        driverId: current.driverId,
-      });
+      emitToRideRoom(req.io, current._id, "ride:status_changed", current);
     }
 
     return res.json({ success: true, message: "Status perjalanan diperbarui", data: current });
@@ -550,14 +575,152 @@ const updateRideStatus = async (req, res) => {
   }
 };
 
-// Rate a completed Ride Order (Customer)
+// 10. Update Driver GPS Location during active ride
+const updateDriverLocation = async (req, res) => {
+  try {
+    const { latitude, longitude, heading, speed } = req.body;
+    const orderId = req.params.id;
+
+    if (latitude == null || longitude == null) {
+      return res.status(400).json({ success: false, message: "Koordinat latitude dan longitude wajib dikirim." });
+    }
+
+    const order = await RideOrder.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    }
+
+    order.driverLocation = {
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      heading: heading != null ? Number(heading) : null,
+      speed: speed != null ? Number(speed) : null,
+      updatedAt: new Date(),
+    };
+
+    await order.save();
+
+    const locPayload = {
+      orderId: order._id,
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      heading,
+      speed,
+      updatedAt: new Date(),
+    };
+
+    emitToUser(req.io, order.customerId, "ride:driver_location_updated", locPayload);
+    emitToRideRoom(req.io, order._id, "ride:driver_location_updated", locPayload);
+
+    return res.json({ success: true, data: locPayload });
+  } catch (error) {
+    console.error("updateDriverLocation error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memperbarui lokasi driver" });
+  }
+};
+
+// 11. Structured Cancellation
+const cancelRideOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const { reason, reasonDetail } = req.body;
+    const authUser = req.authUser;
+
+    const order = await RideOrder.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    }
+
+    if (["COMPLETED", "CANCELLED"].includes(order.status)) {
+      return res.status(400).json({ success: false, message: "Perjalanan sudah selesai atau dibatalkan sebelumnya." });
+    }
+
+    const cancelledBy = authUser?.role === "driver" ? "driver" : "customer";
+
+    // Strict Rule: Customer cannot cancel after trip has started
+    if (cancelledBy === "customer" && order.status === "TRIP_STARTED") {
+      return res.status(400).json({
+        success: false,
+        message: "Perjalanan yang sudah dimulai tidak dapat dibatalkan secara sepihak. Hubungi bantuan darurat jika ada kendala.",
+      });
+    }
+
+    // Cancellation fee rule
+    let fee = 0;
+    if (cancelledBy === "customer") {
+      if (order.status === "SEARCHING_DRIVER") {
+        fee = 0; // Free cancellation while searching
+      } else if (order.status === "DRIVER_ASSIGNED" || order.status === "DRIVER_ON_THE_WAY") {
+        fee = 3000; // Small cancellation fee for driver dispatch
+      } else if (order.status === "DRIVER_ARRIVED") {
+        fee = 5000; // Driver already arrived
+      }
+    }
+
+    const finalReason = reasonDetail ? `${reason} - ${reasonDetail}` : (reason || "Dibatalkan oleh pengguna");
+
+    order.status = "CANCELLED";
+    order.paymentStatus = "Dibatalkan";
+    order.cancellation = {
+      cancelledBy,
+      reason: finalReason,
+      fee,
+      refundAmount: order.paymentStatus === "Lunas" ? Math.max(0, order.totalAmount - fee) : 0,
+      cancelledAt: new Date(),
+    };
+    order.cancelledBy = cancelledBy;
+    order.cancelReason = finalReason;
+
+    order.statusHistory.push({
+      status: "CANCELLED",
+      actorId: String(authUser?._id || ""),
+      actorRole: cancelledBy,
+      note: `Perjalanan dibatalkan (${cancelledBy}). Alasan: ${finalReason}. Denda: Rp ${fee}`,
+      createdAt: new Date(),
+    });
+
+    await order.save();
+
+    // Release driver if assigned
+    if (order.driverId && isValidUserId(order.driverId)) {
+      await User.findByIdAndUpdate(order.driverId, { driverAvailability: "AVAILABLE" }).catch(() => {});
+    }
+
+    // Notify parties
+    const notifyUserId = cancelledBy === "driver" ? order.customerId : order.driverId;
+    if (isValidUserId(notifyUserId)) {
+      await Notification.create({
+        userId: notifyUserId,
+        title: "Perjalanan Dibatalkan",
+        message: `Perjalanan ${order.orderCode} telah dibatalkan (${cancelledBy === "driver" ? "oleh driver" : "oleh customer"}).`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => {});
+
+      emitToUser(req.io, notifyUserId, "ride_status_updated", order);
+      emitToUser(req.io, notifyUserId, "order_status_updated", order);
+    }
+    emitToRideRoom(req.io, order._id, "ride:status_changed", order);
+
+    return res.json({
+      success: true,
+      message: "Perjalanan berhasil dibatalkan.",
+      data: order,
+    });
+  } catch (error) {
+    console.error("cancelRideOrder error:", error);
+    return res.status(500).json({ success: false, message: "Gagal membatalkan perjalanan" });
+  }
+};
+
+// 12. Rate Ride Order
 const rateRideOrder = async (req, res) => {
   try {
     const { rating, review } = req.body;
     const numericRating = Number(rating);
 
     if (!numericRating || numericRating < 1 || numericRating > 5) {
-      return res.status(400).json({ success: false, message: "Rating harus berupa angka antara 1 sampai 5." });
+      return res.status(400).json({ success: false, message: "Rating harus bernilai 1 sampai 5." });
     }
 
     const order = await RideOrder.findById(req.params.id);
@@ -565,47 +728,94 @@ const rateRideOrder = async (req, res) => {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
     }
 
-    order.rating = numericRating;
-    order.review = String(review || "").trim();
+    order.rating = {
+      score: numericRating,
+      review: String(review || "").trim(),
+      createdAt: new Date(),
+    };
     await order.save();
 
-    return res.json({ success: true, message: "Terima kasih atas penilaian Anda!", data: order });
+    // Update driver cumulative rating
+    if (order.driverId && isValidUserId(order.driverId)) {
+      try {
+        const ratedOrders = await RideOrder.find({
+          driverId: order.driverId,
+          "rating.score": { $ne: null },
+        }).lean();
+        if (ratedOrders.length > 0) {
+          const avg = ratedOrders.reduce((sum, o) => sum + (o.rating?.score || 5), 0) / ratedOrders.length;
+          await User.findByIdAndUpdate(order.driverId, { driverRating: Math.round(avg * 10) / 10 });
+        }
+      } catch (rateErr) {
+        console.warn("Update driver rating error:", rateErr);
+      }
+    }
+
+    return res.json({ success: true, message: "Terima kasih atas ulasan perjalanan Anda!", data: order });
   } catch (error) {
     console.error("rateRideOrder error:", error);
-    return res.status(500).json({ success: false, message: "Gagal menyimpan penilaian." });
+    return res.status(500).json({ success: false, message: "Gagal menyimpan ulasan" });
   }
 };
 
-// Estimate Fare & Distance
-const estimateRideFare = async (req, res) => {
+// 13. Submit Ride Complaint
+const submitRideComplaint = async (req, res) => {
   try {
-    const { pickup, destination } = req.body;
-    let distanceKm = 0;
-    if (pickup?.latitude && pickup?.longitude && destination?.latitude && destination?.longitude) {
-      distanceKm = calculateDistanceKm(pickup.latitude, pickup.longitude, destination.latitude, destination.longitude);
-    }
-    if (!distanceKm || distanceKm <= 0) {
-      distanceKm = 2.5;
-    }
-    const estimatedDuration = Math.round(distanceKm * 3.5) + 5;
-    const fare = calculateRideFare(distanceKm);
+    const orderId = req.params.id;
+    const { category, description, attachments = [] } = req.body;
+    const authUser = req.authUser;
 
-    return res.json({
+    if (!category || !description?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Kategori dan deskripsi pengaduan wajib diisi.",
+      });
+    }
+
+    const order = await RideOrder.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
+    }
+
+    const ticketId = `CMP-RIDE-${Date.now().toString().slice(-6)}`;
+
+    const complaint = await RideComplaint.create({
+      ticketId,
+      orderId: order._id,
+      customerId: order.customerId,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      driverId: order.driverId,
+      driverName: order.driverName,
+      category,
+      description: description.trim(),
+      attachments,
+      status: "OPEN",
+    });
+
+    order.status = "DISPUTED";
+    order.statusHistory.push({
+      status: "DISPUTED",
+      actorId: String(authUser?._id || order.customerId),
+      actorRole: "customer",
+      note: `Komplain diajukan (#${ticketId}): ${category}`,
+      createdAt: new Date(),
+    });
+    await order.save();
+
+    return res.status(201).json({
       success: true,
-      data: {
-        distanceKm,
-        estimatedDuration,
-        estimatedFare: fare,
-        formattedFare: `Rp ${fare.toLocaleString("id-ID")}`,
-      },
+      message: `Komplain berhasil didaftarkan (#${ticketId}). Tim dukungan kami akan menindaklanjuti.`,
+      data: complaint,
     });
   } catch (error) {
-    console.error("estimateRideFare error:", error);
-    return res.status(500).json({ success: false, message: "Gagal menghitung estimasi tarif." });
+    console.error("submitRideComplaint error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mendaftarkan komplain." });
   }
 };
 
 module.exports = {
+  estimateRideFare,
   createRideOrder,
   getCustomerRideOrders,
   getActiveCustomerRide,
@@ -614,6 +824,8 @@ module.exports = {
   acceptRideOrder,
   declineRideOrder,
   updateRideStatus,
+  updateDriverLocation,
+  cancelRideOrder,
   rateRideOrder,
-  estimateRideFare,
+  submitRideComplaint,
 };

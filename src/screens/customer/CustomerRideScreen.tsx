@@ -37,6 +37,8 @@ import {
   createRideBooking,
   calculateDistance,
   calculateRideFare,
+  estimateRideFareBreakdown,
+  FareEstimateResult,
   RideLocation,
   fetchActiveCustomerRide,
 } from "../../services/rideService";
@@ -88,6 +90,60 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   // Loading states
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Backend Fare Breakdown State
+  const [fareBreakdown, setFareBreakdown] = useState<FareEstimateResult | null>(null);
+  const [isCalculatingFare, setIsCalculatingFare] = useState(false);
+
+  // Request backend fare estimate whenever points change
+  useEffect(() => {
+    if (!pickup.address.trim() || !destination.address.trim()) {
+      setFareBreakdown(null);
+      return;
+    }
+
+    let active = true;
+    setIsCalculatingFare(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await estimateRideFareBreakdown({
+          pickup: {
+            latitude: pickup.latitude,
+            longitude: pickup.longitude,
+            address: pickup.address,
+          },
+          destination: {
+            latitude: destination.latitude,
+            longitude: destination.longitude,
+            address: destination.address,
+          },
+          vehicleType: selectedVehicle === "CAR" ? "MOBIL" : "MOTOR",
+        });
+
+        if (active && res.success && res.data) {
+          setFareBreakdown(res.data);
+        }
+      } catch (err) {
+        console.warn("Backend fare estimate error:", err);
+      } finally {
+        if (active) setIsCalculatingFare(false);
+      }
+    }, 400);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [
+    pickup.address,
+    pickup.latitude,
+    pickup.longitude,
+    destination.address,
+    destination.latitude,
+    destination.longitude,
+    selectedVehicle,
+  ]);
 
   // Check if there is already an active ride order; if yes, offer to resume
   useEffect(() => {
@@ -211,8 +267,9 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     });
   };
 
-  // Calculate Distance and Fare dynamically
+  // Calculate Distance and Fare dynamically (Backend prioritized)
   const calculatedDistance = useMemo(() => {
+    if (fareBreakdown?.distanceKm) return fareBreakdown.distanceKm;
     if (pickup.latitude && pickup.longitude && destination.latitude && destination.longitude) {
       const d = calculateDistance(
         pickup.latitude,
@@ -223,17 +280,19 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       return Math.max(0.8, d);
     }
     return destination.address.trim().length > 0 ? 3.2 : 0;
-  }, [pickup.latitude, pickup.longitude, destination.latitude, destination.longitude, destination.address]);
+  }, [fareBreakdown?.distanceKm, pickup.latitude, pickup.longitude, destination.latitude, destination.longitude, destination.address]);
 
   const estimatedDuration = useMemo(() => {
+    if (fareBreakdown?.estimatedDurationMinutes) return fareBreakdown.estimatedDurationMinutes;
     if (calculatedDistance <= 0) return 0;
     return Math.round(calculatedDistance * 3.5) + 4;
-  }, [calculatedDistance]);
+  }, [fareBreakdown?.estimatedDurationMinutes, calculatedDistance]);
 
   const estimatedFare = useMemo(() => {
+    if (fareBreakdown?.estimatedFare) return fareBreakdown.estimatedFare;
     if (calculatedDistance <= 0) return 0;
     return calculateRideFare(calculatedDistance);
-  }, [calculatedDistance]);
+  }, [fareBreakdown?.estimatedFare, calculatedDistance]);
 
   // Validation
   const canOrder = Boolean(
@@ -637,9 +696,45 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                     : `E-Wallet ${selectedPaymentMethod}`}
                 </Text>
               </View>
+              {/* Transparent backend fare breakdown */}
+              {fareBreakdown && (
+                <View style={styles.fareBreakdownBox}>
+                  <Text style={styles.fareBreakdownHeader}>RINCIAN TARIF TRANSPARAN</Text>
+                  <View style={styles.fareBreakdownRow}>
+                    <Text style={styles.fareBreakdownLabel}>Tarif Dasar (2 km awal)</Text>
+                    <Text style={styles.fareBreakdownVal}>{rp(fareBreakdown.baseFare)}</Text>
+                  </View>
+                  {fareBreakdown.distanceFare > 0 && (
+                    <View style={styles.fareBreakdownRow}>
+                      <Text style={styles.fareBreakdownLabel}>Biaya Jarak ({calculatedDistance} km)</Text>
+                      <Text style={styles.fareBreakdownVal}>{rp(fareBreakdown.distanceFare)}</Text>
+                    </View>
+                  )}
+                  {fareBreakdown.timeFare > 0 && (
+                    <View style={styles.fareBreakdownRow}>
+                      <Text style={styles.fareBreakdownLabel}>Estimasi Waktu ({estimatedDuration} mnt)</Text>
+                      <Text style={styles.fareBreakdownVal}>{rp(fareBreakdown.timeFare)}</Text>
+                    </View>
+                  )}
+                  <View style={styles.fareBreakdownRow}>
+                    <Text style={styles.fareBreakdownLabel}>Biaya Layanan Platform</Text>
+                    <Text style={styles.fareBreakdownVal}>{rp(fareBreakdown.serviceFee)}</Text>
+                  </View>
+                  {fareBreakdown.discount > 0 && (
+                    <View style={styles.fareBreakdownRow}>
+                      <Text style={[styles.fareBreakdownLabel, { color: "#15803D" }]}>Diskon Promo</Text>
+                      <Text style={[styles.fareBreakdownVal, { color: "#15803D", fontWeight: "700" }]}>-{rp(fareBreakdown.discount)}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
               <View style={[styles.summaryRow, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "#F1F5F9" }]}>
-                <Text style={[styles.summaryLabel, { fontWeight: "800", color: "#0F172A", fontSize: 13 }]}>Total Tarif</Text>
-                <Text style={[styles.summaryVal, { fontWeight: "900", color: "#1B7A4E", fontSize: 16 }]}>
+                <View>
+                  <Text style={[styles.summaryLabel, { fontWeight: "800", color: "#0F172A", fontSize: 13 }]}>Total Tarif</Text>
+                  {isCalculatingFare && <Text style={{ fontSize: 10, color: "#94A3B8" }}>Menghitung tarif resmi...</Text>}
+                </View>
+                <Text style={[styles.summaryVal, { fontWeight: "900", color: "#1B7A4E", fontSize: 17 }]}>
                   {rp(estimatedFare)}
                 </Text>
               </View>
@@ -1206,5 +1301,36 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13.5,
     fontWeight: "800",
+  },
+
+  fareBreakdownBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 6,
+  },
+  fareBreakdownHeader: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#64748B",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  fareBreakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  fareBreakdownLabel: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  fareBreakdownVal: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1E293B",
   },
 });

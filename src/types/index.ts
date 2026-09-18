@@ -8,6 +8,12 @@ export type Screen =
   | "c_catering_tracking"
   | "c_kos_detail" | "c_laundry_tracking"
   | "c_ride" | "c_ride_tracking"
+  | "c_send" | "c_send_location" | "c_send_recipient" | "c_send_package" | "c_send_fare"
+  | "c_send_payment" | "c_send_confirm" | "c_send_searching" | "c_send_tracking" | "c_send_delivery_detail"
+  | "c_recycle_home" | "c_recycle_banks" | "c_recycle_bank_detail" | "c_recycle_deposit_form"
+  | "c_recycle_pickup_schedule" | "c_recycle_tracking" | "c_recycle_weighing_result"
+  | "c_recycle_wallet" | "c_recycle_ledger" | "c_recycle_redemption"
+  | "bank_sampah_dashboard" | "bank_sampah_weighing"
   | "d_home"
   | "pemilik_catering_home"
   | "pemilik_marketplace_home"
@@ -34,6 +40,8 @@ export type Role =
   | "pemilik_marketplace"
   | "pemilik_laundry"
   | "pemilik_kos"
+  | "bank_sampah"
+  | "admin_sampah"
   | "admin";
 
 export type Nav = {
@@ -205,3 +213,121 @@ export interface DriverOrder {
   pay: number;
   time: string;
 }
+
+export type SendPackageCategory =
+  | "Dokumen"
+  | "Makanan"
+  | "Pakaian"
+  | "Elektronik"
+  | "Barang rumah tangga"
+  | "Paket kecil"
+  | "Paket besar"
+  | "Barang mudah pecah"
+  | "Lainnya";
+
+export interface SendPartyData {
+  name: string;
+  phone: string;
+  address: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  notes?: string;
+  locationInstruction?: string;
+  preferredDeliveryTime?: string;
+}
+
+export interface SendPackageData {
+  name: string;
+  category: SendPackageCategory;
+  quantity: number;
+  weightKg: number;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
+  fragile: boolean;
+  specialHandling?: boolean;
+  declaredValue: number;
+  photoUrls: string[];
+  notes?: string;
+}
+
+export interface SendFareBreakdown {
+  distanceKm: number;
+  estimatedDurationMinutes: number;
+  baseFare: number;
+  distanceFare: number;
+  weightFare: number;
+  sizeFare: number;
+  fragileFee: number;
+  insuranceFee: number;
+  serviceFee: number;
+  discount: number;
+  minimumFare: number;
+  estimatedFare: number;
+  finalFare?: number;
+  driverEarnings?: number;
+  currency?: string;
+  breakdownNote?: string;
+}
+
+export interface SendOrderUI {
+  _id: string;
+  orderCode: string;
+  serviceType: string;
+  customerId: string | any;
+  driverId?: string | any;
+  sender: SendPartyData;
+  recipient: SendPartyData;
+  package: SendPackageData;
+  pricing: SendFareBreakdown;
+  distanceKm: number;
+  estimatedDurationMinutes: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  pickupCodeRaw?: string;
+  deliveryOtpRaw?: string;
+  pickupProofUrls?: string[];
+  deliveryProofUrls?: string[];
+  driverLocation?: {
+    latitude: number;
+    longitude: number;
+    heading?: number;
+    speed?: number;
+  };
+  status:
+    | "CREATED"
+    | "PAYMENT_PENDING"
+    | "SEARCHING_DRIVER"
+    | "DRIVER_ASSIGNED"
+    | "DRIVER_ON_THE_WAY_TO_PICKUP"
+    | "DRIVER_ARRIVED_AT_PICKUP"
+    | "PICKUP_VERIFICATION"
+    | "PICKED_UP"
+    | "IN_TRANSIT"
+    | "ARRIVED_AT_DESTINATION"
+    | "DELIVERY_VERIFICATION"
+    | "DELIVERED"
+    | "COMPLETED"
+    | "CANCELLED"
+    | "RETURN_REQUESTED"
+    | "DISPUTED";
+  statusHistory?: {
+    status: string;
+    note?: string;
+    createdAt?: string;
+  }[];
+  rating?: {
+    score: number;
+    review: string;
+  };
+  cancellation?: {
+    fee: number;
+    reason: string;
+    refundAmount: number;
+  };
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+

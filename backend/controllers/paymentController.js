@@ -1,8 +1,11 @@
+const mongoose = require("mongoose");
 const Payment = require("../models/Payment");
 const RideOrder = require("../models/RideOrder");
 const MarketplaceOrder = require("../models/MarketplaceOrder");
 const CateringOrder = require("../models/CateringOrder");
 const LaundryOrder = require("../models/LaundryOrder");
+const SendOrder = require("../models/SendOrder");
+const Notification = require("../models/Notification");
 const paymentGateway = require("../services/paymentGateway");
 
 const getOrderPayments = async (req, res) => {
@@ -18,17 +21,85 @@ const getOrderPayments = async (req, res) => {
 /**
  * Sync status to underlying order
  */
-const syncOrderPaymentStatus = async (orderId, orderType, paymentStatus, paymentMethod) => {
+const syncOrderPaymentStatus = async (orderId, orderType, paymentStatus, paymentMethod, io) => {
   try {
-    const update = { paymentStatus, paymentMethod };
+    const isPaid = paymentStatus === "PAID";
+    const mappedStatus = isPaid ? "Lunas" : paymentStatus;
+    const query = {
+      $or: [
+        ...(mongoose.Types.ObjectId.isValid(orderId) ? [{ _id: orderId }] : []),
+        { orderCode: orderId },
+        { paymentId: orderId },
+      ],
+    };
+
     if (orderType === "RIDE") {
-      await RideOrder.findByIdAndUpdate(orderId, update);
+      await RideOrder.findOneAndUpdate(query, { paymentStatus: mappedStatus, paymentMethod });
     } else if (orderType === "MARKETPLACE") {
-      await MarketplaceOrder.findByIdAndUpdate(orderId, update);
+      const order = await MarketplaceOrder.findOneAndUpdate(
+        query,
+        {
+          paymentStatus: mappedStatus,
+          paymentMethod: String(paymentMethod).toLowerCase(),
+          ...(isPaid ? { "paymentDetails.paidAt": new Date() } : {}),
+        },
+        { new: true }
+      );
+      if (order && isPaid) {
+        await Notification.create([
+          {
+            userId: order.ownerId,
+            title: "Pembayaran Diterima!",
+            message: `Pembayaran pesanan ${order.orderCode} sebesar Rp ${order.totalAmount.toLocaleString("id-ID")} telah lunas. Pesanan siap diproses.`,
+            type: "order_status",
+            relatedId: order._id,
+          },
+          {
+            userId: order.customerId,
+            title: "Pembayaran Berhasil",
+            message: `Pembayaran pesanan ${order.orderCode} sebesar Rp ${order.totalAmount.toLocaleString("id-ID")} berhasil diverifikasi.`,
+            type: "order_status",
+            relatedId: order._id,
+          },
+        ]).catch(() => undefined);
+
+        if (io) {
+          io.to(`user:${String(order.ownerId)}`).emit("order_status_updated", order);
+          io.to(`user:${String(order.customerId)}`).emit("order_status_updated", order);
+          [order.ownerId, order.customerId].forEach((userId) =>
+            io.to(`user:${String(userId)}`).emit("notification:new", { relatedId: String(order._id), type: "order_status" })
+          );
+        }
+      }
     } else if (orderType === "CATERING") {
-      await CateringOrder.findByIdAndUpdate(orderId, update);
+      await CateringOrder.findOneAndUpdate(query, { paymentStatus: mappedStatus, paymentMethod });
     } else if (orderType === "LAUNDRY") {
-      await LaundryOrder.findByIdAndUpdate(orderId, update);
+      await LaundryOrder.findOneAndUpdate(query, { paymentStatus: mappedStatus, paymentMethod });
+    } else if (orderType === "SEND" || orderType === "KANYAAH_SEND") {
+      const existingOrder = await SendOrder.findOne(query);
+      if (existingOrder) {
+        existingOrder.paymentStatus = isPaid ? "PAID" : paymentStatus;
+        if (paymentMethod) existingOrder.paymentMethod = paymentMethod;
+
+        if (isPaid && existingOrder.status === "PAYMENT_PENDING") {
+          existingOrder.status = "SEARCHING_DRIVER";
+          existingOrder.statusHistory.push({
+            status: "SEARCHING_DRIVER",
+            actorRole: "system",
+            note: "Pembayaran digital berhasil diverifikasi. Sistem mulai mencari driver terdekat.",
+            createdAt: new Date(),
+          });
+        }
+        await existingOrder.save();
+
+        if (io) {
+          io.to(`send:${String(existingOrder._id)}`).emit("send:payment_updated", existingOrder);
+          io.to(`user:${String(existingOrder.customerId)}`).emit("send:payment_updated", existingOrder);
+          if (isPaid) {
+            io.emit("send:order_available", existingOrder);
+          }
+        }
+      }
     }
   } catch (error) {
     console.error(`⚠️ Failed to sync order payment status for ${orderId}:`, error);
@@ -132,7 +203,7 @@ const getPaymentStatus = async (req, res) => {
         payment.paidAt = new Date();
       }
       await payment.save();
-      await syncOrderPaymentStatus(payment.orderId, payment.orderType, payment.status, payment.paymentMethod);
+      await syncOrderPaymentStatus(payment.orderId, payment.orderType, payment.status, payment.paymentMethod, req.io);
       if (req.io) {
         req.io.emit("payment:update", {
           paymentId: payment.paymentId,
@@ -177,7 +248,7 @@ const handlePaymentWebhook = async (req, res) => {
     }
     await payment.save();
 
-    await syncOrderPaymentStatus(payment.orderId, payment.orderType, payment.status, payment.paymentMethod);
+    await syncOrderPaymentStatus(payment.orderId, payment.orderType, payment.status, payment.paymentMethod, req.io);
 
     if (req.io) {
       req.io.emit("payment:update", {
@@ -228,7 +299,7 @@ const simulatePaymentWebhook = async (req, res) => {
     }
     await payment.save();
 
-    await syncOrderPaymentStatus(payment.orderId, payment.orderType, payment.status, payment.paymentMethod);
+    await syncOrderPaymentStatus(payment.orderId, payment.orderType, payment.status, payment.paymentMethod, req.io);
 
     if (req.io) {
       req.io.emit("payment:update", {

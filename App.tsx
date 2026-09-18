@@ -33,6 +33,30 @@ import { CustomerKosDetailScreen } from "./src/screens/customer/CustomerKosDetai
 import { CustomerAddressScreen } from "./src/screens/customer/CustomerAddressScreen";
 import { CustomerRideScreen } from "./src/screens/customer/CustomerRideScreen";
 import { CustomerRideTrackingScreen } from "./src/screens/customer/CustomerRideTrackingScreen";
+import { SendProvider } from "./src/context/SendContext";
+import { KanyahSendHomeScreen } from "./src/screens/customer/send/KanyahSendHomeScreen";
+import { SendLocationPickerScreen } from "./src/screens/customer/send/SendLocationPickerScreen";
+import { SendRecipientFormScreen } from "./src/screens/customer/send/SendRecipientFormScreen";
+import { SendPackageDetailScreen } from "./src/screens/customer/send/SendPackageDetailScreen";
+import { SendFareEstimateScreen } from "./src/screens/customer/send/SendFareEstimateScreen";
+import { SendPaymentScreen } from "./src/screens/customer/send/SendPaymentScreen";
+import { SendOrderConfirmationScreen } from "./src/screens/customer/send/SendOrderConfirmationScreen";
+import { SendSearchingDriverScreen } from "./src/screens/customer/send/SendSearchingDriverScreen";
+import { SendTrackingScreen } from "./src/screens/customer/send/SendTrackingScreen";
+import { SendDeliveryDetailScreen } from "./src/screens/customer/send/SendDeliveryDetailScreen";
+import { RecycleProvider } from "./src/context/RecycleContext";
+import { KanyahRecycleHomeScreen } from "./src/screens/customer/recycle/KanyahRecycleHomeScreen";
+import { BankSampahListScreen } from "./src/screens/customer/recycle/BankSampahListScreen";
+import { BankSampahDetailScreen } from "./src/screens/customer/recycle/BankSampahDetailScreen";
+import { WasteDepositFormScreen } from "./src/screens/customer/recycle/WasteDepositFormScreen";
+import { WastePickupScheduleScreen } from "./src/screens/customer/recycle/WastePickupScheduleScreen";
+import { WasteDepositTrackingScreen } from "./src/screens/customer/recycle/WasteDepositTrackingScreen";
+import { WeighingResultScreen } from "./src/screens/customer/recycle/WeighingResultScreen";
+import { PointWalletScreen } from "./src/screens/customer/recycle/PointWalletScreen";
+import { PointLedgerScreen } from "./src/screens/customer/recycle/PointLedgerScreen";
+import { PointRedemptionScreen } from "./src/screens/customer/recycle/PointRedemptionScreen";
+import { WasteBankDashboardScreen } from "./src/screens/bank_sampah/WasteBankDashboardScreen";
+import { WasteWeighingScreen } from "./src/screens/bank_sampah/WasteWeighingScreen";
 import { Beranda as DriverHomeScreen } from "./src/screens/driver/Beranda";
 import { Beranda as PemilikCateringHomeScreen } from "./src/screens/pemilik_catering/Beranda";
 import { Beranda as PemilikMarketplaceHomeScreen } from "./src/screens/pemilik_marketplace/Beranda";
@@ -242,6 +266,52 @@ export default function App() {
         return <CustomerRideScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_ride_tracking":
         return <CustomerRideTrackingScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_send":
+        return <KanyahSendHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_send_location":
+        return <SendLocationPickerScreen navigate={navigate} />;
+      case "c_send_recipient":
+        return <SendRecipientFormScreen navigate={navigate} />;
+      case "c_send_package":
+        return <SendPackageDetailScreen navigate={navigate} />;
+      case "c_send_fare":
+        return <SendFareEstimateScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_send_payment":
+        return <SendPaymentScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_send_confirm":
+        return <SendOrderConfirmationScreen navigate={navigate} />;
+      case "c_send_searching":
+        return <SendSearchingDriverScreen navigate={navigate} />;
+      case "c_send_tracking":
+        return <SendTrackingScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_send_delivery_detail":
+        return <SendDeliveryDetailScreen navigate={navigate} />;
+
+      // Kanyaah Recycle Screens
+      case "c_recycle_home":
+        return <KanyahRecycleHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_recycle_banks":
+        return <BankSampahListScreen navigate={navigate} />;
+      case "c_recycle_bank_detail":
+        return <BankSampahDetailScreen navigate={navigate} />;
+      case "c_recycle_deposit_form":
+        return <WasteDepositFormScreen navigate={navigate} />;
+      case "c_recycle_pickup_schedule":
+        return <WastePickupScheduleScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_recycle_tracking":
+        return <WasteDepositTrackingScreen navigate={navigate} />;
+      case "c_recycle_weighing_result":
+        return <WeighingResultScreen navigate={navigate} />;
+      case "c_recycle_wallet":
+        return <PointWalletScreen navigate={navigate} />;
+      case "c_recycle_ledger":
+        return <PointLedgerScreen navigate={navigate} />;
+      case "c_recycle_redemption":
+        return <PointRedemptionScreen navigate={navigate} />;
+      case "bank_sampah_dashboard":
+        return <WasteBankDashboardScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "bank_sampah_weighing":
+        return <WasteWeighingScreen navigate={navigate} />;
 
       // 2. Driver
       case "d_home":
@@ -296,16 +366,20 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? (currentScreen === "login" || currentScreen === "auth_register" ? undefined : "padding") : "height"}
-        keyboardVerticalOffset={0}
-      >
-        <View style={styles.container}>
-          <StatusBar style="auto" />
-          {renderScreen()}
-        </View>
-      </KeyboardAvoidingView>
+      <RecycleProvider>
+        <SendProvider>
+          <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === "ios" ? (currentScreen === "login" || currentScreen === "auth_register" ? undefined : "padding") : "height"}
+            keyboardVerticalOffset={0}
+          >
+            <View style={styles.container}>
+              <StatusBar style="auto" />
+              {renderScreen()}
+            </View>
+          </KeyboardAvoidingView>
+        </SendProvider>
+      </RecycleProvider>
     </SafeAreaProvider>
   );
 }

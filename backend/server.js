@@ -50,6 +50,10 @@ const transactionRoutes = require("./routes/transactionRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
 const rideRoutes = require("./routes/rideRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const sendRoutes = require("./routes/sendRoutes");
+const wasteRoutes = require("./routes/wasteRoutes");
+const pointRoutes = require("./routes/pointRoutes");
+const voucherRoutes = require("./routes/voucherRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -64,7 +68,13 @@ app.use("/api/marketplace/orders", marketplaceOrderRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/rides", rideRoutes);
+app.use("/api/ride", rideRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/send", sendRoutes);
+app.use("/api/waste-banks", wasteRoutes);
+app.use("/api/waste", wasteRoutes);
+app.use("/api/points", pointRoutes);
+app.use("/api/vouchers", voucherRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {
@@ -106,6 +116,51 @@ io.on("connection", (socket) => {
     const roomName = `user:${String(user._id)}`;
     socket.join(roomName);
     socket.emit("user:joined", { userId: String(user._id) });
+  });
+
+  socket.on("join_send_room", async ({ orderId, token } = {}) => {
+    if (!orderId) return;
+    const roomName = `send:${String(orderId)}`;
+
+    if (token) {
+      const user = await verifyAccessToken(token);
+      if (!user?._id) {
+        socket.emit("send:join_denied", { message: "Sesi autentikasi tidak valid." });
+        return;
+      }
+      try {
+        const SendOrder = require("./models/SendOrder");
+        const order = await SendOrder.findById(orderId).select("customerId driverId").lean();
+        if (order) {
+          const userId = String(user._id);
+          const isParticipant =
+            (order.customerId && String(order.customerId) === userId) ||
+            (order.driverId && String(order.driverId) === userId) ||
+            user.role === "admin";
+
+          if (!isParticipant) {
+            socket.emit("send:join_denied", { message: "Anda tidak berwenang mengakses pelacakan pesanan ini." });
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Socket send room check error:", err.message);
+      }
+    }
+
+    socket.join(roomName);
+    socket.emit("send:room_joined", { orderId, roomName });
+    console.log(`📡 Socket ${socket.id} joined authorized send room: ${roomName}`);
+  });
+
+  socket.on("join_driver_room", async ({ token } = {}) => {
+    const user = await verifyAccessToken(token);
+    if (user?._id) {
+      const roomName = `driver:${String(user._id)}`;
+      socket.join(roomName);
+      socket.emit("driver:joined", { driverId: String(user._id) });
+      console.log(`🚗 Driver ${user._id} joined driver room: ${roomName}`);
+    }
   });
 
   socket.on("join_room_legacy_disabled", (roomName) => {

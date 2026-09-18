@@ -39,10 +39,11 @@ import { getPrimaryCustomerAddress } from "../../services/customerAddressService
 import { CustomerAddressSelector } from "../../components/CustomerAddressSelector";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import { consumePendingMarketplaceCart, setPendingMarketplaceCart } from "./marketplaceCartStore";
+import { MarketplaceDigitalPaymentModal } from "../../components/MarketplaceDigitalPaymentModal";
 
 type MarketplaceView = "catalog" | "cart" | "checkout" | "success";
 type MarketplaceTab = "menu" | "profile" | "reviews";
-type PaymentMethod = "qris" | "gopay" | "bca_va" | "cod";
+type PaymentMethod = "cod" | "qris" | "gopay" | "bca_va" | "mandiri_va";
 
 interface CartLine {
   product: Product;
@@ -65,10 +66,11 @@ const paymentMethods: Array<{
   color: string;
   available: boolean;
 }> = [
-  { id: "qris", name: "QRIS", subtitle: "Belum tersedia", color: "#0D7A53", available: false },
-  { id: "gopay", name: "GoPay", subtitle: "Belum tersedia", color: "#00AED6", available: false },
-  { id: "bca_va", name: "BCA Virtual Account", subtitle: "Belum tersedia", color: "#003C93", available: false },
-  { id: "cod", name: "Bayar di Tempat", subtitle: "Bayar saat pesanan diterima", color: "#D97706", available: true },
+  { id: "cod", name: "Bayar di Tempat (COD)", subtitle: "Bayar tunai ke kurir saat pesanan sampai", color: "#D97706", available: true },
+  { id: "qris", name: "QRIS Instan", subtitle: "Scan QR lewat BCA, Mandiri, GoPay, OVO, DANA, dll.", color: "#0D7A53", available: true },
+  { id: "gopay", name: "GoPay / E-Wallet", subtitle: "Pembayaran instan langsung via GoPay", color: "#00AED6", available: true },
+  { id: "bca_va", name: "BCA Virtual Account", subtitle: "Transfer via BCA Mobile, myBCA, atau ATM BCA", color: "#003C93", available: true },
+  { id: "mandiri_va", name: "Mandiri Virtual Account", subtitle: "Transfer via Livin' by Mandiri atau ATM Mandiri", color: "#002855", available: true },
 ];
 
 interface MarketplaceScreenProps extends Nav {
@@ -86,6 +88,8 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
   const [driverTip, setDriverTip] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>("cod");
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [digitalPaymentModalVisible, setDigitalPaymentModalVisible] = useState(false);
+  const [digitalPaymentOrder, setDigitalPaymentOrder] = useState<any | null>(null);
   const [chatVisible, setChatVisible] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -330,10 +334,6 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
       navigate("c_addresses");
       return;
     }
-    if (selectedPayment !== "cod") {
-      alert("Pembayaran online belum tersedia. Pilih Bayar di Tempat untuk membuat pesanan.");
-      return;
-    }
     const selectedDeliveryAddress = selectedAddress || getPrimaryCustomerAddress(authAccount);
     const deliveryAddress = selectedDeliveryAddress?.fullAddress || address;
     if (!selectedDeliveryAddress) {
@@ -392,7 +392,13 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
       setCart([]);
       checkoutKeys.current.clear();
       setPaymentModalVisible(false);
-      setView("success");
+
+      if (selectedPayment !== "cod" && successfulOrders.length > 0) {
+        setDigitalPaymentOrder(successfulOrders[0].data);
+        setDigitalPaymentModalVisible(true);
+      } else {
+        setView("success");
+      }
     } catch {
       alert("Koneksi terputus. Status pesanan belum diketahui. Coba lagi untuk memeriksa hasil tanpa membuat pesanan ganda.");
     } finally {
@@ -625,26 +631,102 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
         </View>
         <TouchableOpacity style={styles.paymentSelectedCard} onPress={() => setPaymentModalVisible(true)}><View style={styles.paymentIcon}><WalletCards size={20} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{selectedPaymentLabel}</Text><Text style={styles.paymentSub}>Ketuk untuk mengganti metode pembayaran</Text></View><ChevronRight size={18} color="#6B7280" /></TouchableOpacity>
 
-        <View style={styles.summaryCard}><Text style={styles.summaryTitle}>Ringkasan pembayaran</Text><SummaryRow label="Subtotal produk" value={rp(subtotal)} /><SummaryRow label="Ongkir" value={rp(deliveryFee)} /><SummaryRow label="Tips driver" value={rp(driverTip)} /><SummaryRow label="Biaya layanan" value={rp(serviceFee)} />{promoApplied && <SummaryRow label="Diskon promo" value={`- ${rp(discount)}`} green />}<View style={styles.summaryDivider} /><SummaryRow label="Total pembayaran" value={rp(total)} strong /></View>
-        <View style={styles.secureNote}><ShieldCheck size={16} color="#1B7A4E" /><Text style={styles.secureNoteText}>Pesanan COD dibayar saat diterima. Pembayaran online belum tersedia.</Text></View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Ringkasan pembayaran</Text>
+          <SummaryRow label="Subtotal produk" value={rp(subtotal)} />
+          <SummaryRow label="Ongkir" value={rp(deliveryFee)} />
+          <SummaryRow label="Tips driver" value={rp(driverTip)} />
+          <SummaryRow label="Biaya layanan" value={rp(serviceFee)} />
+          {promoApplied && <SummaryRow label="Diskon promo" value={`- ${rp(discount)}`} green />}
+          <View style={styles.summaryDivider} />
+          <SummaryRow label="Total pembayaran" value={rp(total)} strong />
+        </View>
+        <View style={styles.secureNote}>
+          <ShieldCheck size={16} color="#1B7A4E" />
+          <Text style={styles.secureNoteText}>
+            {selectedPayment === "cod"
+              ? "Pesanan COD dibayar tunai saat pesanan sampai di tangan Anda."
+              : `Pembayaran ${selectedPaymentLabel} diverifikasi instan secara otomatis.`}
+          </Text>
+        </View>
       </ScrollView>
 
       <SafeAreaBottomBar absolute style={styles.checkoutFooter}>
-        <View style={styles.footerTotal}><Text style={styles.footerTotalLabel}>Total pembayaran</Text><Text style={styles.footerTotalValue}>{rp(total)}</Text></View>
-        <TouchableOpacity style={styles.footerPayButton} onPress={() => setPaymentModalVisible(true)}><Text style={styles.footerPayText}>Buat Pesanan COD · {rp(total)}</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity>
+        <View style={styles.footerTotal}>
+          <Text style={styles.footerTotalLabel}>Total pembayaran</Text>
+          <Text style={styles.footerTotalValue}>{rp(total)}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.footerPayButton, submitting && { opacity: 0.7 }]}
+          disabled={submitting}
+          onPress={completeMarketplaceOrder}
+        >
+          <Text style={styles.footerPayText}>
+            {submitting
+              ? "Memproses…"
+              : selectedPayment === "cod"
+              ? `Buat Pesanan COD · ${rp(total)}`
+              : `Lanjut Pembayaran · ${rp(total)}`}
+          </Text>
+          <ChevronRight size={18} color="#FFFFFF" />
+        </TouchableOpacity>
       </SafeAreaBottomBar>
     </View>
     );
   };
 
   const renderSuccess = () => (
-    <ScrollView contentContainerStyle={styles.successContent}>
+    <ScrollView contentContainerStyle={styles.successContent} showsVerticalScrollIndicator={false}>
       <View style={styles.successIcon}><Check size={36} color="#FFFFFF" strokeWidth={3} /></View>
       <Text style={styles.successTitle}>{partialCheckout ? "Sebagian Pesanan Tersimpan" : "Pesanan Berhasil Dibuat"}</Text>
-      <Text style={styles.successSubtitle}>{partialCheckout ? "Beberapa toko belum mengonfirmasi pesanan. Coba lagi untuk menyelesaikan checkout; pesanan yang tersimpan tidak akan dibuat ulang." : "Pesanan tercatat. Pembayaran dilakukan saat pesanan diterima."}</Text>
-      <View style={styles.invoiceCard}><View style={styles.invoiceHeader}><View><Text style={styles.invoiceLabel}>NOMOR PESANAN</Text><Text style={styles.invoiceNumber}>{createdOrderCodes.join(", ") || "Menunggu konfirmasi server"}</Text></View><ReceiptText size={24} color="#1B7A4E" /></View><View style={styles.summaryDivider} /><SummaryRow label="Status pembayaran" value="Bayar di tempat saat diterima" green /><SummaryRow label="Metode" value={selectedPaymentLabel} /><SummaryRow label="Total perkiraan" value={rp(total)} strong /></View>
-      {partialCheckout ? <TouchableOpacity style={styles.primaryButton} onPress={() => setView("checkout")}><Text style={styles.primaryButtonText}>Coba Lagi</Text></TouchableOpacity> : <TouchableOpacity style={styles.primaryButton} onPress={() => { setCart([]); setView("catalog"); }}><Text style={styles.primaryButtonText}>Belanja Lagi</Text></TouchableOpacity>}
-      <TouchableOpacity style={styles.secondaryButton} onPress={() => navigate("c_home")}><Text style={styles.secondaryButtonText}>Kembali ke Beranda</Text></TouchableOpacity>
+      <Text style={styles.successSubtitle}>
+        {selectedPayment === "cod"
+          ? "Pesanan Anda telah diteruskan ke pemilik toko dan kurir. Siapkan uang tunai saat pesanan tiba."
+          : "Pesanan Anda telah tercatat. Silakan selesaikan pembayaran digital Anda agar pesanan segera diproses."}
+      </Text>
+
+      {createdOrderCodes.length > 0 && (
+        <View style={styles.orderCodeCard}>
+          <Text style={styles.orderCodeLabel}>KODE PESANAN</Text>
+          <Text style={styles.orderCodeValue}>{createdOrderCodes.join(", ")}</Text>
+          <View style={styles.orderCodeBadge}>
+            <Text style={styles.orderCodeBadgeText}>
+              {selectedPayment === "cod" ? "COD · Bayar di Tempat" : selectedPaymentLabel}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {selectedPayment !== "cod" && digitalPaymentOrder && (
+        <TouchableOpacity
+          style={styles.openDigitalPaymentButton}
+          onPress={() => setDigitalPaymentModalVisible(true)}
+          activeOpacity={0.85}
+        >
+          <WalletCards size={18} color="#FFFFFF" />
+          <Text style={styles.openDigitalPaymentText}>Buka Detail Pembayaran Digital</Text>
+        </TouchableOpacity>
+      )}
+
+      <View style={styles.successActions}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => navigate("c_home")}
+        >
+          <ReceiptText size={18} color="#FFFFFF" />
+          <Text style={styles.primaryButtonText}>Lihat Pesanan Saya</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => {
+            setCreatedOrderCodes([]);
+            setView("catalog");
+          }}
+        >
+          <Text style={styles.secondaryButtonText}>Belanja Lagi</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 
@@ -762,6 +844,16 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
       <Modal visible={paymentModalVisible} transparent animationType="slide" onRequestClose={() => setPaymentModalVisible(false)}>
         <View style={styles.modalOverlay}><View style={styles.paymentSheet}><View style={styles.sheetHandle} /><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Pilih Pembayaran</Text><TouchableOpacity onPress={() => setPaymentModalVisible(false)}><X size={20} color="#111827" /></TouchableOpacity></View>{paymentMethods.map((method) => { const selected = selectedPayment === method.id; return <TouchableOpacity key={method.id} disabled={!method.available || submitting} style={[styles.paymentOption, selected && styles.paymentOptionSelected, !method.available && { opacity: 0.48 }]} onPress={() => setSelectedPayment(method.id)}><View style={[styles.paymentIcon, { backgroundColor: `${method.color}15` }]}><WalletCards size={20} color={method.color} /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{method.name}</Text><Text style={styles.paymentSub}>{method.subtitle}</Text></View><View style={[styles.radio, selected && styles.radioSelected]}>{selected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}</View></TouchableOpacity>; })}<TouchableOpacity style={[styles.primaryButton, submitting && { opacity: 0.65 }]} disabled={submitting} onPress={completeMarketplaceOrder}><Text style={styles.primaryButtonText}>{submitting ? "Membuat pesanan…" : "Buat Pesanan"}</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity></View></View>
       </Modal>
+
+      <MarketplaceDigitalPaymentModal
+        visible={digitalPaymentModalVisible}
+        onClose={() => setDigitalPaymentModalVisible(false)}
+        order={digitalPaymentOrder}
+        onPaymentSuccess={() => {
+          setDigitalPaymentModalVisible(false);
+          setView("success");
+        }}
+      />
     </ResponsiveSafeAreaView>
   );
 };
@@ -987,4 +1079,12 @@ const styles = StyleSheet.create({
   invoiceHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   invoiceLabel: { color: "#9CA3AF", fontSize: 9, fontWeight: "800", letterSpacing: 0.6 },
   invoiceNumber: { color: "#111827", fontSize: 15, fontWeight: "900", marginTop: 4 },
+  orderCodeCard: { width: "100%", backgroundColor: "#FFFFFF", borderRadius: 16, padding: 16, marginTop: 20, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center" },
+  orderCodeLabel: { color: "#9CA3AF", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  orderCodeValue: { color: "#111827", fontSize: 16, fontWeight: "900", marginTop: 4 },
+  orderCodeBadge: { backgroundColor: "#E8F5EE", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, marginTop: 8 },
+  orderCodeBadgeText: { color: "#1B7A4E", fontSize: 11, fontWeight: "800" },
+  openDigitalPaymentButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#0D7A53", borderRadius: 14, minHeight: 48, paddingHorizontal: 20, width: "100%", marginTop: 16 },
+  openDigitalPaymentText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
+  successActions: { width: "100%", marginTop: 24, gap: 10 },
 });

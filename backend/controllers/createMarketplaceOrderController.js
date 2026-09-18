@@ -2,11 +2,31 @@ const { createHash, randomUUID } = require("crypto");
 const mongoose = require("mongoose");
 const MarketplaceOrder = require("../models/MarketplaceOrder");
 const MarketplaceProduct = require("../models/MarketplaceProduct");
+const Payment = require("../models/Payment");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
+const paymentGateway = require("../services/paymentGateway");
 const { syncConversationForOrder } = require("../services/conversationService");
 
 const splitAmount = (amount, count, index) => Math.floor(amount / count) + (index < amount % count ? 1 : 0);
+
+const ALLOWED_PAYMENT_METHODS = ["cod", "qris", "gopay", "dana", "ovo", "shopeepay", "bca_va", "bni_va", "bri_va", "mandiri_va"];
+
+const mapToGatewayPaymentMethod = (method) => {
+  const m = String(method || "cod").toLowerCase();
+  switch (m) {
+    case "qris": return "QRIS";
+    case "gopay": return "GOPAY";
+    case "dana": return "DANA";
+    case "ovo": return "OVO";
+    case "shopeepay": return "SHOPEEPAY";
+    case "bca_va": return "BCA_VA";
+    case "bni_va": return "BNI_VA";
+    case "bri_va": return "BRI_VA";
+    case "mandiri_va": return "MANDIRI_VA";
+    default: return "CASH";
+  }
+};
 
 const makeRequestHash = (body) => {
   const items = (Array.isArray(body.items) ? body.items : []).map((item) => ({
@@ -21,7 +41,7 @@ const makeRequestHash = (body) => {
     items,
     driverTip: Number(body.driverTip || 0),
     voucherId: String(body.voucherId || ""),
-    paymentMethod: String(body.paymentMethod || "cod"),
+    paymentMethod: String(body.paymentMethod || "cod").toLowerCase(),
     groupCount: Number(body.checkoutGroupCount || 1),
     groupIndex: Number(body.checkoutGroupIndex || 0),
   })).digest("hex");
@@ -58,6 +78,8 @@ const createMarketplaceOrder = async (req, res) => {
       notes: String(item.notes || "").trim().slice(0, 120),
     }));
 
+    const normalizedPaymentMethod = String(paymentMethod || "cod").toLowerCase();
+
     if (!idempotencyKey || idempotencyKey.length > 200) {
       return res.status(400).json({ success: false, message: "Kunci checkout tidak valid. Coba kirim pesanan lagi." });
     }
@@ -73,8 +95,8 @@ const createMarketplaceOrder = async (req, res) => {
     if (voucherId && voucherId !== "LOKAL20") {
       return res.status(400).json({ success: false, message: "Kode promo tidak valid" });
     }
-    if (paymentMethod !== "cod") {
-      return res.status(400).json({ success: false, message: "Pembayaran online belum tersedia. Pilih Bayar di Tempat." });
+    if (!ALLOWED_PAYMENT_METHODS.includes(normalizedPaymentMethod)) {
+      return res.status(400).json({ success: false, message: "Metode pembayaran tidak valid." });
     }
     if (normalizedItems.some((item) => !mongoose.Types.ObjectId.isValid(item.productId) || !Number.isInteger(item.quantity) || item.quantity < 1)) {
       return res.status(400).json({ success: false, message: "Produk atau jumlah pesanan tidak valid" });
@@ -116,7 +138,6 @@ const createMarketplaceOrder = async (req, res) => {
     }
 
     const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    // Preserve current MVP pricing until Product confirms the final fee and voucher rules.
     const deliveryFee = splitAmount(8000, groupCount, groupIndex);
     const serviceFee = splitAmount(2000, groupCount, groupIndex);
     const safeDriverTip = splitAmount(driverTip, groupCount, groupIndex);
@@ -124,6 +145,36 @@ const createMarketplaceOrder = async (req, res) => {
     const totalAmount = Math.max(0, subtotal + deliveryFee + serviceFee + safeDriverTip - discount);
     const storeName = owner.roleData?.businessName || owner.name || "";
     const storeAddress = owner.roleData?.businessAddress || owner.roleData?.address || "";
+
+    const isCod = normalizedPaymentMethod === "cod";
+    const initialPaymentStatus = isCod ? "Menunggu pembayaran di tempat" : "Menunggu Pembayaran";
+    const orderCode = `RNG-MKT-${randomUUID().slice(0, 8).toUpperCase()}`;
+
+    // Create payment gateway session if digital payment
+    let gatewayResult = null;
+    if (!isCod) {
+      gatewayResult = await paymentGateway.createPayment({
+        orderId: orderCode,
+        orderCode,
+        orderType: "MARKETPLACE",
+        orderCategory: "DELIVERY",
+        customerId: String(customerId),
+        customerName: customer.name,
+        customerPhone: customer.phone || "",
+        amount: totalAmount,
+        paymentMethod: mapToGatewayPaymentMethod(normalizedPaymentMethod),
+      });
+    }
+
+    const paymentDetails = gatewayResult ? {
+      qrString: gatewayResult.qrString || "",
+      qrCodeUrl: gatewayResult.qrCodeUrl || "",
+      vaNumber: gatewayResult.virtualAccount?.vaNumber || "",
+      bank: gatewayResult.virtualAccount?.bank || "",
+      deepLinkUrl: gatewayResult.deepLinkUrl || "",
+      expiryTime: gatewayResult.expiryTime || null,
+    } : {};
+
     let order;
 
     session = await mongoose.startSession();
@@ -142,7 +193,7 @@ const createMarketplaceOrder = async (req, res) => {
       }
 
       const [created] = await MarketplaceOrder.create([{
-        orderCode: `RNG-MKT-${randomUUID().slice(0, 8).toUpperCase()}`,
+        orderCode,
         idempotencyKey,
         requestHash,
         ownerId,
@@ -163,18 +214,48 @@ const createMarketplaceOrder = async (req, res) => {
         voucherId,
         discount,
         totalAmount,
-        paymentMethod: "cod",
-        paymentStatus: "Menunggu pembayaran di tempat",
+        paymentMethod: normalizedPaymentMethod,
+        paymentStatus: initialPaymentStatus,
+        paymentId: gatewayResult?.paymentId || "",
+        paymentDetails,
       }], { session });
       order = created;
     });
     await session.endSession();
     session = null;
 
+    // Create Payment record in DB if digital
+    if (gatewayResult && order) {
+      await Payment.create({
+        paymentId: gatewayResult.paymentId,
+        orderId: String(order._id),
+        orderCode: order.orderCode,
+        orderType: "MARKETPLACE",
+        orderCategory: "DELIVERY",
+        customerId: String(customerId),
+        customerName: customer.name,
+        customerPhone: customer.phone || "",
+        amount: totalAmount,
+        paymentMethod: gatewayResult.paymentMethod,
+        paymentCategory: gatewayResult.paymentCategory,
+        status: gatewayResult.status || "PENDING",
+        gateway: gatewayResult.gateway || "GEOVERSE_GATEWAY",
+        qrString: gatewayResult.qrString,
+        qrCodeUrl: gatewayResult.qrCodeUrl,
+        deepLinkUrl: gatewayResult.deepLinkUrl,
+        virtualAccount: gatewayResult.virtualAccount,
+        expiredAt: gatewayResult.expiryTime,
+      }).catch((err) => console.error("Create Payment record error:", err));
+    }
+
+    const notifMessage = isCod
+      ? `Pesanan ${order.orderCode} telah diteruskan ke toko. Pembayaran dilakukan saat pesanan diterima.`
+      : `Pesanan ${order.orderCode} berhasil dibuat. Selesaikan pembayaran sebelum batas waktu berakhir.`;
+
     await Promise.allSettled([
       syncConversationForOrder(order, "marketplace"),
-      Notification.create({ userId: customerId, title: "Pesanan berhasil dibuat", message: `Pesanan ${order.orderCode} telah diteruskan ke toko. Pembayaran dilakukan saat pesanan diterima.`, type: "order_new", relatedId: order._id }),
-      Notification.create({ userId: ownerId, title: "Pesanan baru masuk", message: `${customer.name} membuat pesanan ${order.orderCode}.`, type: "order_new", relatedId: order._id }),
+      Notification.create({ userId: customerId, title: "Pesanan berhasil dibuat", message: notifMessage, type: "order_new", relatedId: order._id }),
+      Notification.create({ userId: ownerId, title: "Pesanan baru masuk", message: `${customer.name} membuat pesanan ${order.orderCode} (${normalizedPaymentMethod.toUpperCase()}).`, type: "order_new", relatedId: order._id }),
     ]);
     req.io?.to(`user:${String(ownerId)}`).emit("order_created", order);
     req.io?.to(`user:${String(customerId)}`).emit("order_created", order);

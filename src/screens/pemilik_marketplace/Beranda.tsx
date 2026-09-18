@@ -176,6 +176,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
         }
         setOrders(result.data.map((order: any) => ({
           id: String(order._id),
+          orderCode: order.orderCode || "",
           customer: order.customerName || "Pelanggan",
           customerPhone: order.customerPhone || "",
           items: Array.isArray(order.items) ? order.items : [],
@@ -195,6 +196,9 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           storeName: order.storeName || "Mitra Marketplace",
           storeAddress: order.storeAddress || "Alamat toko belum tersedia",
           driverPhone: order.driverPhone || "",
+          cancellation: order.cancellation,
+          complaint: order.complaint,
+          refund: order.refund,
           driver: order.driverId ? {
             name: order.driverName || "Driver",
             vehicle: order.driverVehicle || "",
@@ -310,7 +314,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
         img: formData.img || (formData.images.length > 0 ? formData.images[0] : editingProduct.img),
         images: formData.images,
       };
-      const result = await updateMarketplaceProduct(editingProduct.id, updatedPayload);
+      const result = await updateMarketplaceProduct(editingProduct.id, updatedPayload, authAccount?.id);
       if (!result.success || !result.data) {
         showAlert("Gagal", result.message || "Gagal memperbarui produk");
         return;
@@ -353,7 +357,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
         description: formData.description,
         stock: formData.stock,
         isActive: formData.isActive,
-      });
+      }, authAccount?.id);
       if (!result.success || !result.data) {
         showAlert("Gagal", result.message || "Gagal menyimpan produk");
         return;
@@ -386,7 +390,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
         text: "Hapus",
         style: "destructive",
         onPress: async () => {
-          const result = await deleteMarketplaceProduct(productId);
+          const result = await deleteMarketplaceProduct(productId, authAccount?.id);
           if (!result.success) {
             showAlert("Gagal", result.message || "Gagal menghapus produk");
             return;
@@ -398,17 +402,24 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
     ]);
   };
 
-  const handleToggleProductActive = (product: ProductItem) => {
+  const handleToggleProductActive = async (product: ProductItem) => {
+    const nextActive = !product.isActive;
     const updated = products.map((p) => {
       if (p.id === product.id) {
-        return { ...p, isActive: !p.isActive };
+        return { ...p, isActive: nextActive };
       }
       return p;
     });
     setProducts(updated);
-    Alert.alert(
+    const result = await updateMarketplaceProduct(product.id, { isActive: nextActive }, authAccount?.id);
+    if (!result.success) {
+      setProducts(products);
+      showAlert("Gagal", result.message || "Gagal memperbarui status produk");
+      return;
+    }
+    showAlert(
       "Sukses",
-      product.isActive ? "Menu dinonaktifkan sementara" : "Menu diaktifkan kembali"
+      nextActive ? "Produk diaktifkan kembali" : "Produk dinonaktifkan sementara"
     );
   };
 
@@ -435,6 +446,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
   // Helper calculation
   const totalCompletedOrders = orders.filter((o) => o.status === "Selesai");
   const totalRevenueVal = totalCompletedOrders.reduce((sum, o) => sum + o.total, 0);
+
   const activeOrdersCount = orders.filter((o) => o.status !== "Selesai" && o.status !== "Dibatalkan").length;
   
   // Needs attention products

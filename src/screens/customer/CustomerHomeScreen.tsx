@@ -26,6 +26,7 @@ import {
   ChevronRight,
   LogOut,
   Bike,
+  Package,
 } from "lucide-react-native";
 
 interface CustomerHomeProps extends Nav {
@@ -38,7 +39,6 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
     { id: "c_catering", name: "Kanyaah\nCatering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5" },
     { id: "c_laundry", name: "Kanyaah\nLaundry", icon: Wind, color: "#0284C7", bg: "#E0F2FE" },
     { id: "c_kos", name: "Kanyaah\nHomestay", icon: Building2, color: "#9333EA", bg: "#F3E8FF" },
-    { id: "c_ride", name: "Kanyaah\nRide", icon: Bike, color: "#1B7A4E", bg: "#E8F5EE" },
   ] as const;
 
   return (
@@ -62,19 +62,16 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Search Header */}
-        <View style={styles.searchHeader}>
-          <Text style={styles.greetingTitle}>Halo, {authAccount?.name?.split(" ")[0] || "Warga Kamojang"}! 👋</Text>
-          <Text style={styles.greetingSubtitle}>{authAccount ? `Mau pesan apa hari ini, ${authAccount.name.split(" ")[0]}?` : "Mau pesan apa hari ini?"}</Text>
-
-          <TouchableOpacity style={styles.searchBar} onPress={() => navigate("c_laundry")} activeOpacity={0.8}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Search */}
+        <View style={styles.searchSection}>
+          <View style={styles.searchBar}>
             <Search size={18} color="#9CA3AF" />
-            <Text style={styles.searchPlaceholder}>Cari produk, catering, laundry...</Text>
-          </TouchableOpacity>
+            <Text style={styles.searchPlaceholder}>Cari produk, catering, atau layanan...</Text>
+          </View>
         </View>
 
-        {/* Banner Promo */}
+        {/* Banner */}
         <View style={styles.banner}>
           <View style={styles.bannerTextCol}>
             <Pill color="orange">Promo Spesial</Pill>
@@ -86,7 +83,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
           </View>
         </View>
 
-        {/* Categories grid */}
+        {/* Categories grid (4-Grid) */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Layanan Utama</Text>
         </View>
@@ -107,6 +104,55 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
               </TouchableOpacity>
             );
           })}
+        </View>
+
+        {/* Featured Kanyaah Ride & Kanyaah Send Hero Cards (Bawah 4-Grid) */}
+        <View style={styles.heroDuoRow}>
+          {/* Kanyaah Ride Card */}
+          <TouchableOpacity
+            style={[styles.heroHalfCard, styles.rideHalfCard]}
+            onPress={() => navigate("c_ride")}
+            activeOpacity={0.88}
+          >
+            <View style={styles.heroHalfBadge}>
+              <Bike size={12} color="#15803D" />
+              <Text style={styles.heroHalfBadgeText}>KANYAAH RIDE</Text>
+            </View>
+            <Text style={styles.heroHalfTitle}>Mau pergi ke mana?</Text>
+            <Text style={styles.heroHalfSub} numberOfLines={2}>Ojek online cepat & aman di Kamojang</Text>
+            <View style={styles.heroHalfBottom}>
+              <View style={styles.heroHalfCta}>
+                <Text style={styles.heroHalfCtaText}>Pesan</Text>
+                <ChevronRight size={12} color="#FFFFFF" />
+              </View>
+              <View style={[styles.heroHalfCircle, { backgroundColor: "#D1FAE5", borderColor: "#A7F3D0" }]}>
+                <Bike size={22} color="#1B7A4E" />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Kanyaah Send Card */}
+          <TouchableOpacity
+            style={[styles.heroHalfCard, styles.sendHalfCard]}
+            onPress={() => navigate("c_send")}
+            activeOpacity={0.88}
+          >
+            <View style={[styles.heroHalfBadge, { backgroundColor: "#FEF3C7" }]}>
+              <Package size={12} color="#B45309" />
+              <Text style={[styles.heroHalfBadgeText, { color: "#B45309" }]}>KANYAAH SEND</Text>
+            </View>
+            <Text style={[styles.heroHalfTitle, { color: "#78350F" }]}>Kirim paket / barang</Text>
+            <Text style={[styles.heroHalfSub, { color: "#92400E" }]} numberOfLines={2}>Kirim cepat & aman dengan kurir</Text>
+            <View style={styles.heroHalfBottom}>
+              <View style={[styles.heroHalfCta, { backgroundColor: "#B45309" }]}>
+                <Text style={styles.heroHalfCtaText}>Kirim</Text>
+                <ChevronRight size={12} color="#FFFFFF" />
+              </View>
+              <View style={[styles.heroHalfCircle, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
+                <Package size={22} color="#B45309" />
+              </View>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Popular Products */}
@@ -416,5 +462,171 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 4,
     marginTop: 2,
+  },
+  searchSection: {
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  heroDuoRow: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    gap: 10,
+    marginTop: 14,
+  },
+  heroHalfCard: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 14,
+    justifyContent: "space-between",
+    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    minHeight: 155,
+  },
+  rideHalfCard: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+    shadowColor: "#15803D",
+  },
+  sendHalfCard: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+    shadowColor: "#B45309",
+  },
+  heroHalfBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  heroHalfBadgeText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#15803D",
+    letterSpacing: 0.5,
+  },
+  heroHalfTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#064E3B",
+  },
+  heroHalfSub: {
+    fontSize: 10,
+    color: "#166534",
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  heroHalfBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  heroHalfCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#15803D",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  heroHalfCtaText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  heroHalfCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+  },
+  rideHeroCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    borderRadius: 20,
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 14,
+    elevation: 3,
+    shadowColor: "#15803D",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  rideHeroLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  rideHeroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  rideHeroBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+    letterSpacing: 0.5,
+  },
+  rideHeroTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#064E3B",
+  },
+  rideHeroSub: {
+    fontSize: 11,
+    color: "#166534",
+    marginTop: 2,
+  },
+  rideHeroCtaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#15803D",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginTop: 8,
+  },
+  rideHeroCtaText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  rideHeroRight: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  rideHeroCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "#D1FAE5",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#A7F3D0",
   },
 });

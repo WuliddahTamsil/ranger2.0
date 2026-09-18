@@ -26,6 +26,8 @@ const userSchema = new mongoose.Schema(
         "pemilik_laundry",
         "pemilik_marketplace",
         "pemilik_catering",
+        "bank_sampah",
+        "admin_sampah",
       ],
     },
     name: {

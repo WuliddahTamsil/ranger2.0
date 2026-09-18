@@ -71,6 +71,12 @@ import {
   updateRideStatus,
   RideStatus,
 } from "../../services/rideService";
+import {
+  fetchAvailableSendOrders,
+  acceptSendOrder,
+  verifySendPickupCode,
+  verifySendDeliveryOtp,
+} from "../../services/sendService";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 
 // Import other screens
@@ -95,6 +101,8 @@ const mapMarketplaceDriverOrder = (order: any): DriverOrder => ({
   customer: order.customerName || "Pelanggan",
   phone: order.customerPhone || "",
   type: "Marketplace",
+  paymentMethod: order.paymentMethod || "COD",
+  paymentStatus: order.paymentStatus || (order.paymentMethod === "COD" ? "Menunggu" : "Lunas"),
   time: order.createdAt ? new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "",
   from: order.storeAddress || order.storeName || "Lokasi pickup belum tersedia",
   to: order.address || "Alamat tujuan belum tersedia",
@@ -119,6 +127,7 @@ const mapCateringDriverOrder = (order: any): DriverOrder => ({
   serviceType: "KANYAAH_CATERING",
   driverId: order.driverId || null,
   rawStatus: order.status || "Menunggu",
+  paymentMethod: order.paymentMethod || "COD",
   paymentStatus: order.paymentStatus || "Menunggu Pembayaran",
   customer: order.customerName || "Pelanggan",
   phone: order.customerPhone || "",
@@ -187,6 +196,53 @@ const mapRideDriverOrder = (order: any): DriverOrder => ({
   notes: order.customerNote || "",
   pickup: order.pickup,
   destination: order.destination,
+  addressSnapshot: null,
+});
+
+const mapSendDriverOrder = (order: any): DriverOrder => ({
+  id: String(order._id || order.id),
+  orderCode: order.orderCode || `#RNG-SEND-${String(order._id || order.id).slice(-8)}`,
+  orderCategory: "DELIVERY",
+  serviceType: "KANYAAH_SEND",
+  driverId: order.driverId || null,
+  rawStatus: order.status || "SEARCHING_DRIVER",
+  customer: order.sender?.name || "Pengirim",
+  phone: order.sender?.phone || "",
+  type: "Kanyaah Send",
+  paymentMethod: order.paymentMethod || "QRIS",
+  paymentStatus: order.paymentStatus || "Lunas",
+  time: order.createdAt ? new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "",
+  from: order.sender?.address || "Titik Pickup Pengirim",
+  to: order.recipient?.address || "Titik Tujuan Penerima",
+  dist: order.distanceKm ? `${order.distanceKm} km` : "Jarak belum tersedia",
+  distanceKm: Number(order.distanceKm || 0),
+  pay: Number(order.pricing?.estimatedFare || 0),
+  driverShare: Number(order.pricing?.driverEarnings || (order.pricing?.estimatedFare ? Math.round(order.pricing.estimatedFare * 0.8) : 0)),
+  completedAt: order.deliveredAt || order.updatedAt || order.createdAt,
+  status:
+    order.status === "SEARCHING_DRIVER" ? "Menunggu"
+    : order.status === "DRIVER_ASSIGNED" ? "Siap"
+    : order.status === "DRIVER_ON_THE_WAY_TO_PICKUP" ? "Menuju Pickup"
+    : order.status === "DRIVER_ARRIVED_AT_PICKUP" || order.status === "PICKUP_VERIFICATION" ? "Sampai Pickup"
+    : order.status === "PICKED_UP" || order.status === "IN_TRANSIT" || order.status === "ARRIVED_AT_DESTINATION" || order.status === "DELIVERY_VERIFICATION" ? "Mengantar"
+    : order.status === "DELIVERED" || order.status === "COMPLETED" ? "Selesai"
+    : order.status === "CANCELLED" ? "Dibatalkan" : "Menunggu",
+  items: [
+    {
+      name: `Kirim Paket: ${order.package?.name || "Barang"} (${order.package?.weightKg || 1} kg, ${order.package?.category || "Paket"})`,
+      quantity: Number(order.package?.quantity || 1),
+      price: Number(order.pricing?.estimatedFare || 0),
+      notes: order.package?.notes || "",
+    },
+  ],
+  storeName: "Pengirim: " + (order.sender?.name || ""),
+  storeAddress: order.sender?.address || "",
+  storePhone: order.sender?.phone || "",
+  ownerId: order.customerId,
+  notes: `Penerima: ${order.recipient?.name} (${order.recipient?.phone}) | Alamat: ${order.recipient?.address}`,
+  pickup: order.sender ? { address: order.sender.address, latitude: order.sender.latitude, longitude: order.sender.longitude } : undefined,
+  destination: order.recipient ? { address: order.recipient.address, latitude: order.recipient.latitude, longitude: order.recipient.longitude } : undefined,
+  deliveryProofUrl: order.deliveryProofUrls?.[0] || "",
   addressSnapshot: null,
 });
 
@@ -314,11 +370,12 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       if (loading) return;
       loading = true;
       try {
-        const [mktRes, catRes, laundryJobs, rideRes] = await Promise.all([
+        const [mktRes, catRes, laundryJobs, rideRes, sendRes] = await Promise.all([
           getMarketplaceOrdersForDriver(authAccount.id),
           getCateringOrdersForDriver(authAccount.id),
           fetchDriverLaundryJobs(authAccount.id),
           fetchDriverRides(authAccount.id),
+          fetchAvailableSendOrders(authAccount.id),
         ]);
         if (!active) return;
 
@@ -396,6 +453,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           ? rideRes.data.map(mapRideDriverOrder)
           : [];
 
+        const sendOrders: DriverOrder[] = (sendRes?.success && Array.isArray(sendRes.data))
+          ? sendRes.data.map(mapSendDriverOrder)
+          : [];
+
         setOrders((current) => {
           const marketplaceOrders = mktRes.success && Array.isArray(mktRes.data)
             ? mktOrders
@@ -403,7 +464,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           const existingRideOrders = rideRes.success && Array.isArray(rideRes.data)
             ? rideOrders
             : current.filter((order) => order.type === "Kanyaah Ride");
-          return [...existingRideOrders, ...marketplaceOrders, ...catOrders, ...lndOrders];
+          const existingSendOrders = sendRes?.success && Array.isArray(sendRes.data)
+            ? sendOrders
+            : current.filter((order) => order.type === "Kanyaah Send");
+          return [...existingRideOrders, ...existingSendOrders, ...marketplaceOrders, ...catOrders, ...lndOrders];
         });
       } catch (error) {
         console.error("Load driver orders error:", error);
@@ -768,6 +832,19 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 }
                 if (res.data) {
                   const updated = mapRideDriverOrder(res.data);
+                  setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                  return updated;
+                }
+                return true;
+              }
+              if (targetOrder?.type === "Kanyaah Send") {
+                const res = await acceptSendOrder(orderId, authAccount?.id || "");
+                if (!res.success) {
+                  Alert.alert("Gagal", res.message || "Pesanan mungkin sudah diambil driver lain");
+                  return false;
+                }
+                if (res.data) {
+                  const updated = mapSendDriverOrder(res.data);
                   setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
                   return updated;
                 }

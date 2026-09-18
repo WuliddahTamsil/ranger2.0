@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const MarketplaceOrder = require("../models/MarketplaceOrder");
 const MarketplaceProduct = require("../models/MarketplaceProduct");
+const Payment = require("../models/Payment");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { syncConversationForOrder } = require("../services/conversationService");
@@ -262,4 +263,410 @@ const assignDriver = async (req, res) => {
   }
 };
 
-module.exports = { createOrder, getOrdersByOwner, getOrdersByCustomer, getOrdersByDriver, acceptDriverOrder, declineDriverOrder, assignDriver, updateOrderStatus };
+/**
+ * POST /api/marketplace/orders/:id/cancel
+ * Cancel order by Customer (if Menunggu) or Pemilik (if Menunggu/Diproses)
+ * Restores product stock and triggers refund if paid
+ */
+const cancelMarketplaceOrder = async (req, res) => {
+  let session;
+  try {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return res.status(401).json({ success: false, message: "Silakan masuk untuk membatalkan pesanan." });
+    }
+
+    const { id } = req.params;
+    const { reason = "Dibatalkan oleh pengguna" } = req.body || {};
+
+    const order = await MarketplaceOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
+    }
+
+    const isCustomer = String(order.customerId) === String(authUser._id);
+    const isOwner = String(order.ownerId) === String(authUser._id);
+
+    if (!isCustomer && !isOwner) {
+      return res.status(403).json({ success: false, message: "Anda tidak berhak membatalkan pesanan ini." });
+    }
+
+    if (order.status === "Dibatalkan") {
+      return res.status(409).json({ success: false, message: "Pesanan ini sudah dibatalkan sebelumnya." });
+    }
+
+    if (isCustomer && order.status !== "Menunggu") {
+      return res.status(409).json({
+        success: false,
+        message: "Pesanan yang sudah diproses atau disiapkan toko tidak dapat dibatalkan secara sepihak.",
+      });
+    }
+
+    if (isOwner && !["Menunggu", "Diproses"].includes(order.status)) {
+      return res.status(409).json({
+        success: false,
+        message: "Pesanan yang sudah siap atau dalam pengantaran kurir tidak dapat dibatalkan.",
+      });
+    }
+
+    const cancelledBy = isCustomer ? "customer" : "pemilik_marketplace";
+    const isPaidOnline = order.paymentStatus === "Lunas" || order.paymentStatus === "PAID";
+
+    session = await mongoose.startSession();
+    await session.withTransaction(async () => {
+      // 1. Restore product stocks
+      if (Array.isArray(order.items)) {
+        for (const item of order.items) {
+          if (item.productId) {
+            await MarketplaceProduct.updateOne(
+              { _id: item.productId },
+              { $inc: { stock: Number(item.quantity || 1), sold: -Number(item.quantity || 1) } },
+              { session }
+            );
+          }
+        }
+      }
+
+      // 2. Update order status and cancellation details
+      order.status = "Dibatalkan";
+      order.cancellation = {
+        reason: String(reason).trim(),
+        cancelledBy,
+        cancelledAt: new Date(),
+      };
+
+      if (isPaidOnline) {
+        order.paymentStatus = "Refund";
+        order.refund = {
+          status: "Diproses",
+          amount: order.totalAmount,
+          reason: `Pengembalian dana pembatalan (${reason})`,
+          refundedAt: null,
+        };
+      }
+
+      await order.save({ session });
+
+      // 3. If Payment record exists, update to REFUNDED / FAILED
+      if (order.paymentId) {
+        await Payment.findOneAndUpdate(
+          { paymentId: order.paymentId },
+          {
+            status: isPaidOnline ? "REFUNDED" : "FAILED",
+            refundedAt: isPaidOnline ? new Date() : null,
+            cancellationReason: reason,
+          },
+          { session }
+        );
+      }
+
+      // 4. Notifications
+      const notifMsgCustomer = isCustomer
+        ? `Pesanan ${order.orderCode} berhasil Anda batalkan.${isPaidOnline ? " Pengembalian dana sedang diproses." : ""}`
+        : `Pesanan ${order.orderCode} dibatalkan oleh toko: ${reason}.${isPaidOnline ? " Pengembalian dana sedang diproses." : ""}`;
+
+      const notifMsgOwner = isCustomer
+        ? `Pesanan ${order.orderCode} dibatalkan oleh pelanggan (${reason}). Stok produk telah dikembalikan otomatis.`
+        : `Pesanan ${order.orderCode} telah Anda batalkan. Stok produk telah dikembalikan otomatis.`;
+
+      await Notification.create(
+        [
+          {
+            userId: order.customerId,
+            title: "Pesanan Dibatalkan",
+            message: notifMsgCustomer,
+            type: "order_status",
+            relatedId: order._id,
+          },
+          {
+            userId: order.ownerId,
+            title: "Pesanan Dibatalkan",
+            message: notifMsgOwner,
+            type: "order_status",
+            relatedId: order._id,
+          },
+          ...(order.driverId ? [{
+            userId: order.driverId,
+            title: "Pesanan Dibatalkan",
+            message: `Pesanan ${order.orderCode} telah dibatalkan. Pengantaran tidak perlu dilanjutkan.`,
+            type: "order_status",
+            relatedId: order._id,
+          }] : []),
+        ],
+        { session, ordered: true }
+      );
+    });
+
+    await session.endSession();
+    session = null;
+
+    // Realtime socket notifications
+    [order.ownerId, order.customerId, order.driverId].filter(Boolean).forEach((userId) => {
+      emitToUser(req.io, userId, "order_status_updated", order);
+      emitToUser(req.io, userId, "notification:new", { relatedId: String(order._id), type: "order_status" });
+    });
+
+    return res.json({
+      success: true,
+      message: `Pesanan berhasil dibatalkan.${isPaidOnline ? " Pengembalian dana sedang diproses sistem." : ""}`,
+      data: order,
+    });
+  } catch (error) {
+    if (session) await session.endSession().catch(() => undefined);
+    console.error("Cancel marketplace order error:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Gagal membatalkan pesanan.",
+    });
+  }
+};
+
+/**
+ * POST /api/marketplace/orders/:id/complaint
+ * Customer submits complaint for completed or in-transit order
+ */
+const submitOrderComplaint = async (req, res) => {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return res.status(401).json({ success: false, message: "Silakan masuk untuk mengajukan komplain." });
+    }
+
+    const { id } = req.params;
+    const {
+      reason,
+      detail = "",
+      photos = [],
+      solutionRequested = "Pengembalian Dana (Refund Penuh)",
+      bankDetails = null,
+    } = req.body || {};
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ success: false, message: "Pilih alasan kendala pesanan Anda." });
+    }
+
+    const order = await MarketplaceOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
+    }
+
+    if (String(order.customerId) !== String(authUser._id)) {
+      return res.status(403).json({ success: false, message: "Anda bukan pemilik pesanan ini." });
+    }
+
+    if (!["Selesai", "Mengantar", "Diambil"].includes(order.status)) {
+      return res.status(409).json({
+        success: false,
+        message: "Komplain hanya dapat diajukan untuk pesanan yang sudah selesai atau sedang diantar.",
+      });
+    }
+
+    const photoList = Array.isArray(photos) ? photos.filter((p) => typeof p === "string" && p.trim()) : [];
+
+    order.complaint = {
+      status: "Diajukan",
+      reason: reason.trim(),
+      detail: String(detail || "").trim(),
+      photos: photoList,
+      solutionRequested: String(solutionRequested || "Refund").trim(),
+      resolutionNotes: "",
+      createdAt: new Date(),
+    };
+
+    if (bankDetails && typeof bankDetails === "object") {
+      order.refund = {
+        status: "Menunggu",
+        amount: order.totalAmount,
+        reason: reason.trim(),
+        bankName: bankDetails.bankName || "",
+        accountNumber: bankDetails.accountNumber || "",
+        accountName: bankDetails.accountName || "",
+        refundedAt: null,
+      };
+    }
+
+    await order.save();
+
+    await Notification.create([
+      {
+        userId: order.ownerId,
+        title: "Komplain Pesanan Masuk",
+        message: `Pelanggan ${order.customerName} mengajukan komplain pada pesanan ${order.orderCode} (${reason}). Harap segera tinjau.`,
+        type: "order_status",
+        relatedId: order._id,
+      },
+      {
+        userId: order.customerId,
+        title: "Komplain Terkirim",
+        message: `Komplain pesanan ${order.orderCode} telah terkirim ke pemilik toko untuk ditinjau.`,
+        type: "order_status",
+        relatedId: order._id,
+      },
+    ]).catch(() => undefined);
+
+    [order.ownerId, order.customerId].forEach((userId) => {
+      emitToUser(req.io, userId, "order_status_updated", order);
+      emitToUser(req.io, userId, "notification:new", { relatedId: String(order._id), type: "order_status" });
+    });
+
+    return res.json({
+      success: true,
+      message: "Komplain berhasil diajukan dan diteruskan ke pemilik toko.",
+      data: order,
+    });
+  } catch (error) {
+    console.error("Submit marketplace complaint error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mengajukan komplain pesanan." });
+  }
+};
+
+/**
+ * POST /api/marketplace/orders/:id/complaint/respond
+ * Store owner approves or rejects complaint
+ */
+const respondOrderComplaint = async (req, res) => {
+  try {
+    const authUser = req.authUser;
+    const { id } = req.params;
+    const { action, resolutionNotes = "", refundAmount } = req.body || {};
+
+    if (!["approve", "reject"].includes(action)) {
+      return res.status(400).json({ success: false, message: "Tindakan harus 'approve' atau 'reject'." });
+    }
+
+    const order = await MarketplaceOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
+    }
+
+    if (String(order.ownerId) !== String(authUser._id)) {
+      return res.status(403).json({ success: false, message: "Anda bukan pemilik toko untuk pesanan ini." });
+    }
+
+    if (!order.complaint || order.complaint.status !== "Diajukan") {
+      return res.status(409).json({ success: false, message: "Tidak ada komplain aktif yang menunggu respons." });
+    }
+
+    const isApprove = action === "approve";
+    order.complaint.status = isApprove ? "Disetujui" : "Ditolak";
+    order.complaint.resolutionNotes = String(resolutionNotes || "").trim() || (isApprove ? "Komplain disetujui toko." : "Komplain ditolak oleh toko.");
+    order.complaint.resolvedAt = new Date();
+
+    if (isApprove) {
+      const finalRefund = Number(refundAmount) > 0 ? Number(refundAmount) : order.totalAmount;
+      order.paymentStatus = "Refund";
+      order.refund = {
+        ...(order.refund || {}),
+        status: "Selesai",
+        amount: finalRefund,
+        refundedAt: new Date(),
+        reason: order.complaint.reason || "Komplain disetujui",
+      };
+    } else {
+      if (order.refund) {
+        order.refund.status = "Ditolak";
+      }
+    }
+
+    await order.save();
+
+    await Notification.create({
+      userId: order.customerId,
+      title: isApprove ? "Komplain Disetujui Toko" : "Komplain Ditolak Toko",
+      message: isApprove
+        ? `Toko menyetujui komplain pesanan ${order.orderCode}.${order.refund?.amount ? ` Pengembalian dana Rp ${order.refund.amount.toLocaleString("id-ID")} diproses.` : ""}`
+        : `Toko menolak komplain pesanan ${order.orderCode}. Catatan: ${order.complaint.resolutionNotes}`,
+      type: "order_status",
+      relatedId: order._id,
+    }).catch(() => undefined);
+
+    [order.ownerId, order.customerId].forEach((userId) => {
+      emitToUser(req.io, userId, "order_status_updated", order);
+      emitToUser(req.io, userId, "notification:new", { relatedId: String(order._id), type: "order_status" });
+    });
+
+    return res.json({
+      success: true,
+      message: isApprove ? "Komplain berhasil disetujui." : "Komplain telah ditolak.",
+      data: order,
+    });
+  } catch (error) {
+    console.error("Respond marketplace complaint error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memproses respons komplain." });
+  }
+};
+
+/**
+ * POST /api/marketplace/orders/:id/simulate-payment
+ * Simulate instant digital payment success (Dev/Testing/Demo)
+ */
+const simulateMarketplacePayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await MarketplaceOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
+    }
+
+    order.paymentStatus = "Lunas";
+    order.paymentDetails = {
+      ...(order.paymentDetails || {}),
+      paidAt: new Date(),
+    };
+    await order.save();
+
+    if (order.paymentId) {
+      await Payment.findOneAndUpdate(
+        { paymentId: order.paymentId },
+        { status: "PAID", paidAt: new Date() }
+      ).catch(() => undefined);
+    }
+
+    await Notification.create([
+      {
+        userId: order.ownerId,
+        title: "Pembayaran Diterima!",
+        message: `Pembayaran pesanan ${order.orderCode} sebesar Rp ${order.totalAmount.toLocaleString("id-ID")} telah lunas. Pesanan siap diproses.`,
+        type: "order_status",
+        relatedId: order._id,
+      },
+      {
+        userId: order.customerId,
+        title: "Pembayaran Berhasil",
+        message: `Pembayaran pesanan ${order.orderCode} sebesar Rp ${order.totalAmount.toLocaleString("id-ID")} berhasil diverifikasi.`,
+        type: "order_status",
+        relatedId: order._id,
+      },
+    ]).catch(() => undefined);
+
+    [order.ownerId, order.customerId].forEach((userId) => {
+      emitToUser(req.io, userId, "order_status_updated", order);
+      emitToUser(req.io, userId, "notification:new", { relatedId: String(order._id), type: "order_status" });
+    });
+
+    return res.json({
+      success: true,
+      message: "Pembayaran berhasil diverifikasi (Simulasi Sandbox).",
+      data: order,
+    });
+  } catch (error) {
+    console.error("Simulate marketplace payment error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memproses simulasi pembayaran." });
+  }
+};
+
+module.exports = {
+  createOrder,
+  getOrdersByOwner,
+  getOrdersByCustomer,
+  getOrdersByDriver,
+  acceptDriverOrder,
+  declineDriverOrder,
+  assignDriver,
+  updateOrderStatus,
+  cancelMarketplaceOrder,
+  submitOrderComplaint,
+  respondOrderComplaint,
+  simulateMarketplacePayment,
+};
+

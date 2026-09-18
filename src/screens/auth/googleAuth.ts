@@ -32,8 +32,8 @@ const parseIdToken = (token: string): Partial<GoogleProfile> | null => {
     let decoded = "";
     if (typeof atob === "function") {
       decoded = atob(padded);
-    } else if (typeof Buffer !== "undefined") {
-      decoded = Buffer.from(padded, "base64").toString("utf-8");
+    } else if (typeof (globalThis as any).Buffer !== "undefined") {
+      decoded = (globalThis as any).Buffer.from(padded, "base64").toString("utf-8");
     } else {
       return null;
     }

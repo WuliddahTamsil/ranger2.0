@@ -86,7 +86,7 @@ export const createPayment = async (
   accountId?: string
 ): Promise<PaymentDetails> => {
   const headers = await getAuthHeaders(accountId);
-  const res = await fetch(getApiUrl("/api/payments"), {
+  const res = await fetch(getApiUrl("/payments"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -107,7 +107,7 @@ export const getPaymentStatus = async (
   accountId?: string
 ): Promise<PaymentDetails> => {
   const headers = await getAuthHeaders(accountId);
-  const res = await fetch(getApiUrl(`/api/payments/${paymentId}`), {
+  const res = await fetch(getApiUrl(`/payments/${paymentId}`), {
     headers: {
       ...headers,
     },
@@ -125,7 +125,7 @@ export const getOrderPayments = async (
   accountId?: string
 ): Promise<PaymentDetails[]> => {
   const headers = await getAuthHeaders(accountId);
-  const res = await fetch(getApiUrl(`/api/payments/order/${orderId}`), {
+  const res = await fetch(getApiUrl(`/payments/order/${orderId}`), {
     headers: {
       ...headers,
     },
@@ -143,7 +143,7 @@ export const simulatePaymentSuccess = async (
   accountId?: string
 ): Promise<PaymentDetails> => {
   const headers = await getAuthHeaders(accountId);
-  const res = await fetch(getApiUrl("/api/payments/simulate"), {
+  const res = await fetch(getApiUrl("/payments/simulate"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

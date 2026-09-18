@@ -36,8 +36,11 @@ import {
   fetchCustomerRides,
   updateRideStatus,
   rateRide,
+  cancelRide,
+  submitRideComplaint,
   RideOrderData,
 } from "../../services/rideService";
+import { Modal } from "react-native";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { SafeCallModal } from "../../components/SafeCallModal";
 import { DigitalPaymentModal } from "../../components/DigitalPaymentModal";
@@ -65,6 +68,14 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
   const [reviewText, setReviewText] = useState("");
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
+
+  // Complaint states
+  const [complaintModalVisible, setComplaintModalVisible] = useState(false);
+  const [complaintCategory, setComplaintCategory] = useState("Tarif tidak sesuai");
+  const [complaintDescription, setComplaintDescription] = useState("");
+  const [isSubmittingComplaint, setIsSubmittingComplaint] = useState(false);
+  const [complaintSubmitted, setComplaintSubmitted] = useState(false);
+  const [complaintTicketId, setComplaintTicketId] = useState("");
 
   // Poll current active ride or most recent ride
   useEffect(() => {
@@ -114,29 +125,46 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
     };
   }, [authAccount?.id]);
 
-  // Cancel ride handler
+  // Cancel ride handler with tiered cancellation policy
   const handleCancelRide = () => {
     if (!currentRide) return;
+
+    if (currentRide.status === "TRIP_STARTED") {
+      Alert.alert(
+        "Tidak Dapat Membatalkan",
+        "Perjalanan sudah dimulai bersama driver dan tidak dapat dibatalkan dari aplikasi penumpang."
+      );
+      return;
+    }
+
+    let policyMessage = "Apakah Anda yakin ingin membatalkan perjalanan ini?";
+    if (currentRide.status === "SEARCHING_DRIVER") {
+      policyMessage = "Driver belum ditugaskan. Pembatalan ini GRATIS tanpa biaya.";
+    } else if (currentRide.status === "DRIVER_ASSIGNED" || currentRide.status === "DRIVER_ON_THE_WAY") {
+      policyMessage = "Driver sudah menerima order dan dalam perjalanan. Pembatalan dikenakan biaya kompensasi Rp 3.000.";
+    } else if (currentRide.status === "DRIVER_ARRIVED") {
+      policyMessage = "Driver sudah tiba di titik penjemputan. Pembatalan dikenakan biaya kompensasi Rp 5.000.";
+    }
+
     Alert.alert(
       "Batalkan Perjalanan?",
-      "Apakah Anda yakin ingin membatalkan pesanan Kanyaah Ride ini?",
+      policyMessage,
       [
-        { text: "Tidak", style: "cancel" },
+        { text: "Kembali", style: "cancel" },
         {
           text: "Ya, Batalkan",
           style: "destructive",
           onPress: async () => {
             setIsCancelling(true);
             try {
-              const res = await updateRideStatus(
-                currentRide._id,
-                "CANCELLED",
-                "Dibatalkan oleh customer",
-                authAccount?.id
-              );
+              const res = await cancelRide(currentRide._id, {
+                reason: "Dibatalkan oleh customer",
+                cancelledBy: "CUSTOMER",
+              });
               if (res.success && res.data) {
                 setCurrentRide(res.data);
-                Alert.alert("Perjalanan Dibatalkan", "Pesanan Anda telah dibatalkan.");
+                const feeText = res.data.cancellation?.fee ? ` Biaya pembatalan: Rp ${res.data.cancellation.fee.toLocaleString("id-ID")}.` : "";
+                Alert.alert("Perjalanan Dibatalkan", `Pesanan Anda telah dibatalkan.${feeText}`);
               } else {
                 Alert.alert("Gagal Membatalkan", res.message || "Periksa koneksi lalu coba lagi.");
               }
@@ -149,6 +177,36 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
         },
       ]
     );
+  };
+
+  // Submit Complaint handler
+  const handleSubmitComplaint = async () => {
+    if (!currentRide) return;
+    if (!complaintDescription.trim()) {
+      Alert.alert("Deskripsi Kosong", "Silakan ceritakan detail masalah yang Anda alami.");
+      return;
+    }
+    setIsSubmittingComplaint(true);
+    try {
+      const res = await submitRideComplaint(currentRide._id, {
+        category: complaintCategory,
+        description: complaintDescription.trim(),
+      });
+      if (res.success) {
+        setComplaintSubmitted(true);
+        setComplaintTicketId(res.data?.ticketId || "RNG-TKT");
+        Alert.alert(
+          "Komplain Diterima",
+          `Tiket pengaduan Anda #${res.data?.ticketId || ""} telah terdaftar dan akan ditindaklanjuti oleh tim admin Rangers.`
+        );
+      } else {
+        Alert.alert("Gagal Mengajukan", res.message || "Silakan coba lagi.");
+      }
+    } catch (err: any) {
+      Alert.alert("Gagal", err.message || "Terjadi kesalahan saat mengirim pengaduan.");
+    } finally {
+      setIsSubmittingComplaint(false);
+    }
   };
 
   // Call driver via Phone app
@@ -526,14 +584,17 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
                 <CheckCircle size={24} color="#15803D" />
                 <Text style={styles.ratingSuccessTitle}>Penilaian Terkirim</Text>
                 <View style={styles.starRow}>
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Star
-                      key={s}
-                      size={20}
-                      color={s <= (currentRide.rating || ratingVal) ? "#D97706" : "#E2E8F0"}
-                      fill={s <= (currentRide.rating || ratingVal) ? "#D97706" : "transparent"}
-                    />
-                  ))}
+                  {[1, 2, 3, 4, 5].map((s) => {
+                    const currentScore = typeof currentRide.rating === "number" ? currentRide.rating : currentRide.rating?.score || ratingVal;
+                    return (
+                      <Star
+                        key={s}
+                        size={20}
+                        color={s <= currentScore ? "#D97706" : "#E2E8F0"}
+                        fill={s <= currentScore ? "#D97706" : "transparent"}
+                      />
+                    );
+                  })}
                 </View>
                 <Text style={styles.ratingSuccessSub}>Terima kasih atas ulasan Anda!</Text>
               </View>
@@ -584,8 +645,8 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           </View>
         )}
 
-        {/* Cancel Button if still searching or on the way */}
-        {(isSearching || status === "DRIVER_ASSIGNED") && (
+        {/* Cancel Button (Available before trip starts) */}
+        {(isSearching || status === "DRIVER_ASSIGNED" || status === "DRIVER_ON_THE_WAY" || status === "DRIVER_ARRIVED") && (
           <TouchableOpacity
             style={styles.cancelTripBtn}
             onPress={handleCancelRide}
@@ -597,6 +658,18 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
             ) : (
               <Text style={styles.cancelTripBtnText}>Batalkan Perjalanan</Text>
             )}
+          </TouchableOpacity>
+        )}
+
+        {/* Complaint / Report issue button for completed or cancelled trips */}
+        {(isCompleted || isCancelled) && (
+          <TouchableOpacity
+            style={styles.reportComplaintBtn}
+            onPress={() => setComplaintModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <AlertTriangle size={16} color="#EA580C" />
+            <Text style={styles.reportComplaintBtnText}>Laporkan Masalah Perjalanan</Text>
           </TouchableOpacity>
         )}
 
@@ -652,6 +725,104 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           }}
         />
       )}
+
+      {/* Ride Complaint / Dispute Modal */}
+      <Modal
+        visible={complaintModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setComplaintModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.complaintModalCard}>
+            <View style={styles.complaintModalHeader}>
+              <View>
+                <Text style={styles.complaintModalTitle}>Laporkan Masalah</Text>
+                <Text style={styles.complaintModalSub}>#{currentRide?.orderCode || "Pesanan"}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setComplaintModalVisible(false)} style={styles.modalCloseBtn}>
+                <Text style={{ fontSize: 18, color: "#64748B", fontWeight: "700" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {complaintSubmitted ? (
+                <View style={styles.complaintSuccessWrap}>
+                  <CheckCircle size={36} color="#15803D" />
+                  <Text style={styles.complaintSuccessTitle}>Komplain Berhasil Dikirim</Text>
+                  <Text style={styles.complaintSuccessCode}>Nomor Tiket: #{complaintTicketId}</Text>
+                  <Text style={styles.complaintSuccessSub}>
+                    Tim operasional Rangers akan memeriksa rekaman perjalanan dan segera menghubungi Anda.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.complaintCloseBtn}
+                    onPress={() => setComplaintModalVisible(false)}
+                  >
+                    <Text style={styles.complaintCloseBtnText}>Tutup</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={{ gap: 14, paddingTop: 10 }}>
+                  <Text style={styles.complaintFieldLabel}>PILIH KATEGORI MASALAH</Text>
+                  <View style={styles.categoryPillsWrap}>
+                    {[
+                      "Tarif tidak sesuai",
+                      "Driver tidak datang",
+                      "Driver berperilaku buruk",
+                      "Lokasi tidak sesuai",
+                      "Barang atau kendaraan bermasalah",
+                      "Pembayaran bermasalah",
+                      "Perjalanan belum selesai tetapi sudah ditutup",
+                    ].map((cat) => (
+                      <TouchableOpacity
+                        key={cat}
+                        style={[
+                          styles.categoryPill,
+                          complaintCategory === cat && styles.categoryPillActive,
+                        ]}
+                        onPress={() => setComplaintCategory(cat)}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryPillText,
+                            complaintCategory === cat && styles.categoryPillTextActive,
+                          ]}
+                        >
+                          {cat}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.complaintFieldLabel}>DETAIL KELUHAN</Text>
+                  <TextInput
+                    style={styles.complaintInput}
+                    placeholder="Jelaskan secara detail apa yang terjadi selama perjalanan..."
+                    placeholderTextColor="#94A3B8"
+                    value={complaintDescription}
+                    onChangeText={setComplaintDescription}
+                    multiline
+                    numberOfLines={4}
+                  />
+
+                  <TouchableOpacity
+                    style={styles.submitComplaintBtn}
+                    onPress={handleSubmitComplaint}
+                    disabled={isSubmittingComplaint}
+                    activeOpacity={0.85}
+                  >
+                    {isSubmittingComplaint ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.submitComplaintBtnText}>Kirim Pengaduan</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ResponsiveSafeAreaView>
   );
 };
@@ -1042,5 +1213,154 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13.5,
     fontWeight: "800",
+  },
+
+  reportComplaintBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FDBA74",
+  },
+  reportComplaintBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#EA580C",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "flex-end",
+  },
+  complaintModalCard: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 32,
+    maxHeight: "80%",
+  },
+  complaintModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    paddingBottom: 12,
+  },
+  complaintModalTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  complaintModalSub: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  complaintFieldLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#64748B",
+    letterSpacing: 0.5,
+  },
+  categoryPillsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  categoryPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  categoryPillActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#2563EB",
+  },
+  categoryPillText: {
+    fontSize: 12,
+    color: "#475569",
+    fontWeight: "600",
+  },
+  categoryPillTextActive: {
+    color: "#2563EB",
+    fontWeight: "700",
+  },
+  complaintInput: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 13,
+    color: "#0F172A",
+    textAlignVertical: "top",
+    minHeight: 90,
+  },
+  submitComplaintBtn: {
+    backgroundColor: "#DC2626",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
+  submitComplaintBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  complaintSuccessWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+    gap: 8,
+  },
+  complaintSuccessTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 4,
+  },
+  complaintSuccessCode: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  complaintSuccessSub: {
+    fontSize: 12,
+    color: "#64748B",
+    textAlign: "center",
+    paddingHorizontal: 16,
+  },
+  complaintCloseBtn: {
+    backgroundColor: "#1B7A4E",
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  complaintCloseBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 13,
   },
 });

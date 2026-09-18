@@ -35,7 +35,14 @@ import {
   Heart,
   PlayCircle,
   Bike,
+  Package,
+  Recycle,
+  Leaf,
+  WalletCards,
+  ArrowUpRight,
+  Sparkles,
 } from "lucide-react-native";
+import { useRecycle } from "../../context/RecycleContext";
 import { fetchCustomerRides } from "../../services/rideService";
 import { rp } from "../../utils/formatters";
 import { RESTAURANTS, LAUNDRIES, KOS_LIST } from "../../constants/mockData";
@@ -71,6 +78,9 @@ interface CustomerHomeProps extends Nav {
 
 export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, onUpdateAccount }) => {
   const [currentTab, setCurrentTab] = useState<number>(0);
+  const { wallet } = useRecycle();
+  const recyclePoints = wallet?.balancePoint || 0;
+  const recycleTotalKg = wallet?.totalKgDeposited || 0;
 
   // Global customer profile states
   const [customerName, setCustomerName] = useState(authAccount?.name || "");
@@ -700,15 +710,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           <Text style={styles.promoSub}>Gunakan kode LOKAL20 untuk potongan Rp5.000</Text>
         </View>
 
-        {/* Service grid row */}
+        {/* Layanan Utama (4-Grid Formasi 4 Layanan) */}
         <Text style={styles.sectionTitle}>Layanan Utama</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.servicesScrollList}
-        >
+        <View style={styles.servicesGrid4}>
           {/* Marketplace -> Kanyaah Mart */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_marketplace")} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem4} onPress={() => navigate("c_marketplace")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5EE" }]}>
               <Store size={22} color="#1B7A4E" />
             </View>
@@ -716,7 +722,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           </TouchableOpacity>
 
           {/* Catering -> Kanyaah Catering */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_catering")} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem4} onPress={() => navigate("c_catering")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#FFEDD5" }]}>
               <Coffee size={22} color="#EA580C" />
             </View>
@@ -724,7 +730,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           </TouchableOpacity>
 
           {/* Laundry -> Kanyaah Laundry */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_laundry")} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem4} onPress={() => navigate("c_laundry")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#E0F2FE" }]}>
               <Wind size={22} color="#0284C7" />
             </View>
@@ -732,21 +738,132 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           </TouchableOpacity>
 
           {/* Kos -> Kanyaah Homestay */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_kos")} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.serviceItem4} onPress={() => navigate("c_kos")} activeOpacity={0.75}>
             <View style={[styles.serviceIconBg, { backgroundColor: "#F3E8FF" }]}>
               <Building size={22} color="#9333EA" />
             </View>
             <Text style={styles.serviceText}>Kanyaah{"\n"}Homestay</Text>
           </TouchableOpacity>
+        </View>
 
-          {/* Ride -> Kanyaah Ride */}
-          <TouchableOpacity style={styles.serviceItem} onPress={() => navigate("c_ride")} activeOpacity={0.75}>
-            <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5EE" }]}>
-              <Bike size={22} color="#1B7A4E" />
+        {/* Featured Kanyaah Ride & Kanyaah Send Hero Cards (Diletakkan di bawah 4 grid) */}
+        <View style={styles.heroDuoRow}>
+          {/* Card Kanyaah Ride */}
+          <TouchableOpacity
+            style={[styles.heroHalfCard, styles.rideHalfCard]}
+            onPress={() => navigate("c_ride")}
+            activeOpacity={0.88}
+          >
+            <View style={styles.heroHalfBadge}>
+              <Bike size={12} color="#15803D" />
+              <Text style={styles.heroHalfBadgeText}>KANYAAH RIDE</Text>
             </View>
-            <Text style={styles.serviceText}>Kanyaah{"\n"}Ride</Text>
+            <Text style={styles.heroHalfTitle}>Mau pergi ke mana?</Text>
+            <Text style={styles.heroHalfSub} numberOfLines={2}>Ojek online cepat & aman di Kamojang</Text>
+            <View style={styles.heroHalfBottom}>
+              <View style={styles.heroHalfCta}>
+                <Text style={styles.heroHalfCtaText}>Pesan</Text>
+                <ChevronRight size={12} color="#FFFFFF" />
+              </View>
+              <View style={[styles.heroHalfCircle, { backgroundColor: "#D1FAE5", borderColor: "#A7F3D0" }]}>
+                <Bike size={22} color="#1B7A4E" />
+              </View>
+            </View>
           </TouchableOpacity>
-        </ScrollView>
+
+          {/* Card Kanyaah Send */}
+          <TouchableOpacity
+            style={[styles.heroHalfCard, styles.sendHalfCard]}
+            onPress={() => navigate("c_send")}
+            activeOpacity={0.88}
+          >
+            <View style={[styles.heroHalfBadge, { backgroundColor: "#FEF3C7" }]}>
+              <Package size={12} color="#B45309" />
+              <Text style={[styles.heroHalfBadgeText, { color: "#B45309" }]}>KANYAAH SEND</Text>
+            </View>
+            <Text style={[styles.heroHalfTitle, { color: "#78350F" }]}>Kirim paket / barang</Text>
+            <Text style={[styles.heroHalfSub, { color: "#92400E" }]} numberOfLines={2}>Kirim cepat & aman dengan kurir</Text>
+            <View style={styles.heroHalfBottom}>
+              <View style={[styles.heroHalfCta, { backgroundColor: "#B45309" }]}>
+                <Text style={styles.heroHalfCtaText}>Kirim</Text>
+                <ChevronRight size={12} color="#FFFFFF" />
+              </View>
+              <View style={[styles.heroHalfCircle, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
+                <Package size={22} color="#B45309" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Card Kanyaah Recycle Feature Entry Point */}
+        <TouchableOpacity
+          style={styles.recycleCard}
+          onPress={() => navigate("c_recycle_home")}
+          activeOpacity={0.9}
+        >
+          <View style={styles.recycleCardHeader}>
+            <View style={styles.recycleBadge}>
+              <Recycle size={14} color="#15803D" />
+              <Text style={styles.recycleBadgeText}>KANYAAH RECYCLE</Text>
+            </View>
+            <View style={styles.recyclePointChip}>
+              <Sparkles size={12} color="#FBBF24" />
+              <Text style={styles.recyclePointChipText}>{recyclePoints.toLocaleString("id-ID")} Pts</Text>
+            </View>
+          </View>
+
+          <Text style={styles.recycleTitle}>Ubah sampah jadi manfaat.</Text>
+          <Text style={styles.recycleSub}>
+            Setor sampah daur ulang, timbang resmi, dan dapatkan GEOVERSE Point!
+          </Text>
+
+          <View style={styles.recycleStatsRow}>
+            <View style={styles.recycleStatItem}>
+              <Text style={styles.recycleStatLabel}>Saldo Point</Text>
+              <Text style={styles.recycleStatVal}>{recyclePoints.toLocaleString("id-ID")} Pts</Text>
+              <Text style={styles.recycleStatSub}>≈ {rp(recyclePoints)}</Text>
+            </View>
+            <View style={styles.recycleStatDivider} />
+            <View style={styles.recycleStatItem}>
+              <Text style={styles.recycleStatLabel}>Total Sampah Disetor</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                <Leaf size={14} color="#15803D" />
+                <Text style={styles.recycleStatVal}>{recycleTotalKg.toFixed(1)} kg</Text>
+              </View>
+              <Text style={styles.recycleStatSub}>Teralihkan dari TPA</Text>
+            </View>
+          </View>
+
+          {/* Shortcuts: Setor Sampah, Tukar Point, Riwayat */}
+          <View style={styles.recycleShortcutsRow}>
+            <TouchableOpacity
+              style={[styles.recycleShortcutBtn, styles.recycleShortcutPrimary]}
+              onPress={() => navigate("c_recycle_banks")}
+              activeOpacity={0.8}
+            >
+              <Recycle size={13} color="#FFFFFF" />
+              <Text style={styles.recycleShortcutPrimaryText}>Setor Sampah</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.recycleShortcutBtn}
+              onPress={() => navigate("c_recycle_redemption")}
+              activeOpacity={0.8}
+            >
+              <ArrowUpRight size={13} color="#15803D" />
+              <Text style={styles.recycleShortcutText}>Tukar Point</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.recycleShortcutBtn}
+              onPress={() => navigate("c_recycle_ledger")}
+              activeOpacity={0.8}
+            >
+              <WalletCards size={13} color="#15803D" />
+              <Text style={styles.recycleShortcutText}>Riwayat</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
 
         {/* Nearby Stores horizontal lists */}
         <Text style={styles.sectionTitle}>Toko Marketplace</Text>
@@ -1783,5 +1900,316 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+  },
+
+  servicesGrid4: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    gap: 8,
+    justifyContent: "space-between",
+  },
+  serviceItem4: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 104,
+    gap: 8,
+    elevation: 2,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  heroDuoRow: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    gap: 10,
+    marginTop: 14,
+  },
+  heroHalfCard: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 14,
+    justifyContent: "space-between",
+    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    minHeight: 155,
+  },
+  rideHalfCard: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+    shadowColor: "#15803D",
+  },
+  sendHalfCard: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+    shadowColor: "#B45309",
+  },
+  heroHalfBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  heroHalfBadgeText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#15803D",
+    letterSpacing: 0.5,
+  },
+  heroHalfTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#064E3B",
+  },
+  heroHalfSub: {
+    fontSize: 10,
+    color: "#166534",
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  heroHalfBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  heroHalfCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#15803D",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  heroHalfCtaText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  heroHalfCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+  },
+  rideHeroCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    borderRadius: 20,
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 14,
+    elevation: 3,
+    shadowColor: "#15803D",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  rideHeroLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  rideHeroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  rideHeroBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+    letterSpacing: 0.5,
+  },
+  rideHeroTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#064E3B",
+  },
+  rideHeroSub: {
+    fontSize: 11,
+    color: "#166534",
+    marginTop: 2,
+  },
+  rideHeroCtaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#15803D",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginTop: 8,
+  },
+  rideHeroCtaText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  rideHeroRight: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  rideHeroCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "#D1FAE5",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#A7F3D0",
+  },
+  recycleCard: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  recycleCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  recycleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#DCFCE7",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  recycleBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#15803D",
+    letterSpacing: 0.5,
+  },
+  recyclePointChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FEF3C7",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  recyclePointChipText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#B45309",
+  },
+  recycleTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#065F46",
+  },
+  recycleSub: {
+    fontSize: 12,
+    color: "#047857",
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  recycleStatsRow: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 12,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  recycleStatItem: {
+    flex: 1,
+  },
+  recycleStatLabel: {
+    fontSize: 10,
+    color: "#6B7280",
+    fontWeight: "600",
+  },
+  recycleStatVal: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#111827",
+    marginTop: 2,
+  },
+  recycleStatSub: {
+    fontSize: 10,
+    color: "#059669",
+    marginTop: 2,
+  },
+  recycleStatDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: "#E5E7EB",
+    marginHorizontal: 12,
+  },
+  recycleShortcutsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  recycleShortcutBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  recycleShortcutPrimary: {
+    backgroundColor: "#15803D",
+    borderColor: "#15803D",
+  },
+  recycleShortcutPrimaryText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  recycleShortcutText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#15803D",
   },
 });

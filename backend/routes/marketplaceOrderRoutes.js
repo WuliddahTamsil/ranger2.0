@@ -1,5 +1,17 @@
 const express = require("express");
-const { getOrdersByOwner, getOrdersByCustomer, getOrdersByDriver, acceptDriverOrder, declineDriverOrder, assignDriver, updateOrderStatus } = require("../controllers/marketplaceOrderController");
+const {
+  getOrdersByOwner,
+  getOrdersByCustomer,
+  getOrdersByDriver,
+  acceptDriverOrder,
+  declineDriverOrder,
+  assignDriver,
+  updateOrderStatus,
+  cancelMarketplaceOrder,
+  submitOrderComplaint,
+  respondOrderComplaint,
+  simulateMarketplacePayment,
+} = require("../controllers/marketplaceOrderController");
 const { createMarketplaceOrder } = require("../controllers/createMarketplaceOrderController");
 const { requireAuth } = require("../middleware/authMiddleware");
 const { requireCustomerOrderOwner } = require("../middleware/requireCustomerOrderOwner");
@@ -15,5 +27,11 @@ router.post("/:id/accept", requireAuth, requireRole("driver"), acceptDriverOrder
 router.post("/:id/decline", requireAuth, requireRole("driver"), declineDriverOrder);
 router.put("/:id/assign-driver", requireAuth, requireRole("pemilik_marketplace"), assignDriver);
 router.put("/:id/status", requireAuth, updateOrderStatus);
+
+// Cancellation, Complaints, and Payment Simulation
+router.post("/:id/cancel", requireAuth, cancelMarketplaceOrder);
+router.post("/:id/complaint", requireAuth, submitOrderComplaint);
+router.post("/:id/complaint/respond", requireAuth, requireRole("pemilik_marketplace"), respondOrderComplaint);
+router.post("/:id/simulate-payment", requireAuth, simulateMarketplacePayment);
 
 module.exports = router;

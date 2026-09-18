@@ -268,11 +268,12 @@ export const createCustomerReview = async (reviewData: Record<string, unknown>) 
   }
 };
 
-export const createMarketplaceProduct = async (productData: Record<string, unknown>) => {
+export const createMarketplaceProduct = async (productData: Record<string, unknown>, actorId?: string) => {
   try {
+    const authHeaders = await getAuthHeaders(actorId || String(productData.ownerId || ""));
     const res = await fetch(getApiUrl("/marketplace"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify(productData),
     });
     return await res.json();
@@ -282,11 +283,12 @@ export const createMarketplaceProduct = async (productData: Record<string, unkno
   }
 };
 
-export const updateMarketplaceProduct = async (id: string | number, productData: Record<string, unknown>) => {
+export const updateMarketplaceProduct = async (id: string | number, productData: Record<string, unknown>, actorId?: string) => {
   try {
+    const authHeaders = await getAuthHeaders(actorId);
     const res = await fetch(getApiUrl(`/marketplace/${id}`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify(productData),
     });
     return await res.json();
@@ -296,15 +298,20 @@ export const updateMarketplaceProduct = async (id: string | number, productData:
   }
 };
 
-export const deleteMarketplaceProduct = async (id: string | number) => {
+export const deleteMarketplaceProduct = async (id: string | number, actorId?: string) => {
   try {
-    const res = await fetch(getApiUrl(`/marketplace/${id}`), { method: "DELETE" });
+    const authHeaders = await getAuthHeaders(actorId);
+    const res = await fetch(getApiUrl(`/marketplace/${id}`), {
+      method: "DELETE",
+      headers: { ...authHeaders },
+    });
     return await res.json();
   } catch (err) {
     console.error("deleteMarketplaceProduct error:", err);
     return { success: false, message: "Gagal menyambung ke server" };
   }
 };
+
 
 export const getMarketplaceOrdersForOwner = async (ownerId: string) => {
   try {
@@ -456,6 +463,84 @@ export const assignMarketplaceDriver = async (orderId: string, driverId: string)
     return { success: false, message: "Gagal menugaskan driver. Periksa koneksi dan coba lagi." };
   }
 };
+
+export const cancelMarketplaceOrder = async (orderId: string, reason?: string, actorId?: string) => {
+  try {
+    const authHeaders = await getAuthHeaders(actorId);
+    const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/cancel`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ reason: reason || "Dibatalkan oleh pengguna" }),
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("cancelMarketplaceOrder error:", err);
+    return { success: false, message: err?.message || "Gagal membatalkan pesanan" };
+  }
+};
+
+export const submitMarketplaceComplaint = async (
+  orderId: string,
+  complaintData: {
+    reason: string;
+    detail?: string;
+    photos?: string[];
+    solutionRequested?: string;
+    bankDetails?: any;
+  },
+  actorId?: string
+) => {
+  try {
+    const authHeaders = await getAuthHeaders(actorId);
+    const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/complaint`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify(complaintData),
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("submitMarketplaceComplaint error:", err);
+    return { success: false, message: err?.message || "Gagal mengajukan komplain" };
+  }
+};
+
+export const respondMarketplaceComplaint = async (
+  orderId: string,
+  responseData: {
+    action: "approve" | "reject";
+    resolutionNotes?: string;
+    refundAmount?: number;
+  },
+  actorId?: string
+) => {
+  try {
+    const authHeaders = await getAuthHeaders(actorId);
+    const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/complaint/respond`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify(responseData),
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("respondMarketplaceComplaint error:", err);
+    return { success: false, message: err?.message || "Gagal memproses tanggapan komplain" };
+  }
+};
+
+export const simulateMarketplacePayment = async (orderId: string, actorId?: string) => {
+  try {
+    const authHeaders = await getAuthHeaders(actorId);
+    const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/simulate-payment`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("simulateMarketplacePayment error:", err);
+    return { success: false, message: err?.message || "Gagal memproses simulasi pembayaran" };
+  }
+};
+
 
 export const getDrivers = async () => {
   try {

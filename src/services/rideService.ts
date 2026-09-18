@@ -9,6 +9,7 @@ export interface RideLocation {
   latitude?: number | null;
   longitude?: number | null;
   placeName?: string;
+  notes?: string;
 }
 
 export interface CreateRideParams {
@@ -18,8 +19,9 @@ export interface CreateRideParams {
   pickup: RideLocation;
   destination: RideLocation;
   customerNote?: string;
-  vehicleType?: "MOTOR" | "CAR";
+  vehicleType?: "MOTOR" | "MOBIL" | "CAR";
   paymentMethod?: string;
+  discount?: number;
   estimatedDistance?: number;
   estimatedDuration?: number;
   estimatedFare?: number;
@@ -32,7 +34,8 @@ export type RideStatus =
   | "DRIVER_ARRIVED"
   | "TRIP_STARTED"
   | "COMPLETED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "DISPUTED";
 
 export interface RideOrderData {
   _id: string;
@@ -50,24 +53,62 @@ export interface RideOrderData {
   driverRating?: number;
   driverVehicle?: string;
   driverPlate?: string;
-  vehicleType: "MOTOR" | "CAR";
+  driverSnapshot?: {
+    name: string;
+    phone: string;
+    photo: string;
+    vehicleType: string;
+    vehiclePlate: string;
+    rating: number;
+  };
+  driverLocation?: {
+    latitude: number;
+    longitude: number;
+    heading?: number | null;
+    speed?: number | null;
+    updatedAt?: string | Date;
+  };
+  vehicleType: "MOTOR" | "MOBIL" | "CAR";
   pickup: RideLocation;
   destination: RideLocation;
   customerNote?: string;
   estimatedDistance: number;
   estimatedDuration: number;
+  estimatedDistanceKm?: number;
+  estimatedDurationMinutes?: number;
+  baseFare?: number;
+  distanceFare?: number;
+  timeFare?: number;
+  serviceFee?: number;
+  discount?: number;
   estimatedFare: number;
   totalAmount: number;
+  finalFare?: number;
+  actualDistanceKm?: number;
+  actualDurationMinutes?: number;
   driverEarnings: number;
+  paymentId?: string | null;
   paymentMethod: string;
   paymentStatus: string;
   status: RideStatus;
-  rating?: number | null;
+  rating?: {
+    score: number;
+    review?: string;
+    createdAt?: string | Date;
+  } | number | null;
   review?: string;
+  cancellation?: {
+    cancelledBy: string;
+    reason: string;
+    fee: number;
+    refundAmount?: number;
+    cancelledAt?: string | Date;
+  };
   cancelledBy?: string | null;
   cancelReason?: string;
   createdAt: string;
   updatedAt: string;
+  completedAt?: string;
 }
 
 const getAuthHeaders = async (accountId?: string): Promise<Record<string, string>> => {
@@ -119,22 +160,107 @@ export const calculateDistance = (
   return Math.round(R * c * 10) / 10;
 };
 
-// Standard fare calculation formula:
-// Base Rp 8.000 for first 2 km, + Rp 2.500 per subsequent km
-export const calculateRideFare = (distanceKm: number): number => {
+// Client-side quick fare fallback formula:
+export const calculateRideFare = (distanceKm: number, vehicleType: string = "MOTOR"): number => {
   const safeDist = Math.max(0.5, Number(distanceKm) || 2);
+  const isCar = vehicleType === "MOBIL" || vehicleType === "CAR";
   const baseKm = 2;
-  const baseFare = 8000;
-  const ratePerKm = 2500;
+  const baseFare = isCar ? 15000 : 8000;
+  const ratePerKm = isCar ? 4500 : 2500;
+  const minFare = isCar ? 20000 : 10000;
 
   let fare = baseFare;
   if (safeDist > baseKm) {
     fare += Math.round((safeDist - baseKm) * ratePerKm);
   }
-  return Math.ceil(fare / 1000) * 1000;
+  return Math.max(minFare, Math.ceil(fare / 1000) * 1000);
 };
 
-// Create a new Kanyaah Ride booking
+export interface FareEstimateResult {
+  distanceKm: number;
+  estimatedDurationMinutes: number;
+  estimatedDuration: number;
+  baseFare: number;
+  distanceFare: number;
+  timeFare: number;
+  serviceFee: number;
+  discount: number;
+  minimumFare: number;
+  estimatedFare: number;
+  formattedFare: string;
+  currency: string;
+}
+
+export interface FareEstimateOptions {
+  pickup: RideLocation;
+  destination: RideLocation;
+  vehicleType?: "MOTOR" | "MOBIL" | "CAR";
+  discount?: number;
+}
+
+// 1. Estimate Fare Breakdown from backend
+export const estimateRideFareBreakdown = async (
+  pickupOrOptions: RideLocation | FareEstimateOptions,
+  destArg?: RideLocation,
+  vehicleTypeArg: "MOTOR" | "MOBIL" | "CAR" = "MOTOR",
+  discountArg: number = 0
+): Promise<{
+  success: boolean;
+  data?: FareEstimateResult;
+  message?: string;
+}> => {
+  try {
+    let pickup: RideLocation;
+    let destination: RideLocation;
+    let vehicleType: string = "MOTOR";
+    let discount: number = 0;
+
+    if (destArg !== undefined) {
+      pickup = pickupOrOptions as RideLocation;
+      destination = destArg;
+      vehicleType = vehicleTypeArg;
+      discount = discountArg;
+    } else {
+      const opts = pickupOrOptions as FareEstimateOptions;
+      pickup = opts.pickup;
+      destination = opts.destination;
+      vehicleType = opts.vehicleType || "MOTOR";
+      discount = opts.discount || 0;
+    }
+
+    const res = await fetch(getApiUrl("/rides/fare-estimate"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pickup, destination, vehicleType, discount }),
+    });
+    return await readJson(res);
+  } catch (err: any) {
+    console.error("estimateRideFareBreakdown error:", err);
+    return { success: false, message: err.message || "Gagal menghitung estimasi tarif" };
+  }
+};
+
+// Backwards-compatible alias
+export const estimateFare = async (
+  pickup: RideLocation,
+  destination: RideLocation
+) => {
+  const res = await estimateRideFareBreakdown(pickup, destination, "MOTOR");
+  if (res.success && res.data) {
+    return {
+      success: true,
+      data: {
+        distanceKm: res.data.distanceKm,
+        estimatedDuration: res.data.estimatedDurationMinutes,
+        estimatedFare: res.data.estimatedFare,
+        formattedFare: res.data.formattedFare,
+      },
+    };
+  }
+  return { success: false, message: res.message };
+};
+
+// 2. Create Ride Booking
 export const createRideBooking = async (
   params: CreateRideParams
 ): Promise<{ success: boolean; data?: RideOrderData; message?: string }> => {
@@ -155,7 +281,7 @@ export const createRideBooking = async (
   }
 };
 
-// Fetch customer ride order history
+// 3. Fetch Customer Rides History
 export const fetchCustomerRides = async (
   customerId: string
 ): Promise<{ success: boolean; data?: RideOrderData[]; message?: string }> => {
@@ -172,7 +298,7 @@ export const fetchCustomerRides = async (
   }
 };
 
-// Fetch currently active ride for customer (if any)
+// 4. Fetch Currently Active Customer Ride
 export const fetchActiveCustomerRide = async (
   customerId: string
 ): Promise<{ success: boolean; data?: RideOrderData | null; message?: string }> => {
@@ -189,7 +315,7 @@ export const fetchActiveCustomerRide = async (
   }
 };
 
-// Fetch available and assigned rides for driver
+// 5. Fetch Driver Available & Assigned Rides
 export const fetchDriverRides = async (
   driverId: string
 ): Promise<{ success: boolean; data?: RideOrderData[]; message?: string }> => {
@@ -206,7 +332,7 @@ export const fetchDriverRides = async (
   }
 };
 
-// Fetch single ride details by order ID
+// 6. Fetch Single Ride Detail
 export const fetchRideDetail = async (
   orderId: string
 ): Promise<{ success: boolean; data?: RideOrderData; message?: string }> => {
@@ -223,7 +349,7 @@ export const fetchRideDetail = async (
   }
 };
 
-// Driver accepts a ride atomically
+// 7. Accept Ride Order (Driver Atomic)
 export const acceptRide = async (
   orderId: string,
   driverId?: string
@@ -244,7 +370,7 @@ export const acceptRide = async (
   }
 };
 
-// Driver declines a ride
+// 8. Decline Ride Order (Driver)
 export const declineRide = async (
   orderId: string,
   driverId?: string
@@ -265,7 +391,7 @@ export const declineRide = async (
   }
 };
 
-// Update ride status (Driver transitions & Cancel)
+// 9. Update Ride Status (Operational Workflow)
 export const updateRideStatus = async (
   orderId: string,
   status: RideOrderData["status"],
@@ -289,14 +415,80 @@ export const updateRideStatus = async (
   }
 };
 
-// Rate a completed ride (Customer)
+// 10. Update Driver Live GPS Location
+export const updateDriverLocation = async (
+  orderId: string,
+  coords: { latitude: number; longitude: number; heading?: number | null; speed?: number | null },
+  driverId?: string
+): Promise<{ success: boolean; data?: any; message?: string }> => {
+  try {
+    const headers = await getAuthHeaders(driverId);
+    const res = await fetch(getApiUrl(`/rides/${orderId}/location`), {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify(coords),
+    });
+    return await readJson(res);
+  } catch (err: any) {
+    console.error("updateDriverLocation error:", err);
+    return { success: false, message: err.message || "Gagal memperbarui lokasi driver" };
+  }
+};
+
+export interface CancelRideOptions {
+  reason: string;
+  reasonDetail?: string;
+  cancelledBy?: string;
+}
+
+// 11. Cancel Ride Order
+export const cancelRide = async (
+  orderId: string,
+  reasonOrOptions: string | CancelRideOptions,
+  reasonDetail?: string,
+  actorId?: string
+): Promise<{ success: boolean; data?: RideOrderData; message?: string }> => {
+  try {
+    const headers = await getAuthHeaders(actorId);
+    let reason = "Dibatalkan";
+    let detail = reasonDetail;
+    let cancelledBy = "CUSTOMER";
+
+    if (typeof reasonOrOptions === "object") {
+      reason = reasonOrOptions.reason || reason;
+      detail = reasonOrOptions.reasonDetail || detail;
+      cancelledBy = reasonOrOptions.cancelledBy || cancelledBy;
+    } else {
+      reason = reasonOrOptions;
+    }
+
+    const res = await fetch(getApiUrl(`/rides/${orderId}/cancel`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify({ reason, reasonDetail: detail, cancelledBy }),
+    });
+    return await readJson(res);
+  } catch (err: any) {
+    console.error("cancelRide error:", err);
+    return { success: false, message: err.message || "Gagal membatalkan perjalanan" };
+  }
+};
+
+// 12. Rate Ride Order
 export const rateRide = async (
   orderId: string,
   rating: number,
-  review?: string
+  review?: string,
+  customerId?: string
 ): Promise<{ success: boolean; data?: RideOrderData; message?: string }> => {
   try {
-    const headers = await getAuthHeaders();
+    const headers = await getAuthHeaders(customerId);
     const res = await fetch(getApiUrl(`/rides/${orderId}/rating`), {
       method: "POST",
       headers: {
@@ -312,29 +504,48 @@ export const rateRide = async (
   }
 };
 
-// Estimate fare from backend
-export const estimateFare = async (
-  pickup: RideLocation,
-  destination: RideLocation
-): Promise<{
-  success: boolean;
-  data?: {
-    distanceKm: number;
-    estimatedDuration: number;
-    estimatedFare: number;
-    formattedFare: string;
-  };
-  message?: string;
-}> => {
+export interface SubmitComplaintOptions {
+  category: string;
+  description: string;
+  attachments?: string[];
+  customerId?: string;
+}
+
+// 13. Submit Ride Complaint
+export const submitRideComplaint = async (
+  orderId: string,
+  categoryOrOptions: string | SubmitComplaintOptions,
+  description?: string,
+  attachments: string[] = [],
+  customerId?: string
+): Promise<{ success: boolean; data?: any; message?: string }> => {
   try {
-    const res = await fetch(getApiUrl("/rides/fare-estimate"), {
+    let category = "Tarif tidak sesuai";
+    let desc = description || "";
+    let att = attachments;
+    let custId = customerId;
+
+    if (typeof categoryOrOptions === "object") {
+      category = categoryOrOptions.category || category;
+      desc = categoryOrOptions.description || desc;
+      att = categoryOrOptions.attachments || att;
+      custId = categoryOrOptions.customerId || custId;
+    } else {
+      category = categoryOrOptions;
+    }
+
+    const headers = await getAuthHeaders(custId);
+    const res = await fetch(getApiUrl(`/rides/${orderId}/complaint`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pickup, destination }),
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify({ category, description: desc, attachments: att }),
     });
     return await readJson(res);
   } catch (err: any) {
-    console.error("estimateFare error:", err);
-    return { success: false, message: err.message || "Gagal menghitung estimasi tarif" };
+    console.error("submitRideComplaint error:", err);
+    return { success: false, message: err.message || "Gagal mengirimkan komplain" };
   }
 };

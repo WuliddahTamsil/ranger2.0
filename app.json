@@ -22,7 +22,12 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.wuliddah_tamsil.the_ranger_react_native"
+      "package": "com.wuliddah_tamsil.the_ranger_react_native",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyGEOVERSE_MAPS_KEY_FALLBACK_ACTIVE"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"

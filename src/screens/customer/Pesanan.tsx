@@ -35,6 +35,11 @@ import {
   Plus,
   Wallet,
   QrCode,
+  AlertTriangle,
+  RotateCcw,
+  ShieldAlert,
+  DollarSign,
+  CheckCircle,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -43,7 +48,13 @@ import { AuthAccount } from "../auth/authTypes";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 import { FormalInvoiceModal, InvoiceData, InvoiceItemDetail } from "../../components/FormalInvoiceModal";
 import * as ImagePicker from "expo-image-picker";
-import { createCustomerReview, uploadFileToBackend } from "../../services/api";
+import {
+  cancelMarketplaceOrder,
+  createCustomerReview,
+  submitMarketplaceComplaint,
+  uploadFileToBackend,
+} from "../../services/api";
+import { MarketplaceDigitalPaymentModal } from "../../components/MarketplaceDigitalPaymentModal";
 
 interface PesananProps {
   orders: OrderItem[];
@@ -102,6 +113,165 @@ export const Pesanan: React.FC<PesananProps> = ({
   const [commentText, setCommentText] = useState("");
   const [reviewMedia, setReviewMedia] = useState<ReviewMediaDraft[]>([]);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Cancellation states
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<OrderItem | null>(null);
+  const [cancelReason, setCancelReason] = useState("Ingin mengubah rincian pesanan");
+  const [cancelDetail, setCancelDetail] = useState("");
+  const [submittingCancel, setSubmittingCancel] = useState(false);
+
+  // Complaint states
+  const [complaintModalVisible, setComplaintModalVisible] = useState(false);
+  const [orderToComplain, setOrderToComplain] = useState<OrderItem | null>(null);
+  const [complaintReason, setComplaintReason] = useState("Barang Rusak / Cacat");
+  const [complaintDetail, setComplaintDetail] = useState("");
+  const [complaintPhotos, setComplaintPhotos] = useState<string[]>([]);
+  const [complaintBank, setComplaintBank] = useState("BCA");
+  const [complaintAccount, setComplaintAccount] = useState("");
+  const [complaintHolder, setComplaintHolder] = useState("");
+  const [submittingComplaint, setSubmittingComplaint] = useState(false);
+
+  // Digital payment modal states
+  const [digitalPaymentModalVisible, setDigitalPaymentModalVisible] = useState(false);
+  const [digitalPaymentOrder, setDigitalPaymentOrder] = useState<any | null>(null);
+
+  const handleOpenMarketplacePayment = (order: OrderItem) => {
+    const raw = order as any;
+    setDigitalPaymentOrder({
+      id: order.id,
+      _id: order.id,
+      orderCode: order.orderCode || `#${order.id}`,
+      totalAmount: order.total,
+      total: order.total,
+      paymentMethod: raw.paymentMethod || "qris",
+      paymentDetails: raw.paymentDetails || {},
+      storeName: raw.storeName || order.item,
+    });
+    setDigitalPaymentModalVisible(true);
+  };
+
+  const handleOpenCancelModal = (order: OrderItem) => {
+    setOrderToCancel(order);
+    setCancelReason("Ingin mengubah rincian pesanan");
+    setCancelDetail("");
+    setCancelModalVisible(true);
+  };
+
+  const handleCancelMarketplaceOrder = async () => {
+    if (!orderToCancel) return;
+    const finalReason = cancelDetail.trim() ? `${cancelReason} - ${cancelDetail.trim()}` : cancelReason;
+    setSubmittingCancel(true);
+    try {
+      const res = await cancelMarketplaceOrder(orderToCancel.id, finalReason, authAccount?.id);
+      if (!res.success) {
+        throw new Error(res.message || "Gagal membatalkan pesanan");
+      }
+      setOrders(orders.map((o) => o.id === orderToCancel.id ? {
+        ...o,
+        status: "Dibatalkan",
+        cancellation: res.data?.cancellation || { reason: finalReason, cancelledBy: "customer", cancelledAt: new Date() },
+        refund: res.data?.refund,
+        paymentStatus: res.data?.paymentStatus || o.paymentStatus,
+      } : o));
+      setCancelModalVisible(false);
+      setOrderToCancel(null);
+      const isRefunded = res.data?.refund?.status === "REFUNDED" || res.data?.refund?.status === "PENDING";
+      Alert.alert(
+        "Pesanan Dibatalkan",
+        isRefunded
+          ? `Pesanan berhasil dibatalkan dan stok produk telah dikembalikan otomatis. Refund otomatis sebesar ${rp(res.data?.refund?.amount || orderToCancel.total)} sedang diproses.`
+          : "Pesanan berhasil dibatalkan dan stok produk telah dikembalikan otomatis."
+      );
+      if (onRetryOrders) onRetryOrders();
+    } catch (err: any) {
+      Alert.alert("Gagal Membatalkan", err?.message || "Terjadi kesalahan saat membatalkan pesanan.");
+    } finally {
+      setSubmittingCancel(false);
+    }
+  };
+
+  const handleOpenComplaintModal = (order: OrderItem) => {
+    setOrderToComplain(order);
+    setComplaintReason("Barang Rusak / Cacat");
+    setComplaintDetail("");
+    setComplaintPhotos([]);
+    setComplaintBank("BCA");
+    setComplaintAccount("");
+    setComplaintHolder(authAccount?.name || "");
+    setComplaintModalVisible(true);
+  };
+
+  const handlePickComplaintPhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Izin Akses", "Aplikasi membutuhkan izin galeri untuk memilih foto bukti.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]?.uri) {
+        const uri = result.assets[0].uri;
+        const fileName = `complaint-${Date.now()}.jpg`;
+        const mimeType = "image/jpeg";
+        const uploadRes = await uploadFileToBackend(uri, fileName, mimeType);
+        if (uploadRes.success && uploadRes.data?.url) {
+          setComplaintPhotos((prev) => [...prev, uploadRes.data.url]);
+        } else {
+          Alert.alert("Gagal Upload", uploadRes.message || "Gagal mengunggah foto bukti.");
+        }
+      }
+    } catch (e: any) {
+      Alert.alert("Gagal Memilih Foto", e?.message || "Terjadi kendala.");
+    }
+  };
+
+  const handleSubmitComplaint = async () => {
+    if (!orderToComplain) return;
+    if (!complaintDetail.trim()) {
+      Alert.alert("Detail Wajib Diisi", "Mohon jelaskan secara rinci permasalahan barang atau pengiriman.");
+      return;
+    }
+    setSubmittingComplaint(true);
+    try {
+      const res = await submitMarketplaceComplaint(orderToComplain.id, {
+        reason: complaintReason,
+        detail: complaintDetail.trim(),
+        photos: complaintPhotos,
+        solutionRequested: "refund",
+        bankDetails: {
+          bankName: complaintBank,
+          accountNumber: complaintAccount.trim(),
+          accountHolder: complaintHolder.trim(),
+        },
+      }, authAccount?.id);
+      if (!res.success) {
+        throw new Error(res.message || "Gagal mengajukan komplain");
+      }
+      setOrders(orders.map((o) => o.id === orderToComplain.id ? {
+        ...o,
+        complaint: res.data?.complaint || {
+          status: "Diajukan",
+          reason: complaintReason,
+          detail: complaintDetail.trim(),
+          photos: complaintPhotos,
+          createdAt: new Date(),
+        },
+      } : o));
+      setComplaintModalVisible(false);
+      setOrderToComplain(null);
+      Alert.alert("Komplain Terkirim", "Komplain Anda berhasil diteruskan ke pemilik toko untuk diverifikasi.");
+      if (onRetryOrders) onRetryOrders();
+    } catch (err: any) {
+      Alert.alert("Gagal Mengajukan Komplain", err?.message || "Terjadi kesalahan jaringan.");
+    } finally {
+      setSubmittingComplaint(false);
+    }
+  };
 
   const getFilteredOrders = () => {
     switch (activeTab) {
@@ -219,6 +389,16 @@ export const Pesanan: React.FC<PesananProps> = ({
   };
 
   const handleOpenTracking = (order: OrderItem) => {
+    if (order.type?.toLowerCase().includes("ride")) {
+      if (navigate) {
+        navigate("c_ride_tracking");
+        return;
+      }
+      if (onOpenRideTracking) {
+        onOpenRideTracking();
+        return;
+      }
+    }
     setSelectedOrder(order);
     setTrackModalVisible(true);
   };
@@ -405,6 +585,21 @@ export const Pesanan: React.FC<PesananProps> = ({
                       {item.status}
                     </Text>
                   </View>
+                  {item.type.toLowerCase().includes("market") && (
+                    <View style={[styles.paymentMethodPill, {
+                      backgroundColor: ((item as any).paymentMethod === "cod" || item.paymentStatus === "Lunas") ? "#ECFDF5" : "#FEF3C7"
+                    }]}>
+                      <Text style={[styles.paymentMethodPillText, {
+                        color: ((item as any).paymentMethod === "cod" || item.paymentStatus === "Lunas") ? "#059669" : "#D97706"
+                      }]}>
+                        {(item as any).paymentMethod === "cod"
+                          ? "COD"
+                          : item.paymentStatus === "Lunas"
+                          ? "Lunas"
+                          : "Belum Bayar"}
+                      </Text>
+                    </View>
+                  )}
                   <TouchableOpacity
                     style={styles.invoiceHintPill}
                     onPress={() => handleOpenInvoice(item)}
@@ -417,6 +612,73 @@ export const Pesanan: React.FC<PesananProps> = ({
               </View>
 
               <View style={styles.cardDivider} />
+
+              {/* Complaint Banner for Marketplace */}
+              {item.type.toLowerCase().includes("market") && (item as any).complaint && (item as any).complaint.status && (item as any).complaint.status !== "None" && (
+                <View style={[
+                  styles.complaintBanner,
+                  (item as any).complaint.status === "Disetujui"
+                    ? styles.complaintBannerApproved
+                    : (item as any).complaint.status === "Ditolak"
+                    ? styles.complaintBannerRejected
+                    : styles.complaintBannerPending
+                ]}>
+                  <View style={styles.complaintBannerHeader}>
+                    <AlertTriangle size={14} color={
+                      (item as any).complaint.status === "Disetujui"
+                        ? "#059669"
+                        : (item as any).complaint.status === "Ditolak"
+                        ? "#DC2626"
+                        : "#D97706"
+                    } />
+                    <Text style={[styles.complaintBannerTitle, {
+                      color: (item as any).complaint.status === "Disetujui"
+                        ? "#059669"
+                        : (item as any).complaint.status === "Ditolak"
+                        ? "#DC2626"
+                        : "#D97706"
+                    }]}>
+                      {(item as any).complaint.status === "Disetujui"
+                        ? "Komplain Diterima · Refund Diproses"
+                        : (item as any).complaint.status === "Ditolak"
+                        ? "Komplain Ditolak Toko"
+                        : "Komplain Sedang Ditinjau Toko"}
+                    </Text>
+                  </View>
+                  <Text style={styles.complaintBannerText} numberOfLines={2}>
+                    {(item as any).complaint.reason || "Pengajuan komplain"}
+                    {(item as any).complaint.resolutionNotes ? ` • Solusi: ${(item as any).complaint.resolutionNotes}` : ""}
+                  </Text>
+                  {(item as any).refund?.amount ? (
+                    <Text style={styles.complaintRefundAmount}>
+                      Nominal Refund: {rp((item as any).refund.amount)} ({(item as any).refund.status || "Diproses"})
+                    </Text>
+                  ) : null}
+                </View>
+              )}
+
+              {/* Cancellation Banner for Marketplace */}
+              {item.type.toLowerCase().includes("market") && item.status.toLowerCase().includes("batal") && (item as any).cancellation && (
+                <View style={styles.cancellationBanner}>
+                  <View style={styles.cancellationHeader}>
+                    <RotateCcw size={13} color="#DC2626" />
+                    <Text style={styles.cancellationTitle}>
+                      Dibatalkan oleh {(item as any).cancellation.cancelledBy === "owner" ? "Pemilik Toko" : "Pelanggan"}
+                    </Text>
+                  </View>
+                  <Text style={styles.cancellationReason}>
+                    Alasan: {(item as any).cancellation.reason || "Dibatalkan"}
+                  </Text>
+                  {(item as any).refund && (item as any).refund.status !== "None" && (
+                    <View style={styles.refundInfoRow}>
+                      <DollarSign size={13} color="#059669" />
+                      <Text style={styles.refundInfoText}>
+                        Refund: {rp((item as any).refund.amount || item.total)} ({(item as any).refund.status === "REFUNDED" ? "Lunas" : "Diproses"})
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {Boolean(item.remainingAmount && item.remainingAmount > 0) && (
                 <View style={styles.paymentReminderBox}>
@@ -511,6 +773,17 @@ export const Pesanan: React.FC<PesananProps> = ({
                         >
                           <Store size={13} color="#4B5563" />
                           <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {item.type.toLowerCase().includes("market") && (!(item as any).complaint || (item as any).complaint?.status === "None") && (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnComplaint]}
+                          onPress={() => handleOpenComplaintModal(item)}
+                          activeOpacity={0.8}
+                        >
+                          <ShieldAlert size={13} color="#D97706" />
+                          <Text style={styles.actionBtnTextComplaint}>Komplain</Text>
                         </TouchableOpacity>
                       )}
 
@@ -616,6 +889,28 @@ export const Pesanan: React.FC<PesananProps> = ({
                             >
                               <Store size={13} color="#EA580C" />
                               <Text style={styles.actionBtnTextMerchantActive}>Chat Toko</Text>
+                            </TouchableOpacity>
+                          )}
+
+                          {item.type.toLowerCase().includes("market") && (item as any).paymentMethod !== "cod" && item.paymentStatus !== "Lunas" && (
+                            <TouchableOpacity
+                              style={[styles.actionBtn, styles.actionBtnPayNow]}
+                              onPress={() => handleOpenMarketplacePayment(item)}
+                              activeOpacity={0.85}
+                            >
+                              <Wallet size={13} color="#FFFFFF" />
+                              <Text style={styles.actionBtnTextPayNow}>Bayar</Text>
+                            </TouchableOpacity>
+                          )}
+
+                          {item.type.toLowerCase().includes("market") && item.status === "Menunggu" && (
+                            <TouchableOpacity
+                              style={[styles.actionBtn, styles.actionBtnCancel]}
+                              onPress={() => handleOpenCancelModal(item)}
+                              activeOpacity={0.8}
+                            >
+                              <RotateCcw size={13} color="#DC2626" />
+                              <Text style={styles.actionBtnTextCancel}>Batalkan</Text>
                             </TouchableOpacity>
                           )}
 
@@ -1068,6 +1363,208 @@ export const Pesanan: React.FC<PesananProps> = ({
         visible={invoiceModalVisible}
         onClose={() => setInvoiceModalVisible(false)}
         data={selectedInvoice}
+      />
+
+      {/* Marketplace Cancel Modal */}
+      <Modal
+        visible={cancelModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCancelModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Batalkan Pesanan</Text>
+                <Text style={styles.sheetSubtitle}>
+                  {orderToCancel ? `Pesanan ${orderToCancel.orderCode || `#${orderToCancel.id}`}` : ""}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setCancelModalVisible(false)}>
+                <X size={20} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+              <Text style={styles.inputLabel}>Pilih Alasan Pembatalan:</Text>
+              {[
+                "Ingin mengubah rincian pesanan",
+                "Alamat pengiriman salah",
+                "Waktu pengantaran terlalu lama",
+                "Menemukan harga lebih murah",
+                "Lainnya",
+              ].map((reason) => (
+                <TouchableOpacity
+                  key={reason}
+                  style={[styles.reasonOption, cancelReason === reason && styles.reasonOptionSelected]}
+                  onPress={() => setCancelReason(reason)}
+                >
+                  <Text style={[styles.reasonOptionText, cancelReason === reason && styles.reasonOptionTextSelected]}>
+                    {reason}
+                  </Text>
+                  {cancelReason === reason && <CheckCircle2 size={16} color="#1B7A4E" />}
+                </TouchableOpacity>
+              ))}
+
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Catatan Tambahan (Opsional):</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Berikan detail tambahan jika ada..."
+                placeholderTextColor="#9CA3AF"
+                value={cancelDetail}
+                onChangeText={setCancelDetail}
+                multiline
+                numberOfLines={3}
+              />
+
+              <View style={styles.warningBox}>
+                <AlertTriangle size={16} color="#B45309" />
+                <Text style={styles.warningBoxText}>
+                  Stok barang akan otomatis dikembalikan ke etalase toko. Jika sudah bayar non-tunai, refund otomatis akan diteruskan ke metode pembayaran Anda.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.destructiveBtn, submittingCancel && { opacity: 0.6 }]}
+                onPress={handleCancelMarketplaceOrder}
+                disabled={submittingCancel}
+              >
+                <RotateCcw size={16} color="#FFFFFF" />
+                <Text style={styles.destructiveBtnText}>
+                  {submittingCancel ? "Membatalkan..." : "Konfirmasi Batalkan Pesanan"}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Marketplace Complaint Modal */}
+      <Modal
+        visible={complaintModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setComplaintModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.sheetContainer, { maxHeight: "90%" }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Ajukan Komplain & Refund</Text>
+                <Text style={styles.sheetSubtitle}>
+                  {orderToComplain ? `Pesanan ${orderToComplain.orderCode || `#${orderToComplain.id}`}` : ""}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setComplaintModalVisible(false)}>
+                <X size={20} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              <Text style={styles.inputLabel}>Jenis Kendala / Alasan Komplain:</Text>
+              {[
+                "Barang Rusak / Cacat",
+                "Barang tidak sesuai deskripsi",
+                "Jumlah pesanan kurang",
+                "Makanan / Minuman basi",
+                "Paket tidak pernah sampai",
+                "Lainnya",
+              ].map((reason) => (
+                <TouchableOpacity
+                  key={reason}
+                  style={[styles.reasonOption, complaintReason === reason && styles.reasonOptionSelected]}
+                  onPress={() => setComplaintReason(reason)}
+                >
+                  <Text style={[styles.reasonOptionText, complaintReason === reason && styles.reasonOptionTextSelected]}>
+                    {reason}
+                  </Text>
+                  {complaintReason === reason && <CheckCircle2 size={16} color="#1B7A4E" />}
+                </TouchableOpacity>
+              ))}
+
+              <Text style={[styles.inputLabel, { marginTop: 14 }]}>Penjelasan Kendala Detail: *</Text>
+              <TextInput
+                style={[styles.textInput, { minHeight: 80 }]}
+                placeholder="Jelaskan kondisi barang saat diterima, kekurangan barang, atau keluhan lainnya..."
+                placeholderTextColor="#9CA3AF"
+                value={complaintDetail}
+                onChangeText={setComplaintDetail}
+                multiline
+                textAlignVertical="top"
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: 14 }]}>Foto Bukti Kendala:</Text>
+              <View style={styles.photoUploadRow}>
+                {complaintPhotos.map((url, idx) => (
+                  <View key={idx} style={styles.photoThumbWrapper}>
+                    <Image source={{ uri: url }} style={styles.photoThumb} />
+                    <TouchableOpacity
+                      style={styles.photoRemoveBtn}
+                      onPress={() => setComplaintPhotos(complaintPhotos.filter((_, i) => i !== idx))}
+                    >
+                      <X size={12} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {complaintPhotos.length < 4 && (
+                  <TouchableOpacity style={styles.addPhotoBtn} onPress={handlePickComplaintPhoto}>
+                    <Plus size={20} color="#1B7A4E" />
+                    <Text style={styles.addPhotoText}>Unggah Foto</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <Text style={[styles.inputLabel, { marginTop: 14 }]}>Rekening / E-Wallet untuk Refund:</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Nama Bank / E-Wallet (BCA/Mandiri/GoPay/DANA)"
+                placeholderTextColor="#9CA3AF"
+                value={complaintBank}
+                onChangeText={setComplaintBank}
+              />
+              <TextInput
+                style={[styles.textInput, { marginTop: 8 }]}
+                placeholder="Nomor Rekening / No. HP E-Wallet"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="numeric"
+                value={complaintAccount}
+                onChangeText={setComplaintAccount}
+              />
+              <TextInput
+                style={[styles.textInput, { marginTop: 8 }]}
+                placeholder="Nama Pemilik Rekening / Akun E-Wallet"
+                placeholderTextColor="#9CA3AF"
+                value={complaintHolder}
+                onChangeText={setComplaintHolder}
+              />
+
+              <TouchableOpacity
+                style={[styles.primaryActionBtn, submittingComplaint && { opacity: 0.6 }, { marginTop: 20 }]}
+                onPress={handleSubmitComplaint}
+                disabled={submittingComplaint}
+              >
+                <ShieldAlert size={16} color="#FFFFFF" />
+                <Text style={styles.primaryActionBtnText}>
+                  {submittingComplaint ? "Mengirimkan Komplain..." : "Kirim Pengajuan Komplain"}
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Marketplace Digital Payment Modal */}
+      <MarketplaceDigitalPaymentModal
+        visible={digitalPaymentModalVisible}
+        onClose={() => setDigitalPaymentModalVisible(false)}
+        order={digitalPaymentOrder}
+        onPaymentSuccess={() => {
+          setDigitalPaymentModalVisible(false);
+          if (onRetryOrders) onRetryOrders();
+        }}
       />
     </ResponsiveSafeAreaView>
   );
@@ -1845,5 +2342,287 @@ const styles = StyleSheet.create({
   },
   submitReviewBtnDisabled: {
     opacity: 0.65,
+  },
+  paymentMethodPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginTop: 3,
+    alignSelf: "flex-end",
+  },
+  paymentMethodPillText: {
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  complaintBanner: {
+    borderRadius: 12,
+    padding: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  complaintBannerPending: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  complaintBannerApproved: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+  },
+  complaintBannerRejected: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  complaintBannerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  complaintBannerTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  complaintBannerText: {
+    fontSize: 11,
+    color: "#4B5563",
+    lineHeight: 16,
+  },
+  complaintRefundAmount: {
+    fontSize: 11,
+    color: "#059669",
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  cancellationBanner: {
+    borderRadius: 12,
+    padding: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  cancellationHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 3,
+  },
+  cancellationTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  cancellationReason: {
+    fontSize: 11,
+    color: "#6B7280",
+    lineHeight: 16,
+  },
+  refundInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 4,
+  },
+  refundInfoText: {
+    fontSize: 11,
+    color: "#059669",
+    fontWeight: "700",
+  },
+  actionBtnComplaint: {
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+    backgroundColor: "#FFFBEB",
+  },
+  actionBtnTextComplaint: {
+    color: "#D97706",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnPayNow: {
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 12,
+  },
+  actionBtnTextPayNow: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnCancel: {
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    backgroundColor: "#FEF2F2",
+  },
+  actionBtnTextCancel: {
+    color: "#DC2626",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    justifyContent: "flex-end",
+  },
+  sheetContainer: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 30,
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  sheetSubtitle: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  reasonOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 7,
+    backgroundColor: "#F8FAFC",
+  },
+  reasonOptionSelected: {
+    borderColor: "#1B7A4E",
+    backgroundColor: "#ECFDF5",
+  },
+  reasonOptionText: {
+    fontSize: 12,
+    color: "#4B5563",
+    fontWeight: "600",
+  },
+  reasonOptionTextSelected: {
+    color: "#1B7A4E",
+    fontWeight: "800",
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 12,
+    color: "#111827",
+    backgroundColor: "#FFFFFF",
+  },
+  warningBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF3C7",
+    padding: 10,
+    borderRadius: 12,
+    marginTop: 14,
+    marginBottom: 16,
+  },
+  warningBoxText: {
+    flex: 1,
+    fontSize: 11,
+    color: "#92400E",
+    lineHeight: 16,
+  },
+  destructiveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#DC2626",
+    height: 48,
+    borderRadius: 14,
+  },
+  destructiveBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  photoUploadRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 10,
+  },
+  photoThumbWrapper: {
+    position: "relative",
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  photoThumb: {
+    width: "100%",
+    height: "100%",
+  },
+  photoRemoveBtn: {
+    position: "absolute",
+    top: 3,
+    right: 3,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 8,
+    padding: 3,
+  },
+  addPhotoBtn: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#1B7A4E",
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ECFDF5",
+  },
+  addPhotoText: {
+    fontSize: 8,
+    color: "#1B7A4E",
+    fontWeight: "800",
+    marginTop: 2,
+  },
+  bankInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  primaryActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#1B7A4E",
+    height: 48,
+    borderRadius: 14,
+  },
+  primaryActionBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });
