@@ -17,7 +17,7 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["booking_new", "dp_verified", "dp_rejected", "order_new", "order_status", "payment_confirmed", "booking_settled", "reminder", "general"],
+      enum: ["booking_new", "dp_verified", "dp_rejected", "order_new", "order_status", "payment_confirmed", "booking_settled", "reminder", "general", "points"],
       default: "general",
     },
     relatedId: {

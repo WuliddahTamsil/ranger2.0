@@ -20,7 +20,7 @@ const paymentSchema = new mongoose.Schema(
     orderType: {
       type: String,
       required: true,
-      enum: ["RIDE", "MARKETPLACE", "CATERING", "LAUNDRY", "SEND", "KANYAAH_SEND"],
+      enum: ["RIDE", "MARKETPLACE", "CATERING", "LAUNDRY", "SEND", "KANYAAH_SEND", "KANYAAH_SHOP", "SHOP"],
       index: true,
     },
     orderCategory: {

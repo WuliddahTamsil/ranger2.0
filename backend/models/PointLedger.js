@@ -16,13 +16,24 @@ const pointLedgerSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["EARN", "REDEEM_VOUCHER", "REDEEM_CASH", "REVERSAL", "ADJUSTMENT"],
+      enum: ["EARN", "REDEEM_VOUCHER", "REDEEM_CASH", "PAYMENT", "REVERSAL", "ADJUSTMENT"],
       required: true,
       index: true,
     },
     sourceType: {
       type: String,
-      enum: ["WASTE_DEPOSIT", "VOUCHER", "CASH_REDEMPTION", "ADMIN"],
+      enum: [
+        "WASTE_DEPOSIT",
+        "VOUCHER",
+        "CASH_REDEMPTION",
+        "ADMIN",
+        "KANYAAH_SHOP",
+        "KANYAAH_RIDE",
+        "KANYAAH_SEND",
+        "CATERING",
+        "LAUNDRY",
+        "REVERSAL",
+      ],
       required: true,
     },
     sourceId: {

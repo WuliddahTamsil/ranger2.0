@@ -53,7 +53,9 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const sendRoutes = require("./routes/sendRoutes");
 const wasteRoutes = require("./routes/wasteRoutes");
 const pointRoutes = require("./routes/pointRoutes");
+const geoversePointRoutes = require("./features/geoversePoint/routes/geoversePointRoutes");
 const voucherRoutes = require("./routes/voucherRoutes");
+const shopRoutes = require("./routes/shopRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -73,8 +75,10 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/send", sendRoutes);
 app.use("/api/waste-banks", wasteRoutes);
 app.use("/api/waste", wasteRoutes);
+app.use("/api/geoverse-points", geoversePointRoutes);
 app.use("/api/points", pointRoutes);
 app.use("/api/vouchers", voucherRoutes);
+app.use("/api/shop", shopRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {
@@ -151,6 +155,14 @@ io.on("connection", (socket) => {
     socket.join(roomName);
     socket.emit("send:room_joined", { orderId, roomName });
     console.log(`📡 Socket ${socket.id} joined authorized send room: ${roomName}`);
+  });
+
+  socket.on("join_shop_room", async ({ orderId } = {}) => {
+    if (!orderId) return;
+    const roomName = `shop:${String(orderId)}`;
+    socket.join(roomName);
+    socket.emit("shop:room_joined", { orderId, roomName });
+    console.log(`🛒 Socket ${socket.id} joined shop room: ${roomName}`);
   });
 
   socket.on("join_driver_room", async ({ token } = {}) => {

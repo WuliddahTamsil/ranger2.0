@@ -5,6 +5,7 @@ const MarketplaceOrder = require("../models/MarketplaceOrder");
 const CateringOrder = require("../models/CateringOrder");
 const LaundryOrder = require("../models/LaundryOrder");
 const SendOrder = require("../models/SendOrder");
+const ShopOrder = require("../models/ShopOrder");
 const Notification = require("../models/Notification");
 const paymentGateway = require("../services/paymentGateway");
 
@@ -97,6 +98,58 @@ const syncOrderPaymentStatus = async (orderId, orderType, paymentStatus, payment
           io.to(`user:${String(existingOrder.customerId)}`).emit("send:payment_updated", existingOrder);
           if (isPaid) {
             io.emit("send:order_available", existingOrder);
+          }
+        }
+      }
+    } else if (orderType === "KANYAAH_SHOP" || orderType === "SHOP") {
+      const shopOrder = await ShopOrder.findOne(query);
+      if (shopOrder) {
+        shopOrder.paymentStatus = isPaid ? "PAID" : paymentStatus;
+        if (paymentMethod) shopOrder.paymentMethod = String(paymentMethod).toUpperCase();
+
+        if (isPaid && (shopOrder.orderStatus === "PAYMENT_PENDING" || shopOrder.orderStatus === "CREATED")) {
+          shopOrder.orderStatus = "WAITING_STORE_CONFIRMATION";
+          shopOrder.statusHistory.push({
+            status: "WAITING_STORE_CONFIRMATION",
+            actorRole: "system",
+            note: "Pembayaran berhasil diverifikasi. Pesanan diteruskan ke toko untuk diproses.",
+            timestamp: new Date(),
+          });
+        }
+        await shopOrder.save();
+
+        if (isPaid) {
+          const MarketplaceStore = require("../models/MarketplaceStore");
+          const store = await MarketplaceStore.findById(shopOrder.storeId);
+          const ownerId = store?.ownerId;
+
+          await Notification.create([
+            {
+              userId: shopOrder.customerId,
+              title: "Pembayaran Kanyaah Shop Berhasil!",
+              message: `Pembayaran pesanan #${shopOrder.orderCode} sebesar Rp ${shopOrder.totalAmount.toLocaleString("id-ID")} telah lunas. Toko segera menyiapkan pesananmu.`,
+              type: "order_status",
+              relatedId: shopOrder._id,
+            },
+            ...(ownerId
+              ? [
+                  {
+                    userId: ownerId,
+                    title: "Pesanan Telah Dibayar!",
+                    message: `Pesanan #${shopOrder.orderCode} sebesar Rp ${shopOrder.totalAmount.toLocaleString("id-ID")} telah lunas dan siap diproses.`,
+                    type: "order_new",
+                    relatedId: shopOrder._id,
+                  },
+                ]
+              : []),
+          ]).catch(() => undefined);
+
+          if (io) {
+            io.to(`shop:${String(shopOrder._id)}`).emit("shop:order_updated", shopOrder);
+            io.to(`user:${String(shopOrder.customerId)}`).emit("shop:order_updated", shopOrder);
+            if (ownerId) {
+              io.to(`user:${String(ownerId)}`).emit("shop:new_order", shopOrder);
+            }
           }
         }
       }

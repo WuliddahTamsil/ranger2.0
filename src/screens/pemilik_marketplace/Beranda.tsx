@@ -663,6 +663,43 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           </TouchableOpacity>
         </View>
 
+        {/* Kanyaah Shop Management Card */}
+        <TouchableOpacity
+          style={{
+            marginHorizontal: 16,
+            marginTop: 14,
+            marginBottom: 6,
+            backgroundColor: "#F0FDF4",
+            borderWidth: 1.5,
+            borderColor: "#86EFAC",
+            borderRadius: 14,
+            padding: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+          onPress={() => navigate("shop_merchant_orders")}
+          activeOpacity={0.88}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+            <View style={{ width: 42, height: 42, borderRadius: 10, backgroundColor: "#DCFCE7", alignItems: "center", justifyContent: "center" }}>
+              <ShoppingBag size={22} color="#15803D" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "800", color: "#14532D" }}>Pesanan Kanyaah Shop</Text>
+                <View style={{ backgroundColor: "#15803D", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 9, fontWeight: "800", color: "#FFF" }}>SHOP</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 11, color: "#4B5563", marginTop: 2 }}>
+                Kelola pesanan masuk, proses picking barang, atur substitusi & resep apotek.
+              </Text>
+            </View>
+          </View>
+          <ChevronRight size={18} color="#15803D" />
+        </TouchableOpacity>
+
         {/* Needs attention products */}
         {needsAttention.length > 0 && (
           <>

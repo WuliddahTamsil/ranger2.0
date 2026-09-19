@@ -55,6 +55,23 @@ import { WeighingResultScreen } from "./src/screens/customer/recycle/WeighingRes
 import { PointWalletScreen } from "./src/screens/customer/recycle/PointWalletScreen";
 import { PointLedgerScreen } from "./src/screens/customer/recycle/PointLedgerScreen";
 import { PointRedemptionScreen } from "./src/screens/customer/recycle/PointRedemptionScreen";
+import {
+  GeoversePointProvider,
+  GeoversePointHomeScreen,
+  GeoversePointLedgerScreen,
+  GeoversePointVoucherScreen,
+  GeoversePointRedeemCashScreen,
+  GeoversePointRedemptionDetailScreen,
+  GeoversePointHowItWorksScreen,
+} from "./src/features/geoversePoint";
+import { ShopCartProvider } from "./src/context/ShopCartContext";
+import { KanyahShopHomeScreen } from "./src/screens/customer/shop/KanyahShopHomeScreen";
+import { StoreDiscoveryScreen } from "./src/screens/customer/shop/StoreDiscoveryScreen";
+import { StoreDetailScreen } from "./src/screens/customer/shop/StoreDetailScreen";
+import { ShopCartScreen } from "./src/screens/customer/shop/ShopCartScreen";
+import { ShopCheckoutScreen } from "./src/screens/customer/shop/ShopCheckoutScreen";
+import { ShopOrderDetailScreen } from "./src/screens/customer/shop/ShopOrderDetailScreen";
+import { ShopMerchantOrderScreen } from "./src/screens/pemilik_marketplace/ShopMerchantOrderScreen";
 import { WasteBankDashboardScreen } from "./src/screens/bank_sampah/WasteBankDashboardScreen";
 import { WasteWeighingScreen } from "./src/screens/bank_sampah/WasteWeighingScreen";
 import { Beranda as DriverHomeScreen } from "./src/screens/driver/Beranda";
@@ -93,6 +110,9 @@ export default function App() {
   const [currentAuthAccount, setCurrentAuthAccount] = useState<AuthAccount | null>(null);
   const [googleDraft, setGoogleDraft] = useState<GoogleProfile | null>(null);
   const [googleCredential, setGoogleCredential] = useState<GoogleCredential | null>(null);
+  const [selectedShopStoreId, setSelectedShopStoreId] = useState<string>("");
+  const [selectedShopOrderId, setSelectedShopOrderId] = useState<string>("");
+  const [selectedPointRedemptionId, setSelectedPointRedemptionId] = useState<string>("");
 
   useEffect(() => {
     let active = true;
@@ -106,7 +126,7 @@ export default function App() {
     };
   }, []);
 
-  const navigate = (screen: Screen) => {
+  const navigate = (screen: Screen, params?: Record<string, any>) => {
     if (screen === "login" || screen === "onboarding") {
       setCurrentAuthAccount(null);
       setRegistrationResult(null);
@@ -114,6 +134,9 @@ export default function App() {
       setGoogleCredential(null);
       void clearSession();
     }
+    if (params?.storeId) setSelectedShopStoreId(params.storeId);
+    if (params?.orderId) setSelectedShopOrderId(params.orderId);
+    if (params?.redemptionId) setSelectedPointRedemptionId(params.redemptionId);
     setCurrentScreen(screen);
   };
 
@@ -302,12 +325,44 @@ export default function App() {
         return <WasteDepositTrackingScreen navigate={navigate} />;
       case "c_recycle_weighing_result":
         return <WeighingResultScreen navigate={navigate} />;
+      // GEOVERSE Point Screens
+      case "c_point_home":
+        return <GeoversePointHomeScreen navigate={navigate} />;
+      case "c_point_ledger":
+        return <GeoversePointLedgerScreen navigate={navigate} />;
+      case "c_point_vouchers":
+        return <GeoversePointVoucherScreen navigate={navigate} />;
+      case "c_point_redeem_cash":
+        return <GeoversePointRedeemCashScreen navigate={navigate} />;
+      case "c_point_redemption_detail":
+        return <GeoversePointRedemptionDetailScreen navigate={navigate} redemptionId={selectedPointRedemptionId} />;
+      case "c_point_how_it_works":
+        return <GeoversePointHowItWorksScreen navigate={navigate} />;
+
+      // Legacy Recycle Point screen aliases
       case "c_recycle_wallet":
-        return <PointWalletScreen navigate={navigate} />;
+        return <GeoversePointHomeScreen navigate={navigate} />;
       case "c_recycle_ledger":
-        return <PointLedgerScreen navigate={navigate} />;
+        return <GeoversePointLedgerScreen navigate={navigate} />;
       case "c_recycle_redemption":
-        return <PointRedemptionScreen navigate={navigate} />;
+        return <GeoversePointRedeemCashScreen navigate={navigate} />;
+
+      // Kanyaah Shop Screens
+      case "c_shop_home":
+        return <KanyahShopHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_shop_discovery":
+        return <StoreDiscoveryScreen navigate={navigate} />;
+      case "c_shop_store":
+        return <StoreDetailScreen navigate={navigate} storeId={selectedShopStoreId} />;
+      case "c_shop_cart":
+        return <ShopCartScreen navigate={navigate} />;
+      case "c_shop_checkout":
+        return <ShopCheckoutScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_shop_order_detail":
+        return <ShopOrderDetailScreen navigate={navigate} orderId={selectedShopOrderId} />;
+      case "shop_merchant_orders":
+        return <ShopMerchantOrderScreen navigate={navigate} authAccount={currentAuthAccount} />;
+
       case "bank_sampah_dashboard":
         return <WasteBankDashboardScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "bank_sampah_weighing":
@@ -366,20 +421,24 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <RecycleProvider>
-        <SendProvider>
-          <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === "ios" ? (currentScreen === "login" || currentScreen === "auth_register" ? undefined : "padding") : "height"}
-            keyboardVerticalOffset={0}
-          >
-            <View style={styles.container}>
-              <StatusBar style="auto" />
-              {renderScreen()}
-            </View>
-          </KeyboardAvoidingView>
-        </SendProvider>
-      </RecycleProvider>
+      <GeoversePointProvider>
+        <RecycleProvider>
+          <SendProvider>
+            <ShopCartProvider>
+              <KeyboardAvoidingView
+                style={styles.container}
+                behavior={Platform.OS === "ios" ? (currentScreen === "login" || currentScreen === "auth_register" ? undefined : "padding") : "height"}
+                keyboardVerticalOffset={0}
+              >
+                <View style={styles.container}>
+                  <StatusBar style="auto" />
+                  {renderScreen()}
+                </View>
+              </KeyboardAvoidingView>
+            </ShopCartProvider>
+          </SendProvider>
+        </RecycleProvider>
+      </GeoversePointProvider>
     </SafeAreaProvider>
   );
 }

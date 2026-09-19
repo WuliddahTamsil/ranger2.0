@@ -21,7 +21,7 @@ const voucherSchema = new mongoose.Schema(
     },
     service: {
       type: String,
-      enum: ["ALL", "MARKETPLACE", "RIDE", "SEND", "LAUNDRY", "CATERING"],
+      enum: ["ALL", "MARKETPLACE", "RIDE", "SEND", "LAUNDRY", "CATERING", "KANYAAH_SHOP", "SHOP"],
       default: "ALL",
       index: true,
     },

@@ -27,6 +27,10 @@ import {
   LogOut,
   Bike,
   Package,
+  ShoppingBag,
+  Sparkles,
+  HeartPulse,
+  Recycle,
 } from "lucide-react-native";
 
 interface CustomerHomeProps extends Nav {
@@ -34,11 +38,18 @@ interface CustomerHomeProps extends Nav {
 }
 
 export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, authAccount }) => {
-  const categories = [
+  const row1Categories = [
     { id: "c_marketplace", name: "Kanyaah\nMart", icon: Store, color: "#1B7A4E", bg: "#E8F5EE" },
     { id: "c_catering", name: "Kanyaah\nCatering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5" },
     { id: "c_laundry", name: "Kanyaah\nLaundry", icon: Wind, color: "#0284C7", bg: "#E0F2FE" },
     { id: "c_kos", name: "Kanyaah\nHomestay", icon: Building2, color: "#9333EA", bg: "#F3E8FF" },
+  ] as const;
+
+  const row2Categories = [
+    { id: "c_ride", name: "Kanyaah\nRide", icon: Bike, color: "#15803D", bg: "#DCFCE7" },
+    { id: "c_send", name: "Kanyaah\nSend", icon: Package, color: "#B45309", bg: "#FEF3C7" },
+    { id: "c_shop_home", name: "Kanyaah\nShop", icon: ShoppingBag, color: "#15803D", bg: "#E8F5EE" },
+    { id: "c_recycle_home", name: "Kanyaah\nRecycle", icon: Recycle, color: "#047857", bg: "#ECFDF5" },
   ] as const;
 
   return (
@@ -83,76 +94,50 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
           </View>
         </View>
 
-        {/* Categories grid (4-Grid) */}
+        {/* Categories grid (4x2 Grid: 4 di atas & 4 di bawah) */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Layanan Utama</Text>
         </View>
-        <View style={styles.categoriesGrid}>
-          {categories.map((cat) => {
-            const IconComp = cat.icon;
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                style={styles.categoryCard}
-                onPress={() => navigate(cat.id)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.categoryIconBg, { backgroundColor: cat.bg }]}>
-                  <IconComp size={24} color={cat.color} />
-                </View>
-                <Text style={styles.categoryName}>{cat.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <View style={styles.categoriesGridContainer}>
+          {/* Baris 1: 4 Card Di Atas */}
+          <View style={styles.categoriesGrid}>
+            {row1Categories.map((cat) => {
+              const IconComp = cat.icon;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={styles.categoryCard}
+                  onPress={() => navigate(cat.id as any)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.categoryIconBg, { backgroundColor: cat.bg }]}>
+                    <IconComp size={24} color={cat.color} />
+                  </View>
+                  <Text style={styles.categoryName}>{cat.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-        {/* Featured Kanyaah Ride & Kanyaah Send Hero Cards (Bawah 4-Grid) */}
-        <View style={styles.heroDuoRow}>
-          {/* Kanyaah Ride Card */}
-          <TouchableOpacity
-            style={[styles.heroHalfCard, styles.rideHalfCard]}
-            onPress={() => navigate("c_ride")}
-            activeOpacity={0.88}
-          >
-            <View style={styles.heroHalfBadge}>
-              <Bike size={12} color="#15803D" />
-              <Text style={styles.heroHalfBadgeText}>KANYAAH RIDE</Text>
-            </View>
-            <Text style={styles.heroHalfTitle}>Mau pergi ke mana?</Text>
-            <Text style={styles.heroHalfSub} numberOfLines={2}>Ojek online cepat & aman di Kamojang</Text>
-            <View style={styles.heroHalfBottom}>
-              <View style={styles.heroHalfCta}>
-                <Text style={styles.heroHalfCtaText}>Pesan</Text>
-                <ChevronRight size={12} color="#FFFFFF" />
-              </View>
-              <View style={[styles.heroHalfCircle, { backgroundColor: "#D1FAE5", borderColor: "#A7F3D0" }]}>
-                <Bike size={22} color="#1B7A4E" />
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* Kanyaah Send Card */}
-          <TouchableOpacity
-            style={[styles.heroHalfCard, styles.sendHalfCard]}
-            onPress={() => navigate("c_send")}
-            activeOpacity={0.88}
-          >
-            <View style={[styles.heroHalfBadge, { backgroundColor: "#FEF3C7" }]}>
-              <Package size={12} color="#B45309" />
-              <Text style={[styles.heroHalfBadgeText, { color: "#B45309" }]}>KANYAAH SEND</Text>
-            </View>
-            <Text style={[styles.heroHalfTitle, { color: "#78350F" }]}>Kirim paket / barang</Text>
-            <Text style={[styles.heroHalfSub, { color: "#92400E" }]} numberOfLines={2}>Kirim cepat & aman dengan kurir</Text>
-            <View style={styles.heroHalfBottom}>
-              <View style={[styles.heroHalfCta, { backgroundColor: "#B45309" }]}>
-                <Text style={styles.heroHalfCtaText}>Kirim</Text>
-                <ChevronRight size={12} color="#FFFFFF" />
-              </View>
-              <View style={[styles.heroHalfCircle, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
-                <Package size={22} color="#B45309" />
-              </View>
-            </View>
-          </TouchableOpacity>
+          {/* Baris 2: 4 Card Di Bawah */}
+          <View style={styles.categoriesGrid}>
+            {row2Categories.map((cat) => {
+              const IconComp = cat.icon;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={styles.categoryCard}
+                  onPress={() => navigate(cat.id as any)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.categoryIconBg, { backgroundColor: cat.bg }]}>
+                    <IconComp size={24} color={cat.color} />
+                  </View>
+                  <Text style={styles.categoryName}>{cat.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         {/* Popular Products */}
@@ -350,6 +335,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#1B7A4E",
+  },
+  categoriesGridContainer: {
+    gap: 10,
+    marginBottom: 8,
   },
   categoriesGrid: {
     flexDirection: "row",
@@ -628,5 +617,121 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 2,
     borderColor: "#A7F3D0",
+  },
+  shopFeaturedCard: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 6,
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  shopCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  shopBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  shopBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#15803D",
+    letterSpacing: 0.5,
+  },
+  shopInstantChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  shopInstantChipText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#15803D",
+  },
+  shopCardTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#14532D",
+    marginBottom: 4,
+  },
+  shopCardSub: {
+    fontSize: 12,
+    color: "#4B5563",
+    lineHeight: 17,
+    marginBottom: 10,
+  },
+  shopPillsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 12,
+  },
+  shopPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  shopPillText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  shopCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#DCFCE7",
+  },
+  shopCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#15803D",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  shopCtaText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  shopCardCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

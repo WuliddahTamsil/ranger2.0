@@ -111,71 +111,15 @@ export interface WasteDepositUI {
   updatedAt: string;
 }
 
-export interface PointWalletUI {
-  _id: string;
-  userId: string;
-  balancePoint: number;
-  lifetimeEarned: number;
-  lifetimeRedeemed: number;
-  totalKgDeposited: number;
-  depositCount: number;
-  totalCo2ReductionKg: number;
-  updatedAt?: string;
-}
+export type {
+  PointWalletUI,
+  PointLedgerUI,
+  PointRedemptionUI,
+  PointVoucherUI as VoucherUI,
+  LedgerType,
+  LedgerSourceType,
+  LedgerStatus,
+  RedemptionType,
+  RedemptionStatus,
+} from "../features/geoversePoint/types/pointTypes";
 
-export interface PointLedgerUI {
-  _id: string;
-  ledgerId: string;
-  userId: string;
-  type: "EARN" | "REDEEM_VOUCHER" | "REDEEM_CASH" | "REVERSAL" | "ADJUSTMENT";
-  sourceType: "WASTE_DEPOSIT" | "VOUCHER" | "CASH_REDEMPTION" | "ADMIN";
-  sourceId: string;
-  points: number;
-  balanceBefore: number;
-  balanceAfter: number;
-  status: "PENDING" | "CONFIRMED" | "REVERSED";
-  notes?: string;
-  createdAt: string;
-}
-
-export interface PointRedemptionUI {
-  _id: string;
-  redemptionCode: string;
-  userId: string;
-  bankSampahId?: any;
-  type: "VOUCHER" | "CASH" | "BANK_TRANSFER" | "E_WALLET";
-  points: number;
-  rupiahValue: number;
-  fee: number;
-  payoutDestination?: {
-    channel: string;
-    accountNumber: string;
-    accountName: string;
-  };
-  voucherId?: any;
-  voucherCode?: string;
-  voucherDetails?: {
-    title: string;
-    service: string;
-    discountValue: number;
-  };
-  status: "REQUESTED" | "REVIEWING" | "APPROVED" | "PAID" | "REJECTED" | "CANCELLED";
-  rejectionReason?: string;
-  paidAt?: string | null;
-  createdAt: string;
-}
-
-export interface VoucherUI {
-  _id: string;
-  voucherCode: string;
-  title: string;
-  description: string;
-  service: "ALL" | "MARKETPLACE" | "RIDE" | "SEND" | "LAUNDRY" | "CATERING";
-  discountType: "FIXED" | "PERCENTAGE";
-  discountValue: number;
-  minTransaction: number;
-  pointsCost: number;
-  validUntil: string;
-  status: "ACTIVE" | "INACTIVE" | "EXPIRED";
-  isUsed?: boolean;
-}

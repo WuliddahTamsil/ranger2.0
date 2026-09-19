@@ -13,6 +13,9 @@ export type Screen =
   | "c_recycle_home" | "c_recycle_banks" | "c_recycle_bank_detail" | "c_recycle_deposit_form"
   | "c_recycle_pickup_schedule" | "c_recycle_tracking" | "c_recycle_weighing_result"
   | "c_recycle_wallet" | "c_recycle_ledger" | "c_recycle_redemption"
+  | "c_point_home" | "c_point_ledger" | "c_point_vouchers" | "c_point_redeem_cash" | "c_point_redemption_detail" | "c_point_how_it_works"
+  | "c_shop_home" | "c_shop_discovery" | "c_shop_store" | "c_shop_cart" | "c_shop_checkout" | "c_shop_order_detail"
+  | "shop_merchant_orders"
   | "bank_sampah_dashboard" | "bank_sampah_weighing"
   | "d_home"
   | "pemilik_catering_home"
@@ -45,7 +48,7 @@ export type Role =
   | "admin";
 
 export type Nav = {
-  navigate: (s: Screen) => void;
+  navigate: (s: Screen, params?: Record<string, any>) => void;
 };
 
 export type AddressLabel = "Rumah" | "Kos" | "Kantor" | "Lainnya";
