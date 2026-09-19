@@ -24,9 +24,12 @@ import {
   ShieldCheck,
   ChevronRight,
   Info,
+  Eye,
+  X,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
+import { useGeoversePoint } from "../../../features/geoversePoint/hooks/useGeoversePoint";
 import {
   confirmWasteDeposit,
   disputeWasteDeposit,
@@ -34,12 +37,14 @@ import {
 import { rp } from "../../../utils/formatters";
 
 export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
-  const { selectedDeposit, setSelectedDeposit, refreshWallet } = useRecycle();
+  const { selectedDeposit, setSelectedDeposit, refreshWallet: refreshRecycleWallet } = useRecycle();
+  const { refreshWallet: refreshPointWallet } = useGeoversePoint();
   const [confirming, setConfirming] = useState(false);
   const [disputeModalVisible, setDisputeModalVisible] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [disputing, setDisputing] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [activeLightboxUrl, setActiveLightboxUrl] = useState<string | null>(null);
 
   if (!selectedDeposit) {
     return (
@@ -75,7 +80,10 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
       const res = await confirmWasteDeposit(deposit._id);
       if (res.success && res.data) {
         setSelectedDeposit(res.data);
-        await refreshWallet();
+        await Promise.allSettled([
+          refreshRecycleWallet(),
+          refreshPointWallet(),
+        ]);
         setSuccessModalVisible(true);
       } else {
         Alert.alert("Gagal Konfirmasi", res.message || "Gagal mengonfirmasi hasil timbang.");
@@ -99,11 +107,7 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
       if (res.success && res.data) {
         setSelectedDeposit(res.data);
         setDisputeModalVisible(false);
-        Alert.alert(
-          "Komplain Diajukan",
-          "Komplain Anda telah dikirimkan ke Bank Sampah untuk ditinjau ulang.",
-          [{ text: "Kembali ke Status", onPress: () => navigate("c_recycle_tracking") }]
-        );
+        navigate("c_recycle_tracking");
       } else {
         Alert.alert("Gagal", res.message || "Gagal mengajukan komplain.");
       }
@@ -169,7 +173,16 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
         {categories.map((cat, idx) => (
           <View key={idx} style={styles.categoryCard}>
             <View style={styles.catHeaderRow}>
-              <Text style={styles.catTitle}>{cat.category}</Text>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                {cat.subCategory && (
+                  <View style={{ flexDirection: "row", marginBottom: 2 }}>
+                    <View style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 9.5, fontWeight: "800", color: "#15803D" }}>{cat.category}</Text>
+                    </View>
+                  </View>
+                )}
+                <Text style={styles.catTitle}>{cat.subCategory || cat.category}</Text>
+              </View>
               <View style={styles.catPriceBadge}>
                 <Text style={styles.catPriceBadgeText}>Rp {cat.pricePerKg?.toLocaleString("id-ID")}/kg</Text>
               </View>
@@ -204,11 +217,25 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
           <View style={styles.proofCard}>
             <View style={styles.proofHeader}>
               <Camera size={16} color="#15803D" />
-              <Text style={styles.proofTitle}>Foto Bukti Penimbangan</Text>
+              <Text style={styles.proofTitle}>Foto Bukti Penimbangan Petugas</Text>
             </View>
+            <Text style={styles.proofSub}>
+              Ketuk foto di bawah untuk melihat bukti timbangan dalam ukuran penuh (zoom).
+            </Text>
             <View style={styles.photoContainer}>
               {deposit.weighingProofPhotos.map((url, i) => (
-                <Image key={i} source={{ uri: url }} style={styles.proofImage} />
+                <TouchableOpacity
+                  key={i}
+                  style={styles.proofImageWrapper}
+                  onPress={() => setActiveLightboxUrl(url)}
+                  activeOpacity={0.85}
+                >
+                  <Image source={{ uri: url }} style={styles.proofImage} />
+                  <View style={styles.photoZoomBadge}>
+                    <Eye size={11} color="#FFFFFF" />
+                    <Text style={styles.photoZoomBadgeText}>Lihat</Text>
+                  </View>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -335,14 +362,43 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
 
             <TouchableOpacity
               style={styles.btnDone}
-              onPress={() => {
+              onPress={async () => {
                 setSuccessModalVisible(false);
+                await refreshPointWallet().catch(() => {});
                 navigate("c_recycle_wallet");
               }}
             >
               <Text style={styles.btnDoneText}>Buka Dompet Point</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Lightbox / Full-screen Photo Preview Modal */}
+      <Modal
+        visible={Boolean(activeLightboxUrl)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveLightboxUrl(null)}
+      >
+        <View style={styles.lightboxBackdrop}>
+          <TouchableOpacity
+            style={styles.lightboxCloseBtn}
+            onPress={() => setActiveLightboxUrl(null)}
+            activeOpacity={0.8}
+          >
+            <X size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.lightboxImageWrapper}>
+            {activeLightboxUrl ? (
+              <Image
+                source={{ uri: activeLightboxUrl }}
+                style={styles.lightboxImage}
+                resizeMode="contain"
+              />
+            ) : null}
+          </View>
+          <Text style={styles.lightboxCaption}>Foto Bukti Penimbangan Resmi</Text>
         </View>
       </Modal>
     </ResponsiveSafeAreaView>
@@ -540,21 +596,88 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 10,
+    marginBottom: 2,
   },
   proofTitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: "700",
     color: "#111827",
   },
+  proofSub: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginBottom: 10,
+  },
   photoContainer: {
     flexDirection: "row",
-    gap: 8,
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  proofImageWrapper: {
+    position: "relative",
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
   },
   proofImage: {
-    width: 90,
-    height: 90,
+    width: 100,
+    height: 100,
     borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+  },
+  photoZoomBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  photoZoomBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.95)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  lightboxCloseBtn: {
+    position: "absolute",
+    top: 40,
+    right: 20,
+    zIndex: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  lightboxImageWrapper: {
+    width: "100%",
+    height: "75%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  lightboxImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
+  },
+  lightboxCaption: {
+    color: "#E2E8F0",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 14,
   },
   notesBox: {
     flexDirection: "row",

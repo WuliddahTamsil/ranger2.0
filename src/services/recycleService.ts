@@ -101,6 +101,24 @@ export const getWasteBankPrices = async (
   }
 };
 
+export const updateWasteBankOperational = async (
+  bankSampahId: string,
+  payload: { openingHours?: string; acceptsPickup?: boolean; phone?: string; status?: string }
+): Promise<{ success: boolean; data?: WasteBankUI; message?: string }> => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/waste-banks/${bankSampahId}/operational`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify(payload),
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("updateWasteBankOperational error:", err);
+    return { success: false, message: err?.message || "Gagal memperbarui jam operasional bank sampah" };
+  }
+};
+
 // ==================== WASTE DEPOSITS ====================
 export const createWasteDeposit = async (
   payload: {

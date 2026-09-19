@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -50,7 +50,7 @@ export const GeoversePointHomeScreen: React.FC<Nav> = ({ navigate }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
+    await Promise.allSettled([
       refreshWallet(),
       refreshLedger({ limit: 10 }),
       refreshVouchers(),
@@ -58,6 +58,18 @@ export const GeoversePointHomeScreen: React.FC<Nav> = ({ navigate }) => {
     ]);
     setRefreshing(false);
   };
+
+  // Automatically fetch and sync points whenever screen mounts or is displayed
+  useEffect(() => {
+    onRefresh();
+
+    // Auto-refresh interval while on the point wallet screen
+    const interval = setInterval(() => {
+      refreshWallet().catch(() => {});
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleRedeemVoucher = async (voucher: PointVoucherUI) => {
     const currentPoints = wallet?.balancePoint || 0;

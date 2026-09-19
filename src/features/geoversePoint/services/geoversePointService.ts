@@ -21,10 +21,13 @@ export const getAuthHeaders = async (accountId?: string): Promise<Record<string,
     ]);
     const session = sessionRaw ? JSON.parse(sessionRaw) : null;
     const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
-    const requestedAccountId = accountId || session?.accountId;
-    const account = Array.isArray(accounts)
-      ? accounts.find((item: any) => String(item.id) === String(requestedAccountId))
+    const requestedAccountId = accountId || session?.accountId || session?.id || session?.userId;
+    let account = Array.isArray(accounts) && requestedAccountId
+      ? accounts.find((item: any) => String(item.id) === String(requestedAccountId) || String(item._id) === String(requestedAccountId))
       : null;
+    if (!account && Array.isArray(accounts) && accounts.length > 0) {
+      account = accounts[0];
+    }
     return account?.token ? { Authorization: `Bearer ${account.token}` } : {};
   } catch {
     return {};

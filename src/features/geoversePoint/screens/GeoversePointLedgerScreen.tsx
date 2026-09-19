@@ -21,7 +21,7 @@ export const GeoversePointLedgerScreen: React.FC<Nav> = ({ navigate }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
-  const { formatPoint, wallet } = useGeoversePoint();
+  const { formatPoint, wallet, refreshWallet } = useGeoversePoint();
 
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [ledgerItems, setLedgerItems] = useState<PointLedgerUI[]>([]);
@@ -47,10 +47,14 @@ export const GeoversePointLedgerScreen: React.FC<Nav> = ({ navigate }) => {
         params.sourceType = "KANYAAH_SHOP";
       }
 
-      const res = await fetchPointLedger(params);
-      if (res.success && res.data?.ledger) {
-        setLedgerItems(res.data.ledger);
-      }
+      await Promise.allSettled([
+        refreshWallet(),
+        fetchPointLedger(params).then((res) => {
+          if (res.success && res.data?.ledger) {
+            setLedgerItems(res.data.ledger);
+          }
+        }),
+      ]);
     } catch (err) {
       console.error("loadLedger error:", err);
     } finally {

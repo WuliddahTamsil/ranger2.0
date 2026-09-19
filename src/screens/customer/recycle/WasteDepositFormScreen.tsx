@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,34 +8,28 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
   ArrowLeft,
   Package,
   Truck,
-  Plus,
-  Trash2,
-  AlertTriangle,
-  Info,
-  Scale,
+  Building2,
+  Clock,
+  MapPin,
   Sparkles,
-  Camera,
-  ChevronRight,
+  Scale,
   CheckCircle2,
+  ChevronRight,
+  ShieldCheck,
+  Coins,
+  FileText,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
-import { getWasteBankPrices, createWasteDeposit } from "../../../services/recycleService";
-import { WasteCategory, WasteCategoryPriceUI } from "../../../types/recycleTypes";
-import { rp } from "../../../utils/formatters";
-
-interface SelectedCategoryItem {
-  category: WasteCategory;
-  subCategory: string;
-  pricePerKg: number;
-  estimatedWeightKg: number;
-}
+import { createWasteDeposit } from "../../../services/recycleService";
+import { WasteDepositUI } from "../../../types/recycleTypes";
 
 export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
   const {
@@ -45,117 +39,22 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
     setSelectedDeposit,
   } = useRecycle();
 
-  const [availablePrices, setAvailablePrices] = useState<WasteCategoryPriceUI[]>([]);
-  const [loadingPrices, setLoadingPrices] = useState(true);
   const [method, setMethod] = useState<"DROP_OFF" | "PICKUP">(draftDeposit.method || "DROP_OFF");
-  const [items, setItems] = useState<SelectedCategoryItem[]>([]);
   const [notes, setNotes] = useState(draftDeposit.pickupNotes || "");
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!selectedBank?._id) return;
-    let active = true;
-    setLoadingPrices(true);
-    getWasteBankPrices(selectedBank._id)
-      .then((res) => {
-        if (!active) return;
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          setAvailablePrices(res.data);
-          // Pre-populate with first category if empty
-          if (items.length === 0) {
-            setItems([
-              {
-                category: res.data[0].category,
-                subCategory: res.data[0].subCategory || "",
-                pricePerKg: res.data[0].pricePerKg,
-                estimatedWeightKg: 2,
-              },
-            ]);
-          }
-        }
-      })
-      .catch((err) => console.error(err))
-      .finally(() => {
-        if (active) setLoadingPrices(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [selectedBank?._id]);
-
-  const handleAddCategory = () => {
-    if (availablePrices.length === 0) return;
-    // Pick the next category not yet added, or fallback to first
-    const unusedPrice =
-      availablePrices.find((p) => !items.some((i) => i.category === p.category)) ||
-      availablePrices[0];
-    setItems((prev) => [
-      ...prev,
-      {
-        category: unusedPrice.category,
-        subCategory: unusedPrice.subCategory || "",
-        pricePerKg: unusedPrice.pricePerKg,
-        estimatedWeightKg: 1,
-      },
-    ]);
-  };
-
-  const handleRemoveCategory = (index: number) => {
-    if (items.length <= 1) {
-      Alert.alert("Perhatian", "Minimal sertakan 1 kategori sampah.");
-      return;
-    }
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleUpdateWeight = (index: number, val: string) => {
-    const num = parseFloat(val.replace(",", ".")) || 0;
-    setItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, estimatedWeightKg: num } : item))
-    );
-  };
-
-  const handleChangeCategory = (index: number, categoryName: WasteCategory) => {
-    const priceObj = availablePrices.find((p) => p.category === categoryName);
-    if (!priceObj) return;
-    setItems((prev) =>
-      prev.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              category: priceObj.category,
-              subCategory: priceObj.subCategory || "",
-              pricePerKg: priceObj.pricePerKg,
-            }
-          : item
-      )
-    );
-  };
-
-  // Estimations
-  const totalWeight = items.reduce((sum, item) => sum + (item.estimatedWeightKg || 0), 0);
-  const totalRupiah = items.reduce(
-    (sum, item) => sum + Math.round((item.estimatedWeightKg || 0) * item.pricePerKg),
-    0
-  );
-  const totalPoint = totalRupiah; // 1 Point = Rp 1
+  const [createdSuccessDeposit, setCreatedSuccessDeposit] = useState<WasteDepositUI | null>(null);
 
   const handleProceed = async () => {
-    if (totalWeight <= 0) {
-      Alert.alert("Berat Kosong", "Masukkan estimasi berat sampah terlebih dahulu.");
-      return;
-    }
-
     if (!selectedBank?._id) {
-      Alert.alert("Error", "Pilih Bank Sampah terlebih dahulu.");
+      Alert.alert("Error", "Pilih Bank Sampah tujuan terlebih dahulu.");
       return;
     }
 
-    // Save items to draft
+    // Save method and notes to draft
     updateDraftDeposit({
       method,
-      categories: items,
       pickupNotes: notes,
+      categories: [],
     });
 
     if (method === "PICKUP") {
@@ -167,20 +66,13 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
         const payload = {
           bankSampahId: selectedBank._id,
           method: "DROP_OFF" as const,
-          categories: items.map((item) => ({
-            category: item.category,
-            estimatedWeightKg: item.estimatedWeightKg,
-          })),
+          categories: [],
           pickupNotes: notes,
         };
         const res = await createWasteDeposit(payload, `deposit_dropoff_${Date.now()}`);
         if (res.success && res.data) {
           setSelectedDeposit(res.data);
-          Alert.alert(
-            "Tiket Setor Berhasil Dibuat!",
-            `Kode Setoran Anda: ${res.data.depositCode}\n\nSilakan bawa sampah Anda ke ${selectedBank.name}. Petugas akan menimbang di lokasi.`,
-            [{ text: "Buka Status", onPress: () => navigate("c_recycle_tracking") }]
-          );
+          setCreatedSuccessDeposit(res.data);
         } else {
           Alert.alert("Gagal", res.message || "Gagal membuat tiket setor.");
         }
@@ -198,194 +90,139 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => navigate("c_recycle_bank_detail")}
+          onPress={() => navigate("c_recycle_home")}
           activeOpacity={0.7}
         >
-          <ArrowLeft size={20} color="#111827" />
+          <ArrowLeft size={20} color="#1E293B" />
         </TouchableOpacity>
         <View style={styles.headerTitleCol}>
           <Text style={styles.headerTitle}>Formulir Setor Sampah</Text>
-          <Text style={styles.headerSub}>{selectedBank?.name || "Bank Sampah"}</Text>
+          <Text style={styles.headerSub} numberOfLines={1}>
+            Tujuan: {selectedBank?.name || "Bank Sampah Terdekat"}
+          </Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Method Toggle: Drop Off vs Pickup */}
-        <Text style={styles.sectionLabel}>Metode Penyetoran</Text>
-        <View style={styles.methodToggleRow}>
+        {/* Destination Bank Card */}
+        <View style={styles.destinationCard}>
+          <View style={styles.destinationTop}>
+            <View style={styles.bankIconBg}>
+              <Building2 size={22} color="#15803D" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.bankLabel}>Bank Sampah Tujuan:</Text>
+              <Text style={styles.bankName}>{selectedBank?.name || "Bank Sampah Merdeka Bersih"}</Text>
+            </View>
+          </View>
+          <View style={styles.bankInfoDivider} />
+          <View style={styles.bankDetailsCol}>
+            <View style={styles.detailItemRow}>
+              <MapPin size={13} color="#64748B" />
+              <Text style={styles.detailText} numberOfLines={1}>
+                {selectedBank?.address || "Jl. Merdeka No. 64, Sumur Bandung"}
+              </Text>
+            </View>
+            <View style={styles.detailItemRow}>
+              <Clock size={13} color="#15803D" />
+              <Text style={[styles.detailText, { color: "#15803D", fontWeight: "700" }]}>
+                {selectedBank?.openingHours || "Senin - Sabtu, 08:00 - 16:00"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Method Toggle */}
+        <Text style={styles.sectionTitle}>Pilih Metode Penyetoran</Text>
+        <View style={styles.methodRow}>
           <TouchableOpacity
             style={[styles.methodCard, method === "DROP_OFF" && styles.methodCardActive]}
             onPress={() => setMethod("DROP_OFF")}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
-            <View style={[styles.methodIconBg, method === "DROP_OFF" && styles.methodIconBgActive]}>
-              <Package size={20} color={method === "DROP_OFF" ? "#FFFFFF" : "#15803D"} />
+            <View style={[styles.methodIconCircle, method === "DROP_OFF" && styles.methodIconCircleActive]}>
+              <Package size={22} color={method === "DROP_OFF" ? "#15803D" : "#64748B"} />
             </View>
             <Text style={[styles.methodTitle, method === "DROP_OFF" && styles.methodTitleActive]}>
               Antar Langsung
             </Text>
-            <Text style={styles.methodDesc}>Datang langsung ke Bank Sampah</Text>
+            <Text style={styles.methodSub}>Datang langsung ke unit Bank Sampah</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.methodCard,
-              method === "PICKUP" && styles.methodCardActive,
-              !selectedBank?.acceptsPickup && styles.methodCardDisabled,
-            ]}
-            onPress={() => {
-              if (selectedBank?.acceptsPickup) setMethod("PICKUP");
-              else Alert.alert("Informasi", "Bank sampah ini belum melayani pickup.");
-            }}
-            activeOpacity={0.8}
+            style={[styles.methodCard, method === "PICKUP" && styles.methodCardActive]}
+            onPress={() => setMethod("PICKUP")}
+            activeOpacity={0.85}
           >
-            <View style={[styles.methodIconBg, method === "PICKUP" && styles.methodIconBgActive]}>
-              <Truck size={20} color={method === "PICKUP" ? "#FFFFFF" : "#047857"} />
+            <View style={[styles.methodIconCircle, method === "PICKUP" && styles.methodIconCircleActive]}>
+              <Truck size={22} color={method === "PICKUP" ? "#15803D" : "#64748B"} />
             </View>
             <Text style={[styles.methodTitle, method === "PICKUP" && styles.methodTitleActive]}>
               Minta Pickup
             </Text>
-            <Text style={styles.methodDesc}>Dijemput driver ke rumah</Text>
+            <Text style={styles.methodSub}>Dijemput driver kurir ke lokasi Anda</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Category Items List */}
-        <View style={styles.categorySectionHeader}>
-          <Text style={styles.sectionLabel}>Pilih Kategori & Estimasi Berat</Text>
-          <TouchableOpacity
-            style={styles.btnAddCategory}
-            onPress={handleAddCategory}
-            activeOpacity={0.7}
-          >
-            <Plus size={14} color="#15803D" />
-            <Text style={styles.btnAddCategoryText}>Tambah Jenis</Text>
-          </TouchableOpacity>
-        </View>
+        {/* How It Works Explainer Banner */}
+        <View style={styles.flowBannerCard}>
+          <View style={styles.flowBannerHeader}>
+            <Sparkles size={16} color="#15803D" />
+            <Text style={styles.flowBannerTitle}>Alur Setor & Konversi Koin Otomatis</Text>
+          </View>
 
-        {loadingPrices ? (
-          <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 20 }} />
-        ) : (
-          items.map((item, index) => (
-            <View key={index} style={styles.itemCard}>
-              <View style={styles.itemCardHeader}>
-                <View style={styles.itemIndexPill}>
-                  <Text style={styles.itemIndexText}>#{index + 1}</Text>
-                </View>
-                <Text style={styles.itemTitle}>{item.category}</Text>
-                {items.length > 1 && (
-                  <TouchableOpacity
-                    onPress={() => handleRemoveCategory(index)}
-                    style={styles.btnDelete}
-                  >
-                    <Trash2 size={16} color="#EF4444" />
-                  </TouchableOpacity>
-                )}
+          <View style={styles.stepsList}>
+            <View style={styles.stepRow}>
+              <View style={styles.stepNumCircle}>
+                <Text style={styles.stepNumText}>1</Text>
               </View>
-
-              {/* Category Picker Chips */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoryChips}
-              >
-                {availablePrices.map((catPrice) => (
-                  <TouchableOpacity
-                    key={catPrice._id}
-                    style={[
-                      styles.categoryChip,
-                      item.category === catPrice.category && styles.categoryChipActive,
-                    ]}
-                    onPress={() => handleChangeCategory(index, catPrice.category)}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        item.category === catPrice.category && styles.categoryChipTextActive,
-                      ]}
-                    >
-                      {catPrice.category} ({rp(catPrice.pricePerKg)}/kg)
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Weight Input Row */}
-              <View style={styles.inputRow}>
-                <View style={styles.inputCol}>
-                  <Text style={styles.inputLabel}>Estimasi Berat</Text>
-                  <View style={styles.weightInputBox}>
-                    <TextInput
-                      style={styles.weightInput}
-                      keyboardType="numeric"
-                      value={item.estimatedWeightKg ? String(item.estimatedWeightKg) : ""}
-                      onChangeText={(val) => handleUpdateWeight(index, val)}
-                      placeholder="0.0"
-                    />
-                    <Text style={styles.weightUnit}>kg</Text>
-                  </View>
-                </View>
-
-                <View style={styles.calcPreviewCol}>
-                  <Text style={styles.calcPreviewLabel}>Estimasi Perolehan</Text>
-                  <Text style={styles.calcPreviewRupiah}>
-                    {rp(Math.round((item.estimatedWeightKg || 0) * item.pricePerKg))}
-                  </Text>
-                  <Text style={styles.calcPreviewPoint}>
-                    ≈ {Math.round((item.estimatedWeightKg || 0) * item.pricePerKg).toLocaleString("id-ID")} Pts
-                  </Text>
-                </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stepHead}>Buat Tiket Setoran</Text>
+                <Text style={styles.stepDesc}>Dapatkan kode tiket untuk diserahkan ke petugas atau driver.</Text>
               </View>
             </View>
-          ))
-        )}
 
-        {/* Notes Input */}
-        <Text style={[styles.sectionLabel, { marginTop: 12 }]}>Catatan Tambahan (Opsional)</Text>
-        <TextInput
-          style={styles.notesInput}
-          placeholder="Contoh: Kardus sudah diikat rapi, botol sudah bersih..."
-          placeholderTextColor="#9CA3AF"
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          numberOfLines={3}
-        />
-
-        {/* Calculation Summary Card */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Estimasi Berat:</Text>
-            <Text style={styles.summaryValBold}>{totalWeight.toFixed(1)} kg</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Estimasi Nilai:</Text>
-            <Text style={styles.summaryValBold}>{rp(totalRupiah)}</Text>
-          </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryRow}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Sparkles size={18} color="#CA8A04" />
-              <Text style={styles.summaryPointLabel}>Estimasi GEOVERSE Point:</Text>
+            <View style={styles.stepRow}>
+              <View style={styles.stepNumCircle}>
+                <Text style={styles.stepNumText}>2</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stepHead}>Petugas Menimbang Berat</Text>
+                <Text style={styles.stepDesc}>Petugas Bank Sampah akan menimbang seluruh sampah Anda secara transparan.</Text>
+              </View>
             </View>
-            <Text style={styles.summaryPointVal}>+{totalPoint.toLocaleString("id-ID")} Pts</Text>
+
+            <View style={styles.stepRow}>
+              <View style={styles.stepNumCircle}>
+                <Text style={styles.stepNumText}>3</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stepHead}>Koin Poin Otomatis Masuk</Text>
+                <Text style={styles.stepDesc}>Hasil timbangan dikonversi otomatis (1 Poin = Rp 1) dan langsung cair ke akun Anda.</Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Mandatory Disclaimer Alert */}
-        <View style={styles.disclaimerBox}>
-          <Info size={18} color="#D97706" style={{ marginTop: 2 }} />
-          <Text style={styles.disclaimerText}>
-            <Text style={{ fontWeight: "800" }}>PENTING: </Text>
-            Nilai final mengikuti hasil timbang petugas Bank Sampah. Point hanya diterbitkan setelah Anda menyetujui hasil timbangan resmi.
-          </Text>
+        {/* Additional Notes */}
+        <Text style={styles.sectionTitle}>Catatan Tambahan (Opsional)</Text>
+        <View style={styles.notesBox}>
+          <TextInput
+            style={styles.notesInput}
+            placeholder="Contoh: Ada botol plastik & kardus box di depan pagar, siap timbang..."
+            placeholderTextColor="#94A3B8"
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+            numberOfLines={3}
+          />
         </View>
       </ScrollView>
 
-      {/* Sticky Bottom Action */}
+      {/* Bottom CTA Bar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={[styles.btnProceed, submitting && { opacity: 0.7 }]}
+          style={[styles.btnSubmit, submitting && { opacity: 0.7 }]}
           onPress={handleProceed}
           disabled={submitting}
           activeOpacity={0.85}
@@ -394,14 +231,54 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <>
-              <Text style={styles.btnProceedText}>
-                {method === "PICKUP" ? "Lanjut Pilih Jadwal Pickup" : "Buat Tiket Setor Sekarang"}
+              <Text style={styles.btnSubmitText}>
+                {method === "PICKUP" ? "Lanjut Pilih Alamat Pickup" : "Buat Tiket Setor Sekarang"}
               </Text>
               <ChevronRight size={18} color="#FFFFFF" />
             </>
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Success Modal */}
+      <Modal
+        visible={Boolean(createdSuccessDeposit)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setCreatedSuccessDeposit(null);
+          navigate("c_recycle_tracking");
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconBg}>
+              <CheckCircle2 size={42} color="#15803D" />
+            </View>
+            <Text style={styles.modalSuccessTitle}>Tiket Setoran Berhasil Dibuat!</Text>
+            <Text style={styles.modalSuccessSub}>
+              Bawa sampah Anda ke Bank Sampah untuk ditimbang langsung oleh petugas.
+            </Text>
+
+            <View style={styles.codeSummaryBox}>
+              <Text style={styles.codeSummaryLabel}>KODE TIKET SETORAN:</Text>
+              <Text style={styles.codeSummaryValue}>{createdSuccessDeposit?.depositCode}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalBtnAction}
+              onPress={() => {
+                setCreatedSuccessDeposit(null);
+                navigate("c_recycle_tracking");
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalBtnActionText}>Buka Pelacakan & QR Setoran</Text>
+              <ChevronRight size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ResponsiveSafeAreaView>
   );
 };
@@ -409,7 +286,7 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
   },
   header: {
     flexDirection: "row",
@@ -418,13 +295,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: "#E2E8F0",
   },
   backBtn: {
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -434,25 +311,81 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
+    fontWeight: "900",
+    color: "#0F172A",
   },
   headerSub: {
     fontSize: 11,
-    color: "#6B7280",
+    color: "#64748B",
     marginTop: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 110,
+    paddingBottom: 100,
   },
-  sectionLabel: {
+  destinationCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  destinationTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  bankIconBg: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#DCFCE7",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bankLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  bankName: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#0F172A",
+    marginTop: 1,
+  },
+  bankInfoDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 10,
+  },
+  bankDetailsCol: {
+    gap: 4,
+  },
+  detailItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  detailText: {
+    fontSize: 11.5,
+    color: "#475569",
+    flex: 1,
+  },
+  sectionTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#1F2937",
-    marginBottom: 8,
+    color: "#1E293B",
+    marginBottom: 10,
   },
-  methodToggleRow: {
+  methodRow: {
     flexDirection: "row",
     gap: 10,
     marginBottom: 16,
@@ -460,242 +393,110 @@ const styles = StyleSheet.create({
   methodCard: {
     flex: 1,
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 12,
     borderWidth: 1.5,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
+    borderRadius: 14,
+    padding: 14,
     alignItems: "center",
   },
   methodCardActive: {
     borderColor: "#15803D",
     backgroundColor: "#F0FDF4",
   },
-  methodCardDisabled: {
-    opacity: 0.5,
-  },
-  methodIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: "#DCFCE7",
+  methodIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
   },
-  methodIconBgActive: {
-    backgroundColor: "#15803D",
+  methodIconCircleActive: {
+    backgroundColor: "#DCFCE7",
   },
   methodTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#111827",
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#334155",
+    marginBottom: 3,
   },
   methodTitleActive: {
     color: "#15803D",
   },
-  methodDesc: {
-    fontSize: 10,
-    color: "#6B7280",
+  methodSub: {
+    fontSize: 10.5,
+    color: "#64748B",
     textAlign: "center",
-    marginTop: 2,
+    lineHeight: 14,
   },
-  categorySectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  btnAddCategory: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#DCFCE7",
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  btnAddCategoryText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#15803D",
-  },
-  itemCard: {
+  flowBannerCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     padding: 14,
-    marginBottom: 10,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
   },
-  itemCardHeader: {
+  flowBannerHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
-  },
-  itemIndexPill: {
-    backgroundColor: "#F3F4F6",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  itemIndexText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#4B5563",
-  },
-  itemTitle: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  btnDelete: {
-    padding: 4,
-  },
-  categoryChips: {
-    flexDirection: "row",
     gap: 6,
     marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
   },
-  categoryChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: "#F3F4F6",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  categoryChipActive: {
-    backgroundColor: "#15803D",
-    borderColor: "#15803D",
-  },
-  categoryChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#4B5563",
-  },
-  categoryChipTextActive: {
-    color: "#FFFFFF",
-  },
-  inputRow: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-  },
-  inputCol: {
-    flex: 1,
-  },
-  inputLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#4B5563",
-    marginBottom: 4,
-  },
-  weightInputBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    paddingHorizontal: 12,
-  },
-  weightInput: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
-    paddingVertical: 8,
-  },
-  weightUnit: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#6B7280",
-  },
-  calcPreviewCol: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  calcPreviewLabel: {
-    fontSize: 10,
-    color: "#6B7280",
-    marginBottom: 2,
-  },
-  calcPreviewRupiah: {
-    fontSize: 14,
+  flowBannerTitle: {
+    fontSize: 12.5,
     fontWeight: "800",
     color: "#15803D",
   },
-  calcPreviewPoint: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#CA8A04",
+  stepsList: {
+    gap: 12,
   },
-  notesInput: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    padding: 12,
-    fontSize: 12,
-    color: "#111827",
-    textAlignVertical: "top",
-    marginBottom: 16,
-  },
-  summaryCard: {
-    backgroundColor: "#F0FDF4",
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    marginBottom: 14,
-  },
-  summaryRow: {
+  stepRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginVertical: 3,
+    alignItems: "flex-start",
+    gap: 10,
   },
-  summaryLabel: {
-    fontSize: 12,
-    color: "#374151",
-  },
-  summaryValBold: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  summaryDivider: {
-    height: 1,
+  stepNumCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: "#DCFCE7",
-    marginVertical: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 1,
   },
-  summaryPointLabel: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#854D0E",
-  },
-  summaryPointVal: {
-    fontSize: 16,
+  stepNumText: {
+    fontSize: 11,
     fontWeight: "900",
     color: "#15803D",
   },
-  disclaimerBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#FEF3C7",
+  stepHead: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  stepDesc: {
+    fontSize: 10.5,
+    color: "#64748B",
+    marginTop: 1,
+    lineHeight: 14,
+  },
+  notesBox: {
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#FDE68A",
-    padding: 12,
-    gap: 8,
+    borderColor: "#CBD5E1",
+    padding: 10,
   },
-  disclaimerText: {
-    flex: 1,
-    fontSize: 11,
-    color: "#92400E",
-    lineHeight: 16,
+  notesInput: {
+    fontSize: 12.5,
+    color: "#0F172A",
+    textAlignVertical: "top",
+    minHeight: 65,
   },
   bottomBar: {
     position: "absolute",
@@ -703,24 +504,104 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#E2E8F0",
+    padding: 14,
+    paddingBottom: 20,
   },
-  btnProceed: {
+  btnSubmit: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
     backgroundColor: "#15803D",
-    paddingVertical: 14,
     borderRadius: 12,
-    gap: 8,
+    paddingVertical: 14,
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  btnProceedText: {
-    fontSize: 14,
-    fontWeight: "800",
+  btnSubmitText: {
     color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 22,
+    alignItems: "center",
+  },
+  modalIconBg: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "#DCFCE7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  modalSuccessTitle: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#0F172A",
+    textAlign: "center",
+  },
+  modalSuccessSub: {
+    fontSize: 12,
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  codeSummaryBox: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    width: "100%",
+    alignItems: "center",
+    marginVertical: 16,
+  },
+  codeSummaryLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#64748B",
+    letterSpacing: 0.5,
+  },
+  codeSummaryValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#15803D",
+    marginTop: 2,
+    letterSpacing: 0.8,
+  },
+  modalBtnAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#15803D",
+    borderRadius: 12,
+    paddingVertical: 13,
+    width: "100%",
+  },
+  modalBtnActionText: {
+    color: "#FFFFFF",
+    fontSize: 13.5,
+    fontWeight: "900",
   },
 });

@@ -34,6 +34,8 @@ export interface WasteBankUI {
   openingHours: string;
   acceptsPickup: boolean;
   status: "PENDING" | "ACTIVE" | "SUSPENDED";
+  officerIds?: string[];
+  officerEmails?: string[];
   distanceKm?: number | null;
   maxPrice?: number;
   prices?: WasteCategoryPriceUI[];

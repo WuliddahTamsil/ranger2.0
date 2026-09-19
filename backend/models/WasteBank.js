@@ -14,6 +14,19 @@ const wasteBankSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    officerIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    officerEmails: [
+      {
+        type: String,
+        lowercase: true,
+        trim: true,
+      },
+    ],
     organizationId: {
       type: String,
       default: "",

@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -24,6 +25,7 @@ import {
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
 import { createWasteDeposit } from "../../../services/recycleService";
+import { WasteDepositUI } from "../../../types/recycleTypes";
 import { rp } from "../../../utils/formatters";
 
 interface Props extends Nav {
@@ -58,6 +60,7 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
   const [selectedSlot, setSelectedSlot] = useState(TIME_SLOTS[0]);
   const [driverNotes, setDriverNotes] = useState(draftDeposit.pickupNotes || "");
   const [submitting, setSubmitting] = useState(false);
+  const [createdSuccessDeposit, setCreatedSuccessDeposit] = useState<WasteDepositUI | null>(null);
 
   // Compute date string
   const getDateString = (offset: number) => {
@@ -94,10 +97,7 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
       const payload = {
         bankSampahId: selectedBank._id,
         method: "PICKUP" as const,
-        categories: draftDeposit.categories.map((c) => ({
-          category: c.category,
-          estimatedWeightKg: c.estimatedWeightKg,
-        })),
+        categories: [],
         pickupAddress: address,
         pickupLatitude: -7.15,
         pickupLongitude: 107.8,
@@ -108,11 +108,7 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
       const res = await createWasteDeposit(payload, `deposit_pickup_${Date.now()}`);
       if (res.success && res.data) {
         setSelectedDeposit(res.data);
-        Alert.alert(
-          "Permintaan Pickup Berhasil!",
-          `Kode Setoran: ${res.data.depositCode}\n\nBank Sampah ${selectedBank.name} dan driver GEOVERSE akan menindaklanjuti jadwal pickup Anda.`,
-          [{ text: "Pantau Status", onPress: () => navigate("c_recycle_tracking") }]
-        );
+        setCreatedSuccessDeposit(res.data);
       } else {
         Alert.alert("Gagal", res.message || "Gagal membuat jadwal pickup.");
       }
@@ -156,9 +152,6 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
             multiline
             numberOfLines={2}
           />
-          <View style={styles.locationTag}>
-            <Text style={styles.locationTagText}>Titik akurat: Ring 1 Kamojang (PGE Geothermal)</Text>
-          </View>
         </View>
 
         {/* Date Selector */}
@@ -242,24 +235,20 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
             <Truck size={18} color="#065F46" />
-            <Text style={styles.summaryTitle}>Ringkasan Permintaan</Text>
+            <Text style={styles.summaryTitle}>Ringkasan Penjemputan</Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Bank Sampah Tujuan:</Text>
-            <Text style={styles.summaryVal}>{selectedBank?.name || "-"}</Text>
+            <Text style={styles.summaryVal}>{selectedBank?.name || "Bank Sampah Terdekat"}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Jumlah Kategori:</Text>
-            <Text style={styles.summaryVal}>{draftDeposit.categories.length} jenis</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Estimasi Berat:</Text>
-            <Text style={styles.summaryVal}>{totalWeight.toFixed(1)} kg</Text>
+            <Text style={styles.summaryLabel}>Jadwal Pickup:</Text>
+            <Text style={styles.summaryVal}>{getDateString(selectedDateIndex)}, {selectedSlot}</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryPointLabel}>Estimasi GEOVERSE Point:</Text>
-            <Text style={styles.summaryPointVal}>+{totalRupiah.toLocaleString("id-ID")} Pts</Text>
+            <Text style={styles.summaryPointLabel}>Status Penimbangan:</Text>
+            <Text style={styles.summaryPointVal}>Ditimbang di Bank Sampah</Text>
           </View>
         </View>
       </ScrollView>
@@ -283,6 +272,65 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Success Modal (Interactive on Web & Mobile) */}
+      <Modal
+        visible={Boolean(createdSuccessDeposit)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCreatedSuccessDeposit(null)}
+      >
+        <View style={styles.successModalBackdrop}>
+          <View style={styles.successModalCard}>
+            <View style={styles.successIconCircle}>
+              <CheckCircle2 size={36} color="#15803D" />
+            </View>
+            <Text style={styles.successModalTitle}>Permintaan Pickup Berhasil!</Text>
+            <Text style={styles.successModalSubtitle}>
+              Bank Sampah {selectedBank?.name || "Mitra"} dan driver GEOVERSE akan menindaklanjuti jadwal penjemputan sampah Anda.
+            </Text>
+
+            <View style={styles.successCodeBox}>
+              <Text style={styles.successCodeLabel}>KODE SETORAN ANDA</Text>
+              <Text style={styles.successCodeText}>{createdSuccessDeposit?.depositCode}</Text>
+            </View>
+
+            <View style={styles.successSummaryBox}>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryLabel}>Total Berat:</Text>
+                <Text style={styles.successSummaryVal}>{totalWeight.toFixed(1)} kg</Text>
+              </View>
+              <View style={styles.successSummaryRow}>
+                <Text style={styles.successSummaryLabel}>Potensi Poin:</Text>
+                <Text style={styles.successSummaryValHighlight}>+{totalRupiah.toLocaleString("id-ID")} Pts</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.btnViewTracking}
+              onPress={() => {
+                setCreatedSuccessDeposit(null);
+                navigate("c_recycle_tracking");
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnViewTrackingText}>Buka Status & Pelacakan Tiket</Text>
+              <ChevronRight size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.btnBackHome}
+              onPress={() => {
+                setCreatedSuccessDeposit(null);
+                navigate("c_recycle_home");
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.btnBackHomeText}>Kembali ke Beranda Recycle</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ResponsiveSafeAreaView>
   );
 };
@@ -509,5 +557,123 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     color: "#FFFFFF",
+  },
+  // Success Modal Styles
+  successModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  successModalCard: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  successIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#DCFCE7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  successModalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+    textAlign: "center",
+    marginBottom: 6,
+  },
+  successModalSubtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  successCodeBox: {
+    width: "100%",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  successCodeLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+    letterSpacing: 0.5,
+  },
+  successCodeText: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#166534",
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  successSummaryBox: {
+    width: "100%",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 18,
+    gap: 4,
+  },
+  successSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  successSummaryLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  successSummaryVal: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  successSummaryValHighlight: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  btnViewTracking: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#15803D",
+    paddingVertical: 13,
+    borderRadius: 12,
+    gap: 6,
+    marginBottom: 10,
+  },
+  btnViewTrackingText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  btnBackHome: {
+    paddingVertical: 6,
+  },
+  btnBackHomeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6B7280",
   },
 });

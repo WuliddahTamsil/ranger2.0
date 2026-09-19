@@ -246,10 +246,49 @@ const updateCategoryPrice = async (req, res) => {
   }
 };
 
+/**
+ * 6. Update Waste Bank Operational Hours & Settings
+ * POST /api/waste-banks/:id/operational
+ */
+const updateWasteBankOperational = async (req, res) => {
+  try {
+    const bankSampahId = req.params.id;
+    const { openingHours, acceptsPickup, phone, status } = req.body;
+
+    const bank = await WasteBank.findById(bankSampahId);
+    if (!bank) {
+      return res.status(404).json({
+        success: false,
+        message: "Bank Sampah tidak ditemukan.",
+      });
+    }
+
+    if (openingHours !== undefined) bank.openingHours = openingHours;
+    if (acceptsPickup !== undefined) bank.acceptsPickup = Boolean(acceptsPickup);
+    if (phone !== undefined) bank.phone = phone;
+    if (status !== undefined) bank.status = status;
+
+    await bank.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Jam operasional Bank Sampah berhasil diperbarui.",
+      data: bank,
+    });
+  } catch (error) {
+    console.error("updateWasteBankOperational error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memperbarui jam operasional Bank Sampah.",
+    });
+  }
+};
+
 module.exports = {
   getWasteBanks,
   getWasteBankById,
   createWasteBank,
   getCategoryPrices,
   updateCategoryPrice,
+  updateWasteBankOperational,
 };
