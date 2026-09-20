@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from "react-native";
 import {
   Store,
   HeartPulse,
@@ -29,6 +29,7 @@ interface CategoryIconCardProps {
   category: CategoryItem;
   isSelected?: boolean;
   onPress: (category: CategoryItem) => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 const renderIcon = (iconName: string, color: string, size = 22) => {
@@ -66,10 +67,11 @@ export const CategoryIconCard: React.FC<CategoryIconCardProps> = ({
   category,
   isSelected = false,
   onPress,
+  style,
 }) => {
   return (
     <TouchableOpacity
-      style={[styles.container, isSelected && styles.selectedContainer]}
+      style={[styles.container, isSelected && styles.selectedContainer, style]}
       onPress={() => onPress(category)}
       activeOpacity={0.75}
     >
@@ -92,8 +94,9 @@ export const CategoryIconCard: React.FC<CategoryIconCardProps> = ({
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    width: 72,
+    width: "20%",
     marginVertical: 4,
+    paddingHorizontal: 2,
   },
   selectedContainer: {
     transform: [{ scale: 1.05 }],
