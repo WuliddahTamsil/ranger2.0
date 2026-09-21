@@ -104,6 +104,9 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
     initialRegion?.longitude ||
     pin?.longitude ||
     107.6191;
+  const routeSignature = routeCoordinates?.length
+    ? `${routeCoordinates.length}:${routeCoordinates[0].latitude}:${routeCoordinates[0].longitude}:${routeCoordinates[routeCoordinates.length - 1].latitude}:${routeCoordinates[routeCoordinates.length - 1].longitude}`
+    : "none";
 
   // Handle incoming postMessage from iframe
   useEffect(() => {
@@ -413,7 +416,7 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
       {/* Interactive Web Map Iframe */}
       <iframe
         ref={iframeRef}
-        key={`web-map-${key}-${centerLat}-${centerLng}-${allMarkers.length}-${routeCoordinates?.length || 0}`}
+        key={`web-map-${key}-${centerLat}-${centerLng}-${allMarkers.length}-${routeSignature}`}
         title="GEOVERSE Leaflet Map"
         srcDoc={leafletHtml}
         style={{

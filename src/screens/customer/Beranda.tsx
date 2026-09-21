@@ -1278,7 +1278,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     {activeOrder.status === "SEARCHING_DRIVER"
                       ? "Mencari Driver"
                       : activeOrder.status === "DRIVER_ASSIGNED" || activeOrder.status === "DRIVER_ON_THE_WAY"
-                      ? "Driver Menuju Toko"
+                      ? (activeOrder.type === "Kanyaah Ride" ? "Driver Menuju Penjemputan" : "Driver Menuju Toko")
+                      : activeOrder.status === "DRIVER_ARRIVED"
+                      ? (activeOrder.type === "Kanyaah Ride" ? "Driver Telah Sampai" : "Sampai di Toko")
                       : activeOrder.status === "TRIP_STARTED"
                       ? "Dalam Perjalanan"
                       : activeOrder.status || "Sedang Diproses"}

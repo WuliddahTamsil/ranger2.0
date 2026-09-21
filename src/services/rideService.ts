@@ -24,8 +24,8 @@ export interface CreateRideParams {
   discount?: number;
   estimatedDistance?: number;
   estimatedDuration?: number;
-  routeDistanceKm?: number;
-  routeDurationMinutes?: number;
+  routeDistanceKm: number;
+  routeDurationMinutes: number;
   estimatedFare?: number;
 }
 
@@ -141,42 +141,6 @@ const readJson = async (res: Response) => {
   }
 };
 
-// Distance calculation helper (Haversine in km)
-export const calculateDistance = (
-  lat1?: number | null,
-  lon1?: number | null,
-  lat2?: number | null,
-  lon2?: number | null
-): number => {
-  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 0;
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return Math.round(R * c * 10) / 10;
-};
-
-// Client-side quick fare fallback formula:
-export const calculateRideFare = (distanceKm: number, vehicleType: string = "MOTOR"): number => {
-  const safeDist = Math.max(0.5, Number(distanceKm) || 2);
-  const isCar = vehicleType === "MOBIL" || vehicleType === "CAR";
-  const baseKm = 2;
-  const baseFare = isCar ? 15000 : 8000;
-  const ratePerKm = isCar ? 4500 : 2500;
-  const minFare = isCar ? 20000 : 10000;
-
-  let fare = baseFare;
-  if (safeDist > baseKm) {
-    fare += Math.round((safeDist - baseKm) * ratePerKm);
-  }
-  return Math.max(minFare, Math.ceil(fare / 1000) * 1000);
-};
 
 export interface FareEstimateResult {
   distanceKm: number;
@@ -198,77 +162,37 @@ export interface FareEstimateOptions {
   destination: RideLocation;
   vehicleType?: "MOTOR" | "MOBIL" | "CAR";
   discount?: number;
-  routeDistanceKm?: number;
-  routeDurationMinutes?: number;
+  routeDistanceKm: number;
+  routeDurationMinutes: number;
 }
 
 // 1. Estimate Fare Breakdown from backend
 export const estimateRideFareBreakdown = async (
-  pickupOrOptions: RideLocation | FareEstimateOptions,
-  destArg?: RideLocation,
-  vehicleTypeArg: "MOTOR" | "MOBIL" | "CAR" = "MOTOR",
-  discountArg: number = 0
+  options: FareEstimateOptions
 ): Promise<{
   success: boolean;
   data?: FareEstimateResult;
   message?: string;
 }> => {
   try {
-    let pickup: RideLocation;
-    let destination: RideLocation;
-    let vehicleType: string = "MOTOR";
-    let discount: number = 0;
-
-    if (destArg !== undefined) {
-      pickup = pickupOrOptions as RideLocation;
-      destination = destArg;
-      vehicleType = vehicleTypeArg;
-      discount = discountArg;
-    } else {
-      const opts = pickupOrOptions as FareEstimateOptions;
-      pickup = opts.pickup;
-      destination = opts.destination;
-      vehicleType = opts.vehicleType || "MOTOR";
-      discount = opts.discount || 0;
-    }
-
     const res = await fetch(getApiUrl("/rides/fare-estimate"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        pickup,
-        destination,
-        vehicleType,
-        discount,
-        routeDistanceKm: destArg === undefined ? (pickupOrOptions as FareEstimateOptions).routeDistanceKm : undefined,
-        routeDurationMinutes: destArg === undefined ? (pickupOrOptions as FareEstimateOptions).routeDurationMinutes : undefined,
+        pickup: options.pickup,
+        destination: options.destination,
+        vehicleType: options.vehicleType || "MOTOR",
+        discount: options.discount || 0,
+        routeDistanceKm: options.routeDistanceKm,
+        routeDurationMinutes: options.routeDurationMinutes,
       }),
     });
     return await readJson(res);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("estimateRideFareBreakdown error:", err);
-    return { success: false, message: err.message || "Gagal menghitung estimasi tarif" };
+    const message = err instanceof Error ? err.message : "Gagal menghitung estimasi tarif";
+    return { success: false, message };
   }
-};
-
-// Backwards-compatible alias
-export const estimateFare = async (
-  pickup: RideLocation,
-  destination: RideLocation
-) => {
-  const res = await estimateRideFareBreakdown(pickup, destination, "MOTOR");
-  if (res.success && res.data) {
-    return {
-      success: true,
-      data: {
-        distanceKm: res.data.distanceKm,
-        estimatedDuration: res.data.estimatedDurationMinutes,
-        estimatedFare: res.data.estimatedFare,
-        formattedFare: res.data.formattedFare,
-      },
-    };
-  }
-  return { success: false, message: res.message };
 };
 
 // 2. Create Ride Booking

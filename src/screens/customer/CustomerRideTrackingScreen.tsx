@@ -44,7 +44,8 @@ import { Modal } from "react-native";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { SafeCallModal } from "../../components/SafeCallModal";
 import { DigitalPaymentModal } from "../../components/DigitalPaymentModal";
-import { NativeMapComponent } from "../../components/NativeMapComponent";
+import { NativeMapComponent, MapMarkerItem } from "../../components/NativeMapComponent";
+import { fetchDrivingRoute } from "../../services/routeService";
 import { rp } from "../../utils/formatters";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 
@@ -124,6 +125,100 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
       unsubscribeRealtime();
     };
   }, [authAccount?.id]);
+
+  // Road geometry coordinates for polyline tracking
+  const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
+
+  useEffect(() => {
+    const pLat = currentRide?.pickup?.latitude;
+    const pLng = currentRide?.pickup?.longitude;
+    const dLat = currentRide?.destination?.latitude;
+    const dLng = currentRide?.destination?.longitude;
+
+    if (!pLat || !pLng || !dLat || !dLng) {
+      setRouteCoords(null);
+      return;
+    }
+
+    let active = true;
+    void fetchDrivingRoute(
+      { latitude: Number(pLat), longitude: Number(pLng) },
+      { latitude: Number(dLat), longitude: Number(dLng) }
+    )
+      .then((route) => {
+        if (active && route?.coordinates) {
+          setRouteCoords(route.coordinates);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [
+    currentRide?.pickup?.latitude,
+    currentRide?.pickup?.longitude,
+    currentRide?.destination?.latitude,
+    currentRide?.destination?.longitude,
+  ]);
+
+  // Comprehensive Markers for Live Tracking
+  const trackingMarkers: MapMarkerItem[] = React.useMemo(() => {
+    const list: MapMarkerItem[] = [];
+    if (currentRide?.pickup?.latitude && currentRide?.pickup?.longitude) {
+      list.push({
+        id: "pickup",
+        coordinate: {
+          latitude: Number(currentRide.pickup.latitude),
+          longitude: Number(currentRide.pickup.longitude),
+        },
+        title: currentRide.pickup.placeName || "Titik Jemput",
+        description: currentRide.pickup.address,
+        pinColor: "#16A34A",
+        type: "pickup",
+      });
+    }
+    if (currentRide?.destination?.latitude && currentRide?.destination?.longitude) {
+      list.push({
+        id: "destination",
+        coordinate: {
+          latitude: Number(currentRide.destination.latitude),
+          longitude: Number(currentRide.destination.longitude),
+        },
+        title: currentRide.destination.placeName || "Tujuan Perjalanan",
+        description: currentRide.destination.address,
+        pinColor: "#DC2626",
+        type: "dropoff",
+      });
+    }
+    if (currentRide?.driverLocation?.latitude && currentRide?.driverLocation?.longitude) {
+      list.push({
+        id: "driver",
+        coordinate: {
+          latitude: Number(currentRide.driverLocation.latitude),
+          longitude: Number(currentRide.driverLocation.longitude),
+        },
+        title: currentRide.driverName || "Driver Rangers",
+        description: currentRide.driverPlate ? `Motor · ${currentRide.driverPlate}` : "Sedang dalam perjalanan",
+        pinColor: "#2563EB",
+        type: "driver",
+      });
+    }
+    return list;
+  }, [
+    currentRide?.pickup?.latitude,
+    currentRide?.pickup?.longitude,
+    currentRide?.pickup?.placeName,
+    currentRide?.pickup?.address,
+    currentRide?.destination?.latitude,
+    currentRide?.destination?.longitude,
+    currentRide?.destination?.placeName,
+    currentRide?.destination?.address,
+    currentRide?.driverLocation?.latitude,
+    currentRide?.driverLocation?.longitude,
+    currentRide?.driverName,
+    currentRide?.driverPlate,
+  ]);
 
   // Cancel ride handler with tiered cancellation policy
   const handleCancelRide = () => {
@@ -459,14 +554,15 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           </View>
         )}
 
-        {/* Map View */}
-        {currentRide.pickup.latitude && currentRide.pickup.longitude && (
+        {/* Interactive Route & Driver Map */}
+        {trackingMarkers.length > 0 && (
           <View style={styles.mapContainer}>
             <NativeMapComponent
-              pin={{
-                latitude: currentRide.pickup.latitude,
-                longitude: currentRide.pickup.longitude,
-              }}
+              markers={trackingMarkers}
+              routeCoordinates={routeCoords || undefined}
+              routeColor="#16A34A"
+              fitToRoute={trackingMarkers.length > 1}
+              showRouteLine={Boolean(routeCoords)}
               style={styles.mapFrame}
             />
           </View>

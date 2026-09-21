@@ -1,0 +1,11 @@
+{
+  "yippee-notification": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "cscript //nologo D:\\ranger2.0\\.agents\\scripts\\play_yippee.vbs",
+        "timeout": 10
+      }
+    ]
+  }
+}

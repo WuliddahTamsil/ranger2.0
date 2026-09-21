@@ -83,8 +83,8 @@ export const NativeMapComponent: React.FC<NativeMapProps> = ({
   return (
     <MapView
       provider={PROVIDER_GOOGLE}
-      style={style || StyleSheet.absoluteFill}
-      region={currentRegion}
+      region={region}
+      initialRegion={region ? undefined : currentRegion}
       ref={mapRef}
       onMapReady={() => setMapReady(true)}
       onRegionChangeComplete={onRegionChangeComplete}

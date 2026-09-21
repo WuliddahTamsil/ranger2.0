@@ -38,29 +38,22 @@ const RIDE_FARE_CONFIG = {
   },
 };
 
-// Haversine formula to compute distance in km
-const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
-  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 0;
-  const R = 6371; // Earth's radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const dist = R * c;
-  return Math.round(dist * 10) / 10;
-};
+const isValidCoordinate = (value) => typeof value === "number" && Number.isFinite(value);
+
+const hasValidRideLocation = (location) =>
+  isValidCoordinate(location?.latitude) &&
+  isValidCoordinate(location?.longitude) &&
+  location.latitude >= -90 &&
+  location.latitude <= 90 &&
+  location.longitude >= -180 &&
+  location.longitude <= 180;
 
 // Compute detailed fare breakdown according to platform formula
 const computeFareBreakdown = (distanceKm, durationMinutes, vehicleType = "MOTOR", discount = 0) => {
   const safeType = vehicleType === "MOBIL" || vehicleType === "CAR" ? "MOBIL" : "MOTOR";
   const cfg = RIDE_FARE_CONFIG[safeType];
-  const safeDist = Math.max(0.1, Number(distanceKm) || 2);
-  const safeDuration = Math.max(1, Number(durationMinutes) || Math.round(safeDist * 3.5) + 5);
+  const safeDist = Number(distanceKm);
+  const safeDuration = Number(durationMinutes);
 
   const baseFare = cfg.baseFare;
   const extraKm = Math.max(0, safeDist - cfg.baseKm);
@@ -95,22 +88,33 @@ const estimateRideFare = async (req, res) => {
       routeDistanceKm,
       routeDurationMinutes,
     } = req.body;
-    const requestedDistance = Number(routeDistanceKm);
-    let distanceKm =
-      Number.isFinite(requestedDistance) && requestedDistance > 0
-        ? Math.round(requestedDistance * 10) / 10
-        : 0;
-    if (!distanceKm && pickup?.latitude != null && pickup?.longitude != null && destination?.latitude != null && destination?.longitude != null) {
-      distanceKm = calculateDistanceKm(pickup.latitude, pickup.longitude, destination.latitude, destination.longitude);
+    if (!hasValidRideLocation(pickup) || !hasValidRideLocation(destination)) {
+      return res.status(400).json({
+        success: false,
+        message: "Koordinat pickup dan destination wajib valid.",
+      });
     }
-    if (!distanceKm || distanceKm <= 0) distanceKm = 2.5;
+    if (pickup.latitude === destination.latitude && pickup.longitude === destination.longitude) {
+      return res.status(400).json({
+        success: false,
+        message: "Pickup dan destination tidak boleh berada di titik yang sama.",
+      });
+    }
 
-    const requestedDuration = Number(routeDurationMinutes);
-    const estimatedDuration =
-      Number.isFinite(requestedDuration) && requestedDuration > 0
-        ? Math.max(1, Math.round(requestedDuration))
-        : Math.round(distanceKm * 3.5) + 5;
-    const breakdown = computeFareBreakdown(distanceKm, estimatedDuration, vehicleType, discount);
+    const distanceKm = Number(routeDistanceKm);
+    const estimatedDuration = Number(routeDurationMinutes);
+    if (!Number.isFinite(distanceKm) || distanceKm <= 0 || !Number.isFinite(estimatedDuration) || estimatedDuration <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Jarak dan durasi hasil routing wajib dikirim.",
+      });
+    }
+    const breakdown = computeFareBreakdown(
+      Math.round(distanceKm * 10) / 10,
+      Math.max(1, Math.round(estimatedDuration)),
+      vehicleType,
+      discount
+    );
     return res.json({
       success: true,
       data: {
@@ -154,6 +158,18 @@ const createRideOrder = async (req, res) => {
         message: "Lokasi penjemputan dan tujuan perjalanan wajib diisi.",
       });
     }
+    if (!hasValidRideLocation(pickup) || !hasValidRideLocation(destination)) {
+      return res.status(400).json({
+        success: false,
+        message: "Koordinat pickup dan destination wajib valid.",
+      });
+    }
+    if (pickup.latitude === destination.latitude && pickup.longitude === destination.longitude) {
+      return res.status(400).json({
+        success: false,
+        message: "Pickup dan destination tidak boleh berada di titik yang sama.",
+      });
+    }
 
     if (vehicleType === "CAR" || vehicleType === "MOBIL") {
       return res.status(400).json({
@@ -162,25 +178,20 @@ const createRideOrder = async (req, res) => {
       });
     }
 
-    // Prefer the road route calculated by the client; fall back to coordinates
-    // when older clients do not send routed metrics.
-    const routedDistance = Number(routeDistanceKm);
-    let distanceKm =
-      Number.isFinite(routedDistance) && routedDistance > 0
-        ? Math.round(routedDistance * 10) / 10
-        : Number(req.body.estimatedDistance || req.body.estimatedDistanceKm || 0);
-    if (!routedDistance && pickup.latitude != null && pickup.longitude != null && destination.latitude != null && destination.longitude != null) {
-      const computed = calculateDistanceKm(pickup.latitude, pickup.longitude, destination.latitude, destination.longitude);
-      if (computed > 0) distanceKm = computed;
+    const distanceKm = Number(routeDistanceKm);
+    const estimatedDuration = Number(routeDurationMinutes);
+    if (!Number.isFinite(distanceKm) || distanceKm <= 0 || !Number.isFinite(estimatedDuration) || estimatedDuration <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Jarak dan durasi hasil routing wajib dikirim.",
+      });
     }
-    if (!distanceKm || distanceKm <= 0) distanceKm = 2.5;
-
-    const routedDuration = Number(routeDurationMinutes);
-    const estimatedDuration =
-      Number.isFinite(routedDuration) && routedDuration > 0
-        ? Math.max(1, Math.round(routedDuration))
-        : Math.round(distanceKm * 3.5) + 5;
-    const breakdown = computeFareBreakdown(distanceKm, estimatedDuration, vehicleType, discount);
+    const breakdown = computeFareBreakdown(
+      Math.round(distanceKm * 10) / 10,
+      Math.max(1, Math.round(estimatedDuration)),
+      vehicleType,
+      discount
+    );
     const estimatedFare = breakdown.estimatedFare;
     const totalAmount = estimatedFare;
     // Driver gets 80% of total fare
@@ -198,15 +209,15 @@ const createRideOrder = async (req, res) => {
       vehicleType: "MOTOR",
       pickup: {
         address: pickup.address,
-        latitude: pickup.latitude || null,
-        longitude: pickup.longitude || null,
+        latitude: pickup.latitude,
+        longitude: pickup.longitude,
         placeName: pickup.placeName || "",
         notes: pickup.notes || "",
       },
       destination: {
         address: destination.address,
-        latitude: destination.latitude || null,
-        longitude: destination.longitude || null,
+        latitude: destination.latitude,
+        longitude: destination.longitude,
         placeName: destination.placeName || "",
         notes: destination.notes || "",
       },
