@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
+  StyleProp,
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   ActivityIndicator,
   Platform,
+  ViewStyle,
 } from "react-native";
 import { MapPin, Navigation, RefreshCw, AlertCircle } from "lucide-react-native";
 
@@ -42,10 +44,13 @@ export interface WebMapProps {
   onPress?: (event: MapPressEvent) => void;
   pin?: { latitude: number; longitude: number };
   markers?: MapMarkerItem[];
+  routeCoordinates?: Array<{ latitude: number; longitude: number }>;
+  routeColor?: string;
+  fitToRoute?: boolean;
   showsUserLocation?: boolean;
   onPinDragEnd?: (coordinate: { latitude: number; longitude: number }) => void;
   interactive?: boolean;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
   showRouteLine?: boolean;
 }
 
@@ -56,6 +61,9 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
   onPress,
   pin,
   markers = [],
+  routeCoordinates,
+  routeColor = "#E11D48",
+  fitToRoute = false,
   showsUserLocation = true,
   onPinDragEnd,
   interactive = true,
@@ -143,9 +151,14 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
   // Generate Leaflet HTML inside srcDoc
   const leafletHtml = useMemo(() => {
     const markersJson = JSON.stringify(allMarkers);
+    const routePoints = routeCoordinates?.length
+      ? routeCoordinates
+      : allMarkers.map((marker) => marker.coordinate);
+    const routePointsJson = JSON.stringify(routePoints);
+    const hasActualRoute = Boolean(routeCoordinates?.length);
     const hasPinDraggable = Boolean(pin && interactive);
-    const shouldDrawRoute = showRouteLine && allMarkers.length >= 2;
-
+    const shouldDrawRoute = showRouteLine && routePoints.length >= 2;
+    const shouldFitRoute = fitToRoute && routePoints.length >= 2;
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -259,14 +272,9 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
       try {
         var map = L.map('map', {
           zoomControl: ${interactive ? "true" : "false"},
-          attributionControl: false,
-          dragging: ${interactive ? "true" : "false"},
-          touchZoom: ${interactive ? "true" : "false"},
-          scrollWheelZoom: ${interactive ? "true" : "false"},
-          doubleClickZoom: ${interactive ? "true" : "false"}
+          attributionControl: false
         }).setView([${centerLat}, ${centerLng}], 15);
 
-        // Google Maps Roadmap Tiles
         var googleRoadmap = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
           maxZoom: 20,
           subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
@@ -274,14 +282,14 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
         googleRoadmap.addTo(map);
 
         var markersData = ${markersJson};
+        var routeData = ${routePointsJson};
         var leafletMarkers = [];
-        var coordsForRoute = [];
 
         function getMarkerColor(m, idx) {
           if (m.pinColor) return m.pinColor;
-          if (m.type === 'pickup' || idx === 0) return '#059669'; // Emerald
-          if (m.type === 'dropoff' || idx === 1) return '#e11d48'; // Rose
-          if (m.type === 'driver') return '#0284c7'; // Blue
+          if (m.type === 'pickup' || idx === 0) return '#059669';
+          if (m.type === 'dropoff' || idx === 1) return '#e11d48';
+          if (m.type === 'driver') return '#0284c7';
           return '#059669';
         }
 
@@ -290,8 +298,6 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
           var lat = Number(m.coordinate.latitude);
           var lng = Number(m.coordinate.longitude);
           var color = getMarkerColor(m, idx);
-          coordsForRoute.push([lat, lng]);
-
           var iconHtml;
           if (m.type === 'driver') {
             iconHtml = '<div class="driver-pin">🛵</div>';
@@ -335,19 +341,25 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
           leafletMarkers.push(marker);
         });
 
-        // Draw Route Line if 2 or more coordinates exist
-        if (${shouldDrawRoute} && coordsForRoute.length >= 2) {
-          var polyline = L.polyline(coordsForRoute, {
-            color: '#059669',
+        if (${shouldDrawRoute} && routeData.length >= 2) {
+          var routeLatLngs = routeData.map(function(point) {
+            return [Number(point.latitude), Number(point.longitude)];
+          });
+          var polyline = L.polyline(routeLatLngs, {
+            color: ${JSON.stringify(hasActualRoute ? routeColor : "#059669")},
             weight: 5,
-            opacity: 0.85,
-            dashArray: '8, 8',
+            opacity: 0.9,
+            dashArray: ${hasActualRoute ? "null" : "'8, 8'"},
             lineJoin: 'round'
           }).addTo(map);
 
-          // Fit bounds to show entire route
-          var group = new L.featureGroup(leafletMarkers.concat([polyline]));
-          map.fitBounds(group.getBounds().pad(0.2));
+          var routeBoundsGroup = new L.featureGroup(leafletMarkers.concat([polyline]));
+          map.fitBounds(routeBoundsGroup.getBounds().pad(0.2));
+        } else if (${shouldFitRoute} && routeData.length >= 2) {
+          var routeBounds = L.latLngBounds(routeData.map(function(point) {
+            return [Number(point.latitude), Number(point.longitude)];
+          }));
+          map.fitBounds(routeBounds.pad(0.2));
         } else if (leafletMarkers.length > 1) {
           var markerGroup = new L.featureGroup(leafletMarkers);
           map.fitBounds(markerGroup.getBounds().pad(0.25));
@@ -377,21 +389,31 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
         }
 
         window.parent.postMessage({ type: 'GEOVERSE_MAP_READY' }, '*');
-      } catch (err) {
-        console.error('Leaflet map error:', err);
+      } catch (error) {
+        window.parent.postMessage({ type: 'GEOVERSE_MAP_ERROR', message: String(error) }, '*');
       }
     })();
   </script>
 </body>
 </html>`;
-  }, [centerLat, centerLng, allMarkers, interactive, pin, showRouteLine]);
+  }, [
+    centerLat,
+    centerLng,
+    allMarkers,
+    interactive,
+    pin,
+    routeColor,
+    routeCoordinates,
+    showRouteLine,
+    fitToRoute,
+  ]);
 
   return (
     <View style={[styles.container, style]}>
       {/* Interactive Web Map Iframe */}
       <iframe
-        key={`web-map-${key}-${centerLat}-${centerLng}-${allMarkers.length}`}
-        ref={iframeRef as any}
+        ref={iframeRef}
+        key={`web-map-${key}-${centerLat}-${centerLng}-${allMarkers.length}-${routeCoordinates?.length || 0}`}
         title="GEOVERSE Leaflet Map"
         srcDoc={leafletHtml}
         style={{

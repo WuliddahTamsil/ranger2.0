@@ -1,5 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -35,13 +35,13 @@ import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import {
   createRideBooking,
-  calculateDistance,
   calculateRideFare,
   estimateRideFareBreakdown,
   FareEstimateResult,
   RideLocation,
   fetchActiveCustomerRide,
 } from "../../services/rideService";
+import { fetchDrivingRoute, RideRoute } from "../../services/routeService";
 import { CustomerLocationPicker, CustomerLocationValue } from "../../components/CustomerLocationPicker";
 import { NativeMapComponent } from "../../components/NativeMapComponent";
 import { rp } from "../../utils/formatters";
@@ -60,8 +60,8 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   const [pickup, setPickup] = useState<RideLocation>({
     address: authAccount?.address || "",
     placeName: "Lokasi Saya",
-    latitude: -6.9175,
-    longitude: 107.6191,
+    latitude: null,
+    longitude: null,
   });
 
   // Destination state
@@ -95,15 +95,79 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   const [fareBreakdown, setFareBreakdown] = useState<FareEstimateResult | null>(null);
   const [isCalculatingFare, setIsCalculatingFare] = useState(false);
 
-  // Request backend fare estimate whenever points change
+  // Road route state
+  const [rideRoute, setRideRoute] = useState<RideRoute | null>(null);
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+  const [routeError, setRouteError] = useState("");
+  const routeRequestRef = useRef(0);
+
+  // Calculate an actual road route whenever both selected coordinates change.
   useEffect(() => {
-    if (!pickup.address.trim() || !destination.address.trim()) {
+    const hasCoordinates = (location: RideLocation) =>
+      typeof location.latitude === "number" &&
+      Number.isFinite(location.latitude) &&
+      typeof location.longitude === "number" &&
+      Number.isFinite(location.longitude);
+    const hasAddresses = Boolean(pickup.address.trim() && destination.address.trim());
+    const pickupPoint = hasCoordinates(pickup)
+      ? { latitude: pickup.latitude as number, longitude: pickup.longitude as number }
+      : null;
+    const destinationPoint = hasCoordinates(destination)
+      ? { latitude: destination.latitude as number, longitude: destination.longitude as number }
+      : null;
+    const requestId = routeRequestRef.current + 1;
+    routeRequestRef.current = requestId;
+
+    setRideRoute(null);
+    setRouteError(
+      hasAddresses && (!pickupPoint || !destinationPoint)
+        ? "Pilih titik pickup dan tujuan dari peta agar rute dapat dihitung."
+        : ""
+    );
+
+    if (!pickupPoint || !destinationPoint || !hasAddresses) {
+      setIsCalculatingRoute(false);
+      return;
+    }
+
+    let active = true;
+    setIsCalculatingRoute(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const route = await fetchDrivingRoute(pickupPoint, destinationPoint);
+        if (active && routeRequestRef.current === requestId) {
+          setRideRoute(route);
+          setRouteError("");
+        }
+      } catch (error) {
+        console.warn("Driving route error:", error);
+        if (active && routeRequestRef.current === requestId) {
+          setRideRoute(null);
+          setRouteError("Rute jalan tidak tersedia. Periksa koneksi atau pilih titik lain.");
+        }
+      } finally {
+        if (active && routeRequestRef.current === requestId) setIsCalculatingRoute(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [pickup.address, pickup.latitude, pickup.longitude, destination.address, destination.latitude, destination.longitude]);
+
+  // Request the backend fare using the road distance and duration.
+  useEffect(() => {
+    if (!rideRoute || !pickup.address.trim() || !destination.address.trim()) {
       setFareBreakdown(null);
+      setIsCalculatingFare(false);
       return;
     }
 
     let active = true;
     setIsCalculatingFare(true);
+    setFareBreakdown(null);
 
     const timer = setTimeout(async () => {
       try {
@@ -118,24 +182,25 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
             longitude: destination.longitude,
             address: destination.address,
           },
+          routeDistanceKm: rideRoute.distanceKm,
+          routeDurationMinutes: rideRoute.durationMinutes,
           vehicleType: selectedVehicle === "CAR" ? "MOBIL" : "MOTOR",
         });
 
-        if (active && res.success && res.data) {
-          setFareBreakdown(res.data);
-        }
-      } catch (err) {
-        console.warn("Backend fare estimate error:", err);
+        if (active && res.success && res.data) setFareBreakdown(res.data);
+      } catch (error) {
+        console.warn("Backend fare estimate error:", error);
       } finally {
         if (active) setIsCalculatingFare(false);
       }
-    }, 400);
+    }, 350);
 
     return () => {
       active = false;
       clearTimeout(timer);
     };
   }, [
+    rideRoute,
     pickup.address,
     pickup.latitude,
     pickup.longitude,
@@ -262,45 +327,90 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     setDestination({
       address: targetAddress,
       placeName: targetName,
-      latitude: (pickup.latitude || -6.9175) + 0.015,
-      longitude: (pickup.longitude || 107.6191) + 0.015,
+      latitude: null,
+      longitude: null,
     });
   };
 
-  // Calculate Distance and Fare dynamically (Backend prioritized)
-  const calculatedDistance = useMemo(() => {
-    if (fareBreakdown?.distanceKm) return fareBreakdown.distanceKm;
-    if (pickup.latitude && pickup.longitude && destination.latitude && destination.longitude) {
-      const d = calculateDistance(
-        pickup.latitude,
-        pickup.longitude,
-        destination.latitude,
-        destination.longitude
-      );
-      return Math.max(0.8, d);
-    }
-    return destination.address.trim().length > 0 ? 3.2 : 0;
-  }, [fareBreakdown?.distanceKm, pickup.latitude, pickup.longitude, destination.latitude, destination.longitude, destination.address]);
+  // Route metrics come only from the road-routing response.
+  const calculatedDistance = useMemo(() => rideRoute?.distanceKm || 0, [rideRoute]);
 
-  const estimatedDuration = useMemo(() => {
-    if (fareBreakdown?.estimatedDurationMinutes) return fareBreakdown.estimatedDurationMinutes;
-    if (calculatedDistance <= 0) return 0;
-    return Math.round(calculatedDistance * 3.5) + 4;
-  }, [fareBreakdown?.estimatedDurationMinutes, calculatedDistance]);
+  const estimatedDuration = useMemo(() => rideRoute?.durationMinutes || 0, [rideRoute]);
 
   const estimatedFare = useMemo(() => {
     if (fareBreakdown?.estimatedFare) return fareBreakdown.estimatedFare;
-    if (calculatedDistance <= 0) return 0;
-    return calculateRideFare(calculatedDistance);
-  }, [fareBreakdown?.estimatedFare, calculatedDistance]);
+    if (!rideRoute) return 0;
+    return calculateRideFare(rideRoute.distanceKm);
+  }, [fareBreakdown?.estimatedFare, rideRoute]);
 
-  // Validation
+  const hasPickupCoordinates =
+    typeof pickup.latitude === "number" &&
+    Number.isFinite(pickup.latitude) &&
+    typeof pickup.longitude === "number" &&
+    Number.isFinite(pickup.longitude);
+  const hasDestinationCoordinates =
+    typeof destination.latitude === "number" &&
+    Number.isFinite(destination.latitude) &&
+    typeof destination.longitude === "number" &&
+    Number.isFinite(destination.longitude);
+
   const canOrder = Boolean(
     pickup.address.trim() &&
-    destination.address.trim() &&
-    selectedVehicle === "MOTOR" &&
-    !isSubmitting
+      destination.address.trim() &&
+      hasPickupCoordinates &&
+      hasDestinationCoordinates &&
+      rideRoute &&
+      !isCalculatingRoute &&
+      !routeError &&
+      selectedVehicle === "MOTOR" &&
+      !isSubmitting
   );
+
+  const rideMarkers = useMemo(() => {
+    const markers: Array<{
+      id: string;
+      coordinate: { latitude: number; longitude: number };
+      title: string;
+      pinColor: string;
+      type: "pickup" | "dropoff";
+    }> = [];
+
+    if (hasPickupCoordinates) {
+      markers.push({
+        id: "pickup",
+        coordinate: { latitude: pickup.latitude as number, longitude: pickup.longitude as number },
+        title: "Lokasi Penjemputan",
+        pinColor: "#16A34A",
+        type: "pickup",
+      });
+    }
+    if (hasDestinationCoordinates) {
+      markers.push({
+        id: "destination",
+        coordinate: { latitude: destination.latitude as number, longitude: destination.longitude as number },
+        title: "Tujuan Perjalanan",
+        pinColor: "#DC2626",
+        type: "dropoff",
+      });
+    }
+    return markers;
+  }, [
+    hasPickupCoordinates,
+    pickup.latitude,
+    pickup.longitude,
+    hasDestinationCoordinates,
+    destination.latitude,
+    destination.longitude,
+  ]);
+  const pickerLocation = pickerTarget === "destination" ? destination : pickup;
+  const pickerInitialLocation =
+    typeof pickerLocation.latitude === "number" && typeof pickerLocation.longitude === "number"
+      ? {
+          latitude: pickerLocation.latitude,
+          longitude: pickerLocation.longitude,
+          detectedAddress: pickerLocation.address,
+        }
+      : undefined;
 
   // Submit Order
   const handleOrderRide = async () => {
@@ -314,6 +424,18 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     }
     if (selectedVehicle === "CAR") {
       Alert.alert("Kanyaah Car Belum Tersedia", "Layanan Kanyaah Car sedang dalam proses pengembangan.");
+      return;
+    }
+    if (!hasPickupCoordinates || !hasDestinationCoordinates) {
+      Alert.alert("Titik Lokasi Belum Lengkap", "Pilih pickup dan tujuan melalui peta agar koordinatnya valid.");
+      return;
+    }
+    if (isCalculatingRoute) {
+      Alert.alert("Rute Sedang Dihitung", "Tunggu sampai rute jalan selesai dihitung.");
+      return;
+    }
+    if (!rideRoute || routeError) {
+      Alert.alert("Rute Tidak Tersedia", routeError || "Rute jalan belum berhasil ditemukan.");
       return;
     }
     if (pickup.address.trim().toLowerCase() === destination.address.trim().toLowerCase()) {
@@ -334,6 +456,8 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         paymentMethod: selectedPaymentMethod,
         estimatedDistance: calculatedDistance,
         estimatedDuration,
+        routeDistanceKm: rideRoute.distanceKm,
+        routeDurationMinutes: rideRoute.durationMinutes,
         estimatedFare,
       });
 
@@ -349,8 +473,9 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         setCreatedOrderForPayment(res.data);
         setPaymentModalVisible(true);
       }
-    } catch (err: any) {
-      Alert.alert("Terjadi Kesalahan", err.message || "Gagal menghubungkan ke server.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal menghubungkan ke server.";
+      Alert.alert("Terjadi Kesalahan", message);
     } finally {
       setIsSubmitting(false);
     }
@@ -432,7 +557,9 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                     placeholder="Tentukan lokasi penjemputan"
                     placeholderTextColor="#94A3B8"
                     value={pickup.address}
-                    onChangeText={(text) => setPickup((prev) => ({ ...prev, address: text }))}
+                    onChangeText={(text) =>
+                      setPickup((prev) => ({ ...prev, address: text, latitude: null, longitude: null }))
+                    }
                   />
                   <TouchableOpacity onPress={() => openLocationPicker("pickup")}>
                     <Text style={styles.mapPinActionText}>Peta</Text>
@@ -454,7 +581,9 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                     placeholder="Ketik alamat tujuan Anda..."
                     placeholderTextColor="#94A3B8"
                     value={destination.address}
-                    onChangeText={(text) => setDestination((prev) => ({ ...prev, address: text }))}
+                    onChangeText={(text) =>
+                      setDestination((prev) => ({ ...prev, address: text, latitude: null, longitude: null }))
+                    }
                   />
                   <TouchableOpacity onPress={() => openLocationPicker("destination")}>
                     <Text style={styles.mapPinActionText}>Peta</Text>
@@ -498,18 +627,35 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
           </View>
         </View>
 
-        {/* Map Preview (If Pickup & Destination have coords) */}
-        {pickup.latitude && pickup.longitude && (
+        {/* Map Preview with selected markers and the routed road geometry */}
+        {hasPickupCoordinates && (
           <View style={styles.mapPreviewWrapper}>
             <NativeMapComponent
-              pin={{ latitude: pickup.latitude, longitude: pickup.longitude }}
+              markers={rideMarkers}
+              routeCoordinates={rideRoute?.coordinates}
+              routeColor="#DC2626"
+              fitToRoute={Boolean(rideRoute)}
+              showRouteLine={Boolean(rideRoute)}
               style={styles.mapPreviewFrame}
             />
             <View style={styles.mapBadge}>
-              <Text style={styles.mapBadgeText}>
-                {calculatedDistance > 0 ? `Jarak: ~${calculatedDistance} km` : "Lokasi Aktif"}
-              </Text>
+              {isCalculatingRoute ? (
+                <View style={styles.mapBadgeRow}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={styles.mapBadgeText}>Menghitung rute...</Text>
+                </View>
+              ) : (
+                <Text style={styles.mapBadgeText}>
+                  {rideRoute ? `${calculatedDistance.toFixed(1)} km · ${estimatedDuration} mnt` : "Pilih tujuan di peta"}
+                </Text>
+              )}
             </View>
+          </View>
+        )}
+        {routeError && (
+          <View style={styles.routeStatusError}>
+            <AlertCircle size={16} color="#B91C1C" />
+            <Text style={styles.routeStatusText}>{routeError}</Text>
           </View>
         )}
 
@@ -541,7 +687,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
               <View style={styles.vehicleMetricsRow}>
                 <Clock size={12} color="#64748B" />
                 <Text style={styles.vehicleMetricText}>
-                  Tiba ~3-5 mnt · Perjalanan {estimatedDuration > 0 ? `${estimatedDuration} mnt` : "15 mnt"}
+                  Tiba ~3-5 mnt · Perjalanan {estimatedDuration > 0 ? `${estimatedDuration} mnt` : "Pilih rute"}
                 </Text>
               </View>
             </View>
@@ -803,11 +949,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       {/* Location Picker Modal */}
       <CustomerLocationPicker
         visible={locationPickerVisible}
-        initialLocation={{
-          latitude: (pickerTarget === "destination" ? destination.latitude : pickup.latitude) || -6.9175,
-          longitude: (pickerTarget === "destination" ? destination.longitude : pickup.longitude) || 107.6191,
-          detectedAddress: pickerTarget === "destination" ? destination.address : pickup.address,
-        }}
+        initialLocation={pickerInitialLocation}
         onClose={() => setLocationPickerVisible(false)}
         onConfirm={handleLocationConfirmed}
       />
@@ -1041,6 +1183,27 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 11,
     fontWeight: "700",
+  },
+  mapBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  routeStatusError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+  },
+  routeStatusText: {
+    flex: 1,
+    color: "#991B1B",
+    fontSize: 11,
+    fontWeight: "600",
   },
   vehicleOptionCard: {
     flexDirection: "row",

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import {
@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +16,7 @@ import {
 } from "react-native";
 import { Check, Crosshair, MapPin, Search, X } from "lucide-react-native";
 import { NativeMapComponent, Region, MapPressEvent } from "./NativeMapComponent";
+import { PlaceSuggestion, safeForwardGeocode, searchPlacesSmart } from "../utils/geocoding";
 
 export interface CustomerLocationValue {
   latitude: number;
@@ -73,14 +75,25 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
     initialLocation ? `${initialLocation.latitude},${initialLocation.longitude}` : `${DEFAULT_REGION.latitude},${DEFAULT_REGION.longitude}`,
   );
   const [searchText, setSearchText] = useState("");
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
+  const searchDebounceRef = useRef<Parameters<typeof clearTimeout>[0] | undefined>(undefined);
+  const searchRequestRef = useRef(0);
 
   useEffect(() => {
+    clearTimeout(searchDebounceRef.current);
+    searchRequestRef.current += 1;
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setSearching(false);
     if (!visible) return;
+
     setRegion(initialRegion);
     setPin({ latitude: initialRegion.latitude, longitude: initialRegion.longitude });
     setDetectedAddress(initialLocation?.detectedAddress || "");
+    setSearchText("");
     setWebMapQuery(initialLocation ? `${initialLocation.latitude},${initialLocation.longitude}` : `${initialRegion.latitude},${initialRegion.longitude}`);
   }, [visible, initialRegion, initialLocation]);
 
@@ -108,29 +121,98 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
     }
   };
 
+  const handleSearchTextChange = (text: string) => {
+    setSearchText(text);
+    clearTimeout(searchDebounceRef.current);
+
+    const requestId = ++searchRequestRef.current;
+    const query = text.trim();
+    if (query.length < 2) {
+      setSearching(false);
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    searchDebounceRef.current = setTimeout(() => {
+      void (async () => {
+        setSearching(true);
+        try {
+          const list = await searchPlacesSmart(query, {
+            lat: pin.latitude,
+            lon: pin.longitude,
+            limit: 6,
+          });
+          if (requestId !== searchRequestRef.current) return;
+          setSuggestions(list);
+          setShowSuggestions(list.length > 0);
+        } catch {
+          if (requestId === searchRequestRef.current) {
+            setSuggestions([]);
+            setShowSuggestions(false);
+          }
+        } finally {
+          if (requestId === searchRequestRef.current) setSearching(false);
+        }
+      })();
+    }, 300);
+  };
+
+  const selectSuggestion = (item: PlaceSuggestion) => {
+    const address = item.formattedAddress || [item.name, item.subtitle].filter(Boolean).join(", ");
+    setSearchText(item.name);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    movePin(item.latitude, item.longitude);
+    setRegion((current) => ({
+      ...current,
+      latitude: item.latitude,
+      longitude: item.longitude,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
+    }));
+    setDetectedAddress(address);
+  };
+
   const handleSearch = async () => {
     const query = searchText.trim();
     if (!query) return;
-    setSearching(true);
-    if (Platform.OS === "web") {
-      // Google Maps iframe handles the search query on Web. The native path
-      // still uses Expo Location geocoding and updates the draggable marker.
-      setWebMapQuery(query);
-      setDetectedAddress(query);
-      setSearching(false);
+
+    setShowSuggestions(false);
+    if (suggestions.length > 0) {
+      selectSuggestion(suggestions[0]);
       return;
     }
+
+    setSearching(true);
     try {
-      const result = await Location.geocodeAsync(query);
-      const match = result[0];
+      const match = await safeForwardGeocode(query, {
+        lat: pin.latitude,
+        lon: pin.longitude,
+      });
+
       if (!match) {
-        Alert.alert("Lokasi tidak ditemukan", "Coba gunakan nama jalan, kelurahan, atau kota yang lebih lengkap.");
+        Alert.alert(
+          "Lokasi tidak ditemukan",
+          "Coba gunakan nama tempat, jalan, kelurahan, atau kota yang lebih lengkap.",
+        );
         return;
       }
+
       movePin(match.latitude, match.longitude);
-      setRegion((current) => ({ ...current, latitude: match.latitude, longitude: match.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 }));
+      setRegion((current) => ({
+        ...current,
+        latitude: match.latitude,
+        longitude: match.longitude,
+        latitudeDelta: 0.012,
+        longitudeDelta: 0.012,
+      }));
+      setDetectedAddress(match.formattedAddress || query);
     } catch {
-      Alert.alert("Pencarian tidak tersedia", "Periksa koneksi internet atau tentukan titik dengan mengetuk peta.");
+      Alert.alert(
+        "Pencarian tidak tersedia",
+        "Periksa koneksi internet lalu coba lagi.",
+      );
     } finally {
       setSearching(false);
     }
@@ -185,20 +267,64 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
             </TouchableOpacity>
           </View>
 
-          <View style={styles.searchRow}>
-            <Search size={17} color="#64748B" />
-            <TextInput
-              value={searchText}
-              onChangeText={setSearchText}
-              onSubmitEditing={() => void handleSearch()}
-              placeholder="Cari jalan, kelurahan, atau kota"
-              placeholderTextColor="#94A3B8"
-              style={styles.searchInput}
-              returnKeyType="search"
-            />
-            <TouchableOpacity style={styles.searchButton} onPress={() => void handleSearch()} disabled={searching}>
-              {searching ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.searchButtonText}>Cari</Text>}
-            </TouchableOpacity>
+          <View style={styles.searchArea}>
+            <View style={styles.searchRow}>
+              <Search size={17} color="#64748B" />
+              <TextInput
+                value={searchText}
+                onChangeText={handleSearchTextChange}
+                onSubmitEditing={() => void handleSearch()}
+                placeholder="Cari tempat, jalan, atau area"
+                placeholderTextColor="#94A3B8"
+                style={styles.searchInput}
+                returnKeyType="search"
+              />
+              {searching ? (
+                <ActivityIndicator size="small" color="#1B7A4E" />
+              ) : searchText.length > 0 ? (
+                <TouchableOpacity
+                  onPress={() => handleSearchTextChange("")}
+                  accessibilityLabel="Hapus pencarian"
+                  activeOpacity={0.7}
+                >
+                  <X size={16} color="#94A3B8" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {showSuggestions && suggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                <ScrollView
+                  style={styles.suggestionsList}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                >
+                  {suggestions.map((item, index) => (
+                    <TouchableOpacity
+                      key={item.id || `suggestion-${index}`}
+                      style={[
+                        styles.suggestionItem,
+                        index === suggestions.length - 1 && styles.suggestionItemLast,
+                      ]}
+                      onPress={() => selectSuggestion(item)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.suggestionIconBox}>
+                        <MapPin size={15} color="#059669" />
+                      </View>
+                      <View style={styles.suggestionTextBox}>
+                        <Text style={styles.suggestionName} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        <Text style={styles.suggestionSubtitle} numberOfLines={2}>
+                          {item.subtitle || item.formattedAddress}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
           </View>
 
           <View style={styles.mapWrap}>
@@ -244,10 +370,17 @@ const styles = StyleSheet.create({
   title: { color: "#0F172A", fontSize: 17, fontWeight: "900" },
   subtitle: { color: "#64748B", fontSize: 11, marginTop: 3 },
   closeButton: { width: 35, height: 35, borderRadius: 18, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" },
-  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, margin: 12, paddingHorizontal: 12, minHeight: 44, borderRadius: 13, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF" },
+  searchArea: { position: "relative", zIndex: 20, elevation: 20 },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, margin: 12, paddingHorizontal: 12, minHeight: 44, borderRadius: 13, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", zIndex: 2 },
   searchInput: { flex: 1, color: "#0F172A", fontSize: 12 },
-  searchButton: { minWidth: 48, minHeight: 30, borderRadius: 9, alignItems: "center", justifyContent: "center", backgroundColor: "#1B7A4E", paddingHorizontal: 9 },
-  searchButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
+  suggestionsContainer: { position: "absolute", top: 62, left: 12, right: 12, maxHeight: 280, borderRadius: 16, backgroundColor: "#FFFFFF", overflow: "hidden", shadowColor: "#0F172A", shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 12, zIndex: 30 },
+  suggestionsList: { maxHeight: 280 },
+  suggestionItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  suggestionItemLast: { borderBottomWidth: 0 },
+  suggestionIconBox: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#ECFDF5" },
+  suggestionTextBox: { flex: 1, gap: 2 },
+  suggestionName: { color: "#0F172A", fontSize: 12.5, fontWeight: "800" },
+  suggestionSubtitle: { color: "#64748B", fontSize: 10.5, lineHeight: 14 },
   mapWrap: { flex: 1, minHeight: 260, position: "relative", backgroundColor: "#E2E8F0" },
   mapBadge: { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.96)" },
   mapBadgeText: { color: "#166534", fontSize: 10, fontWeight: "800" },

@@ -24,6 +24,8 @@ export interface CreateRideParams {
   discount?: number;
   estimatedDistance?: number;
   estimatedDuration?: number;
+  routeDistanceKm?: number;
+  routeDurationMinutes?: number;
   estimatedFare?: number;
 }
 
@@ -196,6 +198,8 @@ export interface FareEstimateOptions {
   destination: RideLocation;
   vehicleType?: "MOTOR" | "MOBIL" | "CAR";
   discount?: number;
+  routeDistanceKm?: number;
+  routeDurationMinutes?: number;
 }
 
 // 1. Estimate Fare Breakdown from backend
@@ -231,7 +235,14 @@ export const estimateRideFareBreakdown = async (
     const res = await fetch(getApiUrl("/rides/fare-estimate"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pickup, destination, vehicleType, discount }),
+      body: JSON.stringify({
+        pickup,
+        destination,
+        vehicleType,
+        discount,
+        routeDistanceKm: destArg === undefined ? (pickupOrOptions as FareEstimateOptions).routeDistanceKm : undefined,
+        routeDurationMinutes: destArg === undefined ? (pickupOrOptions as FareEstimateOptions).routeDurationMinutes : undefined,
+      }),
     });
     return await readJson(res);
   } catch (err: any) {

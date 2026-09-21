@@ -14,7 +14,9 @@ import {
   Linking,
   Platform,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
+import * as Location from "expo-location";
 import {
   Home,
   Map,
@@ -65,6 +67,7 @@ import { RESTAURANTS, LAUNDRIES, KOS_LIST } from "../../constants/mockData";
 import { Nav, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { getPrimaryCustomerAddress } from "../../services/customerAddressService";
+import { PlaceSuggestion, searchPlacesSmart } from "../../utils/geocoding";
 
 // Import other customer screens
 import { Jelajah } from "./Jelajah";
@@ -86,6 +89,28 @@ interface CartItem {
   ownerId?: string;
   serviceType?: "marketplace" | "catering";
 }
+
+interface SearchCoordinates {
+  latitude: number;
+  longitude: number;
+}
+
+type NearbyPlace = PlaceSuggestion & {
+  distanceKm: number;
+};
+
+const calculateDistanceKm = (from: SearchCoordinates, to: SearchCoordinates) => {
+  const earthRadiusKm = 6371;
+  const latitudeDelta = ((to.latitude - from.latitude) * Math.PI) / 180;
+  const longitudeDelta = ((to.longitude - from.longitude) * Math.PI) / 180;
+  const latitude1 = (from.latitude * Math.PI) / 180;
+  const latitude2 = (to.latitude * Math.PI) / 180;
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.sin(longitudeDelta / 2) ** 2 * Math.cos(latitude1) * Math.cos(latitude2);
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
 
 interface CustomerHomeProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -111,6 +136,12 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   const [refreshing, setRefreshing] = useState(false);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [searchFilterText, setSearchFilterText] = useState("");
+  const [searchPlaces, setSearchPlaces] = useState<NearbyPlace[]>([]);
+  const [searchPlacesLoading, setSearchPlacesLoading] = useState(false);
+  const [searchPlacesError, setSearchPlacesError] = useState("");
+  const [searchCoordinates, setSearchCoordinates] = useState<SearchCoordinates | null>(null);
+  const searchDebounceRef = useRef<Parameters<typeof clearTimeout>[0] | undefined>(undefined);
+  const searchRequestRef = useRef(0);
   const [piknikModalVisible, setPiknikModalVisible] = useState(false);
   const [launcherExpanded, setLauncherExpanded] = useState(false);
   const [helpModalVisible, setHelpModalVisible] = useState(false);
@@ -165,6 +196,114 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
     setCustomerLocation(primaryAddress?.fullAddress || authAccount.address);
     setCustomerProfilePhoto(authAccount.profilePhoto || "");
   }, [authAccount]);
+  const getSearchCoordinates = async (): Promise<SearchCoordinates | null> => {
+    if (searchCoordinates) return searchCoordinates;
+
+    try {
+      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.geolocation) {
+        const position = await new Promise<{ coords: { latitude: number; longitude: number } }>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 12000,
+            maximumAge: 60000,
+          });
+        });
+        const coordinates = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        setSearchCoordinates(coordinates);
+        return coordinates;
+      }
+
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== Location.PermissionStatus.GRANTED) return null;
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const coordinates = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      };
+      setSearchCoordinates(coordinates);
+      return coordinates;
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    const query = searchFilterText.trim();
+    clearTimeout(searchDebounceRef.current);
+
+    if (!searchModalVisible || query.length < 2) {
+      setSearchPlaces([]);
+      setSearchPlacesError("");
+      setSearchPlacesLoading(false);
+      return;
+    }
+
+    const requestId = ++searchRequestRef.current;
+    searchDebounceRef.current = setTimeout(() => {
+      void (async () => {
+        setSearchPlacesLoading(true);
+        setSearchPlacesError("");
+
+        try {
+          const coordinates = await getSearchCoordinates();
+          const places = await searchPlacesSmart(query, {
+            lat: coordinates?.latitude,
+            lon: coordinates?.longitude,
+            limit: 12,
+          });
+
+          if (requestId !== searchRequestRef.current) return;
+
+          const nearbyPlaces = places
+            .map((place) => ({
+              ...place,
+              distanceKm: coordinates
+                ? calculateDistanceKm(coordinates, {
+                    latitude: place.latitude,
+                    longitude: place.longitude,
+                  })
+                : Number.POSITIVE_INFINITY,
+            }))
+            .sort((first, second) => first.distanceKm - second.distanceKm)
+            .slice(0, 8);
+
+          setSearchPlaces(nearbyPlaces);
+          if (nearbyPlaces.length === 0) {
+            setSearchPlacesError(`Tidak ada tempat yang cocok dengan "${query}" di sekitar lokasi kamu.`);
+          } else if (!coordinates) {
+            setSearchPlacesError("Izin lokasi belum aktif. Hasil ditampilkan berdasarkan pencarian umum.");
+          }
+        } catch {
+          if (requestId === searchRequestRef.current) {
+            setSearchPlaces([]);
+            setSearchPlacesError("Pencarian lokasi gagal. Periksa koneksi internet lalu coba lagi.");
+          }
+        } finally {
+          if (requestId === searchRequestRef.current) setSearchPlacesLoading(false);
+        }
+      })();
+    }, 450);
+
+    return () => {
+      clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchFilterText, searchModalVisible]);
+
+  const openNearbyPlace = async (place: NearbyPlace) => {
+    const query = `${place.name}, ${place.latitude},${place.longitude}`;
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+    try {
+      await Linking.openURL(mapsUrl);
+    } catch {
+      Alert.alert("Maps tidak tersedia", "Tidak dapat membuka lokasi ini di aplikasi peta.");
+    }
+  };
 
   // Global Cart State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -1281,6 +1420,93 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <ArrowRight size={13} color="#C2410C" />
               </View>
             </TouchableOpacity>
+            {/* Promo Card 5: Kanyaah Ride */}
+            <TouchableOpacity
+              style={[styles.promoCard, { backgroundColor: "#DCFCE7", borderColor: "#BBF7D0" }]}
+              onPress={() => navigate("c_ride")}
+              activeOpacity={0.85}
+            >
+              <View style={styles.promoCardTop}>
+                <View style={[styles.promoBadgePill, { backgroundColor: "#15803D" }]}>
+                  <Text style={styles.promoBadgeText}>KANYAAH RIDE</Text>
+                </View>
+                <Bike size={18} color="#15803D" />
+              </View>
+              <Text style={styles.promoCardTitle}>Bepergian lebih mudah dan aman</Text>
+              <Text style={styles.promoCardDesc} numberOfLines={2}>
+                Pesan ojek terdekat untuk perjalanan cepat dengan driver terpercaya.
+              </Text>
+              <View style={styles.promoCardFooter}>
+                <Text style={[styles.promoCtaText, { color: "#15803D" }]}>Pesan Ride</Text>
+                <ArrowRight size={13} color="#15803D" />
+              </View>
+            </TouchableOpacity>
+
+            {/* Promo Card 6: Kanyaah Laundry */}
+            <TouchableOpacity
+              style={[styles.promoCard, { backgroundColor: "#E0F2FE", borderColor: "#BAE6FD" }]}
+              onPress={() => navigate("c_laundry")}
+              activeOpacity={0.85}
+            >
+              <View style={styles.promoCardTop}>
+                <View style={[styles.promoBadgePill, { backgroundColor: "#0284C7" }]}>
+                  <Text style={styles.promoBadgeText}>KANYAAH LAUNDRY</Text>
+                </View>
+                <Wind size={18} color="#0284C7" />
+              </View>
+              <Text style={styles.promoCardTitle}>Pakaian bersih tanpa repot</Text>
+              <Text style={styles.promoCardDesc} numberOfLines={2}>
+                Laundry kiloan dan ekspres dari mitra terdekat, siap antar-jemput.
+              </Text>
+              <View style={styles.promoCardFooter}>
+                <Text style={[styles.promoCtaText, { color: "#0284C7" }]}>Cari Laundry</Text>
+                <ArrowRight size={13} color="#0284C7" />
+              </View>
+            </TouchableOpacity>
+
+            {/* Promo Card 7: Kanyaah Homestay */}
+            <TouchableOpacity
+              style={[styles.promoCard, { backgroundColor: "#F3E8FF", borderColor: "#E9D5FF" }]}
+              onPress={() => navigate("c_kos")}
+              activeOpacity={0.85}
+            >
+              <View style={styles.promoCardTop}>
+                <View style={[styles.promoBadgePill, { backgroundColor: "#9333EA" }]}>
+                  <Text style={styles.promoBadgeText}>KANYAAH HOMESTAY</Text>
+                </View>
+                <Building2 size={18} color="#9333EA" />
+              </View>
+              <Text style={styles.promoCardTitle}>Temukan tempat tinggal nyaman</Text>
+              <Text style={styles.promoCardDesc} numberOfLines={2}>
+                Pilihan homestay dan kos lokal yang nyaman untuk tinggal lebih tenang.
+              </Text>
+              <View style={styles.promoCardFooter}>
+                <Text style={[styles.promoCtaText, { color: "#9333EA" }]}>Lihat Homestay</Text>
+                <ArrowRight size={13} color="#9333EA" />
+              </View>
+            </TouchableOpacity>
+
+            {/* Promo Card 8: GEOVERSE Point */}
+            <TouchableOpacity
+              style={[styles.promoCard, { backgroundColor: "#FEF9C3", borderColor: "#FDE68A" }]}
+              onPress={() => navigate("c_point_home")}
+              activeOpacity={0.85}
+            >
+              <View style={styles.promoCardTop}>
+                <View style={[styles.promoBadgePill, { backgroundColor: "#CA8A04" }]}>
+                  <Text style={styles.promoBadgeText}>GEOVERSE POINT</Text>
+                </View>
+                <Sparkles size={18} color="#CA8A04" />
+              </View>
+              <Text style={styles.promoCardTitle}>Kumpulkan poin, dapatkan reward</Text>
+              <Text style={styles.promoCardDesc} numberOfLines={2}>
+                Gunakan poin untuk voucher dan potongan transaksi di berbagai layanan.
+              </Text>
+              <View style={styles.promoCardFooter}>
+                <Text style={[styles.promoCtaText, { color: "#A16207" }]}>Lihat Reward</Text>
+                <ArrowRight size={13} color="#A16207" />
+              </View>
+            </TouchableOpacity>
           </ScrollView>
         </View>
 
@@ -1694,7 +1920,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <Search size={18} color="#0D7A53" />
                 <TextInput
                   style={styles.searchModalTextInput}
-                  placeholder="Cari layanan, produk, toko..."
+                  placeholder="Cari MCD, tempat, produk, toko..."
                   placeholderTextColor="#9CA3AF"
                   value={searchFilterText}
                   onChangeText={setSearchFilterText}
@@ -1765,6 +1991,49 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {searchFilterText.trim().length >= 2 && (
+                <View style={styles.searchPlacesSection}>
+                  <View style={styles.searchPlacesHeader}>
+                    <Text style={styles.searchSectionLabel}>Tempat di sekitar kamu</Text>
+                    {searchPlacesLoading && <ActivityIndicator size="small" color="#0D7A53" />}
+                  </View>
+
+                  {searchPlacesError ? (
+                    <Text style={styles.searchPlacesHint}>{searchPlacesError}</Text>
+                  ) : null}
+
+                  {searchPlaces.map((place) => {
+                    const distanceLabel = Number.isFinite(place.distanceKm)
+                      ? place.distanceKm < 1
+                        ? `${Math.max(1, Math.round(place.distanceKm * 1000))} m`
+                        : `${place.distanceKm.toFixed(1)} km`
+                      : "Jarak tidak tersedia";
+
+                    return (
+                      <TouchableOpacity
+                        key={place.id}
+                        style={styles.searchPlaceRow}
+                        onPress={() => void openNearbyPlace(place)}
+                        activeOpacity={0.8}
+                        accessibilityLabel={`Buka ${place.name} di Maps`}
+                      >
+                        <View style={styles.searchPlaceIcon}>
+                          <MapPin size={17} color="#0D7A53" />
+                        </View>
+                        <View style={styles.searchPlaceBody}>
+                          <Text style={styles.searchPlaceName} numberOfLines={1}>{place.name}</Text>
+                          <Text style={styles.searchPlaceAddress} numberOfLines={2}>
+                            {place.subtitle || place.formattedAddress}
+                          </Text>
+                          <Text style={styles.searchPlaceDistance}>{distanceLabel} · Buka di Maps</Text>
+                        </View>
+                        <ExternalLink size={16} color="#0D7A53" />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
 
               {/* Filtered Products if user typed */}
               {searchFilterText.trim().length > 0 && (
@@ -2789,6 +3058,55 @@ const styles = StyleSheet.create({
   searchRecentPillText: {
     fontSize: 11,
     color: "#4B5563",
+  },
+  searchPlacesSection: {
+    marginTop: 14,
+  },
+  searchPlacesHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  searchPlacesHint: {
+    fontSize: 10.5,
+    color: "#64748B",
+    lineHeight: 15,
+    marginBottom: 6,
+  },
+  searchPlaceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  searchPlaceIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EAF8F0",
+  },
+  searchPlaceBody: {
+    flex: 1,
+    gap: 2,
+  },
+  searchPlaceName: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#142238",
+  },
+  searchPlaceAddress: {
+    fontSize: 10.5,
+    color: "#64748B",
+    lineHeight: 14,
+  },
+  searchPlaceDistance: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#0D7A53",
   },
   searchProductsSection: {
     marginTop: 14,

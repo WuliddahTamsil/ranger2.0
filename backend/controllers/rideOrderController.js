@@ -87,17 +87,30 @@ const computeFareBreakdown = (distanceKm, durationMinutes, vehicleType = "MOTOR"
 // 1. Calculate & Estimate Fare
 const estimateRideFare = async (req, res) => {
   try {
-    const { pickup, destination, vehicleType = "MOTOR", discount = 0 } = req.body;
-    let distanceKm = 0;
-    if (pickup?.latitude && pickup?.longitude && destination?.latitude && destination?.longitude) {
+    const {
+      pickup,
+      destination,
+      vehicleType = "MOTOR",
+      discount = 0,
+      routeDistanceKm,
+      routeDurationMinutes,
+    } = req.body;
+    const requestedDistance = Number(routeDistanceKm);
+    let distanceKm =
+      Number.isFinite(requestedDistance) && requestedDistance > 0
+        ? Math.round(requestedDistance * 10) / 10
+        : 0;
+    if (!distanceKm && pickup?.latitude != null && pickup?.longitude != null && destination?.latitude != null && destination?.longitude != null) {
       distanceKm = calculateDistanceKm(pickup.latitude, pickup.longitude, destination.latitude, destination.longitude);
     }
-    if (!distanceKm || distanceKm <= 0) {
-      distanceKm = 2.5;
-    }
-    const estimatedDuration = Math.round(distanceKm * 3.5) + 5;
-    const breakdown = computeFareBreakdown(distanceKm, estimatedDuration, vehicleType, discount);
+    if (!distanceKm || distanceKm <= 0) distanceKm = 2.5;
 
+    const requestedDuration = Number(routeDurationMinutes);
+    const estimatedDuration =
+      Number.isFinite(requestedDuration) && requestedDuration > 0
+        ? Math.max(1, Math.round(requestedDuration))
+        : Math.round(distanceKm * 3.5) + 5;
+    const breakdown = computeFareBreakdown(distanceKm, estimatedDuration, vehicleType, discount);
     return res.json({
       success: true,
       data: {
@@ -131,6 +144,8 @@ const createRideOrder = async (req, res) => {
       vehicleType = "MOTOR",
       paymentMethod = "Bayar Tunai",
       discount = 0,
+      routeDistanceKm,
+      routeDurationMinutes,
     } = req.body;
 
     if (!pickup?.address || !destination?.address) {
@@ -147,17 +162,24 @@ const createRideOrder = async (req, res) => {
       });
     }
 
-    // Compute verified distance on backend (cannot be spoofed from client)
-    let distanceKm = Number(req.body.estimatedDistance || req.body.estimatedDistanceKm || 0);
-    if (pickup.latitude && pickup.longitude && destination.latitude && destination.longitude) {
+    // Prefer the road route calculated by the client; fall back to coordinates
+    // when older clients do not send routed metrics.
+    const routedDistance = Number(routeDistanceKm);
+    let distanceKm =
+      Number.isFinite(routedDistance) && routedDistance > 0
+        ? Math.round(routedDistance * 10) / 10
+        : Number(req.body.estimatedDistance || req.body.estimatedDistanceKm || 0);
+    if (!routedDistance && pickup.latitude != null && pickup.longitude != null && destination.latitude != null && destination.longitude != null) {
       const computed = calculateDistanceKm(pickup.latitude, pickup.longitude, destination.latitude, destination.longitude);
       if (computed > 0) distanceKm = computed;
     }
-    if (!distanceKm || distanceKm <= 0) {
-      distanceKm = 2.5;
-    }
+    if (!distanceKm || distanceKm <= 0) distanceKm = 2.5;
 
-    const estimatedDuration = Math.round(distanceKm * 3.5) + 5;
+    const routedDuration = Number(routeDurationMinutes);
+    const estimatedDuration =
+      Number.isFinite(routedDuration) && routedDuration > 0
+        ? Math.max(1, Math.round(routedDuration))
+        : Math.round(distanceKm * 3.5) + 5;
     const breakdown = computeFareBreakdown(distanceKm, estimatedDuration, vehicleType, discount);
     const estimatedFare = breakdown.estimatedFare;
     const totalAmount = estimatedFare;
