@@ -5,12 +5,14 @@ const CateringOrder = require("../models/CateringOrder");
 const LaundryOrder = require("../models/LaundryOrder");
 const Booking = require("../models/Booking");
 const RideOrder = require("../models/RideOrder");
+const Kost = require("../models/Kost");
 
 const ownerRoles = new Set([
   "pemilik_marketplace",
   "pemilik_catering",
   "pemilik_laundry",
   "pemilik_kos",
+  "bank_sampah",
 ]);
 
 const findOrderByIdentifier = async (identifier) => {
@@ -32,11 +34,34 @@ const findOrderByIdentifier = async (identifier) => {
     if (!order) order = await Model.findOne({ [codeField]: value }).lean().catch(() => null);
     if (order) return { order, orderType, codeField };
   }
+
+  // Fallback: Check Kost / Lodging inquiry by Kost ID or name
+  let kost = null;
+  if (mongoose.Types.ObjectId.isValid(value)) {
+    kost = await Kost.findById(value).lean().catch(() => null);
+  }
+  if (!kost) kost = await Kost.findOne({ name: value }).lean().catch(() => null);
+  if (kost) {
+    return { order: kost, orderType: "kos", codeField: "name", isPropertyInquiry: true };
+  }
+
   return null;
 };
 
 const getOrderParticipants = (record) => {
   const order = record.order;
+  if (record.isPropertyInquiry) {
+    return {
+      customerId: "",
+      ownerId: String(order.ownerId || ""),
+      driverId: "",
+      driverIds: [],
+      storeId: "",
+      orderCode: String(order.name || "Kost & Homestay"),
+      status: "inquiry",
+    };
+  }
+
   const driverIds = [order.driverId, order.driverPickupId, order.driverDeliveryId]
     .filter(Boolean)
     .map(String)
@@ -58,6 +83,19 @@ const resolveParticipant = async (userId, record) => {
   if (!user) return null;
   const participants = getOrderParticipants(record);
   const id = String(user._id);
+
+  if (record.isPropertyInquiry) {
+    if (user.role === "customer") {
+      return { role: "customer", user, ...participants, customerId: String(user._id) };
+    }
+    if (ownerRoles.has(user.role) && id === participants.ownerId) {
+      return { role: "owner", user, ...participants };
+    }
+    // Admin fallback access
+    if (user.role === "admin") {
+      return { role: "customer", user, ...participants, customerId: String(user._id) };
+    }
+  }
 
   if (user.role === "customer" && id === participants.customerId) {
     return { role: "customer", user, ...participants };

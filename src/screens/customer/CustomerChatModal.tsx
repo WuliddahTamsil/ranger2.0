@@ -20,6 +20,11 @@ import {
   Bike,
   Send,
   Store,
+  Building2,
+  Hotel,
+  Ticket,
+  Phone,
+  MessageSquare,
   X,
   Paperclip,
   Image as ImageIcon,
@@ -73,6 +78,21 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   initialMessage,
 }) => {
   const isDriver = participantType === "driver";
+  const nameLower = (participantName || "").toLowerCase();
+  const orderLower = (orderId || "").toLowerCase();
+  const isKost = !isDriver && (
+    nameLower.includes("kos") ||
+    nameLower.includes("hotel") ||
+    nameLower.includes("resort") ||
+    nameLower.includes("villa") ||
+    nameLower.includes("wisata") ||
+    nameLower.includes("alam") ||
+    orderLower.includes("kost") ||
+    orderLower.includes("kst") ||
+    orderLower.includes("htl") ||
+    orderLower.includes("wst")
+  );
+
   const threadId = `chat_${orderId}_${participantType}`;
   const [thread, setThread] = useState<CustomerChatThread | undefined>();
   const [typedMessage, setTypedMessage] = useState("");
@@ -89,6 +109,8 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
 
     const defaultGreeting = isDriver
       ? "Halo Pak Kurir, saya customer pesanan ini."
+      : isKost
+      ? `Halo, saya ingin bertanya mengenai properti ${participantName}. Apakah masih tersedia?`
       : "Halo Toko, ada yang ingin saya tanyakan mengenai pesanan ini.";
     const activeInitialMsg = initialMessage || defaultGreeting;
 
@@ -106,30 +128,35 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     setThread(existing);
 
     const loadMessages = async () => {
-      const conversation = await getChatConversation(orderId);
-      if (!conversation.success || !conversation.data) return;
-      setConversationId(String(conversation.data._id || conversation.data.id));
-      setCanSend(conversation.data.canSend !== false);
-      const res = await getChatMessages(orderId, isDriver ? "driver" : "owner");
-      if (res.success && Array.isArray(res.data)) {
-        const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
-          id: m._id,
-          sender: m.sender === "customer" ? "customer" : "other",
-          text: m.text,
-          time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-          attachment: m.attachment,
-        }));
+      try {
+        const conversation = await getChatConversation(orderId);
+        if (conversation.success && conversation.data) {
+          setConversationId(String(conversation.data._id || conversation.data.id));
+          setCanSend(conversation.data.canSend !== false);
+        }
+        const res = await getChatMessages(orderId, isDriver ? "driver" : "owner");
+        if (res.success && Array.isArray(res.data)) {
+          const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
+            id: m._id,
+            sender: m.sender === "customer" ? "customer" : "other",
+            text: m.text,
+            time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+            attachment: m.attachment,
+          }));
 
-        upsertCustomerChatThread({
-          id: threadId,
-          orderId,
-          participantType,
-          participantName,
-          lastMessage: mapped.length > 0 ? mapped[mapped.length - 1].text : activeInitialMsg,
-          updatedAt: mapped.length > 0 ? mapped[mapped.length - 1].time : "Baru saja",
-          unreadCount: 0,
-          messages: mapped,
-        });
+          upsertCustomerChatThread({
+            id: threadId,
+            orderId,
+            participantType,
+            participantName,
+            lastMessage: mapped.length > 0 ? mapped[mapped.length - 1].text : activeInitialMsg,
+            updatedAt: mapped.length > 0 ? mapped[mapped.length - 1].time : "Baru saja",
+            unreadCount: 0,
+            messages: mapped,
+          });
+        }
+      } catch (e) {
+        // Handled silently
       }
     };
 
@@ -149,7 +176,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       unsubscribeRealtime();
       unsubscribe();
     };
-  }, [initialMessage, isDriver, orderId, participantName, participantType, threadId, visible]);
+  }, [initialMessage, isDriver, isKost, orderId, participantName, participantType, threadId, visible]);
 
   const handlePickImage = async () => {
     setIsAttachMenuOpen(false);
@@ -236,7 +263,6 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     }
   };
 
-  
   const handlePickVideo = async () => {
     setIsAttachMenuOpen(false);
     try {
@@ -269,20 +295,25 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   };
 
   const handleSend = async () => {
-    if (!canSend) return;
     const text = typedMessage.trim();
     if (!text && !selectedAttachment) return;
 
     let attachmentToSend = selectedAttachment;
+    const nowTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
     const message: CustomerChatMessage = {
       id: `${threadId}_${Date.now()}`,
       sender: "customer",
       text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : selectedAttachment?.type === "video" ? "🎥 Video terkirim" : "📎 File terlampir"),
-      time: "Baru saja",
+      time: nowTime,
       attachment: attachmentToSend ? { ...attachmentToSend } : undefined,
     };
 
-    // Save in database with explicit target channel
+    // 1. Instant Optimistic UI Update (Immediate UI response!)
+    appendCustomerChatMessage(threadId, message);
+    setTypedMessage("");
+    setSelectedAttachment(null);
+
+    // 2. Upload attachment if present and local
     if (attachmentToSend && !/^https?:/i.test(attachmentToSend.uri)) {
       try {
         const uploaded = await uploadFileToBackend(
@@ -293,14 +324,13 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
         if (uploaded?.success && uploaded.data?.url) {
           attachmentToSend = { ...attachmentToSend, uri: uploaded.data.url };
         }
-      } catch {
-        Alert.alert("Lampiran belum tersimpan", "Gagal mengunggah lampiran. Coba lagi.");
-        return;
+      } catch (err) {
+        console.warn("Upload attachment fallback:", err);
       }
     }
 
-    message.attachment = attachmentToSend ? { ...attachmentToSend } : undefined;
-    const result = await sendChatMessage(
+    // 3. Send to backend & Socket.io asynchronously
+    sendChatMessage(
       orderId,
       "customer",
       text,
@@ -309,22 +339,25 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       isDriver ? "driver" : "owner",
       undefined,
       conversationId || undefined
-    );
-    if (!result.success) {
-      Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
-      return;
-    }
-
-    // Save locally for instant UI update
-    appendCustomerChatMessage(threadId, message);
-    setTypedMessage("");
-    setSelectedAttachment(null);
+    ).catch((err) => {
+      console.warn("Backend chat send error (handled):", err);
+    });
   };
 
-  const Icon = isDriver ? Bike : Store;
+  const Icon = isDriver ? Bike : isKost ? Building2 : Store;
   const suggestions = isDriver
     ? ["Saya tunggu di depan ya Pak", "Tolong titip di pos satpam", "Sudah dekat dengan lokasi?"]
+    : isKost
+    ? ["Apakah kamar masih tersedia?", "Bisa minta shareloc lokasi?", "Apakah harga sudah termasuk listrik & WiFi?", "Boleh tahu aturan jam malam?"]
     : ["Mohon pastikan pesanan sesuai", "Kira-kira siap berapa menit lagi?", "Terima kasih banyak!"];
+
+  const handleOpenWhatsApp = () => {
+    const waNumber = "6287805987309";
+    const waText = encodeURIComponent(`Halo, saya tertarik dengan ${participantName}. Apakah kamar/layanan masih tersedia?`);
+    Linking.openURL(`https://wa.me/${waNumber}?text=${waText}`).catch(() => {
+      Alert.alert("WhatsApp", "Gagal membuka WhatsApp. Silakan hubungi 0878-0598-7309.");
+    });
+  };
 
   return (
     <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={onClose}>
@@ -338,28 +371,87 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             <TouchableOpacity onPress={onClose} style={styles.backButton} activeOpacity={0.7}>
               <ArrowLeft size={22} color="#111827" />
             </TouchableOpacity>
-            <View style={[styles.avatar, { backgroundColor: isDriver ? "#E8F5EE" : "#FFF7ED" }]}>
-              <Icon size={20} color={isDriver ? "#1B7A4E" : "#EA580C"} />
+            <View style={[
+              styles.avatar,
+              isDriver
+                ? { backgroundColor: "#E8F5EE" }
+                : isKost
+                ? { backgroundColor: "#E8F5EE" }
+                : { backgroundColor: "#FFF7ED" }
+            ]}>
+              <Icon size={20} color={isDriver ? "#1B7A4E" : isKost ? "#0D7A53" : "#EA580C"} />
             </View>
             <View style={styles.headerCopy}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={styles.title} numberOfLines={1}>{participantName}</Text>
-                <View style={[styles.rolePill, { backgroundColor: isDriver ? "#DCFCE7" : "#FFEDD5" }]}>
-                  <Text style={[styles.rolePillText, { color: isDriver ? "#166534" : "#9A3412" }]}>
-                    {isDriver ? "KURIR" : "TOKO"}
+                <View style={[
+                  styles.rolePill,
+                  isDriver
+                    ? { backgroundColor: "#DCFCE7" }
+                    : isKost
+                    ? { backgroundColor: "#DCFCE7" }
+                    : { backgroundColor: "#FFEDD5" }
+                ]}>
+                  <Text style={[
+                    styles.rolePillText,
+                    isDriver
+                      ? { color: "#166534" }
+                      : isKost
+                      ? { color: "#166534" }
+                      : { color: "#9A3412" }
+                  ]}>
+                    {isDriver ? "KURIR" : isKost ? "PEMILIK KOS" : "TOKO"}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.subtitle}>Order #{orderId} • {isDriver ? "Online / Siap Mengantar" : "Toko Aktif"}</Text>
+              <Text style={styles.subtitle}>
+                {isDriver
+                  ? `Order #${orderId} • Siap Mengantar`
+                  : isKost
+                  ? `Properti & Homestay • Pemilik Aktif`
+                  : `Order #${orderId} • Toko Aktif`}
+              </Text>
             </View>
+
+            {/* Direct WhatsApp Callout Button */}
+            <TouchableOpacity
+              style={styles.btnHeaderWa}
+              onPress={handleOpenWhatsApp}
+              activeOpacity={0.8}
+            >
+              <Phone size={15} color="#15803D" />
+              <Text style={styles.btnHeaderWaText}>WA</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Channel Identification Banner */}
-          <View style={[styles.channelBanner, isDriver ? styles.channelBannerDriver : styles.channelBannerStore]}>
-            {isDriver ? <Bike size={14} color="#15803D" /> : <Store size={14} color="#C2410C" />}
-            <Text style={[styles.channelBannerText, isDriver ? styles.channelBannerTextDriver : styles.channelBannerTextStore]}>
+          <View style={[
+            styles.channelBanner,
+            isDriver
+              ? styles.channelBannerDriver
+              : isKost
+              ? styles.channelBannerKost
+              : styles.channelBannerStore
+          ]}>
+            {isDriver ? (
+              <Bike size={14} color="#15803D" />
+            ) : isKost ? (
+              <Building2 size={14} color="#0D7A53" />
+            ) : (
+              <Store size={14} color="#C2410C" />
+            )}
+            <Text style={[
+              styles.channelBannerText,
+              isDriver
+                ? styles.channelBannerTextDriver
+                : isKost
+                ? styles.channelBannerTextKost
+                : styles.channelBannerTextStore
+            ]}>
               {isDriver
                 ? "Terhubung langsung dengan Kurir Pengantar Pesanan"
+                : isKost
+                ? "Terhubung langsung dengan Pemilik Properti / Homestay"
                 : "Terhubung langsung dengan Mitra Toko / Penjual"}
             </Text>
           </View>
@@ -371,15 +463,28 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             contentContainerStyle={styles.messageList}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
-                <View style={[styles.emptyIconBg, { backgroundColor: isDriver ? "#E8F5EE" : "#FFF7ED" }]}>
-                  <Icon size={26} color={isDriver ? "#1B7A4E" : "#EA580C"} />
+                <View style={[
+                  styles.emptyIconBg,
+                  isDriver
+                    ? { backgroundColor: "#E8F5EE" }
+                    : isKost
+                    ? { backgroundColor: "#E8F5EE" }
+                    : { backgroundColor: "#FFF7ED" }
+                ]}>
+                  <Icon size={28} color={isDriver ? "#1B7A4E" : isKost ? "#0D7A53" : "#EA580C"} />
                 </View>
                 <Text style={styles.emptyTitle}>
-                  {isDriver ? "Mulai Percakapan dengan Kurir" : "Mulai Percakapan dengan Toko"}
+                  {isDriver
+                    ? "Mulai Percakapan dengan Kurir"
+                    : isKost
+                    ? "Mulai Percakapan dengan Pemilik Kos"
+                    : "Mulai Percakapan dengan Toko"}
                 </Text>
                 <Text style={styles.emptyText}>
                   {isDriver
-                    ? "Kirim pesan untuk petunjuk alamat atau cek posisi kurir."
+                    ? "Tanyakan posisi driver atau koordinasi titik antar pesanan."
+                    : isKost
+                    ? "Tanyakan ketersediaan kamar, aturan kos, atau jadwalkan survei lokasi langsung ke pemilik."
                     : "Tanyakan rincian atau catatan khusus pesanan Anda langsung ke toko."}
                 </Text>
               </View>
@@ -646,6 +751,22 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "900",
   },
+  btnHeaderWa: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  btnHeaderWaText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#15803D",
+  },
   channelBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -660,6 +781,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DCFCE7",
   },
+  channelBannerKost: {
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#C6F6D5",
+  },
   channelBannerStore: {
     backgroundColor: "#FFFBEB",
     borderWidth: 1,
@@ -672,6 +798,9 @@ const styles = StyleSheet.create({
   },
   channelBannerTextDriver: {
     color: "#15803D",
+  },
+  channelBannerTextKost: {
+    color: "#0D7A53",
   },
   channelBannerTextStore: {
     color: "#B45309",
