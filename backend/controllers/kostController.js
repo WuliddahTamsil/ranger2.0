@@ -5,8 +5,12 @@ const Booking = require("../models/Booking");
 // Get all Kosts (for customer search & filter)
 const getAllKosts = async (req, res) => {
   try {
-    const { search, type, city, minPrice, maxPrice, facilities } = req.query;
+    const { search, type, categoryType, city, minPrice, maxPrice, facilities } = req.query;
     const query = { isActive: true };
+
+    if (categoryType && categoryType !== "all") {
+      query.categoryType = categoryType;
+    }
 
     if (search) {
       query.$or = [
@@ -45,6 +49,12 @@ const getAllKosts = async (req, res) => {
         .filter((p) => p > 0);
       if (roomPrices.length > 0) {
         kObj.price = Math.min(...roomPrices);
+      } else if (Array.isArray(kObj.hotelRooms) && kObj.hotelRooms.length > 0) {
+        const hotelPrices = kObj.hotelRooms.map((hr) => Number(hr.pricePerNight) || 0).filter((p) => p > 0);
+        if (hotelPrices.length > 0) kObj.price = Math.min(...hotelPrices);
+      } else if (Array.isArray(kObj.wisataTickets) && kObj.wisataTickets.length > 0) {
+        const ticketPrices = kObj.wisataTickets.map((wt) => Number(wt.price) || 0).filter((p) => p > 0);
+        if (ticketPrices.length > 0) kObj.price = Math.min(...ticketPrices);
       }
       const roomImgs = rooms
         .flatMap((r) => (Array.isArray(r.images) ? r.images : []))

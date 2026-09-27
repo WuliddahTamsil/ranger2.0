@@ -59,12 +59,13 @@ export interface BookingData {
   kostIdDetails?: any;
 }
 
-export const fetchAllKosts = async (params?: { search?: string; type?: string; city?: string }) => {
+export const fetchAllKosts = async (params?: { search?: string; type?: string; city?: string; categoryType?: string }) => {
   try {
     const query = new URLSearchParams();
     if (params?.search) query.append("search", params.search);
     if (params?.type && params.type !== "Semua") query.append("type", params.type);
     if (params?.city) query.append("city", params.city);
+    if (params?.categoryType && params.categoryType !== "all") query.append("categoryType", params.categoryType);
 
     const url = getApiUrl(`/kosts?${query.toString()}`);
     const response = await fetch(url);

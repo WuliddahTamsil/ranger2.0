@@ -177,8 +177,18 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
             const allRooms = Array.isArray(k.rooms) ? k.rooms : [];
             const roomPrices = allRooms
               .map((r: any) => Number(r.priceMonthly) || 0)
-              .filter((p: number) => p > 0);
-            const minPrice = roomPrices.length > 0 ? Math.min(...roomPrices) : Number(k.price || 0);
+            const categoryType: LodgingCategoryType = (k.categoryType as LodgingCategoryType) || "kost";
+            const hotelPrices = Array.isArray(k.hotelRooms) ? k.hotelRooms.map((hr: any) => Number(hr.pricePerNight) || 0).filter((p: number) => p > 0) : [];
+            const ticketPrices = Array.isArray(k.wisataTickets) ? k.wisataTickets.map((wt: any) => Number(wt.price) || 0).filter((p: number) => p > 0) : [];
+            
+            let finalPrice = Number(k.price || 0);
+            if (roomPrices.length > 0) {
+              finalPrice = Math.min(...roomPrices);
+            } else if (hotelPrices.length > 0) {
+              finalPrice = Math.min(...hotelPrices);
+            } else if (ticketPrices.length > 0) {
+              finalPrice = Math.min(...ticketPrices);
+            }
 
             const roomPhotos = allRooms
               .flatMap((r: any) => (Array.isArray(r.images) ? r.images : []))
@@ -187,7 +197,11 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
             const allPhotos = roomPhotos.length > 0 ? roomPhotos : kostPhotos;
             const primaryImg =
               allPhotos[0] ||
-              "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80";
+              (categoryType === "wisata"
+                ? "https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?auto=format&fit=crop&w=800&q=80"
+                : categoryType === "hotel"
+                ? "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80"
+                : "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80");
 
             const roomFacilities = allRooms.flatMap((r: any) => (Array.isArray(r.facilities) ? r.facilities : []));
             const uniqueFacilities = Array.from(new Set([...roomFacilities, ...(k.facilities || [])])).slice(0, 5);
@@ -195,10 +209,10 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
             return {
               id: k._id || k.id,
               _id: k._id || k.id,
-              categoryType: "kost" as LodgingCategoryType,
+              categoryType,
               name: k.name,
               type: k.type || "Campur",
-              status: allRooms.length === 0 ? "Tersedia" : allRooms.some((r: any) => r.isAvailable) ? "Tersedia" : "Penuh",
+              status: categoryType === "wisata" ? "Buka Hari Ini" : allRooms.length === 0 ? "Tersedia" : allRooms.some((r: any) => r.isAvailable) ? "Tersedia" : "Penuh",
               location: k.address || k.city || "Alamat Kost",
               city: k.city || "Garut",
               areaTag: k.address?.toLowerCase().includes("cipanas")
@@ -210,18 +224,20 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                 : k.address?.toLowerCase().includes("kampus") || k.address?.toLowerCase().includes("uniga") || k.address?.toLowerCase().includes("itg")
                 ? "Dekat Kampus"
                 : "Garut Kota",
-              rating: k.rating || 4.9,
-              reviews: k.reviewCount || 34,
-              price: minPrice,
-              cashbackPoints: Math.round(minPrice * 0.02),
+              rating: k.rating || (categoryType === "hotel" ? 4.8 : categoryType === "wisata" ? 4.7 : 4.9),
+              reviews: k.reviewCount || 45,
+              price: finalPrice,
+              cashbackPoints: k.cashbackPoints || Math.round(finalPrice * 0.03),
+              openHours: k.openHours || (categoryType === "wisata" ? "07:00 - 18:00 WIB" : undefined),
+              stars: k.stars || (categoryType === "hotel" ? 4 : undefined),
               facilities: uniqueFacilities.length > 0 ? uniqueFacilities : ["WiFi", "KM Dalam", "Kasur", "Lemari"],
               img: primaryImg,
               images: allPhotos.length > 0 ? allPhotos : [primaryImg],
               photoCount: allPhotos.length > 0 ? allPhotos.length : 3,
               raw: {
                 ...k,
-                categoryType: "kost",
-                price: minPrice,
+                categoryType,
+                price: finalPrice,
                 images: allPhotos.length > 0 ? allPhotos : [primaryImg],
                 facilities: uniqueFacilities,
               },
@@ -298,8 +314,13 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
   // Merge items according to currently selected mainCategory
   const currentItemsList = React.useMemo(() => {
+    const matchingFromDb = dbKosts.filter((k) => (k.categoryType || "kost") === mainCategory);
+    if (matchingFromDb.length > 0) {
+      return matchingFromDb;
+    }
+
     if (mainCategory === "kost") {
-      return dbKosts.length > 0 ? dbKosts : [];
+      return dbKosts.filter((k) => !k.categoryType || k.categoryType === "kost");
     } else if (mainCategory === "hotel") {
       return MOCK_HOTELS_AND_VILLAS.map((h) => ({
         id: h.id || h._id,
