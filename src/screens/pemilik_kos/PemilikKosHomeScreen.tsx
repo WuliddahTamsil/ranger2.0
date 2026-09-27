@@ -15,7 +15,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
-import { fetchRoomsByOwner, fetchOwnerBookings, fetchTransactionsByOwner } from "../../services/kostService";
+import { fetchRoomsByOwner, fetchOwnerBookings, fetchTransactionsByOwner, fetchKostProperty } from "../../services/kostService";
 import {
   Bell,
   Building2,
@@ -109,6 +109,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   const [chatTargetOrder, setChatTargetOrder] = useState<string>("kost_chat_inquiry");
   const [chatCustomerName, setChatCustomerName] = useState<string>("Wuwu Pelanggan (Customer)");
 
+  const [kostProperty, setKostProperty] = useState<any>(null);
   const [rooms, setRooms] = useState<any[]>([]);
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [pendingBookings, setPendingBookings] = useState<any[]>([]);
@@ -139,12 +140,16 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   const load = async () => {
     try {
       const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
-      const [roomsData, bookingsData, txData] = await Promise.all([
+      const [roomsData, bookingsData, txData, propData] = await Promise.all([
         fetchRoomsByOwner(ownerEmail),
         fetchOwnerBookings(ownerEmail),
         fetchTransactionsByOwner(ownerEmail),
+        fetchKostProperty(ownerEmail).catch(() => null),
       ]);
       setRooms(Array.isArray(roomsData) ? roomsData : []);
+      if (propData) {
+        setKostProperty(propData);
+      }
       if (bookingsData && Array.isArray(bookingsData)) {
         setAllBookings(bookingsData);
         setPendingBookings(bookingsData.filter((b: any) => b.status === "dp_submitted"));
@@ -243,7 +248,8 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
               <TouchableOpacity
                 style={styles.notifBtn}
                 onPress={() => {
-                  setChatTargetOrder(selectedUnit.id || "kost_chat_inquiry");
+                  const targetId = kostProperty?._id || "kost_chat_inquiry";
+                  setChatTargetOrder(String(targetId));
                   setChatCustomerName("Wuwu Pelanggan (Customer)");
                   setIsChatOpen(true);
                 }}

@@ -36,6 +36,7 @@ import {
   ArrowLeft,
   Video,
   Play,
+  User,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -77,10 +78,11 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   participantType,
   initialMessage,
 }) => {
-  const isDriver = participantType === "driver";
+  const isOwnerView = participantType === "customer";
+  const isDriver = !isOwnerView && participantType === "driver";
   const nameLower = (participantName || "").toLowerCase();
   const orderLower = (orderId || "").toLowerCase();
-  const isKost = !isDriver && (
+  const isKost = isOwnerView || (!isDriver && (
     nameLower.includes("kos") ||
     nameLower.includes("hotel") ||
     nameLower.includes("resort") ||
@@ -90,10 +92,11 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     orderLower.includes("kost") ||
     orderLower.includes("kst") ||
     orderLower.includes("htl") ||
-    orderLower.includes("wst")
-  );
+    orderLower.includes("wst") ||
+    orderLower.includes("unit-")
+  ));
 
-  const threadId = `chat_${orderId}_${participantType}`;
+  const threadId = `chat_${orderId}`;
   const [thread, setThread] = useState<CustomerChatThread | undefined>();
   const [typedMessage, setTypedMessage] = useState("");
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
@@ -107,7 +110,9 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     setConversationId(null);
     setCanSend(true);
 
-    const defaultGreeting = isDriver
+    const defaultGreeting = isOwnerView
+      ? "Halo kak, ada yang bisa kami bantu mengenai ketersediaan kamar / unit properti kami?"
+      : isDriver
       ? "Halo Pak Kurir, saya customer pesanan ini."
       : isKost
       ? `Halo, saya ingin bertanya mengenai properti ${participantName}. Apakah masih tersedia?`
@@ -134,7 +139,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           setConversationId(String(conversation.data._id || conversation.data.id));
           setCanSend(conversation.data.canSend !== false);
         }
-        const res = await getChatMessages(orderId, isDriver ? "driver" : "owner");
+        const res = await getChatMessages(orderId, isOwnerView ? "owner" : (isDriver ? "driver" : "owner"));
         if (res.success && Array.isArray(res.data)) {
           const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
             id: m._id,
@@ -302,7 +307,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     const nowTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
     const message: CustomerChatMessage = {
       id: `${threadId}_${Date.now()}`,
-      sender: "customer",
+      sender: isOwnerView ? "other" : "customer",
       text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : selectedAttachment?.type === "video" ? "🎥 Video terkirim" : "📎 File terlampir"),
       time: nowTime,
       attachment: attachmentToSend ? { ...attachmentToSend } : undefined,
@@ -332,11 +337,11 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     // 3. Send to backend & Socket.io asynchronously
     sendChatMessage(
       orderId,
-      "customer",
+      isOwnerView ? "owner" : "customer",
       text,
       attachmentToSend,
       customerId,
-      isDriver ? "driver" : "owner",
+      isOwnerView ? "customer" : (isDriver ? "driver" : "owner"),
       undefined,
       conversationId || undefined
     ).catch((err) => {
@@ -344,8 +349,10 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     });
   };
 
-  const Icon = isDriver ? Bike : isKost ? Building2 : Store;
-  const suggestions = isDriver
+  const Icon = isOwnerView ? User : isDriver ? Bike : isKost ? Building2 : Store;
+  const suggestions = isOwnerView
+    ? ["Kamar masih tersedia ya kak 👍", "Bisa langsung survei hari ini", "Lokasi kami share ya kak", "Harga sudah include WiFi & Listrik"]
+    : isDriver
     ? ["Saya tunggu di depan ya Pak", "Tolong titip di pos satpam", "Sudah dekat dengan lokasi?"]
     : isKost
     ? ["Apakah kamar masih tersedia?", "Bisa minta shareloc lokasi?", "Apakah harga sudah termasuk listrik & WiFi?", "Boleh tahu aturan jam malam?"]
@@ -373,20 +380,24 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             </TouchableOpacity>
             <View style={[
               styles.avatar,
-              isDriver
+              isOwnerView
+                ? { backgroundColor: "#E8F5EE" }
+                : isDriver
                 ? { backgroundColor: "#E8F5EE" }
                 : isKost
                 ? { backgroundColor: "#E8F5EE" }
                 : { backgroundColor: "#FFF7ED" }
             ]}>
-              <Icon size={20} color={isDriver ? "#1B7A4E" : isKost ? "#0D7A53" : "#EA580C"} />
+              <Icon size={20} color={isOwnerView ? "#0D7A53" : isDriver ? "#1B7A4E" : isKost ? "#0D7A53" : "#EA580C"} />
             </View>
             <View style={styles.headerCopy}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={styles.title} numberOfLines={1}>{participantName}</Text>
                 <View style={[
                   styles.rolePill,
-                  isDriver
+                  isOwnerView
+                    ? { backgroundColor: "#DCFCE7" }
+                    : isDriver
                     ? { backgroundColor: "#DCFCE7" }
                     : isKost
                     ? { backgroundColor: "#DCFCE7" }
@@ -394,18 +405,22 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                 ]}>
                   <Text style={[
                     styles.rolePillText,
-                    isDriver
+                    isOwnerView
+                      ? { color: "#166534" }
+                      : isDriver
                       ? { color: "#166534" }
                       : isKost
                       ? { color: "#166534" }
                       : { color: "#9A3412" }
                   ]}>
-                    {isDriver ? "KURIR" : isKost ? "PEMILIK KOS" : "TOKO"}
+                    {isOwnerView ? "PELANGGAN" : isDriver ? "KURIR" : isKost ? "PEMILIK KOS" : "TOKO"}
                   </Text>
                 </View>
               </View>
               <Text style={styles.subtitle}>
-                {isDriver
+                {isOwnerView
+                  ? `Calon Tamu / Penghuni • Pesan Masuk`
+                  : isDriver
                   ? `Order #${orderId} • Siap Mengantar`
                   : isKost
                   ? `Properti & Homestay • Pemilik Aktif`
@@ -427,13 +442,17 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           {/* Channel Identification Banner */}
           <View style={[
             styles.channelBanner,
-            isDriver
+            isOwnerView
+              ? styles.channelBannerKost
+              : isDriver
               ? styles.channelBannerDriver
               : isKost
               ? styles.channelBannerKost
               : styles.channelBannerStore
           ]}>
-            {isDriver ? (
+            {isOwnerView ? (
+              <User size={14} color="#0D7A53" />
+            ) : isDriver ? (
               <Bike size={14} color="#15803D" />
             ) : isKost ? (
               <Building2 size={14} color="#0D7A53" />
@@ -442,13 +461,17 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             )}
             <Text style={[
               styles.channelBannerText,
-              isDriver
+              isOwnerView
+                ? styles.channelBannerTextKost
+                : isDriver
                 ? styles.channelBannerTextDriver
                 : isKost
                 ? styles.channelBannerTextKost
                 : styles.channelBannerTextStore
             ]}>
-              {isDriver
+              {isOwnerView
+                ? "Terhubung langsung dengan Pelanggan / Calon Penghuni"
+                : isDriver
                 ? "Terhubung langsung dengan Kurir Pengantar Pesanan"
                 : isKost
                 ? "Terhubung langsung dengan Pemilik Properti / Homestay"
@@ -465,23 +488,29 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
               <View style={styles.emptyWrap}>
                 <View style={[
                   styles.emptyIconBg,
-                  isDriver
+                  isOwnerView
+                    ? { backgroundColor: "#E8F5EE" }
+                    : isDriver
                     ? { backgroundColor: "#E8F5EE" }
                     : isKost
                     ? { backgroundColor: "#E8F5EE" }
                     : { backgroundColor: "#FFF7ED" }
                 ]}>
-                  <Icon size={28} color={isDriver ? "#1B7A4E" : isKost ? "#0D7A53" : "#EA580C"} />
+                  <Icon size={28} color={isOwnerView ? "#0D7A53" : isDriver ? "#1B7A4E" : isKost ? "#0D7A53" : "#EA580C"} />
                 </View>
                 <Text style={styles.emptyTitle}>
-                  {isDriver
+                  {isOwnerView
+                    ? "Percakapan dengan Pelanggan"
+                    : isDriver
                     ? "Mulai Percakapan dengan Kurir"
                     : isKost
                     ? "Mulai Percakapan dengan Pemilik Kos"
                     : "Mulai Percakapan dengan Toko"}
                 </Text>
                 <Text style={styles.emptyText}>
-                  {isDriver
+                  {isOwnerView
+                    ? "Jawab pertanyaan calon penyewa, kirim foto kamar, atau konfirmasi survei properti."
+                    : isDriver
                     ? "Tanyakan posisi driver atau koordinasi titik antar pesanan."
                     : isKost
                     ? "Tanyakan ketersediaan kamar, aturan kos, atau jadwalkan survei lokasi langsung ke pemilik."
@@ -490,7 +519,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
               </View>
             }
             renderItem={({ item }) => {
-              const isMe = item.sender === "customer";
+              const isMe = isOwnerView ? (item.sender === "other") : (item.sender === "customer");
               const hasAttachment = !!item.attachment;
               const isImg = item.attachment?.type === "image";
 

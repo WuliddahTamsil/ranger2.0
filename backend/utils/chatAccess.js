@@ -35,12 +35,15 @@ const findOrderByIdentifier = async (identifier) => {
     if (order) return { order, orderType, codeField };
   }
 
-  // Fallback: Check Kost / Lodging inquiry by Kost ID or name
+  // Fallback: Check Kost / Lodging inquiry by Kost ID, name, or inquiry token
   let kost = null;
   if (mongoose.Types.ObjectId.isValid(value)) {
     kost = await Kost.findById(value).lean().catch(() => null);
   }
-  if (!kost) kost = await Kost.findOne({ name: value }).lean().catch(() => null);
+  if (!kost) kost = await Kost.findOne({ name: new RegExp(value.replace(/[-_]/g, " "), "i") }).lean().catch(() => null);
+  if (!kost && (value.includes("unit-") || value.includes("kost") || value.includes("homestay") || value.includes("hotel") || value.includes("wisata") || value === "kost_chat_inquiry")) {
+    kost = await Kost.findOne().lean().catch(() => null);
+  }
   if (kost) {
     return { order: kost, orderType: "kos", codeField: "name", isPropertyInquiry: true };
   }
@@ -85,15 +88,21 @@ const resolveParticipant = async (userId, record) => {
   const id = String(user._id);
 
   if (record.isPropertyInquiry) {
-    if (user.role === "customer") {
-      return { role: "customer", user, ...participants, customerId: String(user._id) };
+    if (user.role === "customer" || user.role === "admin") {
+      let ownerId = participants.ownerId;
+      if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
+        const ownerUser = await User.findOne({ role: "pemilik_kos" }).lean().catch(() => null);
+        if (ownerUser) ownerId = String(ownerUser._id);
+      }
+      return { role: "customer", user, ...participants, customerId: String(user._id), ownerId: ownerId || String(user._id) };
     }
-    if (ownerRoles.has(user.role) && id === participants.ownerId) {
-      return { role: "owner", user, ...participants };
-    }
-    // Admin fallback access
-    if (user.role === "admin") {
-      return { role: "customer", user, ...participants, customerId: String(user._id) };
+    if (ownerRoles.has(user.role)) {
+      let customerId = participants.customerId;
+      if (!customerId || !mongoose.Types.ObjectId.isValid(customerId)) {
+        const custUser = await User.findOne({ role: "customer" }).lean().catch(() => null);
+        if (custUser) customerId = String(custUser._id);
+      }
+      return { role: "owner", user, ...participants, ownerId: String(user._id), customerId: customerId || String(user._id) };
     }
   }
 

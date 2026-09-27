@@ -1433,7 +1433,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         orderId={String(kostData?._id || "kost_chat_inquiry")}
         customerId={authAccount?.id || authAccount?.email}
         participantName={kostData?.name || "Pemilik Kos & Homestay"}
-        participantType="merchant"
+        participantType="pemilik_kos"
         initialMessage={`Halo, saya ingin bertanya mengenai properti ${kostData?.name || ""}. Apakah masih ada kamar/tiket yang tersedia?`}
       />
     </ResponsiveSafeAreaView>
