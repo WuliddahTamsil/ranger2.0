@@ -2,7 +2,7 @@ import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-c
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from "react-native";
 import { Nav, Role } from "../../types";
-import { User, Bike, Coffee, Store, Wind, Building2, ShieldCheck } from "lucide-react-native";
+import { User, Bike, Coffee, Store, Wind, Building2, ShieldCheck, Recycle } from "lucide-react-native";
 
 interface RoleScreenProps extends Nav {
   onSelectRole?: (role: Role) => void;
@@ -58,11 +58,20 @@ export const RoleScreen: React.FC<RoleScreenProps> = ({ navigate, onSelectRole }
     {
       role: "pemilik_kos" as const,
       id: "pemilik_kos_home" as const,
-      title: "Pemilik Kos",
-      desc: "Kelola ketersediaan kamar kos dan penerimaan penghuni baru.",
+      title: "Pemilik Kos & Homestay",
+      desc: "Kelola ketersediaan kamar kos, hotel, dan tiket wisata.",
       icon: Building2,
       color: "#0D7A53",
       bg: "#E8F5EE",
+    },
+    {
+      role: "bank_sampah" as const,
+      id: "bank_sampah_dashboard" as const,
+      title: "Mitra Bank Sampah (Recycle)",
+      desc: "Terima setor sampah, verifikasi timbangan & terbitkan Poin GEOVERSE.",
+      icon: Recycle,
+      color: "#047857",
+      bg: "#ECFDF5",
     },
     {
       role: "admin" as const,
@@ -79,7 +88,7 @@ export const RoleScreen: React.FC<RoleScreenProps> = ({ navigate, onSelectRole }
     <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Pilih Peran Anda</Text>
-        <Text style={styles.subtitle}>Pilih salah satu dari 7 modul akses pengguna:</Text>
+        <Text style={styles.subtitle}>Pilih salah satu dari 8 modul akses pengguna:</Text>
 
         <View style={styles.cardContainer}>
           {roles.map((r) => {
