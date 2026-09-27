@@ -376,65 +376,73 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose} style={styles.backButton} activeOpacity={0.7}>
-              <ArrowLeft size={22} color="#111827" />
+              <ArrowLeft size={20} color="#1E293B" />
             </TouchableOpacity>
-            <View style={[
-              styles.avatar,
-              isOwnerView
-                ? { backgroundColor: "#E8F5EE" }
-                : isDriver
-                ? { backgroundColor: "#E8F5EE" }
-                : isKost
-                ? { backgroundColor: "#E8F5EE" }
-                : { backgroundColor: "#FFF7ED" }
-            ]}>
-              <Icon size={20} color={isOwnerView ? "#0D7A53" : isDriver ? "#1B7A4E" : isKost ? "#0D7A53" : "#EA580C"} />
+
+            <View style={styles.avatarContainer}>
+              <View style={[
+                styles.avatar,
+                isOwnerView
+                  ? { backgroundColor: "#DCFCE7" }
+                  : isDriver
+                  ? { backgroundColor: "#DCFCE7" }
+                  : isKost
+                  ? { backgroundColor: "#DCFCE7" }
+                  : { backgroundColor: "#FFEDD5" }
+              ]}>
+                <Icon size={20} color={isOwnerView ? "#0D7A53" : isDriver ? "#15803D" : isKost ? "#0D7A53" : "#C2410C"} />
+              </View>
+              <View style={styles.onlineBadgeDot} />
             </View>
+
             <View style={styles.headerCopy}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={styles.headerTitleRow}>
                 <Text style={styles.title} numberOfLines={1}>{participantName}</Text>
                 <View style={[
                   styles.rolePill,
                   isOwnerView
-                    ? { backgroundColor: "#DCFCE7" }
+                    ? { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }
                     : isDriver
-                    ? { backgroundColor: "#DCFCE7" }
+                    ? { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }
                     : isKost
-                    ? { backgroundColor: "#DCFCE7" }
-                    : { backgroundColor: "#FFEDD5" }
+                    ? { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }
+                    : { backgroundColor: "#FFEDD5", borderColor: "#FDBA74" }
                 ]}>
                   <Text style={[
                     styles.rolePillText,
                     isOwnerView
-                      ? { color: "#166534" }
+                      ? { color: "#15803D" }
                       : isDriver
-                      ? { color: "#166534" }
+                      ? { color: "#15803D" }
                       : isKost
-                      ? { color: "#166534" }
-                      : { color: "#9A3412" }
+                      ? { color: "#15803D" }
+                      : { color: "#C2410C" }
                   ]}>
                     {isOwnerView ? "PELANGGAN" : isDriver ? "KURIR" : isKost ? "PEMILIK KOS" : "TOKO"}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.subtitle}>
-                {isOwnerView
-                  ? `Calon Tamu / Penghuni • Pesan Masuk`
-                  : isDriver
-                  ? `Order #${orderId} • Siap Mengantar`
-                  : isKost
-                  ? `Properti & Homestay • Pemilik Aktif`
-                  : `Order #${orderId} • Toko Aktif`}
-              </Text>
+              <View style={styles.headerSubtitleRow}>
+                <View style={styles.onlineIndicatorMini} />
+                <Text style={styles.subtitle} numberOfLines={1}>
+                  {isOwnerView
+                    ? "Calon Tamu / Penghuni • Aktif"
+                    : isDriver
+                    ? `Order #${orderId} • Siap Antar`
+                    : isKost
+                    ? `Properti & Homestay • Online`
+                    : `Order #${orderId} • Toko Aktif`}
+                </Text>
+              </View>
             </View>
 
             {/* Direct WhatsApp Callout Button */}
             <TouchableOpacity
               style={styles.btnHeaderWa}
               onPress={handleOpenWhatsApp}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Phone size={15} color="#15803D" />
+              <Phone size={13} color="#FFFFFF" />
               <Text style={styles.btnHeaderWaText}>WA</Text>
             </TouchableOpacity>
           </View>
@@ -451,13 +459,13 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
               : styles.channelBannerStore
           ]}>
             {isOwnerView ? (
-              <User size={14} color="#0D7A53" />
+              <User size={13} color="#0D7A53" />
             ) : isDriver ? (
-              <Bike size={14} color="#15803D" />
+              <Bike size={13} color="#15803D" />
             ) : isKost ? (
-              <Building2 size={14} color="#0D7A53" />
+              <Building2 size={13} color="#0D7A53" />
             ) : (
-              <Store size={14} color="#C2410C" />
+              <Store size={13} color="#C2410C" />
             )}
             <Text style={[
               styles.channelBannerText,
@@ -468,7 +476,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                 : isKost
                 ? styles.channelBannerTextKost
                 : styles.channelBannerTextStore
-            ]}>
+            ]} numberOfLines={1}>
               {isOwnerView
                 ? "Terhubung langsung dengan Pelanggan / Calon Penghuni"
                 : isDriver
@@ -484,19 +492,28 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             data={thread?.messages || []}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messageList}
+            ListHeaderComponent={
+              (thread?.messages && thread.messages.length > 0) ? (
+                <View style={styles.dateSeparatorRow}>
+                  <View style={styles.dateSeparatorPill}>
+                    <Text style={styles.dateSeparatorText}>Hari Ini</Text>
+                  </View>
+                </View>
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
                 <View style={[
                   styles.emptyIconBg,
                   isOwnerView
-                    ? { backgroundColor: "#E8F5EE" }
+                    ? { backgroundColor: "#DCFCE7" }
                     : isDriver
-                    ? { backgroundColor: "#E8F5EE" }
+                    ? { backgroundColor: "#DCFCE7" }
                     : isKost
-                    ? { backgroundColor: "#E8F5EE" }
-                    : { backgroundColor: "#FFF7ED" }
+                    ? { backgroundColor: "#DCFCE7" }
+                    : { backgroundColor: "#FFEDD5" }
                 ]}>
-                  <Icon size={28} color={isOwnerView ? "#0D7A53" : isDriver ? "#1B7A4E" : isKost ? "#0D7A53" : "#EA580C"} />
+                  <Icon size={28} color={isOwnerView ? "#0D7A53" : isDriver ? "#15803D" : isKost ? "#0D7A53" : "#EA580C"} />
                 </View>
                 <Text style={styles.emptyTitle}>
                   {isOwnerView
@@ -509,7 +526,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                 </Text>
                 <Text style={styles.emptyText}>
                   {isOwnerView
-                    ? "Jawab pertanyaan calon penyewa, kirim foto kamar, atau konfirmasi survei properti."
+                    ? "Jawab pertanyaan calon penyewa, kirim foto kamar, atau konfirmasi survei properti secara real-time."
                     : isDriver
                     ? "Tanyakan posisi driver atau koordinasi titik antar pesanan."
                     : isKost
@@ -525,6 +542,11 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
 
               return (
                 <View style={[styles.messageWrap, isMe ? styles.messageRight : styles.messageLeft]}>
+                  {!isMe && (
+                    <Text style={styles.senderNameLabel}>
+                      {isOwnerView ? "👤 Pelanggan" : isKost ? "🏠 Pemilik Kos" : "📦 Toko"}
+                    </Text>
+                  )}
                   <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
                     {/* Attachment Render */}
                     {hasAttachment && (
@@ -542,8 +564,8 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                           </TouchableOpacity>
                         ) : (
                           <View style={[styles.bubbleFileCard, isMe ? styles.bubbleFileMe : styles.bubbleFileOther]}>
-                            <View style={styles.fileIconBox}>
-                              <FileText size={20} color="#0D7A53" />
+                            <View style={[styles.fileIconBox, isMe && { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+                              <FileText size={20} color={isMe ? "#FFFFFF" : "#0D7A53"} />
                             </View>
                             <View style={{ flex: 1 }}>
                               <Text style={[styles.bubbleFileName, isMe && styles.bubbleFileNameMe]} numberOfLines={1}>
@@ -562,11 +584,11 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                     {item.text && (!hasAttachment || (item.text !== "📷 Foto terkirim" && item.text !== "📎 File terlampir")) ? (
                       <Text style={[styles.messageText, isMe && styles.messageTextMe]}>{item.text}</Text>
                     ) : null}
-                  </View>
 
-                  <View style={styles.messageFooterRow}>
-                    <Text style={styles.time}>{item.time}</Text>
-                    {isMe && <CheckCheck size={12} color="#0D7A53" style={{ marginLeft: 3 }} />}
+                    <View style={[styles.messageFooterRow, isMe ? styles.footerRowRight : styles.footerRowLeft]}>
+                      <Text style={[styles.time, isMe && styles.timeMe]}>{item.time}</Text>
+                      {isMe && <CheckCheck size={13} color="#A7F3D0" style={{ marginLeft: 4 }} />}
+                    </View>
                   </View>
                 </View>
               );
@@ -631,19 +653,21 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
               disabled={!canSend}
               activeOpacity={0.75}
             >
-              <Paperclip size={18} color={isAttachMenuOpen ? "#FFFFFF" : "#0D7A53"} />
+              <Paperclip size={19} color={isAttachMenuOpen ? "#FFFFFF" : "#0D7A53"} />
             </TouchableOpacity>
 
-            <TextInput
-              value={typedMessage}
-              onChangeText={setTypedMessage}
-              editable={canSend}
-              style={styles.input}
-              placeholder={selectedAttachment ? "Tambah keterangan file..." : "Ketik pesan..."}
-              placeholderTextColor="#9CA3AF"
-              onSubmitEditing={handleSend}
-              returnKeyType="send"
-            />
+            <View style={styles.inputWrapper}>
+              <TextInput
+                value={typedMessage}
+                onChangeText={setTypedMessage}
+                editable={canSend}
+                style={styles.input}
+                placeholder={selectedAttachment ? "Tambah keterangan..." : "Ketik pesan..."}
+                placeholderTextColor="#94A3B8"
+                onSubmitEditing={handleSend}
+                returnKeyType="send"
+              />
+            </View>
 
             <TouchableOpacity
               style={[
@@ -652,7 +676,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
               ]}
               onPress={handleSend}
               disabled={!canSend || (!typedMessage.trim() && !selectedAttachment)}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               <Send size={16} color="#FFFFFF" />
             </TouchableOpacity>
@@ -735,72 +759,120 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: "#E2E8F0",
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 10,
     backgroundColor: "#FFFFFF",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
-    backgroundColor: "#F3F4F6",
+    marginRight: 6,
+    backgroundColor: "#F1F5F9",
+  },
+  avatarContainer: {
+    position: "relative",
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+  },
+  onlineBadgeDot: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: "#10B981",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
   },
   headerCopy: {
     flex: 1,
     marginLeft: 10,
+    justifyContent: "center",
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "nowrap",
   },
   title: {
-    color: "#111827",
+    color: "#0F172A",
     fontSize: 14,
     fontWeight: "900",
+    maxWidth: 140,
+  },
+  headerSubtitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  onlineIndicatorMini: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
   },
   subtitle: {
-    color: "#6B7280",
-    fontSize: 10,
-    marginTop: 2,
+    color: "#64748B",
+    fontSize: 10.5,
+    fontWeight: "600",
   },
   rolePill: {
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 1.5,
     borderRadius: 6,
+    borderWidth: 1,
   },
   rolePillText: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: "900",
+    letterSpacing: 0.3,
   },
   btnHeaderWa: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#25D366",
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#86EFAC",
+    paddingVertical: 5,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: "#25D366",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   btnHeaderWaText: {
     fontSize: 11,
     fontWeight: "900",
-    color: "#15803D",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
   },
   channelBanner: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
+    marginHorizontal: 12,
     borderRadius: 10,
     marginTop: 8,
     marginBottom: 4,
@@ -811,9 +883,9 @@ const styles = StyleSheet.create({
     borderColor: "#DCFCE7",
   },
   channelBannerKost: {
-    backgroundColor: "#E8F5EE",
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: "#C6F6D5",
+    borderColor: "#A7F3D0",
   },
   channelBannerStore: {
     backgroundColor: "#FFFBEB",
@@ -823,7 +895,8 @@ const styles = StyleSheet.create({
   channelBannerText: {
     fontSize: 11,
     fontWeight: "700",
-    marginLeft: 8,
+    marginLeft: 6,
+    flex: 1,
   },
   channelBannerTextDriver: {
     color: "#15803D",
@@ -834,67 +907,82 @@ const styles = StyleSheet.create({
   channelBannerTextStore: {
     color: "#B45309",
   },
-  closeButton: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   messageList: {
     flexGrow: 1,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  dateSeparatorRow: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 10,
+  },
+  dateSeparatorPill: {
+    backgroundColor: "#E2E8F0",
+    paddingHorizontal: 12,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  dateSeparatorText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#64748B",
   },
   emptyWrap: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 36,
-    paddingHorizontal: 20,
+    paddingVertical: 48,
+    paddingHorizontal: 24,
   },
   emptyIconBg: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
   },
   emptyTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#111827",
+    fontSize: 14.5,
+    fontWeight: "900",
+    color: "#0F172A",
     marginBottom: 4,
+    textAlign: "center",
   },
   emptyText: {
-    color: "#9CA3AF",
+    color: "#64748B",
     fontSize: 12,
     textAlign: "center",
     lineHeight: 18,
   },
   quickChipsWrapper: {
-    paddingVertical: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
+    borderTopColor: "#F1F5F9",
   },
   quickChipsScroll: {
     gap: 8,
-    paddingHorizontal: 2,
   },
   quickChip: {
-    backgroundColor: "#F3F4F6",
-    borderRadius: 16,
+    backgroundColor: "#ECFDF5",
+    borderRadius: 18,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#A7F3D0",
   },
   quickChipText: {
-    fontSize: 11,
-    color: "#374151",
-    fontWeight: "600",
+    fontSize: 11.5,
+    color: "#065F46",
+    fontWeight: "700",
   },
   messageWrap: {
-    marginBottom: 12,
-    maxWidth: "84%",
+    marginBottom: 10,
+    maxWidth: "82%",
   },
   messageLeft: {
     alignSelf: "flex-start",
@@ -904,36 +992,67 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
     alignItems: "flex-end",
   },
+  senderNameLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0D7A53",
+    marginBottom: 3,
+    marginLeft: 4,
+  },
   bubble: {
     borderRadius: 18,
-    paddingHorizontal: 12,
+    paddingHorizontal: 13,
     paddingVertical: 9,
     overflow: "hidden",
   },
   bubbleMe: {
     backgroundColor: "#0D7A53",
     borderBottomRightRadius: 4,
+    elevation: 2,
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
   bubbleOther: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#FFFFFF",
     borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
   },
   messageText: {
-    color: "#374151",
-    fontSize: 12.5,
-    lineHeight: 18,
+    color: "#0F172A",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "500",
   },
   messageTextMe: {
     color: "#FFFFFF",
+    fontWeight: "500",
   },
   messageFooterRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 3,
+    marginTop: 4,
+  },
+  footerRowLeft: {
+    justifyContent: "flex-start",
+  },
+  footerRowRight: {
+    justifyContent: "flex-end",
   },
   time: {
-    color: "#9CA3AF",
-    fontSize: 9,
+    color: "#94A3B8",
+    fontSize: 9.5,
+    fontWeight: "600",
+  },
+  timeMe: {
+    color: "#D1FAE5",
   },
 
   // Attachments in bubble
@@ -941,8 +1060,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   bubbleImg: {
-    width: 210,
-    height: 150,
+    width: 220,
+    height: 155,
     borderRadius: 12,
   },
   bubbleFileCard: {
@@ -957,29 +1076,29 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.18)",
   },
   bubbleFileOther: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
   },
   fileIconBox: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: "#E8F5EE",
+    backgroundColor: "#DCFCE7",
     alignItems: "center",
     justifyContent: "center",
   },
   bubbleFileName: {
     fontSize: 12,
-    fontWeight: "700",
-    color: "#111827",
+    fontWeight: "800",
+    color: "#0F172A",
   },
   bubbleFileNameMe: {
     color: "#FFFFFF",
   },
   bubbleFileSize: {
     fontSize: 10,
-    color: "#6B7280",
+    color: "#64748B",
     marginTop: 2,
   },
   bubbleFileSizeMe: {
@@ -991,11 +1110,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: "#DCFCE7",
+    borderColor: "#A7F3D0",
     borderRadius: 14,
     padding: 8,
+    marginHorizontal: 12,
     marginBottom: 8,
   },
   pendingAttachmentLeft: {
@@ -1019,12 +1139,12 @@ const styles = StyleSheet.create({
   },
   pendingFileName: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#0D7A53",
   },
   pendingFileSize: {
     fontSize: 10,
-    color: "#6B7280",
+    color: "#64748B",
     marginTop: 1,
   },
   pendingRemoveBtn: {
@@ -1037,46 +1157,61 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    paddingTop: 12,
+    borderTopColor: "#E2E8F0",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#FFFFFF",
   },
   attachButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#E8F5EE",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
   },
   attachButtonActive: {
     backgroundColor: "#0D7A53",
   },
-  input: {
+  inputWrapper: {
     flex: 1,
-    minHeight: 42,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 14,
+    justifyContent: "center",
+  },
+  input: {
+    minHeight: 40,
     maxHeight: 90,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 14,
-    paddingHorizontal: 13,
-    color: "#111827",
-    fontSize: 12.5,
+    color: "#0F172A",
+    fontSize: 13,
+    paddingVertical: 8,
   },
   sendButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: "#0D7A53",
     alignItems: "center",
     justifyContent: "center",
+    elevation: 3,
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   sendButtonDisabled: {
-    backgroundColor: "#A7D8BE",
+    backgroundColor: "#CBD5E1",
+    elevation: 0,
+    shadowOpacity: 0,
   },
 
   // Attach Menu Modal
   attachBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     justifyContent: "flex-end",
     padding: 16,
     paddingBottom: 24,
@@ -1099,8 +1234,8 @@ const styles = StyleSheet.create({
   },
   attachSheetTitle: {
     fontSize: 15,
-    fontWeight: "800",
-    color: "#111827",
+    fontWeight: "900",
+    color: "#0F172A",
   },
   attachOptionsGrid: {
     flexDirection: "row",
@@ -1110,16 +1245,16 @@ const styles = StyleSheet.create({
   attachOptionItem: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 6,
     borderRadius: 16,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: "#F3F4F6",
+    borderColor: "#E2E8F0",
   },
   attachOptionIconSquare: {
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
@@ -1128,12 +1263,12 @@ const styles = StyleSheet.create({
   attachOptionLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#111827",
+    color: "#0F172A",
     textAlign: "center",
   },
   attachOptionSub: {
-    fontSize: 9,
-    color: "#6B7280",
+    fontSize: 9.5,
+    color: "#64748B",
     textAlign: "center",
     marginTop: 2,
   },
@@ -1141,7 +1276,7 @@ const styles = StyleSheet.create({
   // Full image preview
   imagePreviewBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
+    backgroundColor: "rgba(0,0,0,0.95)",
     alignItems: "center",
     justifyContent: "center",
     padding: 16,
