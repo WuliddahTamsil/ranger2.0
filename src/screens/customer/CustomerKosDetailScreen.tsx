@@ -1016,7 +1016,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         <View style={styles.bottomActionsRight}>
           <TouchableOpacity
             style={styles.btnChatSquare}
-            onPress={() => Alert.alert("Customer Support", "Layanan bantuan GEOVERSE siap membantu via WhatsApp.")}
+            onPress={() => setChatVisible(true)}
             activeOpacity={0.8}
           >
             <MessageCircle size={20} color="#0D7A53" />
@@ -1425,6 +1425,17 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Realtime In-App Chat Modal with Landlord / Property */}
+      <CustomerChatModal
+        visible={chatVisible}
+        onClose={() => setChatVisible(false)}
+        orderId={String(kostData?._id || "kost_chat_inquiry")}
+        customerId={authAccount?.id || authAccount?.email}
+        participantName={kostData?.name || "Pemilik Kos & Homestay"}
+        participantType="merchant"
+        initialMessage={`Halo, saya ingin bertanya mengenai properti ${kostData?.name || ""}. Apakah masih ada kamar/tiket yang tersedia?`}
+      />
     </ResponsiveSafeAreaView>
   );
 };
