@@ -7,6 +7,11 @@ const bookingSchema = new mongoose.Schema(
       unique: true,
       required: true,
     },
+    categoryType: {
+      type: String,
+      enum: ["kost", "hotel", "wisata"],
+      default: "kost",
+    },
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -47,6 +52,14 @@ const bookingSchema = new mongoose.Schema(
       required: true,
     },
     durationMonths: {
+      type: Number,
+      default: 1,
+    },
+    durationNights: {
+      type: Number,
+      default: 1,
+    },
+    ticketCount: {
       type: Number,
       default: 1,
     },

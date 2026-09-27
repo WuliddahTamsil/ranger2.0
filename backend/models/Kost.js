@@ -35,10 +35,20 @@ const kostSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    categoryType: {
+      type: String,
+      enum: ["kost", "hotel", "wisata"],
+      default: "kost",
+    },
     type: {
       type: String,
-      enum: ["Putra", "Putri", "Campur"],
       default: "Campur",
+    },
+    stars: {
+      type: Number,
+    },
+    openHours: {
+      type: String,
     },
     address: {
       type: String,
@@ -46,7 +56,7 @@ const kostSchema = new mongoose.Schema(
     },
     city: {
       type: String,
-      default: "Yogyakarta",
+      default: "Garut",
     },
     district: {
       type: String,
@@ -66,8 +76,29 @@ const kostSchema = new mongoose.Schema(
     },
     facilities: [{ type: String }],
     rules: [{ type: String }],
-    images: [{ type: String }], // Google Drive direct URLs
+    images: [{ type: String }], // Cloudinary / Drive URLs
     rooms: [roomSchema],
+    hotelRooms: [
+      {
+        roomName: { type: String },
+        bedType: { type: String },
+        capacity: { type: Number, default: 2 },
+        pricePerNight: { type: Number },
+        isAvailable: { type: Boolean, default: true },
+        facilities: [{ type: String }],
+        images: [{ type: String }],
+        breakfastIncluded: { type: Boolean, default: true },
+      },
+    ],
+    wisataTickets: [
+      {
+        ticketName: { type: String },
+        ticketType: { type: String, default: "reguler" },
+        price: { type: Number },
+        description: { type: String },
+        includedFacilities: [{ type: String }],
+      },
+    ],
     bankAccount: {
       paymentType: { type: String, enum: ["bank", "qris"], default: "bank" },
       bankName: { type: String, default: "BCA" },
