@@ -1242,14 +1242,18 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     fontWeight: "600",
   },
+  mapPinActionBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "#E8F5EE",
+    borderRadius: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   mapPinActionText: {
     fontSize: 11,
     fontWeight: "800",
     color: "#1B7A4E",
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    backgroundColor: "#E8F5EE",
-    borderRadius: 6,
   },
   quickLocationsSection: {
     paddingTop: 12,
