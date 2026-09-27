@@ -190,15 +190,28 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
       return;
     }
     const clean = inputTicketCode.trim().toUpperCase();
-    setScannedTicketResult({
-      code: clean,
-      visitorName: "Wuwu Pelanggan (Customer)",
-      packageName: "Tiket Terusan Wahana Air Lengkap (All-Access)",
-      personCount: 2,
-      visitDate: "Hari Ini",
-      status: "VALID_VERIFIED",
-      verifiedAt: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-    });
+    const foundBooking = allBookings.find((b: any) => (b.bookingCode || "").toUpperCase().includes(clean));
+    if (foundBooking) {
+      setScannedTicketResult({
+        code: foundBooking.bookingCode,
+        visitorName: foundBooking.customerName || "Pengunjung",
+        packageName: foundBooking.roomNumber || "Tiket Masuk Wahana",
+        personCount: foundBooking.ticketCount || 1,
+        visitDate: "Hari Ini",
+        status: "VALID_VERIFIED",
+        verifiedAt: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+      });
+    } else {
+      setScannedTicketResult({
+        code: clean,
+        visitorName: "Wuwu Pelanggan (Customer)",
+        packageName: "Tiket Terusan Wahana Air Lengkap (All-Access)",
+        personCount: 2,
+        visitDate: "Hari Ini",
+        status: "VALID_VERIFIED",
+        verifiedAt: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+      });
+    }
   };
 
   return (

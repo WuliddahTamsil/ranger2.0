@@ -39,6 +39,7 @@ export interface KostData {
 export interface BookingData {
   _id?: string;
   bookingCode?: string;
+  categoryType?: "kost" | "hotel" | "wisata";
   customerId: string;
   kostId: string;
   roomId?: string;
@@ -48,13 +49,16 @@ export interface BookingData {
   customerEmail?: string;
   customerKtpUrl?: string;
   entryDate: string;
-  durationMonths: number;
+  durationMonths?: number;
+  durationNights?: number;
+  ticketCount?: number;
   monthlyPrice: number;
   totalAmount: number;
   dpAmount: number;
   dpProofImage?: string;
   status?: "pending_dp" | "dp_submitted" | "dp_verified" | "rejected" | "active" | "completed" | "cancelled";
   rejectionReason?: string;
+  notes?: string;
   createdAt?: string;
   kostIdDetails?: any;
 }

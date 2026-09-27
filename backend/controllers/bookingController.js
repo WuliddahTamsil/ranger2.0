@@ -10,6 +10,7 @@ const createBooking = async (req, res) => {
     const {
       customerId,
       kostId,
+      categoryType: incomingCategoryType,
       roomId,
       roomNumber,
       customerName,
@@ -18,6 +19,8 @@ const createBooking = async (req, res) => {
       customerKtpUrl,
       entryDate,
       durationMonths,
+      durationNights,
+      ticketCount,
       monthlyPrice,
       totalAmount,
       dpAmount,
@@ -25,17 +28,19 @@ const createBooking = async (req, res) => {
       notes,
     } = req.body;
 
-    if (!kostId || !customerName || !customerPhone || !entryDate || !dpAmount) {
+    if (!kostId || !customerName || !customerPhone || !entryDate || dpAmount === undefined) {
       return res.status(400).json({
         success: false,
-        message: "Data pemesanan tidak lengkap (Kost, Nama, HP, Tanggal Masuk, DP wajib diisi)",
+        message: "Data pemesanan tidak lengkap (Properti, Nama, HP, Tanggal, Nominal wajib diisi)",
       });
     }
 
     const kost = await Kost.findById(kostId);
     if (!kost) {
-      return res.status(404).json({ success: false, message: "Kost tidak ditemukan" });
+      return res.status(404).json({ success: false, message: "Properti/Wisata tidak ditemukan" });
     }
+
+    const categoryType = incomingCategoryType || kost.categoryType || "kost";
 
     // Resolve customerId if it is an email or empty
     let resolvedCustomerId = customerId;
@@ -55,36 +60,51 @@ const createBooking = async (req, res) => {
       }
     }
 
-    const bookingCode = `KST-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+    const prefix = categoryType === "wisata" ? "WST" : categoryType === "hotel" ? "HTL" : "KST";
+    const bookingCode = `${prefix}-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
 
     const booking = await Booking.create({
       bookingCode,
+      categoryType,
       customerId: resolvedCustomerId,
       ownerId: kost.ownerId,
       kostId,
       roomId: roomId || null,
-      roomNumber: roomNumber || "Kamar Pilihan",
+      roomNumber: roomNumber || (categoryType === "wisata" ? "Tiket Masuk" : categoryType === "hotel" ? "Deluxe Room" : "Kamar Pilihan"),
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
       customerEmail: customerEmail?.trim() || "aisyahphr@gmail.com",
       customerKtpUrl: customerKtpUrl || "",
       entryDate: new Date(entryDate),
       durationMonths: Number(durationMonths) || 1,
+      durationNights: Number(durationNights) || 1,
+      ticketCount: Number(ticketCount) || 1,
       monthlyPrice: Number(monthlyPrice) || kost.price,
-      totalAmount: Number(totalAmount) || (Number(monthlyPrice) || kost.price) * (Number(durationMonths) || 1),
+      totalAmount: Number(totalAmount) || (Number(monthlyPrice) || kost.price),
       dpAmount: Number(dpAmount),
       dpProofImage: dpProofImage || "",
       dpPaidAt: dpProofImage ? new Date() : undefined,
-      status: dpProofImage ? "dp_submitted" : "pending_dp",
+      status: dpProofImage || categoryType === "wisata" ? "dp_submitted" : "pending_dp",
       notes: notes || "",
     });
     await syncConversationForOrder(booking, "kos");
 
-    // Create Notification for Pemilik Kos
+    // Create Notification for Pemilik / Pengelola
+    let notifTitle = "🔔 Pembayaran DP Masuk!";
+    let notifMsg = `${customerName} telah membayar DP Rp ${Number(dpAmount).toLocaleString("id-ID")} untuk kamar ${roomNumber || ""} di '${kost.name}'. Segera verifikasi!`;
+
+    if (categoryType === "wisata") {
+      notifTitle = "🎟️ Tiket Wisata Terjual!";
+      notifMsg = `${customerName} telah membeli tiket (${ticketCount || 1}x) di '${kost.name}'. Kode: ${bookingCode}`;
+    } else if (categoryType === "hotel") {
+      notifTitle = "🏨 Reservasi Kamar Hotel Baru!";
+      notifMsg = `${customerName} telah memesan kamar '${roomNumber || "Kamar"}' (${durationNights || 1} Malam) di '${kost.name}'.`;
+    }
+
     const notif = await Notification.create({
       userId: kost.ownerId,
-      title: "🔔 Pembayaran DP Masuk!",
-      message: `${customerName} telah membayar DP Rp ${Number(dpAmount).toLocaleString("id-ID")} untuk kamar ${roomNumber || ""} di '${kost.name}'. Segera verifikasi!`,
+      title: notifTitle,
+      message: notifMsg,
       type: "booking_new",
       relatedId: booking._id,
     });
@@ -104,7 +124,7 @@ const createBooking = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Pemesanan kost berhasil dibuat & DP berhasil dikirim ke pemilik kost",
+      message: `${categoryType === "wisata" ? "Tiket wisata" : categoryType === "hotel" ? "Reservasi hotel" : "Pemesanan kost"} berhasil dibuat & terkirim ke pemilik`,
       data: booking,
     });
   } catch (error) {

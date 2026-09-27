@@ -2,6 +2,8 @@ export type LodgingCategoryType = "kost" | "hotel" | "wisata";
 
 export interface HotelRoomOption {
   _id?: string;
+  id?: string;
+  roomId?: string;
   roomName: string;
   bedType: string;
   capacity: number;
@@ -14,6 +16,8 @@ export interface HotelRoomOption {
 
 export interface WisataTicketOption {
   _id?: string;
+  id?: string;
+  ticketId?: string;
   ticketName: string;
   ticketType: "reguler" | "terusan" | "vip" | "weekend";
   price: number;

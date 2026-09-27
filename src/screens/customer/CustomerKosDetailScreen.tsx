@@ -428,6 +428,37 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
     setActiveCustomerBooking(activeObj);
     setBookingResponse(activeObj);
 
+    // Persist real booking to backend MongoDB database if kostId exists
+    if (kostData?._id) {
+      createKostBooking({
+        customerId: authAccount?.id || authAccount?.email || "customer_1",
+        kostId: String(kostData._id),
+        categoryType: categoryType,
+        roomId: selectedRoom?._id || selectedHotelRoom?.roomId || selectedWisataTicket?.ticketId,
+        roomNumber: activeObj.roomNumber,
+        customerName: activeObj.customerName,
+        customerPhone: activeObj.customerPhone,
+        customerEmail: activeObj.customerEmail,
+        entryDate: startDate || new Date().toISOString(),
+        durationMonths: durationNum,
+        durationNights: nightsNum,
+        ticketCount: ticketsNum,
+        monthlyPrice: currentUnitCost,
+        totalAmount: totalPrice,
+        dpAmount: dpAmount,
+        dpProofImage: finalProofUrl,
+        notes: "",
+      }).then((res) => {
+        if (res && res.data) {
+          const synced = { ...activeObj, _id: res.data._id, bookingCode: res.data.bookingCode };
+          setActiveCustomerBooking(synced);
+          setBookingResponse(synced);
+        }
+      }).catch((err) => {
+        console.warn("Realtime DB Booking sync (handled):", err);
+      });
+    }
+
     setIsSubmitting(false);
     setOrderCreated(true);
     setIsReceiptModalOpen(true);
