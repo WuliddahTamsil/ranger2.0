@@ -49,9 +49,11 @@ import {
   Bed,
   Utensils,
   Share2,
+  MessageSquare,
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
 import { LodgingCategoryType } from "../customer/customerKosStore";
+import { CustomerChatModal } from "../customer/CustomerChatModal";
 
 interface PemilikKosHomeProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -101,6 +103,11 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
 
   // Hotel Guest Check-in Modal
   const [isHotelGuestModalOpen, setIsHotelGuestModalOpen] = useState(false);
+
+  // Live Chat with Customer
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatTargetOrder, setChatTargetOrder] = useState<string>("kost_chat_inquiry");
+  const [chatCustomerName, setChatCustomerName] = useState<string>("Wuwu Pelanggan (Customer)");
 
   const [rooms, setRooms] = useState<any[]>([]);
   const [allBookings, setAllBookings] = useState<any[]>([]);
@@ -232,6 +239,20 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
               <Text style={styles.nameText}>{authAccount?.name || "Aisyah Pemilik"}</Text>
             </View>
             <View style={styles.headerRight}>
+              {/* Chat Pelanggan Button */}
+              <TouchableOpacity
+                style={styles.notifBtn}
+                onPress={() => {
+                  setChatTargetOrder(selectedUnit.id || "kost_chat_inquiry");
+                  setChatCustomerName("Wuwu Pelanggan (Customer)");
+                  setIsChatOpen(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <MessageSquare size={18} color="#FFFFFF" />
+                <View style={[styles.notifBadge, { backgroundColor: "#10B981" }]} />
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.notifBtn}
                 onPress={scrollToPerluTindakan}
@@ -965,6 +986,16 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* In-App Customer Live Chat Modal for Owner */}
+      <CustomerChatModal
+        visible={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        orderId={chatTargetOrder}
+        participantName={chatCustomerName}
+        participantType="customer"
+        initialMessage="Halo kak, ada yang bisa kami bantu mengenai ketersediaan kamar / unit kami?"
+      />
     </ResponsiveSafeAreaView>
   );
 };

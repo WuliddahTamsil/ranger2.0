@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type CustomerChatParticipantType = "driver" | "merchant";
+export type CustomerChatParticipantType = "driver" | "merchant" | "pemilik_kos" | "customer";
 
 export interface CustomerChatMessage {
   id: string;
