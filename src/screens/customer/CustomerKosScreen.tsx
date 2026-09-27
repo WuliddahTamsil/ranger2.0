@@ -7,12 +7,10 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Image,
   ActivityIndicator,
   Modal,
-  Alert,
 } from "react-native";
 import {
   ArrowLeft,
@@ -43,16 +41,35 @@ import {
   Building2,
   Calendar,
   FileText,
-  Download,
-  Printer,
-  Share2,
   Check,
+  Hotel,
+  Ticket,
+  Sparkles,
+  Compass,
+  TreePine,
+  Waves,
+  Coffee,
+  Gift,
+  Zap,
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { fetchAllKosts, fetchCustomerBookings } from "../../services/kostService";
-import { setSelectedKost, getActiveCustomerBooking, subscribeCustomerBooking, ActiveCustomerBooking } from "./customerKosStore";
+import {
+  setSelectedKost,
+  getActiveCustomerBooking,
+  subscribeCustomerBooking,
+  ActiveCustomerBooking,
+  LodgingCategoryType,
+  SelectedKost,
+} from "./customerKosStore";
+import {
+  MOCK_HOTELS_AND_VILLAS,
+  MOCK_TOURIST_ATTRACTIONS,
+  TravelDestinationUI,
+} from "../../services/lodgingTravelService";
 import { AuthAccount } from "../auth/authTypes";
 import { Linking } from "react-native";
+import { rp } from "../../utils/formatters";
 
 interface CustomerKosScreenProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -92,10 +109,57 @@ const setBannerRestoredInStorage = (bookingId?: string) => {
   } catch (e) {}
 };
 
+const PROMO_DEALS = [
+  {
+    id: "p1",
+    tag: "MAHASISWA & KOST",
+    title: "Diskon 20% Kos Baru",
+    sub: "Potongan sewa bulan pertama untuk mahasiswa baru & civitas akademika",
+    code: "MABARANGER",
+    color: "#0D7A53",
+    bgLight: "#E8F5EE",
+  },
+  {
+    id: "p2",
+    tag: "STAYCATION HOTEL",
+    title: "Weekend Cashback 50k",
+    sub: "Booking Hotel & Resort Cipanas/Kamojang dapat Cashback Poin",
+    code: "STAYWEEKEND",
+    color: "#0284C7",
+    bgLight: "#E0F2FE",
+  },
+  {
+    id: "p3",
+    tag: "TIKET WISATA & RIDE",
+    title: "Bundling Wisata + Ride",
+    sub: "Beli tiket Sabda Alam / Kamojang gratis voucher Kanyaah Ride",
+    code: "WISATARIDE",
+    color: "#D97706",
+    bgLight: "#FEF3C7",
+  },
+];
+
+const AREA_CHIPS = [
+  "Semua Area",
+  "Garut Kota",
+  "Cipanas / Tarogong",
+  "Kamojang / Samarang",
+  "Bandung Dago",
+  "Dekat Kampus",
+];
+
 export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, authAccount }) => {
-  const [activeCategory, setActiveCategory] = useState<"semua" | "putra" | "putri" | "campur">("semua");
+  // Main Category Mode (Traveloka style): kost | hotel | wisata
+  const [mainCategory, setMainCategory] = useState<LodgingCategoryType>("kost");
+
+  // Sub filters
+  const [selectedArea, setSelectedArea] = useState("Semua Area");
+  const [activeKostGender, setActiveKostGender] = useState<"semua" | "putra" | "putri" | "campur">("semua");
+  const [hotelTypeFilter, setHotelTypeFilter] = useState("Semua");
+  const [wisataTypeFilter, setWisataTypeFilter] = useState("Semua");
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [isBannerVisible, setIsBannerVisible] = useState(true);
+  const [isPromoVisible, setIsPromoVisible] = useState(true);
   const [loading, setLoading] = useState(false);
   const [dbKosts, setDbKosts] = useState<any[]>([]);
   const [activeBooking, setActiveBooking] = useState<ActiveCustomerBooking | null>(null);
@@ -116,7 +180,6 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               .filter((p: number) => p > 0);
             const minPrice = roomPrices.length > 0 ? Math.min(...roomPrices) : Number(k.price || 0);
 
-            // Photos: prioritize owner's uploaded room photos
             const roomPhotos = allRooms
               .flatMap((r: any) => (Array.isArray(r.images) ? r.images : []))
               .filter(Boolean);
@@ -126,24 +189,38 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               allPhotos[0] ||
               "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80";
 
-            // Facilities from rooms or kost
             const roomFacilities = allRooms.flatMap((r: any) => (Array.isArray(r.facilities) ? r.facilities : []));
             const uniqueFacilities = Array.from(new Set([...roomFacilities, ...(k.facilities || [])])).slice(0, 5);
 
             return {
               id: k._id || k.id,
+              _id: k._id || k.id,
+              categoryType: "kost" as LodgingCategoryType,
               name: k.name,
               type: k.type || "Campur",
               status: allRooms.length === 0 ? "Tersedia" : allRooms.some((r: any) => r.isAvailable) ? "Tersedia" : "Penuh",
               location: k.address || k.city || "Alamat Kost",
-              rating: k.rating || 5.0,
-              reviews: k.reviewCount || 0,
-              price: minPrice.toLocaleString("id-ID"),
-              facilities: uniqueFacilities,
+              city: k.city || "Garut",
+              areaTag: k.address?.toLowerCase().includes("cipanas")
+                ? "Cipanas / Tarogong"
+                : k.address?.toLowerCase().includes("kamojang") || k.address?.toLowerCase().includes("samarang")
+                ? "Kamojang / Samarang"
+                : k.address?.toLowerCase().includes("dago") || k.address?.toLowerCase().includes("bandung")
+                ? "Bandung Dago"
+                : k.address?.toLowerCase().includes("kampus") || k.address?.toLowerCase().includes("uniga") || k.address?.toLowerCase().includes("itg")
+                ? "Dekat Kampus"
+                : "Garut Kota",
+              rating: k.rating || 4.9,
+              reviews: k.reviewCount || 34,
+              price: minPrice,
+              cashbackPoints: Math.round(minPrice * 0.02),
+              facilities: uniqueFacilities.length > 0 ? uniqueFacilities : ["WiFi", "KM Dalam", "Kasur", "Lemari"],
               img: primaryImg,
-              photoCount: allPhotos.length > 0 ? allPhotos.length : 1,
+              images: allPhotos.length > 0 ? allPhotos : [primaryImg],
+              photoCount: allPhotos.length > 0 ? allPhotos.length : 3,
               raw: {
                 ...k,
+                categoryType: "kost",
                 price: minPrice,
                 images: allPhotos.length > 0 ? allPhotos : [primaryImg],
                 facilities: uniqueFacilities,
@@ -163,6 +240,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
             const activeObj: ActiveCustomerBooking = {
               _id: latest._id,
               bookingCode: latest.bookingCode,
+              categoryType: latest.categoryType || "kost",
               customerName: latest.customerName,
               customerPhone: latest.customerPhone,
               customerEmail: latest.customerEmail,
@@ -170,6 +248,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               kostName: latest.kostId?.name || "Kost Pilihan",
               kostAddress: latest.kostId?.address,
               roomNumber: latest.roomNumber || "101",
+              roomType: latest.roomType || "AC",
               entryDate: latest.entryDate ? new Date(latest.entryDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Segera",
               durationMonths: latest.durationMonths || 1,
               monthlyPrice: latest.monthlyPrice || 1500000,
@@ -181,7 +260,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               verifiedAt: latest.verifiedAt,
               createdAt: latest.createdAt,
               ownerPhone: latest.ownerId?.phone || "087805987309",
-              ownerName: latest.ownerId?.name || "Pemilik Kost",
+              ownerName: latest.ownerId?.name || "Pemilik Kos",
             };
             setActiveBooking(activeObj);
             const isDismissed = getIsBannerDismissed(activeObj._id || activeObj.bookingCode);
@@ -217,303 +296,135 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
     return unsub;
   }, [authAccount]);
 
-  const kosList = dbKosts;
+  // Merge items according to currently selected mainCategory
+  const currentItemsList = React.useMemo(() => {
+    if (mainCategory === "kost") {
+      return dbKosts.length > 0 ? dbKosts : [];
+    } else if (mainCategory === "hotel") {
+      return MOCK_HOTELS_AND_VILLAS.map((h) => ({
+        id: h.id || h._id,
+        _id: h._id || h.id,
+        categoryType: "hotel" as LodgingCategoryType,
+        name: h.name,
+        type: h.type,
+        status: "Tersedia",
+        location: h.address,
+        city: h.city,
+        areaTag: h.areaTag,
+        badgeTag: h.badgeTag,
+        rating: h.rating || 4.8,
+        reviews: h.reviewCount || 100,
+        price: h.price,
+        cashbackPoints: h.cashbackPoints || 25000,
+        facilities: h.facilities,
+        img: h.images[0],
+        images: h.images,
+        photoCount: h.images.length,
+        stars: h.stars || 4,
+        raw: h,
+      }));
+    } else {
+      return MOCK_TOURIST_ATTRACTIONS.map((w) => ({
+        id: w.id || w._id,
+        _id: w._id || w.id,
+        categoryType: "wisata" as LodgingCategoryType,
+        name: w.name,
+        type: w.type,
+        status: "Buka Hari Ini",
+        location: w.address,
+        city: w.city,
+        areaTag: w.areaTag,
+        badgeTag: w.badgeTag,
+        rating: w.rating || 4.8,
+        reviews: w.reviewCount || 150,
+        price: w.price,
+        cashbackPoints: w.cashbackPoints || 5000,
+        openHours: w.openHours || "08:00 - 17:00 WIB",
+        facilities: w.facilities,
+        img: w.images[0],
+        images: w.images,
+        photoCount: w.images.length,
+        raw: w,
+      }));
+    }
+  }, [mainCategory, dbKosts]);
 
-  const filteredKosList = kosList.filter((item) => {
-    const matchesCategory =
-      activeCategory === "semua" || item.type.toLowerCase() === activeCategory.toLowerCase();
-    const matchesSearch =
-      searchQuery.trim() === "" ||
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.facilities.some((f: string) => f.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Filter items based on search query, area chip, and specific subcategory
+  const filteredList = React.useMemo(() => {
+    return currentItemsList.filter((item: any) => {
+      // Area match
+      const matchesArea =
+        selectedArea === "Semua Area" ||
+        item.areaTag === selectedArea ||
+        item.location.toLowerCase().includes(selectedArea.toLowerCase()) ||
+        item.city.toLowerCase().includes(selectedArea.toLowerCase());
 
-    return matchesCategory && matchesSearch;
-  });
-
-  const handleOpenWhatsAppOwner = (phone?: string, kostName?: string, roomNumber?: string) => {
-    const cleanPhone = (phone || "087805987309").replace(/[^0-9]/g, "").replace(/^0/, "62");
-    const msg = `Halo Pemilik ${kostName || "Kost"}, saya ingin konfirmasi perihal booking kamar No. ${roomNumber || ""} saya di aplikasi GEOVERSE.`;
-    Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
-  };
-
-  const handleShareReceiptWa = () => {
-    if (!activeBooking) return;
-    const cleanPhone = (activeBooking.ownerPhone || "087805987309").replace(/[^0-9]/g, "").replace(/^0/, "62");
-    const sisaBayar = Number(activeBooking.totalAmount || 700000) - Number(activeBooking.dpAmount || 140000);
-    const msg = `*BUKTI NOTA KONFIRMASI PEMESANAN KOST*\n` +
-      `*GEOVERSE App*\n\n` +
-      `📄 No. Nota / Booking: *${activeBooking.bookingCode}*\n` +
-      `🏠 Nama Kos: *${activeBooking.kostName}*\n` +
-      `🚪 Kamar: *${activeBooking.roomNumber}* (${activeBooking.roomType || "AC"})\n` +
-      `📅 Tgl Masuk: *${activeBooking.entryDate}*\n` +
-      `👤 Penghuni: *${activeBooking.customerName || authAccount?.name || "Customer"}*\n` +
-      `📱 No HP: *${activeBooking.customerPhone || authAccount?.phone || "-"}*\n\n` +
-      `💰 Total Sewa (${activeBooking.durationMonths || 1} bln): Rp ${Number(activeBooking.totalAmount || 700000).toLocaleString("id-ID")}\n` +
-      `✅ *DP 20% Terbayar: Rp ${Number(activeBooking.dpAmount || 140000).toLocaleString("id-ID")} (LUNAS)*\n` +
-      `⏳ Sisa Pelunasan Saat Masuk: Rp ${sisaBayar.toLocaleString("id-ID")}\n\n` +
-      `_Status: Kamar Resmi Terkunci & Siap Ditempati._`;
-
-    Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
-  };
-
-  const handlePrintOrDownloadPdf = () => {
-    if (!activeBooking) return;
-    setIsDownloading(true);
-
-    try {
-      if (typeof window !== "undefined") {
-        const printWindow = window.open("", "_blank");
-        if (printWindow) {
-          const sisaBayar = Number(activeBooking.totalAmount || 700000) - Number(activeBooking.dpAmount || 140000);
-          const receiptHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Nota Konfirmasi Pemesanan - ${activeBooking.bookingCode || "GEOVERSE"}</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-    * { box-sizing: border-box; }
-    body {
-      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
-      margin: 0;
-      padding: 40px 20px;
-      color: #1f2937;
-      background: #f3f4f6;
-    }
-    .ticket {
-      max-width: 600px;
-      margin: 0 auto;
-      background: #ffffff;
-      border-radius: 20px;
-      box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-      overflow: hidden;
-      border: 1px solid #e5e7eb;
-    }
-    .header {
-      background: linear-gradient(135deg, #0D7A53 0%, #15803D 100%);
-      color: #ffffff;
-      padding: 28px 24px;
-      text-align: center;
-      position: relative;
-    }
-    .header h1 {
-      margin: 0;
-      font-size: 24px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-    }
-    .header p {
-      margin: 6px 0 0 0;
-      font-size: 13px;
-      opacity: 0.92;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      margin-top: 14px;
-      background: #ffffff;
-      color: #0D7A53;
-      padding: 6px 16px;
-      border-radius: 30px;
-      font-weight: 800;
-      font-size: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.12);
-    }
-    .body {
-      padding: 28px;
-    }
-    .code-box {
-      background: #f9fafb;
-      border: 1.5px dashed #0D7A53;
-      border-radius: 12px;
-      padding: 14px 18px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-    }
-    .code-title {
-      font-size: 11px;
-      color: #6b7280;
-      text-transform: uppercase;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-    }
-    .code-val {
-      font-size: 16px;
-      font-weight: 800;
-      color: #0D7A53;
-      margin-top: 2px;
-    }
-    .section-title {
-      font-size: 12px;
-      font-weight: 800;
-      color: #0D7A53;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      border-bottom: 1.5px solid #e5e7eb;
-      padding-bottom: 6px;
-      margin: 22px 0 12px 0;
-    }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-      font-size: 13px;
-    }
-    .label {
-      color: #6b7280;
-      font-weight: 500;
-    }
-    .val {
-      font-weight: 700;
-      color: #111827;
-      text-align: right;
-    }
-    .total-box {
-      background: #f0fdf4;
-      border: 1.5px solid #86efac;
-      border-radius: 14px;
-      padding: 16px 18px;
-      margin-top: 20px;
-    }
-    .instructions {
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
-      border-radius: 12px;
-      padding: 16px;
-      margin-top: 24px;
-      font-size: 12.5px;
-      color: #1e40af;
-      line-height: 1.6;
-    }
-    .footer {
-      text-align: center;
-      padding: 18px;
-      font-size: 11px;
-      color: #9ca3af;
-      border-top: 1px solid #f3f4f6;
-      background: #fafafa;
-    }
-    @media print {
-      body { background: transparent; padding: 0; }
-      .ticket { box-shadow: none; border: 1px solid #ccc; max-width: 100%; border-radius: 0; }
-      .no-print { display: none; }
-    }
-  </style>
-</head>
-<body>
-  <div class="ticket">
-    <div class="header">
-      <h1>GEOVERSE</h1>
-      <p>Bukti Resmi Konfirmasi Pemesanan & Pembayaran DP Kos</p>
-      <div class="badge">✓ RESMI TERVERIFIKASI & KAMAR TERKUNCI</div>
-    </div>
-    <div class="body">
-      <div class="code-box">
-        <div>
-          <div class="code-title">Nomor Nota / Kode Pemesanan</div>
-          <div class="code-val">${activeBooking.bookingCode || "KST-ONLINE"}</div>
-        </div>
-        <div style="text-align: right;">
-          <div class="code-title">Tanggal Terbit</div>
-          <div style="font-size: 12px; font-weight: 700; color: #374151; margin-top: 2px;">
-            ${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
-          </div>
-        </div>
-      </div>
-
-      <div class="section-title">Informasi Penghuni</div>
-      <div class="row">
-        <span class="label">Nama Calon Penghuni</span>
-        <span class="val">${activeBooking.customerName || authAccount?.name || "Customer"}</span>
-      </div>
-      <div class="row">
-        <span class="label">No. WhatsApp / HP</span>
-        <span class="val">${activeBooking.customerPhone || authAccount?.phone || "-"}</span>
-      </div>
-      <div class="row">
-        <span class="label">Email</span>
-        <span class="val">${activeBooking.customerEmail || authAccount?.email || "aisyahphr@gmail.com"}</span>
-      </div>
-
-      <div class="section-title">Detail Hunian & Kamar</div>
-      <div class="row">
-        <span class="label">Nama Kos</span>
-        <span class="val" style="color: #0D7A53; font-weight: 800;">${activeBooking.kostName || "Kost"}</span>
-      </div>
-      <div class="row">
-        <span class="label">Nomor Kamar</span>
-        <span class="val">Kamar ${activeBooking.roomNumber || "101"} (${activeBooking.roomType || "AC"})</span>
-      </div>
-      <div class="row">
-        <span class="label">Tanggal Masuk (Check-in)</span>
-        <span class="val">${activeBooking.entryDate || "-"}</span>
-      </div>
-      <div class="row">
-        <span class="label">Durasi Sewa</span>
-        <span class="val">${activeBooking.durationMonths || 1} Bulan</span>
-      </div>
-
-      <div class="section-title">Rincian Pembayaran DP & Sewa</div>
-      <div class="row">
-        <span class="label">Biaya Sewa Bulanan</span>
-        <span class="val">Rp ${Number(activeBooking.monthlyPrice || 700000).toLocaleString("id-ID")}</span>
-      </div>
-      <div class="row">
-        <span class="label">Total Biaya Sewa (${activeBooking.durationMonths || 1} Bulan)</span>
-        <span class="val">Rp ${Number(activeBooking.totalAmount || 700000).toLocaleString("id-ID")}</span>
-      </div>
-      <div class="total-box">
-        <div class="row" style="margin-bottom: 6px;">
-          <span style="font-weight: 800; color: #166534; font-size: 13px;">Uang Muka (DP 20%) - DIBAYAR</span>
-          <span style="font-weight: 800; color: #166534; font-size: 16px;">Rp ${Number(activeBooking.dpAmount || 140000).toLocaleString("id-ID")} (LUNAS ✓)</span>
-        </div>
-        <div class="row" style="margin-bottom: 0;">
-          <span style="font-size: 12px; color: #4b5563; font-weight: 600;">Sisa Pelunasan Saat Check-in:</span>
-          <span style="font-weight: 800; color: #b45309; font-size: 14px;">Rp ${sisaBayar.toLocaleString("id-ID")}</span>
-        </div>
-      </div>
-
-      <div class="instructions">
-        <strong>📌 Petunjuk Serah Terima Kunci:</strong><br/>
-        Simpan atau cetak nota ini sebagai tanda bukti sah pemesanan kamar Anda. Tunjukkan nota digital/cetak ini kepada pemilik kos saat tiba di lokasi untuk serah terima kunci kamar dan pelunasan sisa sewa.
-      </div>
-    </div>
-    <div class="footer">
-      Diterbitkan secara otomatis oleh Sistem GEOVERSE App • Terverifikasi Real-Time
-    </div>
-  </div>
-  <script>
-    window.onload = function() {
-      setTimeout(function() {
-        window.print();
-      }, 500);
-    }
-  </script>
-</body>
-</html>
-          `;
-          printWindow.document.open();
-          printWindow.document.write(receiptHtml);
-          printWindow.document.close();
-        }
+      // Specific Sub-category match
+      let matchesSub = true;
+      if (mainCategory === "kost") {
+        matchesSub =
+          activeKostGender === "semua" ||
+          item.type.toLowerCase() === activeKostGender.toLowerCase();
+      } else if (mainCategory === "hotel") {
+        matchesSub =
+          hotelTypeFilter === "Semua" ||
+          item.type.toLowerCase().includes(hotelTypeFilter.toLowerCase());
+      } else if (mainCategory === "wisata") {
+        matchesSub =
+          wisataTypeFilter === "Semua" ||
+          item.type.toLowerCase().includes(wisataTypeFilter.toLowerCase());
       }
-    } catch (e) {
-      console.warn("Print error:", e);
-    } finally {
-      setIsDownloading(false);
+
+      // Search text match
+      const query = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        query === "" ||
+        item.name.toLowerCase().includes(query) ||
+        item.location.toLowerCase().includes(query) ||
+        (Array.isArray(item.facilities) &&
+          item.facilities.some((f: string) => f.toLowerCase().includes(query)));
+
+      return matchesArea && matchesSub && matchesSearch;
+    });
+  }, [currentItemsList, selectedArea, activeKostGender, hotelTypeFilter, wisataTypeFilter, searchQuery, mainCategory]);
+
+  const handleOpenWhatsAppOwner = (phone?: string, name?: string, roomNumber?: string) => {
+    const cleanPhone = (phone || "087805987309").replace(/[^0-9]/g, "").replace(/^0/, "62");
+    const msg = `Halo Pengelola ${name || "Properti"}, saya ingin konfirmasi perihal pemesanan ${roomNumber ? `No. ${roomNumber}` : ""} saya di aplikasi GEOVERSE.`;
+    Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
+  };
+
+  const handleSelectCard = (item: any) => {
+    if (item.raw) {
+      setSelectedKost({
+        ...item.raw,
+        categoryType: mainCategory,
+      });
+    } else {
+      setSelectedKost({
+        id: item.id,
+        _id: item.id,
+        categoryType: mainCategory,
+        name: item.name,
+        type: item.type,
+        address: item.location,
+        city: item.city,
+        price: item.price || 950000,
+        dpAmount: Math.round((item.price || 950000) * 0.2),
+        facilities: item.facilities || ["WiFi", "AC"],
+        images: item.images || [item.img],
+        rating: item.rating,
+        reviewCount: item.reviews,
+      });
     }
+    navigate("c_kos_detail");
   };
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Header */}
+      {/* Top Main Navigation Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigate("c_home")}
@@ -524,8 +435,8 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
         </TouchableOpacity>
 
         <View style={styles.headerTitleCol}>
-          <Text style={styles.headerTitle}>Kanyaah Homestay / Kos</Text>
-          <Text style={styles.headerSubTitle}>Temukan hunian nyaman & strategis</Text>
+          <Text style={styles.headerTitle}>Kanyaah Kost & Travel</Text>
+          <Text style={styles.headerSubTitle}>Kost, Hotel, Villa & Tiket Wisata Garut - Bandung</Text>
         </View>
 
         <View style={styles.headerRightActions}>
@@ -536,7 +447,86 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Active Customer Booking Status Card (Only for verified customer bookings) */}
+        {/* ============================================================ */}
+        {/* TRAVELOKA STYLE 3-PILL MAIN SWITCHER                         */}
+        {/* ============================================================ */}
+        <View style={styles.mainSwitcherCard}>
+          <View style={styles.switcherPillContainer}>
+            {/* Tab 1: Kost */}
+            <TouchableOpacity
+              style={[
+                styles.switcherTab,
+                mainCategory === "kost" && styles.switcherTabActiveKost,
+              ]}
+              onPress={() => setMainCategory("kost")}
+              activeOpacity={0.85}
+            >
+              <Building2
+                size={18}
+                color={mainCategory === "kost" ? "#0D7A53" : "#64748B"}
+              />
+              <Text
+                style={[
+                  styles.switcherTabText,
+                  mainCategory === "kost" && styles.switcherTabTextActiveKost,
+                ]}
+              >
+                Kost & Coliving
+              </Text>
+              {mainCategory === "kost" && <View style={styles.activeIndicatorKost} />}
+            </TouchableOpacity>
+
+            {/* Tab 2: Hotel & Villa */}
+            <TouchableOpacity
+              style={[
+                styles.switcherTab,
+                mainCategory === "hotel" && styles.switcherTabActiveHotel,
+              ]}
+              onPress={() => setMainCategory("hotel")}
+              activeOpacity={0.85}
+            >
+              <Hotel
+                size={18}
+                color={mainCategory === "hotel" ? "#0284C7" : "#64748B"}
+              />
+              <Text
+                style={[
+                  styles.switcherTabText,
+                  mainCategory === "hotel" && styles.switcherTabTextActiveHotel,
+                ]}
+              >
+                Hotel & Villa
+              </Text>
+              {mainCategory === "hotel" && <View style={styles.activeIndicatorHotel} />}
+            </TouchableOpacity>
+
+            {/* Tab 3: Wisata & Atraksi */}
+            <TouchableOpacity
+              style={[
+                styles.switcherTab,
+                mainCategory === "wisata" && styles.switcherTabActiveWisata,
+              ]}
+              onPress={() => setMainCategory("wisata")}
+              activeOpacity={0.85}
+            >
+              <Ticket
+                size={18}
+                color={mainCategory === "wisata" ? "#D97706" : "#64748B"}
+              />
+              <Text
+                style={[
+                  styles.switcherTabText,
+                  mainCategory === "wisata" && styles.switcherTabTextActiveWisata,
+                ]}
+              >
+                Tiket Wisata
+              </Text>
+              {mainCategory === "wisata" && <View style={styles.activeIndicatorWisata} />}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Active Customer Booking Status Banner (If Any) */}
         {activeBooking && activeBooking._id && authAccount?.role === "customer" && isBookingBannerVisible && (
           <View
             style={[
@@ -576,15 +566,14 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                     ]}
                   >
                     {activeBooking.status === "dp_verified"
-                      ? "✓ DP Diterima (Siap Huni)"
+                      ? "✓ Terverifikasi (Siap Pakai)"
                       : activeBooking.status === "rejected"
-                      ? "❌ DP Ditolak"
-                      : "⏳ Menunggu Verifikasi DP"}
+                      ? "❌ Pembayaran Ditolak"
+                      : "⏳ Menunggu Konfirmasi"}
                   </Text>
                 </View>
               </View>
 
-              {/* Tombol Close untuk Menutup Badge / Banner DP Diterima */}
               <TouchableOpacity
                 onPress={() => {
                   if (activeBooking) {
@@ -594,7 +583,6 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                 }}
                 style={styles.closeBookingBannerBtn}
                 activeOpacity={0.7}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <X size={16} color="#6B7280" />
               </TouchableOpacity>
@@ -602,42 +590,18 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
             <Text style={styles.bookingKostTitle}>{activeBooking.kostName}</Text>
             <Text style={styles.bookingRoomSub}>
-              Kamar {activeBooking.roomNumber} ({activeBooking.roomType || "AC"}) • Masuk: {activeBooking.entryDate}
+              {activeBooking.roomNumber ? `Kamar ${activeBooking.roomNumber} • ` : ""}
+              Tgl: {activeBooking.entryDate}
             </Text>
 
             <View style={styles.bookingDivider} />
 
             <View style={styles.bookingDetailRow}>
-              <Text style={styles.bookingDpLabel}>DP 20% Terkirim:</Text>
-              <Text style={styles.bookingDpValue}>Rp {activeBooking.dpAmount.toLocaleString("id-ID")}</Text>
+              <Text style={styles.bookingDpLabel}>Uang Muka / Terbayar:</Text>
+              <Text style={styles.bookingDpValue}>{rp(activeBooking.dpAmount || activeBooking.totalAmount)}</Text>
             </View>
 
-            {activeBooking.status === "dp_verified" ? (
-              <View style={styles.verifiedNoticeBox}>
-                <CheckCircle2 size={16} color="#166534" />
-                <Text style={styles.verifiedNoticeText}>
-                  Kamar Anda sudah terkunci dan siap ditempati. Hubungi pemilik untuk serah terima kunci kamar.
-                </Text>
-              </View>
-            ) : activeBooking.status === "rejected" ? (
-              <View style={styles.rejectedNoticeBox}>
-                <AlertCircle size={16} color="#DC2626" />
-                <Text style={styles.rejectedNoticeText}>
-                  {activeBooking.rejectionReason || "Bukti transfer tidak sesuai. Silakan hubungi pemilik kos."}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.pendingNoticeBox}>
-                <Clock size={16} color="#D97706" />
-                <Text style={styles.pendingNoticeText}>
-                  Pemilik kos sedang mencocokkan mutasi transfer DP Anda. Kamar otomatis terkunci saat disetujui.
-                </Text>
-              </View>
-            )}
-
-            {/* Quick Actions (Nota & WhatsApp) */}
             <View style={{ gap: 8, marginTop: 14 }}>
-              {/* Button 1: Download / Lihat Nota Konfirmasi Booking (Hanya muncul jika DP sudah di-ACC / Diterima) */}
               {(activeBooking.status === "dp_verified" || activeBooking.status === "completed") && (
                 <TouchableOpacity
                   style={styles.btnDownloadNota}
@@ -645,94 +609,34 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                   activeOpacity={0.85}
                 >
                   <FileText size={16} color="#0D7A53" />
-                  <Text style={styles.btnDownloadNotaText}>Unduh / Lihat Nota Konfirmasi</Text>
+                  <Text style={styles.btnDownloadNotaText}>Unduh / Lihat E-Receipt Nota</Text>
                 </TouchableOpacity>
               )}
 
-              {/* Button 2: WhatsApp Chat */}
               <TouchableOpacity
                 style={styles.btnChatOwnerWa}
                 onPress={() => handleOpenWhatsAppOwner(activeBooking.ownerPhone, activeBooking.kostName, activeBooking.roomNumber)}
                 activeOpacity={0.85}
               >
                 <MessageCircle size={16} color="#FFFFFF" />
-                <Text style={styles.btnChatOwnerWaText}>Chat WhatsApp Pemilik Kos</Text>
+                <Text style={styles.btnChatOwnerWaText}>Chat Pengelola via WhatsApp</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Mini History / Tracking Widget (Ketika banner ditutup oleh customer) */}
-        {activeBooking && activeBooking._id && authAccount?.role === "customer" && !isBookingBannerVisible && (
-          <View style={styles.miniTrackingBar}>
-            <TouchableOpacity
-              style={styles.miniTrackingLeft}
-              onPress={() => {
-                if (activeBooking) {
-                  setBannerRestoredInStorage(activeBooking._id || activeBooking.bookingCode);
-                }
-                setIsBookingBannerVisible(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={styles.miniTrackingIconBg}>
-                <Building2 size={13} color="#0D7A53" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={styles.miniTrackingCode}>{activeBooking.bookingCode}</Text>
-                  <Text
-                    style={[
-                      styles.miniTrackingStatus,
-                      activeBooking.status === "dp_verified"
-                        ? { color: "#166534" }
-                        : activeBooking.status === "rejected"
-                        ? { color: "#DC2626" }
-                        : { color: "#D97706" },
-                    ]}
-                  >
-                    {activeBooking.status === "dp_verified"
-                      ? "• DP Diterima"
-                      : activeBooking.status === "rejected"
-                      ? "• DP Ditolak"
-                      : "• Menunggu Verifikasi"}
-                  </Text>
-                </View>
-                <Text style={styles.miniTrackingSub} numberOfLines={1}>
-                  {activeBooking.kostName} (Kamar {activeBooking.roomNumber})
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              {(activeBooking.status === "dp_verified" || activeBooking.status === "completed") && (
-                <TouchableOpacity
-                  style={styles.miniTrackingNotaBtn}
-                  onPress={() => setIsNotaModalOpen(true)}
-                  activeOpacity={0.8}
-                >
-                  <FileText size={12} color="#0D7A53" />
-                  <Text style={styles.miniTrackingNotaText}>Nota</Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity
-                style={styles.miniTrackingExpandBtn}
-                onPress={() => setIsBookingBannerVisible(true)}
-                activeOpacity={0.7}
-              >
-                <ChevronDown size={14} color="#4B5563" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Search Bar */}
+        {/* Search Bar with Near Me Button */}
         <View style={styles.searchContainer}>
           <Search size={18} color="#9CA3AF" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Cari lokasi, nama kos, atau fasilitas..."
+            placeholder={
+              mainCategory === "kost"
+                ? "Cari nama kos, area kampus, atau fasilitas..."
+                : mainCategory === "hotel"
+                ? "Cari hotel, resort, villa, atau staycation..."
+                : "Cari tempat wisata, waterpark, kawah, danau..."
+            }
             placeholderTextColor="#9CA3AF"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -748,258 +652,403 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
           </TouchableOpacity>
         </View>
 
-        {/* Filter Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterPillsRow}
-        >
-          {/* Semua */}
-          <TouchableOpacity
-            style={[styles.pillBtn, activeCategory === "semua" && styles.pillBtnActive]}
-            onPress={() => setActiveCategory("semua")}
-            activeOpacity={0.8}
+        {/* Area Destination Filter Pills */}
+        <View style={styles.filterSection}>
+          <Text style={styles.filterSectionTitle}>Destinasi & Lokasi Populer</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.areaChipsRow}
           >
-            <LayoutGrid size={15} color={activeCategory === "semua" ? "#FFFFFF" : "#0D7A53"} />
-            <Text style={[styles.pillText, activeCategory === "semua" && styles.pillTextActive]}>
-              Semua
-            </Text>
-          </TouchableOpacity>
-
-          {/* Putra */}
-          <TouchableOpacity
-            style={[styles.pillBtn, activeCategory === "putra" && styles.pillBtnActive]}
-            onPress={() => setActiveCategory("putra")}
-            activeOpacity={0.8}
-          >
-            <User size={15} color={activeCategory === "putra" ? "#FFFFFF" : "#0284C7"} />
-            <Text style={[styles.pillText, activeCategory === "putra" && styles.pillTextActive]}>
-              Putra
-            </Text>
-          </TouchableOpacity>
-
-          {/* Putri */}
-          <TouchableOpacity
-            style={[styles.pillBtn, activeCategory === "putri" && styles.pillBtnActive]}
-            onPress={() => setActiveCategory("putri")}
-            activeOpacity={0.8}
-          >
-            <User size={15} color={activeCategory === "putri" ? "#FFFFFF" : "#DB2777"} />
-            <Text style={[styles.pillText, activeCategory === "putri" && styles.pillTextActive]}>
-              Putri
-            </Text>
-          </TouchableOpacity>
-
-          {/* Campur */}
-          <TouchableOpacity
-            style={[styles.pillBtn, activeCategory === "campur" && styles.pillBtnActive]}
-            onPress={() => setActiveCategory("campur")}
-            activeOpacity={0.8}
-          >
-            <Users size={15} color={activeCategory === "campur" ? "#FFFFFF" : "#EA580C"} />
-            <Text style={[styles.pillText, activeCategory === "campur" && styles.pillTextActive]}>
-              Campur
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-
-        {/* Promo Banner */}
-        {isBannerVisible && (
-          <View style={styles.promoBanner}>
-            <View style={styles.promoIconSquare}>
-              <Percent size={22} color="#0D7A53" />
-            </View>
-
-            <View style={styles.promoTextCol}>
-              <Text style={styles.promoTitle}>Diskon Spesial!</Text>
-              <Text style={styles.promoSub}>
-                Dapatkan potongan harga hingga 15% untuk pemesanan bulan ini
-              </Text>
-
-              <TouchableOpacity style={styles.btnLihatPromo} activeOpacity={0.8}>
-                <Text style={styles.btnLihatPromoText}>Lihat Promo</Text>
-                <ChevronRight size={12} color="#FFFFFF" />
+            {AREA_CHIPS.map((area, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[
+                  styles.areaChip,
+                  selectedArea === area && styles.areaChipActive,
+                ]}
+                onPress={() => setSelectedArea(area)}
+                activeOpacity={0.8}
+              >
+                <Compass
+                  size={13}
+                  color={selectedArea === area ? "#FFFFFF" : "#4B5563"}
+                />
+                <Text
+                  style={[
+                    styles.areaChipText,
+                    selectedArea === area && styles.areaChipTextActive,
+                  ]}
+                >
+                  {area}
+                </Text>
               </TouchableOpacity>
-            </View>
+            ))}
+          </ScrollView>
+        </View>
 
-            <TouchableOpacity
-              onPress={() => setIsBannerVisible(false)}
-              activeOpacity={0.7}
-              style={styles.closePromoBtn}
+        {/* Sub-Category Specific Filter Pills */}
+        {mainCategory === "kost" && (
+          <View style={styles.subFilterSection}>
+            <Text style={styles.filterSectionTitle}>Tipe Kos-Kosan</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsRow}
             >
-              <X size={16} color="#9CA3AF" />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pillBtn, activeKostGender === "semua" && styles.pillBtnActive]}
+                onPress={() => setActiveKostGender("semua")}
+                activeOpacity={0.8}
+              >
+                <LayoutGrid size={15} color={activeKostGender === "semua" ? "#FFFFFF" : "#0D7A53"} />
+                <Text style={[styles.pillText, activeKostGender === "semua" && styles.pillTextActive]}>
+                  Semua Tipe
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.pillBtn, activeKostGender === "putra" && styles.pillBtnActive]}
+                onPress={() => setActiveKostGender("putra")}
+                activeOpacity={0.8}
+              >
+                <User size={15} color={activeKostGender === "putra" ? "#FFFFFF" : "#0284C7"} />
+                <Text style={[styles.pillText, activeKostGender === "putra" && styles.pillTextActive]}>
+                  Kos Putra
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.pillBtn, activeKostGender === "putri" && styles.pillBtnActive]}
+                onPress={() => setActiveKostGender("putri")}
+                activeOpacity={0.8}
+              >
+                <User size={15} color={activeKostGender === "putri" ? "#FFFFFF" : "#DB2777"} />
+                <Text style={[styles.pillText, activeKostGender === "putri" && styles.pillTextActive]}>
+                  Kos Putri
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.pillBtn, activeKostGender === "campur" && styles.pillBtnActive]}
+                onPress={() => setActiveKostGender("campur")}
+                activeOpacity={0.8}
+              >
+                <Users size={15} color={activeKostGender === "campur" ? "#FFFFFF" : "#EA580C"} />
+                <Text style={[styles.pillText, activeKostGender === "campur" && styles.pillTextActive]}>
+                  Kos Campur
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         )}
 
-        {/* Kos Cards List */}
+        {mainCategory === "hotel" && (
+          <View style={styles.subFilterSection}>
+            <Text style={styles.filterSectionTitle}>Kategori Penginapan</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsRow}
+            >
+              {["Semua", "Hotel Bintang 4", "Resort", "Villa"].map((type, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.pillBtnHotel, hotelTypeFilter === type && styles.pillBtnHotelActive]}
+                  onPress={() => setHotelTypeFilter(type)}
+                  activeOpacity={0.8}
+                >
+                  <Hotel size={14} color={hotelTypeFilter === type ? "#FFFFFF" : "#0284C7"} />
+                  <Text style={[styles.pillTextHotel, hotelTypeFilter === type && styles.pillTextHotelActive]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {mainCategory === "wisata" && (
+          <View style={styles.subFilterSection}>
+            <Text style={styles.filterSectionTitle}>Kategori Wisata</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsRow}
+            >
+              {["Semua", "Waterpark", "Wisata Alam", "Danau"].map((wType, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.pillBtnWisata, wisataTypeFilter === wType && styles.pillBtnWisataActive]}
+                  onPress={() => setWisataTypeFilter(wType)}
+                  activeOpacity={0.8}
+                >
+                  {wType === "Waterpark" ? (
+                    <Waves size={14} color={wisataTypeFilter === wType ? "#FFFFFF" : "#D97706"} />
+                  ) : wType === "Wisata Alam" ? (
+                    <TreePine size={14} color={wisataTypeFilter === wType ? "#FFFFFF" : "#D97706"} />
+                  ) : (
+                    <Compass size={14} color={wisataTypeFilter === wType ? "#FFFFFF" : "#D97706"} />
+                  )}
+                  <Text style={[styles.pillTextWisata, wisataTypeFilter === wType && styles.pillTextWisataActive]}>
+                    {wType}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Promo & Flash Deals Carousel */}
+        {isPromoVisible && (
+          <View style={styles.promoSection}>
+            <View style={styles.promoHeaderRow}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Sparkles size={16} color="#D97706" />
+                <Text style={styles.promoSectionTitle}>Promo & Cashback Eksklusif</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsPromoVisible(false)}>
+                <X size={15} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promoCardsScroll}>
+              {PROMO_DEALS.map((promo) => (
+                <View key={promo.id} style={[styles.promoDealCard, { borderColor: promo.color }]}>
+                  <View style={[styles.promoDealTag, { backgroundColor: promo.bgLight }]}>
+                    <Text style={[styles.promoDealTagText, { color: promo.color }]}>{promo.tag}</Text>
+                  </View>
+                  <Text style={styles.promoDealTitle}>{promo.title}</Text>
+                  <Text style={styles.promoDealSub}>{promo.sub}</Text>
+                  <View style={styles.promoDealFooter}>
+                    <Text style={styles.promoDealCodeLabel}>KODE:</Text>
+                    <View style={styles.promoDealCodeBadge}>
+                      <Text style={styles.promoDealCodeText}>{promo.code}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Listing Cards List */}
         <View style={styles.cardsList}>
-          {filteredKosList.length === 0 ? (
+          <View style={styles.listHeaderRow}>
+            <Text style={styles.listHeaderTitle}>
+              {mainCategory === "kost"
+                ? "Daftar Hunian Kos Pilihan"
+                : mainCategory === "hotel"
+                ? "Hotel & Villa Terbaik di Garut & Bandung"
+                : "Destinasi & Tiket Wisata Populer"}
+            </Text>
+            <Text style={styles.listHeaderCount}>
+              {filteredList.length} Ditemukan
+            </Text>
+          </View>
+
+          {loading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color="#0D7A53" />
+              <Text style={styles.loadingText}>Memuat rekomendasi terbaik untuk Anda...</Text>
+            </View>
+          ) : filteredList.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateTitle}>Tidak ada kos ditemukan</Text>
+              <Compass size={40} color="#9CA3AF" />
+              <Text style={styles.emptyStateTitle}>Tidak ada listing ditemukan</Text>
               <Text style={styles.emptyStateSub}>
-                Coba ubah filter atau kata kunci pencarian Anda.
+                Coba ubah kata kunci pencarian atau filter lokasi area Anda.
               </Text>
             </View>
           ) : (
-            filteredKosList.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.kosCard}
-              onPress={() => {
-                if (item.raw) {
-                  setSelectedKost(item.raw);
-                } else {
-                  setSelectedKost({
-                    id: item.id,
-                    name: item.name,
-                    type: item.type,
-                    address: item.location,
-                    price: 950000,
-                    dpAmount: 250000,
-                    facilities: item.facilities,
-                    images: [item.img],
-                  });
-                }
-                navigate("c_kos_detail");
-              }}
-              activeOpacity={0.9}
-            >
-              {/* Image Box */}
-              <View style={styles.cardImgBox}>
-                <Image source={{ uri: item.img }} style={styles.cardImg} />
+            filteredList.map((item: any) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.kosCard}
+                onPress={() => handleSelectCard(item)}
+                activeOpacity={0.9}
+              >
+                {/* Image Box */}
+                <View style={styles.cardImgBox}>
+                  <Image source={{ uri: item.img }} style={styles.cardImg} />
 
-                {/* Photo Count Badge */}
-                <View style={styles.photoCountBadge}>
-                  <Text style={styles.photoCountText}>📷 {item.photoCount} Foto</Text>
+                  {/* Photo Count Badge */}
+                  <View style={styles.photoCountBadge}>
+                    <Text style={styles.photoCountText}>📷 {item.photoCount} Foto</Text>
+                  </View>
+
+                  {/* Special Badge Tag (e.g. TERPOPULER, PRIVATE ONSEN) */}
+                  {item.badgeTag && (
+                    <View style={styles.specialBadge}>
+                      <Zap size={11} color="#FFFFFF" />
+                      <Text style={styles.specialBadgeText}>{item.badgeTag}</Text>
+                    </View>
+                  )}
+
+                  {/* Heart Action */}
+                  <TouchableOpacity style={styles.heartBtn} activeOpacity={0.7}>
+                    <Heart size={18} color="#FFFFFF" />
+                  </TouchableOpacity>
                 </View>
 
-                {/* Heart Action */}
-                <TouchableOpacity style={styles.heartBtn} activeOpacity={0.7}>
-                  <Heart size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-
-                {/* Image Dots */}
-                <View style={styles.imageDotsRow}>
-                  <View style={[styles.imgDot, styles.imgDotActive]} />
-                  <View style={styles.imgDot} />
-                  <View style={styles.imgDot} />
-                </View>
-              </View>
-
-              {/* Card Details */}
-              <View style={styles.cardBody}>
-                {/* Badges Row */}
-                <View style={styles.cardBadgesRow}>
-                  <View
-                    style={[
-                      styles.typeBadge,
-                      item.type === "Putri"
-                        ? styles.typePutri
-                        : item.type === "Putra"
-                        ? styles.typePutra
-                        : styles.typeCampur,
-                    ]}
-                  >
-                    <User
-                      size={11}
-                      color={
-                        item.type === "Putri"
-                          ? "#DB2777"
-                          : item.type === "Putra"
-                          ? "#0284C7"
-                          : "#EA580C"
-                      }
-                    />
-                    <Text
+                {/* Card Details */}
+                <View style={styles.cardBody}>
+                  {/* Badges Row */}
+                  <View style={styles.cardBadgesRow}>
+                    <View
                       style={[
-                        styles.typeBadgeText,
-                        {
-                          color:
+                        styles.typeBadge,
+                        item.type === "Putri"
+                          ? styles.typePutri
+                          : item.type === "Putra"
+                          ? styles.typePutra
+                          : item.categoryType === "hotel"
+                          ? styles.typeHotel
+                          : item.categoryType === "wisata"
+                          ? styles.typeWisata
+                          : styles.typeCampur,
+                      ]}
+                    >
+                      {item.categoryType === "hotel" ? (
+                        <Hotel size={11} color="#0284C7" />
+                      ) : item.categoryType === "wisata" ? (
+                        <Ticket size={11} color="#D97706" />
+                      ) : (
+                        <User
+                          size={11}
+                          color={
                             item.type === "Putri"
                               ? "#DB2777"
                               : item.type === "Putra"
                               ? "#0284C7"
-                              : "#EA580C",
-                        },
-                      ]}
-                    >
-                      {item.type}
-                    </Text>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      item.status === "Tersedia" ? styles.statusGreen : styles.statusRed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusBadgeText,
-                        { color: item.status === "Tersedia" ? "#0D7A53" : "#DC2626" },
-                      ]}
-                    >
-                      {item.status}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Title & Location */}
-                <Text style={styles.kosTitle}>{item.name}</Text>
-
-                <View style={styles.locationRow}>
-                  <MapPin size={13} color="#6B7280" />
-                  <Text style={styles.locationText}>{item.location}</Text>
-                </View>
-
-                {/* Rating Row */}
-                <View style={styles.ratingRow}>
-                  <Star size={13} color="#EAB308" fill="#EAB308" />
-                  <Text style={styles.ratingVal}>{item.rating}</Text>
-                  <Text style={styles.reviewsText}>
-                    ({item.reviews > 0 ? `${item.reviews} ulasan` : "Belum ada ulasan"})
-                  </Text>
-                </View>
-
-                {/* Facility Chips Row */}
-                <View style={styles.facilitiesRow}>
-                  {item.facilities.map((f: string, idx: number) => (
-                    <View key={idx} style={styles.facilityChip}>
-                      {f === "WiFi" ? (
-                        <Wifi size={11} color="#6B7280" />
-                      ) : f === "AC" ? (
-                        <Laptop size={11} color="#6B7280" />
-                      ) : f === "KM Dalam" ? (
-                        <ShowerHead size={11} color="#6B7280" />
-                      ) : f === "Dapur" ? (
-                        <Utensils size={11} color="#6B7280" />
-                      ) : f === "Parkir" ? (
-                        <Car size={11} color="#6B7280" />
-                      ) : (
-                        <Shirt size={11} color="#6B7280" />
+                              : "#EA580C"
+                          }
+                        />
                       )}
-                      <Text style={styles.facilityText}>{f}</Text>
+                      <Text
+                        style={[
+                          styles.typeBadgeText,
+                          {
+                            color:
+                              item.categoryType === "hotel"
+                                ? "#0284C7"
+                                : item.categoryType === "wisata"
+                                ? "#D97706"
+                                : item.type === "Putri"
+                                ? "#DB2777"
+                                : item.type === "Putra"
+                                ? "#0284C7"
+                                : "#EA580C",
+                          },
+                        ]}
+                      >
+                        {item.type}
+                      </Text>
                     </View>
-                  ))}
-                </View>
 
-                {/* Footer Price & Chevron */}
-                <View style={styles.cardFooterRow}>
-                  <View>
-                    <Text style={styles.startFromText}>Mulai dari</Text>
-                    <Text style={styles.priceValText}>
-                      Rp {item.price} <Text style={styles.unitText}>/bulan</Text>
+                    {item.stars ? (
+                      <View style={styles.starsBadge}>
+                        {[...Array(item.stars)].map((_, i) => (
+                          <Star key={i} size={11} color="#FBBF24" fill="#FBBF24" />
+                        ))}
+                      </View>
+                    ) : null}
+
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        item.status === "Tersedia" || item.status === "Buka Hari Ini"
+                          ? styles.statusGreen
+                          : styles.statusRed,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          {
+                            color:
+                              item.status === "Tersedia" || item.status === "Buka Hari Ini"
+                                ? "#0D7A53"
+                                : "#DC2626",
+                          },
+                        ]}
+                      >
+                        {item.status}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Title & Location */}
+                  <Text style={styles.kosTitle} numberOfLines={2}>
+                    {item.name}
+                  </Text>
+
+                  <View style={styles.locationRow}>
+                    <MapPin size={13} color="#6B7280" />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {item.location}
                     </Text>
                   </View>
 
-                  <View style={styles.chevronCircleGreen}>
-                    <ChevronRight size={16} color="#0D7A53" />
+                  {/* Rating & Review */}
+                  <View style={styles.ratingRow}>
+                    <Star size={13} color="#EAB308" fill="#EAB308" />
+                    <Text style={styles.ratingVal}>{item.rating}</Text>
+                    <Text style={styles.reviewsText}>
+                      ({item.reviews > 0 ? `${item.reviews} ulasan` : "Terverifikasi"})
+                    </Text>
+                  </View>
+
+                  {/* Facility Chips Row */}
+                  <View style={styles.facilitiesRow}>
+                    {item.facilities &&
+                      item.facilities.slice(0, 4).map((f: string, idx: number) => (
+                        <View key={idx} style={styles.facilityChip}>
+                          <Text style={styles.facilityText}>{f}</Text>
+                        </View>
+                      ))}
+                  </View>
+
+                  {/* Cashback Poin Callout */}
+                  {item.cashbackPoints ? (
+                    <View style={styles.cashbackRow}>
+                      <Gift size={12} color="#D97706" />
+                      <Text style={styles.cashbackText}>
+                        Cashback +{item.cashbackPoints.toLocaleString("id-ID")} GEOVERSE Point
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* Footer Price & Chevron */}
+                  <View style={styles.cardFooterRow}>
+                    <View>
+                      <Text style={styles.startFromText}>
+                        {mainCategory === "kost"
+                          ? "Mulai dari sewa bulanan"
+                          : mainCategory === "hotel"
+                          ? "Mulai dari per malam"
+                          : "Harga tiket masuk"}
+                      </Text>
+                      <Text style={styles.priceValText}>
+                        {rp(item.price)}{" "}
+                        <Text style={styles.unitText}>
+                          {mainCategory === "kost"
+                            ? "/bulan"
+                            : mainCategory === "hotel"
+                            ? "/malam"
+                            : "/tiket"}
+                        </Text>
+                      </Text>
+                    </View>
+
+                    <View style={styles.chevronCircleGreen}>
+                      <ChevronRight size={16} color="#0D7A53" />
+                    </View>
                   </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          )))}
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         {/* Footer Guarantee Info Row */}
@@ -1008,23 +1057,21 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
             <ShieldCheck size={16} color="#0D7A53" />
             <Text style={styles.guaranteeText}>
               <Text style={{ fontWeight: "800", color: "#111827" }}>Aman & Terverifikasi</Text>{"\n"}
-              Semua kos telah diverifikasi
+              Listing telah disurvei resmi
             </Text>
           </View>
           <View style={styles.guaranteeItem}>
-            <Users size={16} color="#0284C7" />
+            <Sparkles size={16} color="#0284C7" />
             <Text style={styles.guaranteeText}>
-              <Text style={{ fontWeight: "800", color: "#111827" }}>
-                {dbKosts.length > 0 ? `${dbKosts.length} Properti Kos` : "Pilihan Kos"}
-              </Text>{"\n"}
-              Pilihan terbaik untukmu
+              <Text style={{ fontWeight: "800", color: "#111827" }}>Poin GEOVERSE</Text>{"\n"}
+              Bisa pakai poin Bank Sampah
             </Text>
           </View>
           <View style={styles.guaranteeItem}>
             <Headphones size={16} color="#EA580C" />
             <Text style={styles.guaranteeText}>
               <Text style={{ fontWeight: "800", color: "#111827" }}>Layanan 24/7</Text>{"\n"}
-              Kami siap membantu
+              Bantuan pelanggan siap siaga
             </Text>
           </View>
         </View>
@@ -1032,11 +1079,10 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Modal Nota Konfirmasi & Bukti Pembayaran DP */}
+      {/* Modal E-Receipt Nota */}
       <Modal visible={isNotaModalOpen} transparent animationType="slide">
         <View style={styles.notaModalOverlay}>
           <View style={styles.notaModalContent}>
-            {/* Modal Header */}
             <View style={styles.notaModalHeader}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <View style={styles.notaHeaderIconBg}>
@@ -1053,26 +1099,22 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               </TouchableOpacity>
             </View>
 
-            {/* Scrollable Receipt Body */}
             <ScrollView showsVerticalScrollIndicator={false} style={styles.notaScrollArea}>
               <View style={styles.receiptCard}>
-                {/* Top Green Banner */}
                 <View style={styles.receiptTopBanner}>
                   <Text style={styles.receiptBrand}>GEOVERSE</Text>
-                  <Text style={styles.receiptSubBrand}>E-Receipt & Konfirmasi Sewa Kos</Text>
+                  <Text style={styles.receiptSubBrand}>E-Receipt & Konfirmasi Pemesanan</Text>
                   <View style={styles.receiptVerifiedBadge}>
                     <Check size={13} color="#0D7A53" strokeWidth={3} />
-                    <Text style={styles.receiptVerifiedText}>DP TERVERIFIKASI • RESMI</Text>
+                    <Text style={styles.receiptVerifiedText}>TERVERIFIKASI RESMI</Text>
                   </View>
                 </View>
 
-                {/* Receipt Details */}
                 <View style={styles.receiptBody}>
-                  {/* Code & Date */}
                   <View style={styles.receiptCodeBox}>
                     <View>
                       <Text style={styles.receiptCodeLabel}>NO. NOTA / KODE BOOKING</Text>
-                      <Text style={styles.receiptCodeVal}>{activeBooking?.bookingCode || "KST-ONLINE"}</Text>
+                      <Text style={styles.receiptCodeVal}>{activeBooking?.bookingCode || "GEO-ONLINE"}</Text>
                     </View>
                     <View style={{ alignItems: "flex-end" }}>
                       <Text style={styles.receiptCodeLabel}>TGL TERBIT</Text>
@@ -1082,10 +1124,9 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                     </View>
                   </View>
 
-                  {/* Section 1: Penghuni */}
-                  <Text style={styles.receiptSectionHeader}>DATA PENGHUNI</Text>
+                  <Text style={styles.receiptSectionHeader}>DATA PEMESAN</Text>
                   <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Nama Calon Penghuni</Text>
+                    <Text style={styles.receiptLabel}>Nama Pemesan</Text>
                     <Text style={styles.receiptValBold}>{activeBooking?.customerName || authAccount?.name || "Customer"}</Text>
                   </View>
                   <View style={styles.receiptRow}>
@@ -1094,88 +1135,35 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                   </View>
                   <View style={styles.receiptRow}>
                     <Text style={styles.receiptLabel}>Email</Text>
-                    <Text style={styles.receiptVal}>{activeBooking?.customerEmail || authAccount?.email || "aisyahphr@gmail.com"}</Text>
+                    <Text style={styles.receiptVal}>{activeBooking?.customerEmail || authAccount?.email || "customer@geoverse.id"}</Text>
                   </View>
 
-                  {/* Section 2: Hunian & Kamar */}
-                  <Text style={styles.receiptSectionHeader}>RINCIAN HUNIAN</Text>
+                  <Text style={styles.receiptSectionHeader}>DETAIL PROPERTI / WISATA</Text>
                   <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Nama Kos</Text>
-                    <Text style={[styles.receiptValBold, { color: "#0D7A53" }]}>{activeBooking?.kostName || "Kost"}</Text>
+                    <Text style={styles.receiptLabel}>Nama Tempat</Text>
+                    <Text style={styles.receiptValBoldGreen}>{activeBooking?.kostName || "Properti"}</Text>
                   </View>
-                  <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Nomor Kamar</Text>
-                    <Text style={styles.receiptValBold}>Kamar {activeBooking?.roomNumber || "101"} ({activeBooking?.roomType || "AC"})</Text>
-                  </View>
-                  <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Tgl Masuk (Check-in)</Text>
-                    <Text style={styles.receiptValBold}>{activeBooking?.entryDate || "-"}</Text>
-                  </View>
-                  <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Durasi Sewa</Text>
-                    <Text style={styles.receiptVal}>{activeBooking?.durationMonths || 1} Bulan</Text>
-                  </View>
-
-                  {/* Section 3: Pembayaran */}
-                  <Text style={styles.receiptSectionHeader}>RINCIAN PEMBAYARAN</Text>
-                  <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Harga Sewa Bulanan</Text>
-                    <Text style={styles.receiptVal}>Rp {Number(activeBooking?.monthlyPrice || 700000).toLocaleString("id-ID")}</Text>
-                  </View>
-                  <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Total Biaya Sewa ({activeBooking?.durationMonths || 1} Bulan)</Text>
-                    <Text style={styles.receiptValBold}>Rp {Number(activeBooking?.totalAmount || 700000).toLocaleString("id-ID")}</Text>
-                  </View>
-
-                  {/* Highlight DP Box */}
-                  <View style={styles.receiptDpBox}>
+                  {activeBooking?.roomNumber && (
                     <View style={styles.receiptRow}>
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#166534" }}>DP Terbayar (20%)</Text>
-                      <Text style={{ fontSize: 15, fontWeight: "900", color: "#166534" }}>
-                        Rp {Number(activeBooking?.dpAmount || 140000).toLocaleString("id-ID")} (LUNAS ✓)
-                      </Text>
+                      <Text style={styles.receiptLabel}>Kamar</Text>
+                      <Text style={styles.receiptVal}>Kamar {activeBooking.roomNumber} ({activeBooking.roomType || "Standar"})</Text>
                     </View>
-                    <View style={[styles.receiptRow, { marginTop: 4, marginBottom: 0 }]}>
-                      <Text style={{ fontSize: 11, color: "#6B7280" }}>Sisa Saat Check-in</Text>
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#B45309" }}>
-                        Rp {Number((activeBooking?.totalAmount || 700000) - (activeBooking?.dpAmount || 140000)).toLocaleString("id-ID")}
-                      </Text>
-                    </View>
+                  )}
+                  <View style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>Tgl Check-in / Kunjungan</Text>
+                    <Text style={styles.receiptVal}>{activeBooking?.entryDate || "-"}</Text>
                   </View>
 
-                  {/* Petunjuk */}
-                  <View style={styles.receiptNoticeBox}>
-                    <Text style={styles.receiptNoticeTitle}>📌 Petunjuk Serah Terima Kunci:</Text>
-                    <Text style={styles.receiptNoticeText}>
-                      Tunjukkan nota / bukti digital ini kepada pemilik kos saat check-in di lokasi untuk serah terima kunci kamar Anda.
-                    </Text>
+                  <View style={styles.receiptTotalBox}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                      <Text style={styles.receiptTotalLabel}>Uang Muka / Terbayar</Text>
+                      <Text style={styles.receiptTotalVal}>{rp(activeBooking?.dpAmount || activeBooking?.totalAmount || 0)} (LUNAS ✓)</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: "#166534" }}>Tunjukkan nota digital ini saat tiba di lokasi.</Text>
                   </View>
                 </View>
               </View>
-
-              <View style={{ height: 16 }} />
             </ScrollView>
-
-            {/* Modal Bottom Buttons */}
-            <View style={styles.notaBottomActions}>
-              <TouchableOpacity
-                style={styles.btnCetakPdf}
-                onPress={handlePrintOrDownloadPdf}
-                activeOpacity={0.85}
-              >
-                <Printer size={16} color="#FFFFFF" />
-                <Text style={styles.btnCetakPdfText}>Cetak / Simpan PDF Nota</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.btnKirimWaNota}
-                onPress={handleShareReceiptWa}
-                activeOpacity={0.85}
-              >
-                <Share2 size={15} color="#0D7A53" />
-                <Text style={styles.btnKirimWaNotaText}>Kirim via WhatsApp</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
@@ -1186,76 +1174,158 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: "#E2E8F0",
+    gap: 12,
   },
   backBtn: {
-    padding: 4,
-    marginRight: 12,
+    padding: 6,
+    borderRadius: 8,
   },
   headerTitleCol: {
     flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#111827",
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
   },
   headerSubTitle: {
-    fontSize: 12,
-    color: "#6B7280",
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
   },
   headerRightActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
   },
   iconCircleBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
   },
-
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 24,
+  },
+
+  // Main Switcher (Traveloka 3-Pill Switcher)
+  mainSwitcherCard: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  switcherPillContainer: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    padding: 4,
+    gap: 4,
+  },
+  switcherTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 11,
+    gap: 6,
+    position: "relative",
+  },
+  switcherTabActiveKost: {
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#0D7A53",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  switcherTabActiveHotel: {
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#0284C7",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  switcherTabActiveWisata: {
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#D97706",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  switcherTabText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  switcherTabTextActiveKost: {
+    color: "#0D7A53",
+    fontWeight: "800",
+  },
+  switcherTabTextActiveHotel: {
+    color: "#0284C7",
+    fontWeight: "800",
+  },
+  switcherTabTextActiveWisata: {
+    color: "#D97706",
+    fontWeight: "800",
+  },
+  activeIndicatorKost: {
+    position: "absolute",
+    bottom: -4,
+    width: 20,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "#0D7A53",
+  },
+  activeIndicatorHotel: {
+    position: "absolute",
+    bottom: -4,
+    width: 20,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "#0284C7",
+  },
+  activeIndicatorWisata: {
+    position: "absolute",
+    bottom: -4,
+    width: 20,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "#D97706",
   },
 
   // Active Booking Card
   activeBookingCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  bookingCardPending: {
-    borderColor: "#FDE68A",
-    backgroundColor: "#FFFBEB",
+    margin: 16,
+    marginBottom: 8,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1.5,
   },
   bookingCardVerified: {
-    borderColor: "#BBF7D0",
     backgroundColor: "#F0FDF4",
+    borderColor: "#86EFAC",
   },
   bookingCardRejected: {
-    borderColor: "#FECACA",
     backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  bookingCardPending: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
   },
   bookingCardHeader: {
     flexDirection: "row",
@@ -1263,87 +1333,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
-  closeBookingBannerBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(0, 0, 0, 0.05)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 6,
-  },
-  // Mini History / Tracking Widget (Pill Bar Kecil)
-  miniTrackingBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 14,
-  },
-  miniTrackingLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-  },
-  miniTrackingIconBg: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  miniTrackingCode: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#0D7A53",
-  },
-  miniTrackingStatus: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  miniTrackingSub: {
-    fontSize: 11,
-    color: "#4B5563",
-    fontWeight: "500",
-    marginTop: 1,
-  },
-  miniTrackingNotaBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  miniTrackingNotaText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#0D7A53",
-  },
-  miniTrackingExpandBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "#E5E7EB",
-    alignItems: "center",
-    justifyContent: "center",
-  },
   bookingCodePill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E8F5EE",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
-    gap: 4,
+    borderRadius: 8,
   },
   bookingCodeText: {
     fontSize: 11,
@@ -1356,97 +1353,68 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   statusBadgePillText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "800",
+  },
+  closeBookingBannerBtn: {
+    padding: 4,
   },
   bookingKostTitle: {
     fontSize: 15,
-    fontWeight: "900",
-    color: "#111827",
+    fontWeight: "800",
+    color: "#0F172A",
   },
   bookingRoomSub: {
     fontSize: 12,
-    color: "#4B5563",
+    color: "#64748B",
     marginTop: 2,
   },
   bookingDivider: {
     height: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#E2E8F0",
     marginVertical: 10,
   },
   bookingDetailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
   },
   bookingDpLabel: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#64748B",
   },
   bookingDpValue: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#0D7A53",
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#15803D",
   },
-  verifiedNoticeBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#DCFCE7",
-    padding: 10,
-    borderRadius: 10,
-    gap: 8,
-    marginBottom: 10,
-  },
-  verifiedNoticeText: {
-    fontSize: 11,
-    color: "#166534",
-    fontWeight: "700",
-    flex: 1,
-  },
-  rejectedNoticeBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FEE2E2",
-    padding: 10,
-    borderRadius: 10,
-    gap: 8,
-    marginBottom: 10,
-  },
-  rejectedNoticeText: {
-    fontSize: 11,
-    color: "#991B1B",
-    fontWeight: "700",
-    flex: 1,
-  },
-  pendingNoticeBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FEF3C7",
-    padding: 10,
-    borderRadius: 10,
-    gap: 8,
-    marginBottom: 10,
-  },
-  pendingNoticeText: {
-    fontSize: 11,
-    color: "#92400E",
-    fontWeight: "700",
-    flex: 1,
-  },
-  btnChatOwnerWa: {
-    backgroundColor: "#0D7A53",
-    height: 40,
-    borderRadius: 10,
+  btnDownloadNota: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#DCFCE7",
+    paddingVertical: 9,
+    borderRadius: 10,
+    gap: 6,
+  },
+  btnDownloadNotaText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  btnChatOwnerWa: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#22C55E",
+    paddingVertical: 9,
+    borderRadius: 10,
     gap: 6,
   },
   btnChatOwnerWaText: {
-    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "800",
+    color: "#FFFFFF",
   },
 
   // Search Bar
@@ -1454,213 +1422,364 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
+    paddingHorizontal: 12,
     height: 46,
-    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 8,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 2,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
-    color: "#111827",
+    fontSize: 12.5,
+    color: "#0F172A",
   },
   nearMePill: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
     gap: 4,
-    backgroundColor: "#E8F5EE",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
   },
   nearMeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "700",
     color: "#0D7A53",
   },
 
-  // Filter Pills
-  filterPillsRow: {
+  // Filter Sections
+  filterSection: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+  },
+  subFilterSection: {
+    marginTop: 10,
+    paddingHorizontal: 16,
+  },
+  filterSectionTitle: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#64748B",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  areaChipsRow: {
+    gap: 8,
+    paddingRight: 16,
+  },
+  areaChip: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 14,
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    gap: 6,
+  },
+  areaChipActive: {
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
+  },
+  areaChipText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  areaChipTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  filterPillsRow: {
+    gap: 8,
+    paddingRight: 16,
   },
   pillBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
     backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 6,
   },
   pillBtnActive: {
     backgroundColor: "#0D7A53",
     borderColor: "#0D7A53",
   },
   pillText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#374151",
+    color: "#475569",
   },
   pillTextActive: {
     color: "#FFFFFF",
   },
-
-  // Promo Banner
-  promoBanner: {
+  pillBtnHotel: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#E8F5EE",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#DCFCE7",
-    marginBottom: 16,
-    position: "relative",
-  },
-  promoIconSquare: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    alignItems: "center",
     backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  promoTextCol: {
-    flex: 1,
-  },
-  promoTitle: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#0D7A53",
-  },
-  promoSub: {
-    fontSize: 11,
-    color: "#0D7A53",
-    marginTop: 2,
-    lineHeight: 16,
-    opacity: 0.9,
-  },
-  btnLihatPromo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#0D7A53",
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    alignSelf: "flex-start",
-    marginTop: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 6,
   },
-  btnLihatPromoText: {
-    fontSize: 11,
-    fontWeight: "800",
+  pillBtnHotelActive: {
+    backgroundColor: "#0284C7",
+    borderColor: "#0284C7",
+  },
+  pillTextHotel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0284C7",
+  },
+  pillTextHotelActive: {
     color: "#FFFFFF",
   },
-  closePromoBtn: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    padding: 4,
+  pillBtnWisata: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 6,
+  },
+  pillBtnWisataActive: {
+    backgroundColor: "#D97706",
+    borderColor: "#D97706",
+  },
+  pillTextWisata: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#D97706",
+  },
+  pillTextWisataActive: {
+    color: "#FFFFFF",
   },
 
-  // Kos Cards List
+  // Promo Section
+  promoSection: {
+    marginTop: 14,
+    marginHorizontal: 16,
+  },
+  promoHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  promoSectionTitle: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  promoCardsScroll: {
+    gap: 10,
+    paddingRight: 16,
+  },
+  promoDealCard: {
+    width: 240,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    gap: 4,
+  },
+  promoDealTag: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  promoDealTagText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
+  promoDealTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 2,
+  },
+  promoDealSub: {
+    fontSize: 11,
+    color: "#64748B",
+    lineHeight: 14,
+  },
+  promoDealFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+    gap: 6,
+  },
+  promoDealCodeLabel: {
+    fontSize: 10,
+    color: "#94A3B8",
+    fontWeight: "700",
+  },
+  promoDealCodeBadge: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  promoDealCodeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: 0.5,
+  },
+
+  // Listing Cards
   cardsList: {
-    gap: 16,
+    marginTop: 16,
+    paddingHorizontal: 16,
+  },
+  listHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  listHeaderTitle: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: "#0F172A",
+    flex: 1,
+  },
+  listHeaderCount: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  loadingBox: {
+    paddingVertical: 32,
+    alignItems: "center",
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  emptyState: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 30,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 8,
+  },
+  emptyStateTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  emptyStateSub: {
+    fontSize: 11.5,
+    color: "#64748B",
+    textAlign: "center",
   },
   kosCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 14,
-    flexDirection: "row",
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  cardImgBox: {
-    width: 120,
-    height: 150,
     borderRadius: 16,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 14,
+    elevation: 2,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  cardImgBox: {
+    height: 160,
+    width: "100%",
     position: "relative",
+    backgroundColor: "#E2E8F0",
   },
   cardImg: {
     width: "100%",
     height: "100%",
+    resizeMode: "cover",
   },
   photoCountBadge: {
     position: "absolute",
-    bottom: 12,
+    bottom: 8,
     left: 8,
-    backgroundColor: "rgba(17, 24, 39, 0.75)",
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 10,
+    borderRadius: 6,
   },
   photoCountText: {
-    fontSize: 9,
-    fontWeight: "700",
     color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  specialBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#D97706",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+  },
+  specialBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9.5,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
   heartBtn: {
     position: "absolute",
     top: 8,
     right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
     alignItems: "center",
     justifyContent: "center",
   },
-  imageDotsRow: {
-    position: "absolute",
-    bottom: 6,
-    alignSelf: "center",
-    flexDirection: "row",
-    gap: 4,
-  },
-  imgDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
-  },
-  imgDotActive: {
-    width: 10,
-    backgroundColor: "#FFFFFF",
-  },
-
   cardBody: {
-    flex: 1,
-    justifyContent: "space-between",
+    padding: 12,
   },
   cardBadgesRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    marginBottom: 6,
   },
   typeBadge: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
   },
   typePutri: {
     backgroundColor: "#FCE7F3",
@@ -1671,15 +1790,24 @@ const styles = StyleSheet.create({
   typeCampur: {
     backgroundColor: "#FFEDD5",
   },
+  typeHotel: {
+    backgroundColor: "#E0F2FE",
+  },
+  typeWisata: {
+    backgroundColor: "#FEF3C7",
+  },
   typeBadgeText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "800",
   },
-
+  starsBadge: {
+    flexDirection: "row",
+    gap: 2,
+  },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
   },
   statusGreen: {
     backgroundColor: "#DCFCE7",
@@ -1688,27 +1816,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEE2E2",
   },
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "800",
   },
-
   kosTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#111827",
-    marginTop: 4,
+    fontSize: 14.5,
+    fontWeight: "800",
+    color: "#0F172A",
+    lineHeight: 19,
   },
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginTop: 2,
+    marginTop: 3,
   },
   locationText: {
-    fontSize: 11,
-    color: "#6B7280",
+    fontSize: 11.5,
+    color: "#64748B",
+    flex: 1,
   },
-
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1716,335 +1843,255 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   ratingVal: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: "800",
-    color: "#111827",
+    color: "#0F172A",
   },
   reviewsText: {
     fontSize: 11,
-    color: "#9CA3AF",
+    color: "#94A3B8",
   },
-
   facilitiesRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
-    marginTop: 6,
+    gap: 4,
+    marginTop: 8,
   },
   facilityChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#F3F4F6",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
   },
   facilityText: {
     fontSize: 10,
+    color: "#475569",
     fontWeight: "600",
-    color: "#374151",
   },
-
+  cashbackRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFBEB",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  cashbackText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#B45309",
+  },
   cardFooterRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
     justifyContent: "space-between",
-    marginTop: 8,
+    alignItems: "center",
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
   },
   startFromText: {
     fontSize: 10,
-    color: "#9CA3AF",
+    color: "#94A3B8",
+    fontWeight: "600",
   },
   priceValText: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: "900",
     color: "#0D7A53",
   },
   unitText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#6B7280",
+    color: "#64748B",
   },
   chevronCircleGreen: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#E8F5EE",
+    backgroundColor: "#DCFCE7",
     alignItems: "center",
     justifyContent: "center",
   },
 
-  // Guarantee Footer Row
+  // Footer Guarantees
   footerGuaranteeRow: {
-    flexDirection: "column",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    marginTop: 24,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 8,
   },
   guaranteeItem: {
-    flexDirection: "row",
+    flex: 1,
     alignItems: "center",
-    gap: 10,
+    gap: 4,
   },
   guaranteeText: {
-    fontSize: 11,
-    color: "#6B7280",
-    lineHeight: 16,
-  },
-  emptyState: {
-    paddingVertical: 36,
-    paddingHorizontal: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderStyle: "dashed",
-  },
-  emptyStateTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#374151",
-    marginBottom: 4,
-  },
-  emptyStateSub: {
-    fontSize: 12,
-    color: "#9CA3AF",
+    fontSize: 9.5,
+    color: "#64748B",
     textAlign: "center",
+    lineHeight: 12,
   },
 
-  // Nota & E-Receipt Action Buttons & Modal Styles
-  btnDownloadNota: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#E6F4EA",
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "#0D7A53",
-  },
-  btnDownloadNotaText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#0D7A53",
-  },
-
+  // Modal Nota
   notaModalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.65)",
-    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "center",
+    padding: 16,
   },
   notaModalContent: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    maxHeight: "92%",
-    paddingBottom: 24,
+    borderRadius: 20,
+    maxHeight: "85%",
+    overflow: "hidden",
   },
   notaModalHeader: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    alignItems: "center",
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: "#E2E8F0",
   },
   notaHeaderIconBg: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#E6F4EA",
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#DCFCE7",
     alignItems: "center",
     justifyContent: "center",
   },
   notaModalHeaderTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
-    color: "#111827",
+    color: "#0F172A",
   },
   notaCloseBtn: {
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
+    padding: 4,
   },
   notaScrollArea: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    padding: 16,
   },
   receiptCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   receiptTopBanner: {
     backgroundColor: "#0D7A53",
-    paddingVertical: 18,
-    paddingHorizontal: 20,
+    padding: 16,
     alignItems: "center",
+    gap: 4,
   },
   receiptBrand: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "900",
     color: "#FFFFFF",
     letterSpacing: 1,
   },
   receiptSubBrand: {
     fontSize: 11,
-    color: "#E6F4EA",
-    marginTop: 2,
+    color: "rgba(255, 255, 255, 0.9)",
   },
   receiptVerifiedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginTop: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginTop: 6,
+    gap: 4,
   },
   receiptVerifiedText: {
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "800",
     color: "#0D7A53",
   },
   receiptBody: {
-    padding: 18,
+    padding: 14,
+    gap: 8,
   },
   receiptCodeBox: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "#0D7A53",
+    backgroundColor: "#FFFFFF",
+    padding: 10,
     borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   receiptCodeLabel: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#6B7280",
-    letterSpacing: 0.5,
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: "#64748B",
   },
   receiptCodeVal: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#0D7A53",
-    marginTop: 2,
-  },
-  receiptDateVal: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#374151",
-    marginTop: 2,
-  },
-  receiptSectionHeader: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "800",
     color: "#0D7A53",
+  },
+  receiptDateVal: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#334155",
+  },
+  receiptSectionHeader: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#0D7A53",
+    marginTop: 8,
     letterSpacing: 0.5,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-    paddingBottom: 4,
-    marginTop: 12,
-    marginBottom: 8,
   },
   receiptRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
   },
   receiptLabel: {
-    fontSize: 12,
-    color: "#6B7280",
+    fontSize: 11.5,
+    color: "#64748B",
   },
   receiptVal: {
-    fontSize: 12,
+    fontSize: 11.5,
+    color: "#0F172A",
     fontWeight: "600",
-    color: "#1F2937",
   },
   receiptValBold: {
+    fontSize: 11.5,
+    color: "#0F172A",
+    fontWeight: "800",
+  },
+  receiptValBoldGreen: {
+    fontSize: 12,
+    color: "#0D7A53",
+    fontWeight: "800",
+  },
+  receiptTotalBox: {
+    backgroundColor: "#DCFCE7",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  receiptTotalLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#111827",
+    color: "#166534",
   },
-  receiptDpBox: {
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#86EFAC",
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-  },
-  receiptNoticeBox: {
-    backgroundColor: "#EFF6FF",
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 14,
-  },
-  receiptNoticeTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#1E40AF",
-    marginBottom: 2,
-  },
-  receiptNoticeText: {
-    fontSize: 11,
-    color: "#1E40AF",
-    lineHeight: 16,
-  },
-  notaBottomActions: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    gap: 8,
-  },
-  btnCetakPdf: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#0D7A53",
-    paddingVertical: 14,
-    borderRadius: 14,
-  },
-  btnCetakPdfText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  btnKirimWaNota: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#E6F4EA",
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#0D7A53",
-  },
-  btnKirimWaNotaText: {
+  receiptTotalVal: {
     fontSize: 13,
-    fontWeight: "700",
-    color: "#0D7A53",
+    fontWeight: "900",
+    color: "#166534",
   },
 });

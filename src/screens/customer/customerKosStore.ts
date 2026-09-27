@@ -1,11 +1,35 @@
+export type LodgingCategoryType = "kost" | "hotel" | "wisata";
+
+export interface HotelRoomOption {
+  _id?: string;
+  roomName: string;
+  bedType: string;
+  capacity: number;
+  pricePerNight: number;
+  isAvailable: boolean;
+  facilities: string[];
+  images: string[];
+  breakfastIncluded?: boolean;
+}
+
+export interface WisataTicketOption {
+  _id?: string;
+  ticketName: string;
+  ticketType: "reguler" | "terusan" | "vip" | "weekend";
+  price: number;
+  description: string;
+  includedFacilities: string[];
+}
+
 export interface SelectedKost {
   _id?: string;
   id?: string;
+  categoryType?: LodgingCategoryType; // "kost" | "hotel" | "wisata"
   name: string;
-  type: string;
+  type: string; // e.g., "Putra" | "Putri" | "Campur" | "Hotel Bintang 4" | "Villa" | "Wisata Alam" | "Waterpark"
   address: string;
   city?: string;
-  price: number;
+  price: number; // For kost: price/mo; for hotel: price/night; for wisata: price/ticket
   dpAmount?: number;
   description?: string;
   facilities: string[];
@@ -13,13 +37,12 @@ export interface SelectedKost {
   images: string[];
   rating?: number;
   reviewCount?: number;
-  bankAccount?: {
-    paymentType?: "bank" | "qris";
-    bankName: string;
-    accountNumber: string;
-    accountHolder: string;
-    qrisImage?: string;
-  };
+  stars?: number; // For hotel (1-5)
+  openHours?: string; // For wisata (e.g. "08:00 - 17:00")
+  highlights?: string[]; // For wisata & hotel
+  locationMapUrl?: string;
+
+  // Kost rooms
   rooms?: Array<{
     _id?: string;
     roomNumber: string;
@@ -31,12 +54,27 @@ export interface SelectedKost {
     facilities?: string[];
     images?: string[];
   }>;
+
+  // Hotel rooms
+  hotelRooms?: HotelRoomOption[];
+
+  // Wisata tickets
+  wisataTickets?: WisataTicketOption[];
+
+  bankAccount?: {
+    paymentType?: "bank" | "qris";
+    bankName: string;
+    accountNumber: string;
+    accountHolder: string;
+    qrisImage?: string;
+  };
   ownerId?: any;
 }
 
 export interface ActiveCustomerBooking {
   _id?: string;
   bookingCode: string;
+  categoryType?: LodgingCategoryType; // "kost" | "hotel" | "wisata"
   customerId?: string;
   customerName: string;
   customerPhone: string;
@@ -46,11 +84,15 @@ export interface ActiveCustomerBooking {
   kostAddress?: string;
   kostImage?: string;
   roomId?: string;
-  roomNumber: string;
+  roomNumber?: string;
   roomType?: string;
-  entryDate: string;
-  durationMonths: number;
-  monthlyPrice: number;
+  entryDate: string; // Or check-in date or visit date
+  checkOutDate?: string; // For hotel
+  durationMonths?: number; // For kost
+  durationNights?: number; // For hotel
+  ticketCount?: number; // For wisata
+  monthlyPrice?: number;
+  pricePerItem?: number;
   totalAmount: number;
   dpAmount: number;
   dpProofImage?: string;
@@ -60,6 +102,7 @@ export interface ActiveCustomerBooking {
   createdAt?: string;
   ownerPhone?: string;
   ownerName?: string;
+  eTicketBarcode?: string; // For wisata & hotel instant voucher
 }
 
 let selectedKost: SelectedKost | null = null;
