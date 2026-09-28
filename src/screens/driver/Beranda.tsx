@@ -657,7 +657,20 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     );
   };
 
+  // Derive ongoing active trip and available incoming orders
+  const isTripOngoing = (o: DriverOrder) => ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status);
+
+  // Active assigned order being driven/delivered by this driver
+  const activeOrder = orders.find((o) => isTripOngoing(o)) || null;
+
   const acceptRideFromHome = async (orderId: string) => {
+    if (activeOrder) {
+      Alert.alert(
+        "Perjalanan Aktif",
+        "Anda masih memiliki perjalanan aktif. Selesaikan perjalanan saat ini terlebih dahulu."
+      );
+      return;
+    }
     if (homeActionLock.current.has(orderId)) return;
     homeActionLock.current.add(orderId);
     setHomeActionOrderId(orderId);
@@ -713,12 +726,6 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       setHomeActionOrderId((current) => current === orderId ? null : current);
     }
   };
-
-  // Derive ongoing active trip and available incoming orders
-  const isTripOngoing = (o: DriverOrder) => ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status);
-
-  // Active assigned order being driven/delivered by this driver
-  const activeOrder = orders.find((o) => isTripOngoing(o)) || null;
 
   // Incoming available orders waiting for driver acceptance
   const incomingAvailableOrders = orders.filter((o) => {
@@ -825,6 +832,13 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 return true;
               }
               if (targetOrder?.type === "Kanyaah Ride") {
+                if (activeOrder) {
+                  Alert.alert(
+                    "Perjalanan Aktif",
+                    "Anda masih memiliki perjalanan aktif. Selesaikan perjalanan saat ini terlebih dahulu."
+                  );
+                  return false;
+                }
                 const res = await acceptRide(orderId, authAccount?.id || "");
                 if (!res.success) {
                   Alert.alert("Gagal", res.message || "Pesanan mungkin sudah diambil driver lain");

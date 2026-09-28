@@ -78,8 +78,8 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
 
 const SafeAreaViewWrapper: React.FC<React.PropsWithChildren> = ({ children }) => (
   <ResponsiveSafeAreaView style={authStyles.container}>
-    <View pointerEvents="none" style={styles.shapeTop} />
-    <View pointerEvents="none" style={styles.shapeBottom} />
+    <View style={[styles.shapeTop, { pointerEvents: "none" }]} />
+    <View style={[styles.shapeBottom, { pointerEvents: "none" }]} />
     {children}
   </ResponsiveSafeAreaView>
 );
