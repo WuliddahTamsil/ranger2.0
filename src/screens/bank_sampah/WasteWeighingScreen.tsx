@@ -47,12 +47,9 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
   const [availablePrices, setAvailablePrices] = useState<WasteCategoryPriceUI[]>([]);
   const [loadingPrices, setLoadingPrices] = useState(true);
   const [notes, setNotes] = useState("");
-  const [proofPhotoUrl, setProofPhotoUrl] = useState(
-    "https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=500"
-  );
+  const [proofPhotoUrl, setProofPhotoUrl] = useState<string>("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
-  const [showUrlInput, setShowUrlInput] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [successWeighedDeposit, setSuccessWeighedDeposit] = useState<WasteDepositUI | null>(null);
 
@@ -105,6 +102,8 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
 
     if (Array.isArray(selectedDeposit.weighingProofPhotos) && selectedDeposit.weighingProofPhotos.length > 0) {
       setProofPhotoUrl(selectedDeposit.weighingProofPhotos[0]);
+    } else {
+      setProofPhotoUrl("");
     }
 
     return () => {
@@ -136,7 +135,7 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
     }));
   };
 
-  // Image Upload Handlers
+  // Image Upload Handler (Gallery only)
   const handlePickFromGallery = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
@@ -167,44 +166,6 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
       }
     } catch (err: any) {
       Alert.alert("Galeri", err?.message || "Gagal membuka galeri foto.");
-    }
-  };
-
-  const handleTakeFromCamera = async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert("Izin Kamera", "Izin akses kamera diperlukan untuk mengambil foto bukti timbangan.");
-        return;
-      }
-
-      const res = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!res.canceled && res.assets?.[0]) {
-        const asset = res.assets[0];
-        setProofPhotoUrl(asset.uri);
-        setUploadingPhoto(true);
-        try {
-          const uploaded = await uploadFileToBackend(
-            asset.uri,
-            asset.fileName || `weighing-camera-${Date.now()}.jpg`,
-            asset.mimeType || "image/jpeg"
-          );
-          if (uploaded?.success && uploaded?.data?.url) {
-            setProofPhotoUrl(uploaded.data.url);
-          }
-        } catch (uploadErr) {
-          console.warn("Upload file to backend error, fallback to local uri:", uploadErr);
-        } finally {
-          setUploadingPhoto(false);
-        }
-      }
-    } catch (err: any) {
-      Alert.alert("Kamera", err?.message || "Gagal mengambil foto dari kamera.");
     }
   };
 
@@ -242,7 +203,7 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
 
       const payload = {
         categories: activeWeighedCats,
-        weighingProofPhotos: proofPhotoUrl ? [proofPhotoUrl] : [],
+        weighingProofPhotos: proofPhotoUrl && proofPhotoUrl.trim() ? [proofPhotoUrl.trim()] : [],
         weighingNotes: notes || "Ditimbang resmi oleh petugas Bank Sampah.",
       };
 
@@ -428,20 +389,11 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
                   <>
                     <TouchableOpacity
                       style={styles.btnPhotoChange}
-                      onPress={handleTakeFromCamera}
-                      activeOpacity={0.8}
-                    >
-                      <Camera size={13} color="#15803D" />
-                      <Text style={styles.btnPhotoChangeText}>Kamera</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.btnPhotoChange}
                       onPress={handlePickFromGallery}
                       activeOpacity={0.8}
                     >
                       <ImageIcon size={13} color="#15803D" />
-                      <Text style={styles.btnPhotoChangeText}>Galeri</Text>
+                      <Text style={styles.btnPhotoChangeText}>Ganti dari Galeri</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -461,54 +413,18 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
                 <UploadCloud size={24} color="#15803D" />
               </View>
               <Text style={styles.dropzoneTitle}>Unggah Foto Bukti Timbangan</Text>
-              <Text style={styles.dropzoneSub}>Ambil foto langsung timbangan atau pilih dari galeri</Text>
+              <Text style={styles.dropzoneSub}>Pilih foto bukti timbangan resmi dari galeri perangkat</Text>
 
-              <View style={styles.dropzoneBtnRow}>
-                <TouchableOpacity
-                  style={styles.btnPickCamera}
-                  onPress={handleTakeFromCamera}
-                  activeOpacity={0.85}
-                >
-                  <Camera size={15} color="#FFFFFF" />
-                  <Text style={styles.btnPickCameraText}>Buka Kamera</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.btnPickGallery}
-                  onPress={handlePickFromGallery}
-                  activeOpacity={0.85}
-                >
-                  <ImageIcon size={15} color="#15803D" />
-                  <Text style={styles.btnPickGalleryText}>Pilih Galeri</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.btnPickGalleryFull}
+                onPress={handlePickFromGallery}
+                activeOpacity={0.85}
+              >
+                <ImageIcon size={16} color="#FFFFFF" />
+                <Text style={styles.btnPickGalleryFullText}>Pilih Foto dari Galeri</Text>
+              </TouchableOpacity>
             </View>
           ) : null}
-
-          {/* Toggle manual URL input (only if not finished) */}
-          {!isFinished && (
-            <>
-              <TouchableOpacity
-                style={styles.btnToggleUrl}
-                onPress={() => setShowUrlInput(!showUrlInput)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.btnToggleUrlText}>
-                  {showUrlInput ? "- Sembunyikan Input Link URL" : "+ Input Link Gambar URL Manual"}
-                </Text>
-              </TouchableOpacity>
-
-              {showUrlInput && (
-                <TextInput
-                  style={styles.urlInput}
-                  value={proofPhotoUrl}
-                  onChangeText={setProofPhotoUrl}
-                  placeholder="https://link-foto-timbangan.jpg"
-                  placeholderTextColor="#94A3B8"
-                />
-              )}
-            </>
-          )}
         </View>
 
         {/* Officer Notes */}
@@ -1011,62 +927,21 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 12,
   },
-  dropzoneBtnRow: {
-    flexDirection: "row",
-    gap: 8,
+  btnPickGalleryFull: {
     width: "100%",
-  },
-  btnPickCamera: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 8,
     backgroundColor: "#15803D",
-    paddingVertical: 9,
-    borderRadius: 8,
+    paddingVertical: 11,
+    borderRadius: 10,
+    marginTop: 4,
   },
-  btnPickCameraText: {
-    fontSize: 11,
+  btnPickGalleryFullText: {
+    fontSize: 12,
     fontWeight: "800",
     color: "#FFFFFF",
-  },
-  btnPickGallery: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#86EFAC",
-    paddingVertical: 9,
-    borderRadius: 8,
-  },
-  btnPickGalleryText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#15803D",
-  },
-  btnToggleUrl: {
-    paddingVertical: 6,
-    alignItems: "center",
-  },
-  btnToggleUrlText: {
-    fontSize: 10.5,
-    fontWeight: "700",
-    color: "#64748B",
-  },
-  urlInput: {
-    fontSize: 12,
-    color: "#0F172A",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginTop: 4,
   },
   lightboxBackdrop: {
     flex: 1,

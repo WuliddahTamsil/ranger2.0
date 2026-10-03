@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const WasteDeposit = require("../models/WasteDeposit");
 const WasteBank = require("../models/WasteBank");
@@ -159,10 +160,22 @@ const createDeposit = async (req, res) => {
       req.io.emit("recycle:new_deposit", deposit);
     }
 
+    const populatedDeposit = {
+      ...deposit.toObject(),
+      bankSampahId: {
+        _id: bank._id,
+        name: bank.name,
+        address: bank.address,
+        phone: bank.phone,
+        photoUrl: bank.photoUrl,
+        rating: bank.rating,
+      },
+    };
+
     return res.status(201).json({
       success: true,
       message: "Permintaan setor sampah berhasil dikirim! Menunggu konfirmasi Bank Sampah.",
-      data: deposit,
+      data: populatedDeposit,
     });
   } catch (error) {
     console.error("createDeposit error:", error);
@@ -595,6 +608,60 @@ const disputeWeighing = async (req, res) => {
   }
 };
 
+/**
+ * 10. Customer / Bank Sampah: Cancel Deposit Request
+ * POST /api/waste/deposits/:id/cancel
+ */
+const cancelDeposit = async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    const isObjectId = mongoose.Types.ObjectId.isValid(rawId);
+    const filter = isObjectId ? { _id: rawId } : { depositCode: rawId };
+
+    const deposit = await WasteDeposit.findOne(filter);
+    if (!deposit) {
+      return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
+    }
+
+    if (["COMPLETED", "POINT_ISSUED", "CANCELLED", "REJECTED"].includes(deposit.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Setoran berstatus ${deposit.status} dan tidak dapat dibatalkan lagi.`,
+      });
+    }
+
+    const { reason } = req.body;
+    const actorId = req.authUser?._id || req.user?._id || deposit.customerId;
+    const actorRole = req.authUser?.role || "customer";
+
+    deposit.status = "CANCELLED";
+    deposit.cancelReason = reason || "Dibatalkan oleh customer.";
+    deposit.statusHistory.push({
+      status: "CANCELLED",
+      actorId,
+      actorRole,
+      note: `Permohonan setoran dibatalkan: ${deposit.cancelReason}`,
+      createdAt: new Date(),
+    });
+
+    await deposit.save();
+
+    emitToDepositRoom(req.io, deposit._id, "recycle:cancelled", deposit);
+    if (req.io) {
+      req.io.emit("recycle:deposit_status", deposit);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Permohonan setoran berhasil dibatalkan.",
+      data: deposit,
+    });
+  } catch (error) {
+    console.error("cancelDeposit error:", error);
+    return res.status(500).json({ success: false, message: "Gagal membatalkan setoran." });
+  }
+};
+
 module.exports = {
   createDeposit,
   getCustomerDeposits,
@@ -605,4 +672,5 @@ module.exports = {
   weighDeposit,
   confirmWeighing,
   disputeWeighing,
+  cancelDeposit,
 };

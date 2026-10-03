@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -36,6 +36,7 @@ import {
   Coins,
   History,
   Info,
+  Search,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { AuthAccount } from "../../auth/authTypes";
@@ -68,14 +69,36 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
   const [userAddress, setUserAddress] = useState(initialAddr);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number }>({ lat: -7.145, lng: 107.789 });
   const [addressModalVisible, setAddressModalVisible] = useState(false);
-  const [inputAddress, setInputAddress] = useState(initialAddr);
+  const [searchLocationQuery, setSearchLocationQuery] = useState("");
 
-  const presetLocations = [
-    { label: "Kamojang (Samarang, Garut)", address: "Jl. Kamojang No. 8, Samarang, Garut", lat: -7.145, lng: 107.789 },
-    { label: "Garut Kota", address: "Jl. Cimanuk No. 42, Garut Kota", lat: -7.218, lng: 107.902 },
-    { label: "Coblong / Dago (Bandung)", address: "Jl. Dago No. 120, Coblong, Bandung", lat: -6.885, lng: 107.614 },
-    { label: "Sumur Bandung", address: "Jl. Merdeka No. 64, Sumur Bandung", lat: -6.912, lng: 107.610 },
+  const baseLocations = [
+    { label: "Pakuan (Bogor)", address: "Pakuan, Bogor, Jawa Barat", lat: -6.5976, lng: 106.8062, bankName: "Bank Sampah Pakuan" },
+    { label: "Kamojang (Samarang, Garut)", address: "Jl. Kamojang No. 8, Samarang, Garut", lat: -7.145, lng: 107.789, bankName: "Bank Sampah Induk Kamojang Asri" },
+    { label: "Garut Kota", address: "Jl. Cimanuk No. 42, Garut Kota", lat: -7.218, lng: 107.902, bankName: "Bank Sampah Berkah Mandiri Garut" },
+    { label: "Coblong / Dago (Bandung)", address: "Jl. Dago No. 120, Coblong, Bandung", lat: -6.885, lng: 107.614, bankName: "Bank Sampah Hijau Lestari Bandung" },
+    { label: "Sumur Bandung", address: "Jl. Merdeka No. 64, Sumur Bandung", lat: -6.912, lng: 107.610, bankName: "Bank Sampah Merdeka Bersih" },
   ];
+
+  // Dynamically include any other registered bank addresses
+  const allServiceLocations = [...baseLocations];
+  nearbyBanks.forEach((b) => {
+    if (b.address && !allServiceLocations.some((l) => l.address.toLowerCase().includes(b.address.toLowerCase()) || b.address.toLowerCase().includes(l.address.toLowerCase()))) {
+      allServiceLocations.push({
+        label: `${b.name} (${b.address.split(",")[0] || b.address})`,
+        address: b.address,
+        lat: b.latitude,
+        lng: b.longitude,
+        bankName: b.name,
+      });
+    }
+  });
+
+  const filteredPresetLocations = allServiceLocations.filter(
+    (p) =>
+      p.label.toLowerCase().includes(searchLocationQuery.toLowerCase()) ||
+      p.address.toLowerCase().includes(searchLocationQuery.toLowerCase()) ||
+      (p.bankName && p.bankName.toLowerCase().includes(searchLocationQuery.toLowerCase()))
+  );
 
   const loadData = async (coords = userCoords) => {
     try {
@@ -102,7 +125,27 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
     loadData(userCoords);
     refreshRecycleWallet().catch(() => {});
     refreshPointWallet().catch(() => {});
-  }, [authAccount?.id]);
+
+    // Real-time sync on focus or every 3 seconds to catch bank operational updates instantly
+    const onFocus = () => {
+      loadData(userCoords);
+    };
+
+    const interval = setInterval(() => {
+      loadData(userCoords);
+    }, 3000);
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", onFocus);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", onFocus);
+      }
+    };
+  }, [authAccount?.id, userCoords.lat, userCoords.lng]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -142,7 +185,31 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
     (d) => !["COMPLETED", "CANCELLED", "REJECTED"].includes(d.status)
   );
 
-  const nearestBank = nearbyBanks.length > 0 ? nearbyBanks[0] : null;
+  const nearestBank = useMemo(() => {
+    if (nearbyBanks.length === 0) return null;
+    const lower = (userAddress || "").toLowerCase();
+    const exactMatch = nearbyBanks.find((b) => {
+      const bAddr = (b.address || "").toLowerCase();
+      const bName = (b.name || "").toLowerCase();
+      if (lower.includes("pakuan") || lower.includes("bogor")) {
+        return bName.includes("pakuan") || bAddr.includes("pakuan") || bAddr.includes("bogor");
+      }
+      if (lower.includes("kamojang") || lower.includes("samarang")) {
+        return bName.includes("kamojang") || bAddr.includes("kamojang") || bAddr.includes("samarang");
+      }
+      if (lower.includes("cimanuk") || lower.includes("garut kota")) {
+        return bName.includes("berkah") || bAddr.includes("cimanuk") || bAddr.includes("garut kota");
+      }
+      if (lower.includes("dago") || lower.includes("coblong")) {
+        return bName.includes("hijau") || bAddr.includes("dago") || bAddr.includes("coblong");
+      }
+      if (lower.includes("merdeka") || lower.includes("sumur bandung")) {
+        return bName.includes("merdeka") || bAddr.includes("merdeka") || bAddr.includes("sumur bandung");
+      }
+      return bAddr.includes(lower) || lower.includes(bAddr);
+    });
+    return exactMatch || nearbyBanks[0];
+  }, [nearbyBanks, userAddress]);
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -177,7 +244,7 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
       <TouchableOpacity
         style={styles.locationBar}
         onPress={() => {
-          setInputAddress(userAddress);
+          setSearchLocationQuery("");
           setAddressModalVisible(true);
         }}
         activeOpacity={0.8}
@@ -507,66 +574,97 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
           visible={addressModalVisible}
           transparent
           animationType="slide"
-          onRequestClose={() => setAddressModalVisible(false)}
+          onRequestClose={() => {
+            setAddressModalVisible(false);
+            setSearchLocationQuery("");
+          }}
         >
           <View style={styles.modalBackdrop}>
             <View style={styles.modalSheet}>
               <View style={styles.modalHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalTitle}>Pilih Lokasi Penyetoran</Text>
-                  <Text style={styles.modalSub}>Sistem akan menghubungkan dengan Bank Sampah terdekat</Text>
+                  <Text style={styles.modalSub}>
+                    Pilih wilayah layanan aktif mitra Bank Sampah resmi
+                  </Text>
                 </View>
                 <TouchableOpacity
                   style={styles.modalCloseBtn}
-                  onPress={() => setAddressModalVisible(false)}
+                  onPress={() => {
+                    setAddressModalVisible(false);
+                    setSearchLocationQuery("");
+                  }}
                 >
                   <X size={18} color="#6B7280" />
                 </TouchableOpacity>
               </View>
 
-              {/* Custom Input */}
-              <View style={styles.inputAddressBox}>
-                <MapPin size={18} color="#15803D" style={{ marginTop: 2 }} />
+              {/* Search Available Location */}
+              <View style={styles.searchLocationBox}>
+                <Search size={16} color="#15803D" />
                 <TextInput
-                  style={styles.addressInput}
-                  placeholder="Ketik alamat lengkap atau patokan..."
-                  placeholderTextColor="#9CA3AF"
-                  value={inputAddress}
-                  onChangeText={setInputAddress}
-                  multiline
+                  style={styles.searchLocationInput}
+                  placeholder="Cari wilayah layanan (Pakuan, Garut, Dago...)"
+                  placeholderTextColor="#94A3B8"
+                  value={searchLocationQuery}
+                  onChangeText={setSearchLocationQuery}
                 />
+                {searchLocationQuery ? (
+                  <TouchableOpacity onPress={() => setSearchLocationQuery("")}>
+                    <X size={14} color="#94A3B8" />
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
-              <TouchableOpacity
-                style={styles.btnSaveCustomAddress}
-                onPress={() => handleSaveAddress(inputAddress)}
-                activeOpacity={0.85}
-              >
-                <Check size={16} color="#FFFFFF" />
-                <Text style={styles.btnSaveCustomAddressText}>Gunakan Alamat Ini</Text>
-              </TouchableOpacity>
+              <Text style={styles.presetSectionLabel}>
+                Daftar Wilayah Layanan ({filteredPresetLocations.length}):
+              </Text>
 
-              <Text style={styles.presetSectionLabel}>Atau Pilih Preset Lokasi:</Text>
-              <View style={styles.presetList}>
-                {presetLocations.map((p, idx) => {
-                  const isSelected = userAddress.toLowerCase().includes(p.label.toLowerCase()) || userAddress === p.address;
-                  return (
-                    <TouchableOpacity
-                      key={`preset-${idx}`}
-                      style={[styles.presetItem, isSelected && styles.presetItemActive]}
-                      onPress={() => handleSaveAddress(p.address, { lat: p.lat, lng: p.lng })}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.presetDot, isSelected && styles.presetDotActive]} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.presetLabel, isSelected && styles.presetLabelActive]}>{p.label}</Text>
-                        <Text style={styles.presetAddressText} numberOfLines={1}>{p.address}</Text>
-                      </View>
-                      {isSelected && <CheckCircle2 size={16} color="#15803D" />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.presetList}>
+                  {filteredPresetLocations.length === 0 ? (
+                    <View style={styles.emptyLocationBox}>
+                      <MapPin size={22} color="#94A3B8" />
+                      <Text style={styles.emptyLocationTitle}>Wilayah Tidak Ditemukan</Text>
+                      <Text style={styles.emptyLocationSub}>
+                        Penyetoran hanya dapat dilakukan pada wilayah layanan mitra yang tersedia.
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredPresetLocations.map((p, idx) => {
+                      const isSelected =
+                        userAddress.toLowerCase().includes(p.label.toLowerCase()) ||
+                        userAddress === p.address;
+                      return (
+                        <TouchableOpacity
+                          key={`preset-${idx}`}
+                          style={[styles.presetItem, isSelected && styles.presetItemActive]}
+                          onPress={() => {
+                            handleSaveAddress(p.address, { lat: p.lat, lng: p.lng });
+                            setSearchLocationQuery("");
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[styles.presetDot, isSelected && styles.presetDotActive]} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.presetLabel, isSelected && styles.presetLabelActive]}>
+                              {p.label}
+                            </Text>
+                            <Text style={styles.presetAddressText} numberOfLines={1}>
+                              {p.address}
+                            </Text>
+                          </View>
+                          {isSelected ? (
+                            <CheckCircle2 size={16} color="#15803D" />
+                          ) : (
+                            <ChevronRight size={14} color="#CBD5E1" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </View>
+              </ScrollView>
             </View>
           </View>
         </Modal>
@@ -1329,38 +1427,45 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  inputAddressBox: {
+  searchLocationBox: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1.5,
-    borderColor: "#15803D",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 14,
     gap: 8,
   },
-  addressInput: {
+  searchLocationInput: {
     flex: 1,
     fontSize: 13,
     color: "#0F172A",
-    minHeight: 48,
-    textAlignVertical: "top",
+    padding: 0,
   },
-  btnSaveCustomAddress: {
-    flexDirection: "row",
+  emptyLocationBox: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#15803D",
-    paddingVertical: 12,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    backgroundColor: "#F8FAFC",
     borderRadius: 10,
-    gap: 6,
-    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  btnSaveCustomAddressText: {
+  emptyLocationTitle: {
     fontSize: 13,
-    fontWeight: "800",
-    color: "#FFFFFF",
+    fontWeight: "700",
+    color: "#475569",
+    marginTop: 6,
+  },
+  emptyLocationSub: {
+    fontSize: 11,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginTop: 2,
   },
   presetSectionLabel: {
     fontSize: 12,

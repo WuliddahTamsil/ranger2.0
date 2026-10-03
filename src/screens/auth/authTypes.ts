@@ -6,7 +6,8 @@ export type AuthRegistrationRole =
   | "pemilik_marketplace"
   | "pemilik_catering"
   | "pemilik_laundry"
-  | "pemilik_kos";
+  | "pemilik_kos"
+  | "bank_sampah";
 
 export type AuthAccountStatus = "pending" | "verified" | "rejected";
 export type AuthDocumentStatus = "pending" | "verified" | "rejected";
@@ -90,4 +91,5 @@ export const ROLE_LABELS: Record<AuthRegistrationRole, string> = {
   pemilik_catering: "Pemilik Catering",
   pemilik_laundry: "Pemilik Laundry",
   pemilik_kos: "Pemilik Kos",
+  bank_sampah: "Pengelola Bank Sampah",
 };

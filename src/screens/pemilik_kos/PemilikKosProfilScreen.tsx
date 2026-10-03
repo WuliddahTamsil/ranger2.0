@@ -35,6 +35,9 @@ import {
   Check,
 } from "lucide-react-native";
 
+import { fetchKostProperty, updateKostProperty } from "../../services/kostService";
+import { updateUserProfile } from "../../services/api";
+
 interface PemilikKosProfilProps extends Nav {
   authAccount?: AuthAccount | null;
 }
@@ -45,7 +48,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
   // User Profile State matching image
   const [name, setName] = useState(authAccount?.name || "");
   const [phone, setPhone] = useState(authAccount?.phone || "");
-  const [badgeText, setBadgeText] = useState(authAccount?.roleData.businessName || "Usaha Kos");
+  const [badgeText, setBadgeText] = useState(authAccount?.roleData.businessName || "Usaha Homestay");
   const [avatarUri, setAvatarUri] = useState<string | null>(authAccount?.profilePhoto || null);
 
   // Modals state
@@ -55,21 +58,68 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
   const [editName, setEditName] = useState(name);
   const [editPhone, setEditPhone] = useState(phone);
   const [alamatKos, setAlamatKos] = useState(authAccount?.roleData.businessAddress || authAccount?.address || "");
+  const [latitude, setLatitude] = useState("-7.2278");
+  const [longitude, setLongitude] = useState("107.9087");
   const [metodePembayaran, setMetodePembayaran] = useState("Belum diatur");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!authAccount) return;
     setName(authAccount.name);
     setPhone(authAccount.phone);
-    setBadgeText(authAccount.roleData.businessName || "Usaha Kos");
-    setAlamatKos(authAccount.roleData.businessAddress || authAccount.address);
+    setBadgeText(authAccount.roleData.businessName || "Usaha Homestay");
+    setAlamatKos(authAccount.roleData.businessAddress || authAccount.address || "");
     setAvatarUri(authAccount.profilePhoto || null);
+    if (authAccount.roleData.latitude) setLatitude(String(authAccount.roleData.latitude));
+    if (authAccount.roleData.longitude) setLongitude(String(authAccount.roleData.longitude));
+
+    // Also fetch live property from MongoDB
+    fetchKostProperty(authAccount.email || authAccount.id).then((prop) => {
+      if (prop) {
+        if (prop.name) setBadgeText(prop.name);
+        if (prop.address) setAlamatKos(prop.address);
+        if (prop.latitude) setLatitude(String(prop.latitude));
+        if (prop.longitude) setLongitude(String(prop.longitude));
+      }
+    });
   }, [authAccount]);
 
-  const handleSaveProfile = () => {
-    setName(editName);
-    setPhone(editPhone);
-    setActiveModal(null);
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      setName(editName);
+      setPhone(editPhone);
+      if (authAccount?.id) {
+        await updateUserProfile(authAccount.id, { name: editName, phone: editPhone });
+      }
+      Alert.alert("Sukses", "Profil pemilik berhasil diperbarui!");
+      setActiveModal(null);
+    } catch (err: any) {
+      Alert.alert("Info", "Profil diperbarui secara lokal.");
+      setActiveModal(null);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveAddressAndGps = async () => {
+    setIsSaving(true);
+    try {
+      const ownerId = authAccount?.email || authAccount?.id || "";
+      if (ownerId) {
+        await updateKostProperty(ownerId, {
+          address: alamatKos,
+          latitude: Number(latitude) || -7.2278,
+          longitude: Number(longitude) || 107.9087,
+        });
+      }
+      Alert.alert("Sukses", "Alamat dan koordinat GPS properti berhasil disimpan ke database!");
+      setActiveModal(null);
+    } catch (err: any) {
+      Alert.alert("Gagal", "Tidak dapat menyimpan ke server: " + (err.message || ""));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleLogout = () => {
@@ -311,28 +361,62 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
         </View>
       </Modal>
 
-      {/* MODAL 2: Alamat Kos */}
+      {/* MODAL 2: Alamat & Lokasi GPS Properti */}
       <Modal visible={activeModal === "alamat"} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.dragHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Alamat Kos</Text>
+              <Text style={styles.modalTitle}>Alamat & Titik GPS Properti</Text>
               <TouchableOpacity onPress={() => setActiveModal(null)}>
                 <X size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Alamat Lengkap Kos</Text>
+            <Text style={styles.label}>Alamat Lengkap Properti</Text>
             <TextInput
-              style={[styles.input, { height: 80, paddingTop: 10 }]}
+              style={[styles.input, { height: 75, paddingTop: 10 }]}
               value={alamatKos}
               onChangeText={setAlamatKos}
+              placeholder="Jalan, Nomor, RT/RW, Kelurahan, Garut"
               multiline
             />
 
-            <TouchableOpacity style={styles.btnPrimary} onPress={() => setActiveModal(null)} activeOpacity={0.85}>
-              <Text style={styles.btnPrimaryText}>Simpan Alamat</Text>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Latitude (GPS)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={latitude}
+                  onChangeText={setLatitude}
+                  placeholder="-7.2278"
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Longitude (GPS)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={longitude}
+                  onChangeText={setLongitude}
+                  placeholder="107.9087"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+            <Text style={{ fontSize: 11, color: "#6B7280", marginTop: 4, marginBottom: 14 }}>
+              💡 Koordinat GPS memastikan jarak km dan rute di peta aplikasi customer akurat.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.btnPrimary}
+              onPress={handleSaveAddressAndGps}
+              disabled={isSaving}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnPrimaryText}>
+                {isSaving ? "Menyimpan ke Server..." : "Simpan Alamat & Koordinat GPS"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

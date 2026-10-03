@@ -17,6 +17,7 @@ const {
   weighDeposit,
   confirmWeighing,
   disputeWeighing,
+  cancelDeposit,
 } = require("../controllers/wasteDepositController");
 const { requireAuth, optionalAuth } = require("../middleware/authMiddleware");
 
@@ -57,5 +58,6 @@ router.post("/deposits/:id/assign-driver", optionalAuth, assignDriver);
 router.post("/deposits/:id/weigh", optionalAuth, weighDeposit);
 router.post("/deposits/:id/confirm", optionalAuth, confirmWeighing);
 router.post("/deposits/:id/complaint", optionalAuth, disputeWeighing);
+router.post("/deposits/:id/cancel", optionalAuth, cancelDeposit);
 
 module.exports = router;

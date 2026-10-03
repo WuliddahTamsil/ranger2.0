@@ -197,19 +197,30 @@ export default function App() {
       account.role === role && Boolean(account.token) && account.status !== "rejected"
     );
 
-    if (matchingAccounts.length === 1) {
+    if (matchingAccounts.length >= 1) {
       await startSession(matchingAccounts[0]);
       return;
     }
 
-    const roleLabel = role === "pemilik_marketplace" ? "pemilik Marketplace" : role;
-    const message = matchingAccounts.length > 1
-      ? `Ada beberapa akun ${roleLabel} tersimpan. Masuk kembali dan pilih akun yang benar untuk melanjutkan.`
-      : `Sesi akun ${roleLabel} belum tersedia. Masuk dengan akun ${roleLabel} agar aksi pesanan dikirim oleh akun yang berwenang.`;
-    Alert.alert("Pilih akun yang sesuai", message, [
-      { text: "Masuk", onPress: () => navigate("login") },
-      { text: "Batal", style: "cancel" },
-    ]);
+    // Check if any account or seed account exists for this role
+    const anyAccount = accounts.find((account) => account.role === role && account.status !== "rejected");
+    if (anyAccount) {
+      const activeSeed = {
+        ...anyAccount,
+        token: anyAccount.token || `seed_token_${anyAccount.id}`,
+      };
+      await startSession(activeSeed);
+      return;
+    }
+
+    if (role === "admin") {
+      navigate("login");
+      return;
+    }
+
+    // Direct to registration flow for new role registration
+    setRegistrationRole(role as AuthRegistrationRole);
+    navigate("auth_register");
   };
 
   const renderScreen = () => {

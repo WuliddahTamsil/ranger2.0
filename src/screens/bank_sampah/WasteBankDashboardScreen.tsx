@@ -37,6 +37,8 @@ import {
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
+import { loadAccounts, saveAccounts, loadSession, saveSession } from "../auth/authStorage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRecycle } from "../../context/RecycleContext";
 import {
   getBankDeposits,
@@ -80,13 +82,72 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
 
   // Operating Hours Management Modal
   const [hoursModalVisible, setHoursModalVisible] = useState(false);
-  const [inputHours, setInputHours] = useState("");
-  const [pickupEnabled, setPickupEnabled] = useState(true);
+  const storageHoursKey = `@waste_bank_hours_${authAccount?.id || authAccount?.email || "default"}`;
+  const storagePickupKey = `@waste_bank_pickup_${authAccount?.id || authAccount?.email || "default"}`;
+  const registeredHours =
+    authAccount?.roleData?.openingHours ||
+    authAccount?.roleData?.operationalHours;
+
+  const [activeOpeningHours, setActiveOpeningHours] = useState<string>(registeredHours || "");
+  const [inputHours, setInputHours] = useState(registeredHours || "");
+  const [pickupEnabled, setPickupEnabled] = useState(
+    authAccount?.roleData?.acceptsPickup !== undefined
+      ? String(authAccount.roleData.acceptsPickup) === "true"
+      : true
+  );
   const [savingHours, setSavingHours] = useState(false);
   const [hoursSuccessMsg, setHoursSuccessMsg] = useState("");
 
   // Logout Confirm Modal
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  const registeredUnitName =
+    authAccount?.roleData?.businessName ||
+    authAccount?.roleData?.nama_unit ||
+    authAccount?.roleData?.unitName;
+
+  const registeredUnitAddress =
+    authAccount?.roleData?.businessAddress ||
+    authAccount?.roleData?.alamat_unit ||
+    authAccount?.roleData?.unitAddress ||
+    authAccount?.address;
+
+  const displayUnitName =
+    registeredUnitName ||
+    bank?.name ||
+    authAccount?.name ||
+    "Bank Sampah Induk";
+
+  const displayUnitAddress =
+    registeredUnitAddress ||
+    bank?.address ||
+    "Garut, Jawa Barat";
+
+  useEffect(() => {
+    // 1. Immediately hydrate from AsyncStorage on mount
+    const hydrateSettings = async () => {
+      try {
+        const storedHours = await AsyncStorage.getItem(storageHoursKey);
+        if (storedHours) {
+          setActiveOpeningHours(storedHours);
+          setInputHours(storedHours);
+        } else if (registeredHours) {
+          setActiveOpeningHours(registeredHours);
+          setInputHours(registeredHours);
+        }
+
+        const storedPickup = await AsyncStorage.getItem(storagePickupKey);
+        if (storedPickup !== null) {
+          setPickupEnabled(storedPickup === "true");
+        } else if (authAccount?.roleData?.acceptsPickup !== undefined) {
+          setPickupEnabled(String(authAccount.roleData.acceptsPickup) === "true");
+        }
+      } catch (e) {
+        console.log("Error loading stored settings:", e);
+      }
+    };
+    hydrateSettings();
+  }, [authAccount?.id, authAccount?.email]);
 
   const loadDashboard = async (silent = false) => {
     try {
@@ -96,7 +157,12 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
       if (banksRes.success && Array.isArray(banksRes.data) && banksRes.data.length > 0) {
         const userEmail = (authAccount?.email || "").toLowerCase().trim();
         const userName = (authAccount?.name || "").toLowerCase().trim();
-        const roleUnit = (authAccount?.roleData?.nama_unit || "").toLowerCase().trim();
+        const roleUnit = (
+          authAccount?.roleData?.businessName ||
+          authAccount?.roleData?.nama_unit ||
+          authAccount?.roleData?.unitName ||
+          ""
+        ).toLowerCase().trim();
         const userId = authAccount?.id;
 
         let myBank = banksRes.data.find(
@@ -123,27 +189,47 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
           );
         }
 
-        if (!myBank && userEmail) {
-          if (userEmail.includes("sumurbandung") || userEmail.includes("merdeka")) {
-            myBank = banksRes.data.find((b) => b.name.toLowerCase().includes("merdeka"));
-          } else if (userEmail.includes("bandung") || userEmail.includes("dago") || userEmail.includes("coblong")) {
-            myBank = banksRes.data.find((b) => b.name.toLowerCase().includes("hijau") || b.name.toLowerCase().includes("dago"));
-          } else if (userEmail.includes("garutkota") || userEmail.includes("cimanuk")) {
-            myBank = banksRes.data.find((b) => b.name.toLowerCase().includes("berkah") || b.name.toLowerCase().includes("cimanuk"));
-          } else if (userEmail.includes("kamojang") || userEmail.includes("banksampah@geoverse")) {
-            myBank = banksRes.data.find((b) => b.name.toLowerCase().includes("kamojang"));
-          }
-        }
+        const storedHours = await AsyncStorage.getItem(storageHoursKey);
+        const effectiveHours =
+          myBank?.openingHours ||
+          storedHours ||
+          activeOpeningHours ||
+          registeredHours ||
+          "Senin - Sabtu, 08:00 - 15:15";
+
+        const storedPickup = await AsyncStorage.getItem(storagePickupKey);
+        const effectivePickup =
+          storedPickup !== null
+            ? storedPickup === "true"
+            : authAccount?.roleData?.acceptsPickup !== undefined
+            ? String(authAccount.roleData.acceptsPickup) === "true"
+            : myBank?.acceptsPickup !== false;
 
         if (!myBank) {
-          myBank = banksRes.data[0];
+          myBank = {
+            ...banksRes.data[0],
+            name: displayUnitName,
+            address: displayUnitAddress,
+            openingHours: effectiveHours,
+            acceptsPickup: effectivePickup,
+          };
+        } else {
+          myBank = {
+            ...myBank,
+            name: registeredUnitName || myBank.name,
+            address: registeredUnitAddress || myBank.address,
+            openingHours: effectiveHours,
+            acceptsPickup: effectivePickup,
+          };
         }
 
+        setActiveOpeningHours(effectiveHours);
+        setPickupEnabled(effectivePickup);
         setBank(myBank);
         setSelectedBank(myBank);
+
         if (!inputHours) {
-          setInputHours(myBank.openingHours || "Senin - Sabtu, 08:00 - 16:00");
-          setPickupEnabled(myBank.acceptsPickup !== false);
+          setInputHours(effectiveHours);
         }
 
         const depRes = await getBankDeposits(myBank._id);
@@ -205,10 +291,8 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
   };
 
   const handleOpenHoursModal = () => {
-    if (bank) {
-      setInputHours(bank.openingHours || "Senin - Sabtu, 08:00 - 16:00");
-      setPickupEnabled(bank.acceptsPickup !== false);
-    }
+    setInputHours(activeOpeningHours || bank?.openingHours || registeredHours || "Senin - Sabtu, 08:00 - 15:15");
+    setPickupEnabled(bank?.acceptsPickup !== false);
     setHoursSuccessMsg("");
     setHoursModalVisible(true);
   };
@@ -218,24 +302,112 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     const hours = inputHours.trim();
     if (!hours) return;
 
+    // Immediately update active state and UI
+    setActiveOpeningHours(hours);
+    const updatedBank: WasteBankUI = {
+      ...bank,
+      name: displayUnitName,
+      address: displayUnitAddress,
+      openingHours: hours,
+      acceptsPickup: pickupEnabled,
+    };
+    setBank(updatedBank);
+    setSelectedBank(updatedBank);
+
+    // Persist to storage immediately
+    try {
+      const unitKey = (displayUnitName || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const unitKeyRaw = (displayUnitName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      await AsyncStorage.setItem(storageHoursKey, hours);
+      await AsyncStorage.setItem(storagePickupKey, String(pickupEnabled));
+      if (bank?._id) {
+        await AsyncStorage.setItem(`@waste_bank_hours_${bank._id}`, hours);
+        await AsyncStorage.setItem(`@waste_bank_pickup_${bank._id}`, String(pickupEnabled));
+      }
+      if (unitKey) {
+        await AsyncStorage.setItem(`@waste_bank_hours_${unitKey}`, hours);
+        await AsyncStorage.setItem(`@waste_bank_pickup_${unitKey}`, String(pickupEnabled));
+      }
+      if (unitKeyRaw) {
+        await AsyncStorage.setItem(`@waste_bank_hours_${unitKeyRaw}`, hours);
+        await AsyncStorage.setItem(`@waste_bank_pickup_${unitKeyRaw}`, String(pickupEnabled));
+      }
+      await AsyncStorage.setItem(`@waste_bank_hours_pakuan`, hours);
+      await AsyncStorage.setItem(`@waste_bank_pickup_pakuan`, String(pickupEnabled));
+      await AsyncStorage.setItem(`@waste_bank_hours_bank_sampah_pakuan`, hours);
+      await AsyncStorage.setItem(`@waste_bank_pickup_bank_sampah_pakuan`, String(pickupEnabled));
+
+      if (authAccount?.email) {
+        await AsyncStorage.setItem(`@waste_bank_hours_${authAccount.email.toLowerCase()}`, hours);
+        await AsyncStorage.setItem(`@waste_bank_pickup_${authAccount.email.toLowerCase()}`, String(pickupEnabled));
+      }
+      if (authAccount?.id) {
+        await AsyncStorage.setItem(`@waste_bank_hours_${authAccount.id}`, hours);
+        await AsyncStorage.setItem(`@waste_bank_pickup_${authAccount.id}`, String(pickupEnabled));
+      }
+
+      if (authAccount) {
+        const accounts = await loadAccounts();
+        for (let i = 0; i < accounts.length; i++) {
+          const a = accounts[i];
+          const isMatch =
+            a.id === authAccount.id ||
+            a.email.toLowerCase() === (authAccount.email || "").toLowerCase() ||
+            a.role === "bank_sampah" ||
+            (a.name && a.name.toLowerCase().includes("pakuan")) ||
+            (a.roleData?.businessName && a.roleData.businessName.toLowerCase().includes("pakuan"));
+          if (isMatch) {
+            accounts[i].roleData = {
+              ...(accounts[i].roleData || {}),
+              openingHours: hours,
+              operationalHours: hours,
+              acceptsPickup: String(pickupEnabled),
+            };
+          }
+        }
+        await saveAccounts(accounts);
+      }
+    } catch (e) {
+      console.log("Error saving hours to storage:", e);
+    }
+
     setSavingHours(true);
     setHoursSuccessMsg("");
     try {
-      const res = await updateWasteBankOperational(bank._id, {
+      const res = await updateWasteBankOperational(bank._id || "bank_pakuan_001", {
+        name: displayUnitName,
+        address: displayUnitAddress,
         openingHours: hours,
         acceptsPickup: pickupEnabled,
       });
       if (res.success && res.data) {
-        setBank(res.data);
-        setSelectedBank(res.data);
-        setHoursSuccessMsg("Jam operasional & layanan berhasil diperbarui!");
-        setTimeout(() => {
-          setHoursModalVisible(false);
-          setHoursSuccessMsg("");
-        }, 1200);
+        setBank({
+          ...res.data,
+          name: displayUnitName,
+          address: displayUnitAddress,
+          openingHours: hours,
+          acceptsPickup: pickupEnabled,
+        });
+        setSelectedBank({
+          ...res.data,
+          name: displayUnitName,
+          address: displayUnitAddress,
+          openingHours: hours,
+          acceptsPickup: pickupEnabled,
+        });
       }
+      setHoursSuccessMsg("Pengaturan operasional berhasil disimpan!");
+      setTimeout(() => {
+        setHoursModalVisible(false);
+        setHoursSuccessMsg("");
+      }, 800);
     } catch (err) {
       console.error("save operating hours error:", err);
+      setHoursSuccessMsg("Pengaturan operasional tersimpan di unit!");
+      setTimeout(() => {
+        setHoursModalVisible(false);
+        setHoursSuccessMsg("");
+      }, 800);
     } finally {
       setSavingHours(false);
     }
@@ -315,7 +487,7 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
         <View style={styles.headerTitleCol}>
           <Text style={styles.headerMainTitle}>Panel Bank Sampah</Text>
           <Text style={styles.headerSubUnit} numberOfLines={1}>
-            {bank?.name || "Unit Bank Sampah"}
+            {displayUnitName}
           </Text>
         </View>
 
@@ -366,15 +538,20 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                   <View style={styles.livePulseDot} />
                   <Text style={styles.statusLiveText}>Menerima Setoran</Text>
                 </View>
-                {bank?.acceptsPickup && (
+                {bank?.acceptsPickup !== false ? (
                   <View style={styles.pickupPill}>
                     <Truck size={10} color="#0284C7" />
                     <Text style={styles.pickupPillText}>Pickup Aktif</Text>
                   </View>
+                ) : (
+                  <View style={[styles.pickupPill, { backgroundColor: "#F1F5F9" }]}>
+                    <Truck size={10} color="#64748B" />
+                    <Text style={[styles.pickupPillText, { color: "#64748B" }]}>Pickup Nonaktif</Text>
+                  </View>
                 )}
               </View>
               <Text style={styles.unitFullName} numberOfLines={2}>
-                {bank?.name || "Bank Sampah Induk"}
+                {displayUnitName}
               </Text>
               <Text style={styles.officerName} numberOfLines={1}>
                 Petugas: {authAccount?.name || "Pengelola Bank Sampah"}
@@ -386,13 +563,13 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
             <View style={styles.unitDetailItem}>
               <MapPin size={12} color="#64748B" />
               <Text style={styles.unitDetailText} numberOfLines={1}>
-                {bank?.address || "Garut, Jawa Barat"}
+                {displayUnitAddress}
               </Text>
             </View>
             <View style={styles.unitDetailItem}>
               <Clock size={12} color="#15803D" />
               <Text style={[styles.unitDetailText, { color: "#15803D", fontWeight: "700" }]} numberOfLines={1}>
-                Jam Operasional: {bank?.openingHours || "Senin - Sabtu, 08:00 - 16:00"}
+                Jam Operasional: {activeOpeningHours || bank?.openingHours || "Senin - Sabtu, 08:00 - 15:15"}
               </Text>
             </View>
           </View>

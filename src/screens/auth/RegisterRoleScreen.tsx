@@ -1,7 +1,7 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { ArrowLeft, Bike, Building2, ChevronRight, Coffee, ShieldCheck, ShoppingBag, UserRound, WashingMachine } from "lucide-react-native";
+import { ArrowLeft, Bike, Building2, ChevronRight, Coffee, Scale, ShieldCheck, ShoppingBag, UserRound, WashingMachine } from "lucide-react-native";
 import * as Google from "expo-auth-session/providers/google";
 import { makeRedirectUri } from "expo-auth-session";
 import { Nav } from "../../types";
@@ -23,7 +23,8 @@ const options: Array<{ role: AuthRegistrationRole; description: string; icon: Re
   { role: "pemilik_marketplace", description: "Jual produk UMKM dan kelola toko online.", icon: ShoppingBag, color: "#059669" },
   { role: "pemilik_catering", description: "Terima pesanan catering dan kelola menu usaha.", icon: Coffee, color: "#D97706" },
   { role: "pemilik_laundry", description: "Kelola order laundry dan status pengerjaan.", icon: WashingMachine, color: "#0284C7" },
-  { role: "pemilik_kos", description: "Kelola kamar kos dan pengajuan penghuni baru.", icon: Building2, color: "#7C3AED" },
+  { role: "pemilik_kos", description: "Kelola homestay, kamar kos, penginapan & tiket wisata.", icon: Building2, color: "#7C3AED" },
+  { role: "bank_sampah", description: "Kelola unit bank sampah, timbangan & penerbitan poin.", icon: Scale, color: "#16A34A" },
 ];
 
 export const RegisterRoleScreen: React.FC<Props> = ({ navigate, googleDraft, onGoogleConnect, onSelect }) => {

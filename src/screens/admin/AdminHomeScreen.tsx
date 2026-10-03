@@ -542,7 +542,11 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
       </View>
 
       {/* Status Filter Pills */}
-      <View style={styles.statusPillsRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.statusPillsRow}
+      >
         <TouchableOpacity
           style={[styles.statusPill, statusFilter === "pending" && styles.statusPillPendingActive]}
           onPress={() => setStatusFilter("pending")}
@@ -582,10 +586,10 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           activeOpacity={0.7}
         >
           <Text style={[styles.statusPillText, statusFilter === "semua" && styles.statusPillTextActive]}>
-            Semua ({mitraAccounts.length})
+            Semua ({mitraAccounts.filter((m) => m.role !== "customer").length})
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       {/* Role Category Filter Chips */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsRow}>
@@ -2004,87 +2008,89 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1B7A4E" />
 
-      {/* Top Header Bar (Emerald Premium Style) */}
-      <View style={styles.topHeader}>
-        <View style={styles.headerTopRow}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.greetingText}>Halo, {formattedGreeting.toLowerCase()} 🍃</Text>
-            <Text style={styles.nameText} numberOfLines={1}>
-              {getAdminDisplayName()}
-            </Text>
+      <View style={styles.appShell}>
+        {/* Top Header Bar (Emerald Premium Style) */}
+        <View style={styles.topHeader}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.greetingText}>Halo, {formattedGreeting.toLowerCase()} 🍃</Text>
+              <Text style={styles.nameText} numberOfLines={1}>
+                {getAdminDisplayName()}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.notifBtn}
+              onPress={() => setNotifModalVisible(true)}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Buka notifikasi"
+            >
+              <Bell size={20} color="#FFFFFF" strokeWidth={2} />
+              {pendingCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {pendingCount > 99 ? "99+" : pendingCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={styles.notifBtn}
-            onPress={() => setNotifModalVisible(true)}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel="Buka notifikasi"
-          >
-            <Bell size={20} color="#FFFFFF" strokeWidth={2} />
-            {pendingCount > 0 && (
-              <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>
-                  {pendingCount > 99 ? "99+" : pendingCount}
+          {/* Role Pill */}
+          <View style={styles.rolePill}>
+            <ShieldCheck size={14} color="#FFFFFF" strokeWidth={2.5} />
+            <Text style={styles.rolePillText}>Super Admin • PGE Kamojang</Text>
+            <View style={styles.roleLiveDot} />
+          </View>
+        </View>
+
+        {/* Main Tab Scroll Content */}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={refreshData}
+              colors={["#1B7A4E"]}
+              tintColor="#1B7A4E"
+            />
+          }
+        >
+          {renderTabContent()}
+        </ScrollView>
+
+        {/* ========================================================
+            CUSTOM BOTTOM NAVIGATION BAR (5 Tabs matching other roles)
+           ======================================================== */}
+        <View style={styles.bottomNavContainer}>
+          {navItems.map((item, index) => {
+            const active = currentTab === index;
+            const IconComp = item.icon;
+            return (
+              <TouchableOpacity
+                key={index}
+                style={styles.navItem}
+                onPress={() => setCurrentTab(index)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.navIconBg, active ? styles.navIconBgActive : null]}>
+                  <IconComp size={20} color={active ? "#1B7A4E" : "#9CA3AF"} />
+                  {Boolean(item.badge && item.badge > 0) && (
+                    <View style={styles.navBadge}>
+                      <Text style={styles.navBadgeText}>{item.badge}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={[styles.navLabel, active ? styles.navLabelActive : null]}>
+                  {item.label}
                 </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-
-        {/* Role Pill */}
-        <View style={styles.rolePill}>
-          <ShieldCheck size={14} color="#FFFFFF" strokeWidth={2.5} />
-          <Text style={styles.rolePillText}>Super Admin • PGE Kamojang</Text>
-          <View style={styles.roleLiveDot} />
-        </View>
-      </View>
-
-      {/* Main Tab Scroll Content */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={refreshData}
-            colors={["#1B7A4E"]}
-            tintColor="#1B7A4E"
-          />
-        }
-      >
-        {renderTabContent()}
-      </ScrollView>
-
-      {/* ========================================================
-          CUSTOM BOTTOM NAVIGATION BAR (5 Tabs matching other roles)
-         ======================================================== */}
-      <View style={styles.bottomNavContainer}>
-        {navItems.map((item, index) => {
-          const active = currentTab === index;
-          const IconComp = item.icon;
-          return (
-            <TouchableOpacity
-              key={index}
-              style={styles.navItem}
-              onPress={() => setCurrentTab(index)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.navIconBg, active ? styles.navIconBgActive : null]}>
-                <IconComp size={20} color={active ? "#1B7A4E" : "#9CA3AF"} />
-                {Boolean(item.badge && item.badge > 0) && (
-                  <View style={styles.navBadge}>
-                    <Text style={styles.navBadgeText}>{item.badge}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.navLabel, active ? styles.navLabelActive : null]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
       </View>
 
       {/* ================= MODAL LENGKAP: DETAIL BERKAS & ACC ================= */}
@@ -2909,7 +2915,19 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#EEF2F6",
+    alignItems: "center",
+  },
+  appShell: {
+    width: "100%",
+    maxWidth: 480,
+    flex: 1,
     backgroundColor: "#1B7A4E",
+    position: "relative",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 4 },
   },
   scrollView: {
     flex: 1,
@@ -3115,19 +3133,18 @@ const styles = StyleSheet.create({
   statusPillsRow: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 12,
+    paddingBottom: 12,
   },
   statusPill: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
+    gap: 6,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E5E7EB",
     paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingHorizontal: 12,
     borderRadius: 12,
   },
   statusPillActive: {
@@ -4320,6 +4337,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
+    alignItems: "center",
   },
   modalCard: {
     backgroundColor: "#FFFFFF",
@@ -4328,6 +4346,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     maxHeight: "90%",
+    width: "100%",
+    maxWidth: 480,
   },
   modalDragHandle: {
     width: 40,

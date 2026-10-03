@@ -217,27 +217,41 @@ const findKostByOwnerOrEmail = async (ownerIdentifier) => {
 
   // If still no Kost record but user exists as pemilik_kos, auto-provision their Kost document
   if (!kost && user && (user.role === "pemilik_kos" || user.role === "admin")) {
-    const kostName = user.roleData?.businessName || user.name || "Kost Mitra";
+    const rawRoleData = user.roleData instanceof Map ? Object.fromEntries(user.roleData) : (user.roleData || {});
+    const kostName = rawRoleData.businessName || user.name || "Kost Mitra";
+    const categoryType = rawRoleData.businessCategory || (rawRoleData.propertyType?.toLowerCase().includes("wisata") ? "wisata" : rawRoleData.propertyType?.toLowerCase().includes("hotel") || rawRoleData.propertyType?.toLowerCase().includes("villa") ? "hotel" : "kost");
     let kostType = "Campur";
-    if (user.roleData?.propertyType?.toLowerCase().includes("putri")) kostType = "Putri";
-    else if (user.roleData?.propertyType?.toLowerCase().includes("putra")) kostType = "Putra";
+    if (rawRoleData.propertyType?.toLowerCase().includes("putri")) kostType = "Putri";
+    else if (rawRoleData.propertyType?.toLowerCase().includes("putra")) kostType = "Putra";
+
+    const lat = Number(rawRoleData.latitude) || -7.2278;
+    const lng = Number(rawRoleData.longitude) || 107.9087;
 
     kost = await Kost.create({
       ownerId: user._id,
       name: kostName.charAt(0).toUpperCase() + kostName.slice(1),
+      categoryType: categoryType || "kost",
       type: kostType,
-      address: user.address || user.roleData?.businessAddress || "Jl. Kamojang, Garut",
+      address: user.address || rawRoleData.businessAddress || "Jl. Raya Kamojang, Samarang, Garut",
       city: "Garut",
       district: "Kamojang",
-      description: "Kos eksklusif nyaman, bersih, aman, dan berfasilitas lengkap untuk mahasiswa & pekerja.",
-      price: 1200000,
-      dpAmount: 300000,
-      facilities: ["WiFi", "AC", "KM Dalam", "Kasur", "Lemari"],
+      latitude: lat,
+      longitude: lng,
+      description: "Properti eksklusif nyaman, bersih, aman, dan berfasilitas lengkap di kawasan Garut.",
+      price: categoryType === "wisata" ? 25000 : categoryType === "hotel" ? 450000 : 1200000,
+      dpAmount: categoryType === "wisata" ? 25000 : 200000,
+      facilities: ["WiFi", "AC", "KM Dalam", "Kasur", "Lemari", "Parkir Luas"],
       rules: ["Akses 24 Jam", "Dilarang Merokok di Kamar"],
       images: [
-        user.profilePhoto || "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80",
+        user.profilePhoto || (categoryType === "wisata" ? "https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?auto=format&fit=crop&w=800&q=80" : categoryType === "hotel" ? "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80" : "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80"),
       ],
       rooms: [],
+      hotelRooms: categoryType === "hotel" ? [
+        { roomName: "Deluxe Villa Room", bedType: "King Bed", capacity: 2, pricePerNight: 450000, isAvailable: true, facilities: ["WiFi", "AC", "Smart TV", "Bathtub", "Sarapan"], images: [] }
+      ] : [],
+      wisataTickets: categoryType === "wisata" ? [
+        { ticketName: "Tiket Masuk Reguler", ticketType: "reguler", price: 25000, description: "Akses seluruh wahana air dan spot foto", includedFacilities: ["Spot Foto", "Gazebo", "Kolam Renang"] }
+      ] : [],
     });
   }
 
@@ -743,7 +757,22 @@ const updateKostProperty = async (req, res) => {
     const kost = await findKostByOwnerOrEmail(ownerId);
     if (!kost) return res.status(404).json({ success: false, message: "Kost tidak ditemukan" });
 
-    const { facilities, rules, description, name, type, address, city, district, bankAccount, dpAmount } = req.body;
+    const {
+      facilities,
+      rules,
+      description,
+      name,
+      type,
+      categoryType,
+      address,
+      city,
+      district,
+      latitude,
+      longitude,
+      bankAccount,
+      dpAmount,
+    } = req.body;
+
     if (facilities !== undefined) {
       kost.facilities = Array.isArray(facilities) ? Array.from(new Set(facilities.filter(Boolean))) : facilities;
       kost.markModified("facilities");
@@ -755,9 +784,12 @@ const updateKostProperty = async (req, res) => {
     if (description !== undefined) kost.description = description;
     if (name !== undefined) kost.name = name;
     if (type !== undefined) kost.type = type;
+    if (categoryType !== undefined) kost.categoryType = categoryType;
     if (address !== undefined) kost.address = address;
     if (city !== undefined) kost.city = city;
     if (district !== undefined) kost.district = district;
+    if (latitude !== undefined) kost.latitude = Number(latitude);
+    if (longitude !== undefined) kost.longitude = Number(longitude);
 
     if (bankAccount !== undefined) {
       kost.bankAccount = {
@@ -778,7 +810,7 @@ const updateKostProperty = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Data rekening pembayaran & properti kos berhasil diperbarui di database!",
+      message: "Data rekening pembayaran, lokasi GPS & properti homestay berhasil diperbarui di database!",
       data: kost,
     });
   } catch (error) {

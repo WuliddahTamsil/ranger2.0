@@ -29,6 +29,7 @@ import {
   Camera,
   Eye,
   X,
+  AlertCircle,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
@@ -39,32 +40,21 @@ import {
 import { WasteDepositStatus, WasteDepositUI } from "../../../types/recycleTypes";
 import { rp } from "../../../utils/formatters";
 
-const DROP_OFF_STEPS: Array<{ key: WasteDepositStatus; label: string; desc: string }> = [
-  { key: "REQUESTED", label: "Tiket Setoran Dibuat", desc: "Silakan bawa sampah Anda ke Bank Sampah" },
-  { key: "AT_BANK", label: "Tiba di Bank Sampah", desc: "Sampah diserahkan ke petugas" },
-  { key: "WEIGHING", label: "Proses Penimbangan", desc: "Petugas menimbang berat aktual sampah" },
-  { key: "WAITING_CUSTOMER_CONFIRMATION", label: "Konfirmasi Hasil Timbang", desc: "Silakan periksa & setujui koin poin" },
+const TRACKING_STEPS: Array<{ key: WasteDepositStatus; label: string; desc: string }> = [
+  { key: "REQUESTED", label: "Tiket Setoran Dibuat", desc: "Silakan bawa / siapkan sampah Anda untuk Bank Sampah" },
+  { key: "WAITING_CUSTOMER_CONFIRMATION", label: "Konfirmasi Hasil Timbang", desc: "Silakan periksa & setujui hasil penimbangan poin" },
   { key: "COMPLETED", label: "Poin Diterbitkan & Selesai", desc: "Koin resmi masuk ke saldo Anda" },
 ];
 
-const PICKUP_STEPS: Array<{ key: WasteDepositStatus; label: string; desc: string }> = [
-  { key: "REQUESTED", label: "Permintaan Pickup Dibuat", desc: "Menunggu konfirmasi Bank Sampah" },
-  { key: "ACCEPTED", label: "Diterima Bank Sampah", desc: "Jadwal penjemputan dikonfirmasi" },
-  { key: "DRIVER_ASSIGNED", label: "Driver Ditugaskan", desc: "Kurir siap menjemput sampah" },
-  { key: "PICKED_UP", label: "Sampah Dijemput Driver", desc: "Sedang diantar ke Bank Sampah" },
-  { key: "AT_BANK", label: "Tiba di Bank Sampah", desc: "Sampah siap ditimbang petugas" },
-  { key: "WEIGHING", label: "Proses Penimbangan", desc: "Petugas menimbang berat aktual" },
-  { key: "WAITING_CUSTOMER_CONFIRMATION", label: "Konfirmasi Hasil Timbang", desc: "Silakan periksa & setujui koin poin" },
-  { key: "COMPLETED", label: "Poin Diterbitkan & Selesai", desc: "Poin resmi masuk ke saldo Anda" },
-];
-
 export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
-  const { selectedDeposit, setSelectedDeposit } = useRecycle();
+  const { selectedDeposit, setSelectedDeposit, selectedBank } = useRecycle();
   const [deposit, setDeposit] = useState<WasteDepositUI | null>(selectedDeposit);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [activeLightboxUrl, setActiveLightboxUrl] = useState<string | null>(null);
+
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
 
   const fetchLatest = async () => {
     if (!deposit?._id) return;
@@ -98,34 +88,32 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
   };
 
   const handleCancel = () => {
-    Alert.alert(
-      "Batalkan Setoran",
-      "Apakah Anda yakin ingin membatalkan permohonan setoran sampah ini?",
-      [
-        { text: "Kembali", style: "cancel" },
-        {
-          text: "Ya, Batalkan",
-          style: "destructive",
-          onPress: async () => {
-            if (!deposit?._id) return;
-            setCancelling(true);
-            try {
-              const res = await cancelWasteDeposit(deposit._id, "Dibatalkan oleh customer");
-              if (res.success) {
-                Alert.alert("Sukses", "Permohonan setoran berhasil dibatalkan.");
-                fetchLatest();
-              } else {
-                Alert.alert("Gagal", res.message || "Gagal membatalkan.");
-              }
-            } catch (err: any) {
-              Alert.alert("Error", err?.message || "Terjadi kesalahan.");
-            } finally {
-              setCancelling(false);
-            }
-          },
-        },
-      ]
-    );
+    setCancelModalVisible(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!deposit?._id) return;
+    setCancelling(true);
+    try {
+      const res = await cancelWasteDeposit(deposit._id, "Dibatalkan oleh customer");
+      if (res.success) {
+        setCancelModalVisible(false);
+        if (res.data) {
+          setDeposit(res.data);
+          setSelectedDeposit(res.data);
+        } else {
+          setDeposit((prev) => (prev ? { ...prev, status: "CANCELLED" } : null));
+        }
+        Alert.alert("Sukses", "Permohonan setoran berhasil dibatalkan.");
+        fetchLatest();
+      } else {
+        Alert.alert("Gagal", res.message || "Gagal membatalkan.");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Terjadi kesalahan.");
+    } finally {
+      setCancelling(false);
+    }
   };
 
   if (!deposit) {
@@ -141,22 +129,21 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
     );
   }
 
-  // Dynamic steps based on method
   const isPickup = deposit.method === "PICKUP";
-  const activeSteps = isPickup ? PICKUP_STEPS : DROP_OFF_STEPS;
-
-  let currentStepIndex = activeSteps.findIndex((s) => s.key === deposit.status);
-  if (currentStepIndex === -1) {
-    if (deposit.status === "POINT_ISSUED" || deposit.status === "COMPLETED") {
-      currentStepIndex = activeSteps.length - 1;
-    } else if (deposit.status === "ACCEPTED" && !isPickup) {
-      currentStepIndex = 0;
-    }
-  }
-
   const isWeighingWaiting = deposit.status === "WAITING_CUSTOMER_CONFIRMATION";
   const isCompleted = deposit.status === "COMPLETED" || deposit.status === "POINT_ISSUED";
   const canCancel = deposit.status === "REQUESTED" || deposit.status === "ACCEPTED";
+
+  let currentStepIndex = 0;
+  if (isCompleted) {
+    currentStepIndex = 2;
+  } else if (isWeighingWaiting || deposit.status === "DISPUTED") {
+    currentStepIndex = 1;
+  } else if (deposit.status === "CANCELLED" || deposit.status === "REJECTED") {
+    currentStepIndex = -1;
+  } else {
+    currentStepIndex = 0;
+  }
 
   // Check if categories have been weighed
   const hasWeighedCategories =
@@ -205,6 +192,28 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#15803D"]} />}
       >
+        {/* Cancelled Alert Banner */}
+        {deposit.status === "CANCELLED" && (
+          <View style={styles.cancelledCard}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <AlertCircle size={22} color="#DC2626" />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.cancelledTitle}>Permohonan Setoran Dibatalkan</Text>
+                <Text style={styles.cancelledSub}>
+                  Tiket ini telah berhasil dibatalkan ({deposit.cancelReason || "Dibatalkan oleh nasabah"}).
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.cancelledHomeBtn}
+              onPress={() => navigate("c_recycle_home")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.cancelledHomeBtnText}>Kembali ke Beranda Setor Sampah</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Waiting Confirmation Alert CTA */}
         {isWeighingWaiting && (
           <TouchableOpacity
@@ -258,14 +267,14 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.bankName}>
-                {typeof deposit.bankSampahId === "object"
-                  ? deposit.bankSampahId?.name
-                  : "Bank Sampah Mitra"}
+                {typeof deposit.bankSampahId === "object" && deposit.bankSampahId?.name
+                  ? deposit.bankSampahId.name
+                  : (selectedBank?.name || "Bank Sampah Pakuan")}
               </Text>
               <Text style={styles.bankAddress} numberOfLines={1}>
-                {typeof deposit.bankSampahId === "object"
-                  ? deposit.bankSampahId?.address
-                  : "Kamojang, Kab. Bandung"}
+                {typeof deposit.bankSampahId === "object" && deposit.bankSampahId?.address
+                  ? deposit.bankSampahId.address
+                  : (selectedBank?.address || "Pakuan, Bogor, Jawa Barat")}
               </Text>
             </View>
           </View>
@@ -354,18 +363,17 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
           </View>
         )}
 
-        {/* Realtime Status Timeline (Adapted to Method) */}
+        {/* Realtime Status Timeline */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Proses Penyetoran</Text>
         </View>
 
         <View style={styles.timelineCard}>
-          {activeSteps.map((step, idx) => {
+          {TRACKING_STEPS.map((step, idx) => {
             const isDone =
               currentStepIndex > idx ||
-              (isCompleted && idx === activeSteps.length - 1) ||
-              deposit.status === step.key;
-            const isCurrent = deposit.status === step.key;
+              (isCompleted && idx === TRACKING_STEPS.length - 1);
+            const isCurrent = currentStepIndex === idx;
 
             return (
               <View key={step.key} style={styles.timelineStep}>
@@ -383,7 +391,7 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
                       <View style={styles.stepDotInner} />
                     )}
                   </View>
-                  {idx < activeSteps.length - 1 && (
+                  {idx < TRACKING_STEPS.length - 1 && (
                     <View style={[styles.timelineLine, isDone && styles.timelineLineDone]} />
                   )}
                 </View>
@@ -420,6 +428,48 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Cancel Confirmation Modal */}
+      <Modal
+        visible={cancelModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCancelModalVisible(false)}
+      >
+        <View style={styles.cancelModalOverlay}>
+          <View style={styles.cancelModalBox}>
+            <View style={styles.cancelModalIconWrap}>
+              <AlertTriangle size={28} color="#DC2626" />
+            </View>
+            <Text style={styles.cancelModalHead}>Batalkan Permohonan Setoran?</Text>
+            <Text style={styles.cancelModalBody}>
+              Apakah Anda yakin ingin membatalkan tiket setoran sampah ini? Tindakan ini tidak dapat diulang.
+            </Text>
+            <View style={styles.cancelModalActions}>
+              <TouchableOpacity
+                style={styles.cancelModalBtnCancel}
+                onPress={() => setCancelModalVisible(false)}
+                disabled={cancelling}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelModalBtnCancelText}>Kembali</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelModalBtnConfirm}
+                onPress={handleConfirmCancel}
+                disabled={cancelling}
+                activeOpacity={0.8}
+              >
+                {cancelling ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.cancelModalBtnConfirmText}>Ya, Batalkan</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Lightbox / Full-screen Photo Preview Modal */}
       <Modal
@@ -887,6 +937,108 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#DC2626",
+  },
+  cancelledCard: {
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    marginBottom: 16,
+  },
+  cancelledTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  cancelledSub: {
+    fontSize: 11,
+    color: "#991B1B",
+    marginTop: 2,
+  },
+  cancelledHomeBtn: {
+    marginTop: 12,
+    backgroundColor: "#DC2626",
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  cancelledHomeBtnText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  cancelModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  cancelModalBox: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 22,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  cancelModalIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#FEE2E2",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  cancelModalHead: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#0F172A",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  cancelModalBody: {
+    fontSize: 12,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  cancelModalActions: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
+  },
+  cancelModalBtnCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+  },
+  cancelModalBtnCancelText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  cancelModalBtnConfirm: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#DC2626",
+    alignItems: "center",
+  },
+  cancelModalBtnConfirmText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
   emptyCenter: {
     flex: 1,

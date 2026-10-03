@@ -52,8 +52,15 @@ export const getDocumentRequirements = (role: AuthRegistrationRole): AuthDocumen
 
   if (role === "pemilik_kos") {
     return [
-      { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik kos yang jelas dan tidak terpotong.", required: true },
-      { key: "property_photo", label: "Foto properti kos", description: "Satu foto tampak depan atau area utama kos.", required: true },
+      { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik kos/homestay yang jelas.", required: true },
+      { key: "property_photo", label: "Foto properti", description: "Satu foto tampak depan properti / unit usaha.", required: true },
+    ];
+  }
+
+  if (role === "bank_sampah") {
+    return [
+      { key: "ktp", label: "KTP Pengelola", description: "Identitas pengelola bank sampah yang sah.", required: true },
+      { key: "unit_photo", label: "Foto Unit Bank Sampah", description: "Foto tampak depan unit atau plang nama bank sampah.", required: true },
     ];
   }
 

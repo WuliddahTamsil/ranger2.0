@@ -54,7 +54,7 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
   } = useRecycle();
 
   const [address, setAddress] = useState(
-    draftDeposit.pickupAddress || authAccount?.address || "Ring 1 Kamojang, Ibun, Kab. Bandung"
+    draftDeposit.pickupAddress || authAccount?.address || selectedBank?.address || "Pakuan, Bogor, Jawa Barat"
   );
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState(TIME_SLOTS[0]);

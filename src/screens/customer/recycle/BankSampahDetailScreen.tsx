@@ -135,11 +135,18 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
             <Text style={styles.detailText}>{selectedBank.phone}</Text>
           </View>
 
-          {selectedBank.acceptsPickup && (
+          {selectedBank.acceptsPickup ? (
             <View style={styles.pickupAlert}>
               <Truck size={16} color="#047857" />
               <Text style={styles.pickupAlertText}>
                 Tersedia layanan penjemputan (Pickup) dari rumah oleh driver GEOVERSE.
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.pickupAlert, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}>
+              <AlertCircle size={16} color="#DC2626" />
+              <Text style={[styles.pickupAlertText, { color: "#991B1B" }]}>
+                Layanan penjemputan driver saat ini sedang nonaktif. Bank Sampah ini hanya menerima setoran antar langsung di lokasi.
               </Text>
             </View>
           )}
@@ -197,7 +204,7 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
       {/* Sticky Bottom Actions */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={[styles.actionBtn, styles.btnDropOff]}
+          style={[styles.actionBtn, styles.btnDropOff, !selectedBank.acceptsPickup && { flex: 1.2 }]}
           onPress={() => handleStartDeposit("DROP_OFF")}
           activeOpacity={0.8}
         >
@@ -205,7 +212,7 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
           <Text style={styles.btnDropOffText}>Setor Langsung</Text>
         </TouchableOpacity>
 
-        {selectedBank.acceptsPickup && (
+        {selectedBank.acceptsPickup ? (
           <TouchableOpacity
             style={[styles.actionBtn, styles.btnPickup]}
             onPress={() => handleStartDeposit("PICKUP")}
@@ -213,6 +220,20 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
           >
             <Truck size={18} color="#FFFFFF" />
             <Text style={styles.btnPickupText}>Minta Pickup</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.btnPickup, { backgroundColor: "#F1F5F9", borderColor: "#E2E8F0" }]}
+            onPress={() => {
+              Alert.alert(
+                "Layanan Pickup Nonaktif",
+                `${selectedBank.name} sedang menonaktifkan layanan penjemputan driver. Silakan gunakan tombol Setor Langsung.`
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <Truck size={18} color="#94A3B8" />
+            <Text style={[styles.btnPickupText, { color: "#94A3B8" }]}>Pickup Nonaktif</Text>
           </TouchableOpacity>
         )}
       </View>

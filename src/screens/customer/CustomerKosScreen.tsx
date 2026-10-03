@@ -206,6 +206,24 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
             const roomFacilities = allRooms.flatMap((r: any) => (Array.isArray(r.facilities) ? r.facilities : []));
             const uniqueFacilities = Array.from(new Set([...roomFacilities, ...(k.facilities || [])])).slice(0, 5);
 
+            // Calculate distance using GPS coordinates (Default center: Garut Kota -7.2278, 107.9087)
+            let distanceStr = "";
+            if (k.latitude && k.longitude) {
+              const lat1 = Number(k.latitude);
+              const lon1 = Number(k.longitude);
+              const lat2 = -7.2278;
+              const lon2 = 107.9087;
+              const dLat = (lat2 - lat1) * (Math.PI / 180);
+              const dLon = (lon2 - lon1) * (Math.PI / 180);
+              const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              const d = 6371 * c;
+              distanceStr = d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km`;
+            }
+
             return {
               id: k._id || k.id,
               _id: k._id || k.id,
@@ -214,6 +232,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               type: k.type || "Campur",
               status: categoryType === "wisata" ? "Buka Hari Ini" : allRooms.length === 0 ? "Tersedia" : allRooms.some((r: any) => r.isAvailable) ? "Tersedia" : "Penuh",
               location: k.address || k.city || "Alamat Kost",
+              distance: distanceStr,
               city: k.city || "Garut",
               areaTag: k.address?.toLowerCase().includes("cipanas")
                 ? "Cipanas / Tarogong"
@@ -1005,8 +1024,13 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                   </Text>
 
                   <View style={styles.locationRow}>
-                    <MapPin size={13} color="#6B7280" />
+                    <MapPin size={13} color="#0D7A53" />
                     <Text style={styles.locationText} numberOfLines={1}>
+                      {item.distance ? (
+                        <Text style={{ fontWeight: "700", color: "#0D7A53" }}>
+                          {item.distance} •{" "}
+                        </Text>
+                      ) : null}
                       {item.location}
                     </Text>
                   </View>

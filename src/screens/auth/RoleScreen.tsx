@@ -119,11 +119,14 @@ export const RoleScreen: React.FC<RoleScreenProps> = ({ navigate, onSelectRole }
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F8FAFC",
+    alignItems: "center",
   },
   scrollContent: {
     padding: 24,
     paddingBottom: 40,
+    width: "100%",
+    maxWidth: 560,
   },
   title: {
     fontSize: 24,

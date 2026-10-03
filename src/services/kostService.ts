@@ -5,10 +5,13 @@ export interface KostData {
   id?: string | number;
   ownerId: any;
   name: string;
-  type: "Putra" | "Putri" | "Campur";
+  categoryType?: "kost" | "hotel" | "wisata";
+  type: "Putra" | "Putri" | "Campur" | string;
   address: string;
   city?: string;
   district?: string;
+  latitude?: number;
+  longitude?: number;
   price: number;
   dpAmount?: number;
   description?: string;

@@ -100,6 +100,7 @@ export interface WasteDepositUI {
   weighedBy?: any;
   customerConfirmedAt?: string | null;
   disputeReason?: string;
+  cancelReason?: string;
   status: WasteDepositStatus;
   statusHistory?: Array<{
     status: string;

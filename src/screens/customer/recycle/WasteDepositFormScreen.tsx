@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   Coins,
   FileText,
+  AlertCircle,
+  AlertTriangle,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
@@ -44,9 +46,26 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
   const [submitting, setSubmitting] = useState(false);
   const [createdSuccessDeposit, setCreatedSuccessDeposit] = useState<WasteDepositUI | null>(null);
 
+  const isPickupAvailable = selectedBank?.acceptsPickup !== false;
+
+  useEffect(() => {
+    if (!isPickupAvailable && method === "PICKUP") {
+      setMethod("DROP_OFF");
+    }
+  }, [isPickupAvailable, method]);
+
   const handleProceed = async () => {
     if (!selectedBank?._id) {
       Alert.alert("Error", "Pilih Bank Sampah tujuan terlebih dahulu.");
+      return;
+    }
+
+    if (method === "PICKUP" && !isPickupAvailable) {
+      Alert.alert(
+        "Layanan Pickup Nonaktif",
+        `${selectedBank.name || "Bank Sampah ini"} sedang menonaktifkan layanan driver pickup. Silakan gunakan metode Antar Langsung.`
+      );
+      setMethod("DROP_OFF");
       return;
     }
 
@@ -150,19 +169,64 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.methodCard, method === "PICKUP" && styles.methodCardActive]}
-            onPress={() => setMethod("PICKUP")}
-            activeOpacity={0.85}
+            style={[
+              styles.methodCard,
+              method === "PICKUP" && isPickupAvailable && styles.methodCardActive,
+              !isPickupAvailable && styles.methodCardDisabled,
+            ]}
+            onPress={() => {
+              if (isPickupAvailable) {
+                setMethod("PICKUP");
+              } else {
+                Alert.alert(
+                  "Layanan Pickup Nonaktif",
+                  `${selectedBank?.name || "Bank Sampah ini"} sedang menonaktifkan layanan driver pickup. Silakan gunakan metode Antar Langsung.`
+                );
+              }
+            }}
+            activeOpacity={isPickupAvailable ? 0.85 : 0.6}
           >
-            <View style={[styles.methodIconCircle, method === "PICKUP" && styles.methodIconCircleActive]}>
-              <Truck size={22} color={method === "PICKUP" ? "#15803D" : "#64748B"} />
+            <View
+              style={[
+                styles.methodIconCircle,
+                method === "PICKUP" && isPickupAvailable && styles.methodIconCircleActive,
+                !isPickupAvailable && styles.methodIconCircleDisabled,
+              ]}
+            >
+              <Truck size={22} color={!isPickupAvailable ? "#94A3B8" : method === "PICKUP" ? "#15803D" : "#64748B"} />
             </View>
-            <Text style={[styles.methodTitle, method === "PICKUP" && styles.methodTitleActive]}>
-              Minta Pickup
+            <View style={styles.methodTitleWrap}>
+              <Text
+                style={[
+                  styles.methodTitle,
+                  method === "PICKUP" && isPickupAvailable && styles.methodTitleActive,
+                  !isPickupAvailable && styles.methodTitleDisabled,
+                ]}
+              >
+                Minta Pickup
+              </Text>
+              {!isPickupAvailable && (
+                <View style={styles.disabledTag}>
+                  <Text style={styles.disabledTagText}>Nonaktif</Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.methodSub, !isPickupAvailable && styles.methodSubDisabled]}>
+              {isPickupAvailable
+                ? "Dijemput driver kurir ke lokasi Anda"
+                : "Layanan driver pickup nonaktif"}
             </Text>
-            <Text style={styles.methodSub}>Dijemput driver kurir ke lokasi Anda</Text>
           </TouchableOpacity>
         </View>
+
+        {!isPickupAvailable && (
+          <View style={styles.pickupDisabledNotice}>
+            <AlertCircle size={15} color="#DC2626" style={{ marginTop: 1 }} />
+            <Text style={styles.pickupDisabledNoticeText}>
+              Bank Sampah ini sedang <Text style={{ fontWeight: "800" }}>menonaktifkan layanan driver pickup</Text>. Hanya menerima setoran dengan metode Antar Langsung.
+            </Text>
+          </View>
+        )}
 
         {/* How It Works Explainer Banner */}
         <View style={styles.flowBannerCard}>
@@ -403,6 +467,11 @@ const styles = StyleSheet.create({
     borderColor: "#15803D",
     backgroundColor: "#F0FDF4",
   },
+  methodCardDisabled: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "#E2E8F0",
+    opacity: 0.85,
+  },
   methodIconCircle: {
     width: 44,
     height: 44,
@@ -415,6 +484,15 @@ const styles = StyleSheet.create({
   methodIconCircleActive: {
     backgroundColor: "#DCFCE7",
   },
+  methodIconCircleDisabled: {
+    backgroundColor: "#F1F5F9",
+  },
+  methodTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 3,
+  },
   methodTitle: {
     fontSize: 13,
     fontWeight: "800",
@@ -424,11 +502,46 @@ const styles = StyleSheet.create({
   methodTitleActive: {
     color: "#15803D",
   },
+  methodTitleDisabled: {
+    color: "#94A3B8",
+  },
+  disabledTag: {
+    backgroundColor: "#FEE2E2",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginBottom: 3,
+  },
+  disabledTagText: {
+    fontSize: 8.5,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
   methodSub: {
     fontSize: 10.5,
     color: "#64748B",
     textAlign: "center",
     lineHeight: 14,
+  },
+  methodSubDisabled: {
+    color: "#94A3B8",
+  },
+  pickupDisabledNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 16,
+  },
+  pickupDisabledNoticeText: {
+    fontSize: 11,
+    color: "#991B1B",
+    flex: 1,
+    lineHeight: 15,
   },
   flowBannerCard: {
     backgroundColor: "#FFFFFF",

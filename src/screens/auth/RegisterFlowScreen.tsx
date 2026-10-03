@@ -56,6 +56,10 @@ const inputConfig: Record<AuthRegistrationRole, Array<{ key: string; label: stri
     { key: "businessAddress", label: "Alamat properti kos", placeholder: "Alamat lengkap kos", multiline: true },
     { key: "propertyType", label: "Tipe kos", placeholder: "Putri / Putra / Campur", required: false },
   ],
+  bank_sampah: [
+    { key: "businessName", label: "Nama Unit Bank Sampah", placeholder: "Contoh: Bank Sampah Bersih Kamojang" },
+    { key: "businessAddress", label: "Alamat Lengkap Unit", placeholder: "Alamat operasional unit bank sampah", multiline: true },
+  ],
 };
 
 export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEmail, initialName, googleRegistration, onSubmit }) => {
@@ -140,12 +144,158 @@ const BaseStep: React.FC<{ form: RegistrationForm; update: (key: keyof Registrat
   </View>
 );
 
-const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, string>; updateRoleData: (key: string, value: string) => void }> = ({ role, roleData, updateRoleData }) => (
-  <View style={authStyles.card}>
-    <SectionHeading icon={<ShieldCheck size={18} color={authColors.primary} />} title={role === "driver" ? "Data kendaraan" : role === "pemilik_kos" ? "Data properti" : "Data usaha"} text={role === "driver" ? "Cukup isi data kendaraan yang digunakan." : "Isi informasi dasar yang akan tampil di profil usaha."} />
-    {inputConfig[role].map((field) => <TextField key={field.key} label={`${field.label}${field.required === false ? " (opsional)" : " *"}`} value={roleData[field.key] || ""} onChangeText={(value) => updateRoleData(field.key, value)} placeholder={field.placeholder} multiline={field.multiline} />)}
-  </View>
-);
+const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, string>; updateRoleData: (key: string, value: string) => void }> = ({ role, roleData, updateRoleData }) => {
+  if (role === "pemilik_kos") {
+    const selectedCategory = roleData.businessCategory || "kost";
+    const selectedType = roleData.propertyType || "Campur";
+
+    const categories = [
+      { id: "kost", label: "Kost", sub: "Putri, Putra, atau Campur (Bulanan/Tahunan)", icon: "🏠" },
+      { id: "hotel", label: "Penginapan / Villa / Hotel", sub: "Sewa harian, villa, homestay", icon: "🏨" },
+      { id: "wisata", label: "Destinasi Wisata", sub: "Tiket wahana & tempat wisata", icon: "🎟️" },
+    ];
+
+    const kostTypes = ["Putri", "Putra", "Campur"];
+
+    return (
+      <View style={authStyles.card}>
+        <SectionHeading
+          icon={<ShieldCheck size={18} color={authColors.primary} />}
+          title="Data Usaha Homestay"
+          text="Pilih bentuk usaha dan lengkapi detail lokasi serta nama properti Anda."
+        />
+
+        {/* Pilihan Bentuk Usaha */}
+        <Text style={[authStyles.label, { marginTop: 14 }]}>Bentuk Usaha *</Text>
+        <View style={styles.categoryGrid}>
+          {categories.map((cat) => {
+            const isSelected = selectedCategory === cat.id;
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                style={[styles.categoryCard, isSelected && styles.categoryCardSelected]}
+                onPress={() => {
+                  updateRoleData("businessCategory", cat.id);
+                  if (cat.id !== "kost") {
+                    updateRoleData("propertyType", cat.id === "hotel" ? "Villa / Hotel" : "Wisata");
+                  } else {
+                    updateRoleData("propertyType", "Campur");
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.categoryEmoji}>{cat.icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.categoryLabel, isSelected && styles.categoryLabelSelected]}>
+                    {cat.label}
+                  </Text>
+                  <Text style={styles.categorySub}>{cat.sub}</Text>
+                </View>
+                <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                  {isSelected && <View style={styles.radioInner} />}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Jika tipe Kost: Sub-opsi Putri / Putra / Campur */}
+        {selectedCategory === "kost" && (
+          <View style={{ marginTop: 12 }}>
+            <Text style={authStyles.label}>Tipe Penghuni Kost *</Text>
+            <View style={styles.subTypeRow}>
+              {kostTypes.map((t) => {
+                const isTypeActive = selectedType.toLowerCase().includes(t.toLowerCase());
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.subTypeChip, isTypeActive && styles.subTypeChipActive]}
+                    onPress={() => updateRoleData("propertyType", `Kost ${t}`)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.subTypeText, isTypeActive && styles.subTypeTextActive]}>
+                      Kost {t}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Input Nama Usaha */}
+        <TextField
+          label="Nama Usaha / Properti *"
+          value={roleData.businessName || ""}
+          onChangeText={(value) => updateRoleData("businessName", value)}
+          placeholder={
+            selectedCategory === "wisata"
+              ? "Contoh: Taman Wisata Air Sabda Alam"
+              : selectedCategory === "hotel"
+              ? "Contoh: Kamojang Green Resort & Villa"
+              : "Contoh: Ais Kost Putri Exclusive"
+          }
+        />
+
+        {/* Input Alamat Lengkap */}
+        <TextField
+          label="Alamat Lengkap Properti *"
+          value={roleData.businessAddress || ""}
+          onChangeText={(value) => updateRoleData("businessAddress", value)}
+          placeholder="Jalan, No, RT/RW, Kelurahan, Kecamatan, Garut"
+          multiline
+          icon={<MapPin size={17} color="#6B7280" />}
+        />
+
+        {/* Koordinat GPS */}
+        <View style={styles.gpsRow}>
+          <View style={{ flex: 1 }}>
+            <TextField
+              label="Latitude (GPS)"
+              value={roleData.latitude || "-7.2278"}
+              onChangeText={(value) => updateRoleData("latitude", value)}
+              placeholder="-7.2278"
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={{ width: 10 }} />
+          <View style={{ flex: 1 }}>
+            <TextField
+              label="Longitude (GPS)"
+              value={roleData.longitude || "107.9087"}
+              onChangeText={(value) => updateRoleData("longitude", value)}
+              placeholder="107.9087"
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
+        <Text style={styles.gpsHint}>
+          💡 Koordinat GPS digunakan agar pelanggan dapat melihat jarak presisi (km) ke lokasi properti Anda di peta.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={authStyles.card}>
+      <SectionHeading
+        icon={<ShieldCheck size={18} color={authColors.primary} />}
+        title={role === "driver" ? "Data kendaraan" : "Data usaha"}
+        text={role === "driver" ? "Cukup isi data kendaraan yang digunakan." : "Isi informasi dasar yang akan tampil di profil usaha."}
+      />
+      {inputConfig[role].map((field) => (
+        <TextField
+          key={field.key}
+          label={`${field.label}${field.required === false ? " (opsional)" : " *"}`}
+          value={roleData[field.key] || ""}
+          onChangeText={(value) => updateRoleData(field.key, value)}
+          placeholder={field.placeholder}
+          multiline={field.multiline}
+        />
+      ))}
+    </View>
+  );
+};
 
 const DocumentsStep: React.FC<{ role: AuthRegistrationRole; requirements: ReturnType<typeof getDocumentRequirements>; documents: RegistrationForm["documents"]; setDocument: (key: string, document?: RegistrationForm["documents"][string]) => void }> = ({ role, requirements, documents, setDocument }) => {
   const requiredCount = requirements.filter((item) => item.required).length;
@@ -206,4 +356,21 @@ const styles = StyleSheet.create({
   error: { color: authColors.danger, backgroundColor: authColors.dangerBg, borderRadius: 10, padding: 11, marginTop: 14, fontSize: 13, lineHeight: 18 },
   next: { flexDirection: "row", gap: 8, marginTop: 18 },
   submitHint: { color: "#9CA3AF", fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 10 },
+  categoryGrid: { gap: 10, marginTop: 8 },
+  categoryCard: { flexDirection: "row", alignItems: "center", padding: 12, borderRadius: 14, borderWidth: 1.5, borderColor: "#E5E7EB", backgroundColor: "#F9FAFB", gap: 10 },
+  categoryCardSelected: { borderColor: "#0D7A53", backgroundColor: "#F0FDF4" },
+  categoryEmoji: { fontSize: 24 },
+  categoryLabel: { fontSize: 14, fontWeight: "800", color: "#1F2937" },
+  categoryLabelSelected: { color: "#0D7A53" },
+  categorySub: { fontSize: 11, color: "#6B7280", marginTop: 2 },
+  radioCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: "#D1D5DB", alignItems: "center", justifyContent: "center" },
+  radioCircleSelected: { borderColor: "#0D7A53" },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#0D7A53" },
+  subTypeRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  subTypeChip: { flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#FFFFFF", alignItems: "center" },
+  subTypeChipActive: { borderColor: "#0D7A53", backgroundColor: "#0D7A53" },
+  subTypeText: { fontSize: 12, fontWeight: "700", color: "#4B5563" },
+  subTypeTextActive: { color: "#FFFFFF" },
+  gpsRow: { flexDirection: "row", alignItems: "center" },
+  gpsHint: { fontSize: 11, color: "#6B7280", marginTop: 6, lineHeight: 15 },
 });
