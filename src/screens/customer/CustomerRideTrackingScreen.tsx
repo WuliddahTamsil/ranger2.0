@@ -31,9 +31,11 @@ import {
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   fetchActiveCustomerRide,
   fetchCustomerRides,
+  fetchRideDetail,
   updateRideStatus,
   rateRide,
   cancelRide,
@@ -85,6 +87,17 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
 
     const loadRide = async () => {
       try {
+        const targetedId = await AsyncStorage.getItem("selected_ride_tracking_id");
+        if (targetedId) {
+          const detailRes = await fetchRideDetail(targetedId);
+          if (!active) return;
+          if (detailRes.success && detailRes.data) {
+            setCurrentRide(detailRes.data);
+            setLoading(false);
+            return;
+          }
+        }
+
         const activeRes = await fetchActiveCustomerRide(authAccount.id);
         if (!active) return;
         if (activeRes.success && activeRes.data) {
@@ -276,29 +289,42 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
 
   // Submit Complaint handler
   const handleSubmitComplaint = async () => {
-    if (!currentRide) return;
-    if (!complaintDescription.trim()) {
-      Alert.alert("Deskripsi Kosong", "Silakan ceritakan detail masalah yang Anda alami.");
+    if (!currentRide) {
+      if (Platform.OS === "web") {
+        window.alert("Pesanan tidak ditemukan.");
+      } else {
+        Alert.alert("Gagal", "Pesanan tidak ditemukan.");
+      }
       return;
     }
+
+    const resolvedCategory = complaintCategory || "Lainnya";
+    const resolvedDescription = complaintDescription.trim() || `Laporan masalah terkait: ${resolvedCategory}`;
+
     setIsSubmittingComplaint(true);
     try {
       const res = await submitRideComplaint(currentRide._id, {
-        category: complaintCategory,
-        description: complaintDescription.trim(),
+        category: resolvedCategory,
+        description: resolvedDescription,
       });
       if (res.success) {
         setComplaintSubmitted(true);
         setComplaintTicketId(res.data?.ticketId || "RNG-TKT");
-        Alert.alert(
-          "Komplain Diterima",
-          `Tiket pengaduan Anda #${res.data?.ticketId || ""} telah terdaftar dan akan ditindaklanjuti oleh tim admin Rangers.`
-        );
       } else {
-        Alert.alert("Gagal Mengajukan", res.message || "Silakan coba lagi.");
+        const errorMsg = res.message || "Silakan coba lagi.";
+        if (Platform.OS === "web") {
+          window.alert(errorMsg);
+        } else {
+          Alert.alert("Gagal Mengajukan", errorMsg);
+        }
       }
     } catch (err: any) {
-      Alert.alert("Gagal", err.message || "Terjadi kesalahan saat mengirim pengaduan.");
+      const errorMsg = err.message || "Terjadi kesalahan saat mengirim pengaduan.";
+      if (Platform.OS === "web") {
+        window.alert(errorMsg);
+      } else {
+        Alert.alert("Gagal", errorMsg);
+      }
     } finally {
       setIsSubmittingComplaint(false);
     }
@@ -379,6 +405,11 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
   ].includes(status);
   const isCompleted = status === "COMPLETED";
   const isCancelled = status === "CANCELLED";
+
+  const plateNumber = currentRide.driverPlate || (currentRide as any).driverSnapshot?.vehiclePlate || "";
+  const vehicleName = currentRide.driverVehicle || (currentRide as any).driverSnapshot?.vehicleType || "Sepeda Motor";
+  const driverName = currentRide.driverName || (currentRide as any).driverSnapshot?.name || "";
+  const showDriverCard = (hasDriver || isCompleted) && Boolean(driverName || currentRide.driverId);
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -496,9 +527,9 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
         )}
 
         {/* ========================================================================= */}
-        {/* DRIVER INFO CARD (Visible once driver is assigned) */}
+        {/* DRIVER INFO CARD (Visible once driver is assigned or completed) */}
         {/* ========================================================================= */}
-        {hasDriver && currentRide.driverName && (
+        {showDriverCard && (
           <View style={styles.driverCard}>
             <View style={styles.driverHeaderRow}>
               {currentRide.driverPhoto ? (
@@ -506,14 +537,14 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
               ) : (
                 <View style={styles.driverAvatarLetter}>
                   <Text style={styles.driverAvatarLetterText}>
-                    {currentRide.driverName.charAt(0).toUpperCase()}
+                    {(driverName || "D").charAt(0).toUpperCase()}
                   </Text>
                 </View>
               )}
 
               <View style={styles.driverInfoBody}>
                 <View style={styles.driverNameRow}>
-                  <Text style={styles.driverNameText}>{currentRide.driverName}</Text>
+                  <Text style={styles.driverNameText}>{driverName}</Text>
                   <View style={styles.ratingBadge}>
                     <Star size={11} color="#D97706" fill="#D97706" />
                     <Text style={styles.ratingBadgeText}>
@@ -521,36 +552,41 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.driverVehicleText}>
-                  {currentRide.driverVehicle || "Sepeda Motor"}
-                  {currentRide.driverPlate ? ` · ` : ""}
-                  {currentRide.driverPlate ? (
-                    <Text style={styles.driverPlateText}>{currentRide.driverPlate}</Text>
-                  ) : null}
-                </Text>
+                <View style={styles.driverVehicleRow}>
+                  <Text style={styles.driverVehicleText}>
+                    {vehicleName}
+                  </Text>
+                  {Boolean(plateNumber) && (
+                    <View style={styles.plateBadge}>
+                      <Text style={styles.plateBadgeText}>{plateNumber}</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
 
-            {/* Actions: Chat & Phone */}
-            <View style={styles.driverActionRow}>
-              <TouchableOpacity
-                style={[styles.driverActionBtn, styles.driverActionBtnChat]}
-                onPress={() => setChatModalVisible(true)}
-                activeOpacity={0.8}
-              >
-                <MessageSquare size={16} color="#1B7A4E" />
-                <Text style={styles.driverActionTextChat}>Chat Driver</Text>
-              </TouchableOpacity>
+            {/* Actions: Chat & Phone (available during active ride) */}
+            {hasDriver && (
+              <View style={styles.driverActionRow}>
+                <TouchableOpacity
+                  style={[styles.driverActionBtn, styles.driverActionBtnChat]}
+                  onPress={() => setChatModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <MessageSquare size={16} color="#1B7A4E" />
+                  <Text style={styles.driverActionTextChat}>Chat Driver</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.driverActionBtn, styles.driverActionBtnPhone]}
-                onPress={handleCallDriver}
-                activeOpacity={0.8}
-              >
-                <Phone size={16} color="#0284C7" />
-                <Text style={styles.driverActionTextPhone}>Telepon</Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={[styles.driverActionBtn, styles.driverActionBtnPhone]}
+                  onPress={handleCallDriver}
+                  activeOpacity={0.8}
+                >
+                  <Phone size={16} color="#0284C7" />
+                  <Text style={styles.driverActionTextPhone}>Telepon</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -1088,10 +1124,30 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#92400E",
   },
+  driverVehicleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+  },
   driverVehicleText: {
     fontSize: 12,
     color: "#64748B",
     fontWeight: "600",
+  },
+  plateBadge: {
+    backgroundColor: "#0F172A",
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  plateBadgeText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
   },
   driverPlateText: {
     color: "#0F172A",

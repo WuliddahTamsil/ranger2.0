@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Platform } from "react-native";
 import { Nav } from "../../types";
 
 export const SplashScreen: React.FC<Nav> = ({ navigate }) => {
@@ -45,11 +45,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    ...(Platform.OS === "web"
+      ? ({ boxShadow: "0px 4px 8px rgba(0,0,0,0.2)" } as any)
+      : {
+          elevation: 8,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+        }),
   },
   logoText: {
     fontSize: 48,

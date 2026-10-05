@@ -21,6 +21,7 @@ import {
   X,
   CheckCircle2,
 } from "lucide-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { rp } from "../../utils/formatters";
 
 export interface TransactionRecord {
@@ -38,6 +39,7 @@ interface KeuanganProps {
   setBalance: (bal: number) => void;
   transactions: TransactionRecord[];
   setTransactions: (txs: TransactionRecord[]) => void;
+  driverId?: string;
 }
 
 export const Keuangan: React.FC<KeuanganProps> = ({
@@ -45,6 +47,7 @@ export const Keuangan: React.FC<KeuanganProps> = ({
   setBalance,
   transactions,
   setTransactions,
+  driverId,
 }) => {
   // Modal states
   const [topupModalVisible, setTopupModalVisible] = useState(false);
@@ -79,7 +82,12 @@ export const Keuangan: React.FC<KeuanganProps> = ({
       time: "Hari ini, Baru saja",
       status: "Sukses",
     };
-    setTransactions([newTx, ...transactions]);
+    const updated = [newTx, ...transactions];
+    setTransactions(updated);
+    if (driverId) {
+      const manualOnly = updated.filter((tx) => !tx.id.startsWith("order-income-"));
+      void AsyncStorage.setItem(`driver_manual_tx_${driverId}`, JSON.stringify(manualOnly));
+    }
 
     setTopupModalVisible(false);
     setTopupAmount("");
@@ -114,7 +122,12 @@ export const Keuangan: React.FC<KeuanganProps> = ({
       time: "Hari ini, Baru saja",
       status: "Diproses",
     };
-    setTransactions([newTx, ...transactions]);
+    const updated = [newTx, ...transactions];
+    setTransactions(updated);
+    if (driverId) {
+      const manualOnly = updated.filter((tx) => !tx.id.startsWith("order-income-"));
+      void AsyncStorage.setItem(`driver_manual_tx_${driverId}`, JSON.stringify(manualOnly));
+    }
 
     setWithdrawModalVisible(false);
     setDrawAmount("");

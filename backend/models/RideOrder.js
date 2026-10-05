@@ -8,6 +8,11 @@ const rideOrderSchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
+    idempotencyKey: {
+      type: String,
+      default: null,
+      index: true,
+    },
     orderType: {
       type: String,
       default: "KANYAAH_RIDE",

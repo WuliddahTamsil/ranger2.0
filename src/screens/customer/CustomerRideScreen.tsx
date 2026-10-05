@@ -29,8 +29,10 @@ import {
   ShieldCheck,
   AlertCircle,
   ChevronRight,
+  ArrowRight,
 } from "lucide-react-native";
 import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import {
@@ -43,17 +45,18 @@ import {
 } from "../../services/rideService";
 import { fetchDrivingRoute, RideRoute } from "../../services/routeService";
 import { CustomerLocationPicker, CustomerLocationValue } from "../../components/CustomerLocationPicker";
+import { getCurrentUserCoordinates } from "../../utils/geocoding";
 import { NativeMapComponent } from "../../components/NativeMapComponent";
 import { rp } from "../../utils/formatters";
 import { DigitalPaymentModal } from "../../components/DigitalPaymentModal";
 import { PaymentMethodType } from "../../services/paymentService";
 
-const KAMOJANG_DEFAULT_COORDS = {
+const DEFAULT_COORDS = {
   pickup: {
-    address: "Jl. Raya Kamojang, Samarang, Garut",
-    placeName: "Pusat Kamojang",
-    latitude: -7.1472,
-    longitude: 107.7942,
+    address: "Kota Bogor, Jawa Barat",
+    placeName: "Lokasi Saya",
+    latitude: -6.5962,
+    longitude: 106.8040,
   },
   home: {
     address: "Perumahan Kamojang Asri Blok B No. 12",
@@ -74,6 +77,7 @@ const KAMOJANG_DEFAULT_COORDS = {
     longitude: 107.7915,
   },
 };
+const KAMOJANG_DEFAULT_COORDS = DEFAULT_COORDS;
 
 interface CustomerRideScreenProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -83,12 +87,30 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   navigate,
   authAccount,
 }) => {
-  // Pickup state
-  const [pickup, setPickup] = useState<RideLocation>({
-    address: authAccount?.address || KAMOJANG_DEFAULT_COORDS.pickup.address,
-    placeName: "Lokasi Saya",
-    latitude: KAMOJANG_DEFAULT_COORDS.pickup.latitude,
-    longitude: KAMOJANG_DEFAULT_COORDS.pickup.longitude,
+  // Pickup state initialized dynamically from cached user location or default Bogor
+  const [pickup, setPickup] = useState<RideLocation>(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem("GEOVERSE_USER_LOCATION");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed.latitude === "number" && typeof parsed.longitude === "number") {
+            return {
+              address: parsed.address || "Lokasi Saya",
+              placeName: "Lokasi Saya",
+              latitude: parsed.latitude,
+              longitude: parsed.longitude,
+            };
+          }
+        }
+      } catch {}
+    }
+    return {
+      address: authAccount?.address || DEFAULT_COORDS.pickup.address,
+      placeName: "Lokasi Saya",
+      latitude: DEFAULT_COORDS.pickup.latitude,
+      longitude: DEFAULT_COORDS.pickup.longitude,
+    };
   });
 
   // Destination state
@@ -116,6 +138,8 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   // Loading states
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const [activeRideOrder, setActiveRideOrder] = useState<RideOrderData | null>(null);
 
   // Backend Fare Breakdown State
   const [fareBreakdown, setFareBreakdown] = useState<FareEstimateResult | null>(null);
@@ -265,6 +289,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     void fetchActiveCustomerRide(authAccount.id).then((res) => {
       if (!active) return;
       if (res.success && res.data) {
+        setActiveRideOrder(res.data);
         Alert.alert(
           "Perjalanan Sedang Berjalan",
           `Anda memiliki perjalanan aktif (${res.data.status}). Buka pelacakan sekarang?`,
@@ -273,6 +298,8 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
             { text: "Buka Pelacakan", onPress: () => navigate("c_ride_tracking") },
           ]
         );
+      } else {
+        setActiveRideOrder(null);
       }
     });
     return () => {
@@ -285,89 +312,41 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     let active = true;
     (async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === "granted") {
-          const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          if (!active) return;
-          const lat = loc.coords.latitude;
-          const lng = loc.coords.longitude;
-          let detectedAddress = "Lokasi Penjemputan";
-          try {
-            const reverse = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-            if (reverse && reverse.length > 0) {
-              const item = reverse[0];
-              detectedAddress = [
-                item.name && item.name !== item.street ? item.name : "",
-                item.street,
-                item.district,
-                item.city,
-              ].filter(Boolean).join(", ") || "Lokasi Terdeteksi";
-            }
-          } catch {
-            // fallback gracefully
-          }
-          if (active) {
-            setPickup({
-              address: detectedAddress,
-              placeName: "Lokasi Saya",
-              latitude: lat,
-              longitude: lng,
-            });
-          }
-        }
-      } catch {
-        // Fallback already in initial state
+        const userLoc = await getCurrentUserCoordinates();
+        if (!active || !userLoc) return;
+        setPickup({
+          address: userLoc.address,
+          placeName: userLoc.placeName || "Lokasi Saya",
+          latitude: userLoc.latitude,
+          longitude: userLoc.longitude,
+        });
+      } catch (err) {
+        console.warn("Auto-detect GPS error on mount:", err);
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Request current GPS location for pickup
   const handleUseCurrentLocation = async () => {
     setIsLocating(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
+      const userLoc = await getCurrentUserCoordinates();
+      if (!userLoc) {
         Alert.alert(
-          "Izin Lokasi Ditolak",
-          "Aktifkan izin lokasi pada perangkat Anda untuk mendeteksi posisi penjemputan secara otomatis."
+          "Izin Lokasi Diperlukan",
+          "Aktifkan izin GPS pada perangkat atau browser Anda untuk mendeteksi posisi penjemputan secara otomatis."
         );
-        setIsLocating(false);
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      const lat = loc.coords.latitude;
-      const lng = loc.coords.longitude;
-
-      let detectedAddress = "Lokasi Saya Saat Ini";
-      try {
-        const reverse = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-        if (reverse && reverse.length > 0) {
-          const item = reverse[0];
-          detectedAddress = [
-            item.name && item.name !== item.street ? item.name : "",
-            item.street,
-            item.district,
-            item.city,
-          ]
-            .filter(Boolean)
-            .join(", ") || "Lokasi Saya Saat Ini";
-        }
-      } catch {
-        // Fallback to default label
-      }
-
       setPickup({
-        address: detectedAddress,
-        placeName: "Lokasi Terdeteksi",
-        latitude: lat,
-        longitude: lng,
+        address: userLoc.address,
+        placeName: userLoc.placeName || "Lokasi Terdeteksi",
+        latitude: userLoc.latitude,
+        longitude: userLoc.longitude,
       });
     } catch (err) {
       console.error("Location error:", err);
@@ -453,7 +432,8 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     pickup.longitude === destination.longitude;
 
   const canOrder = Boolean(
-    pickup.address.trim() &&
+    !activeRideOrder &&
+      pickup.address.trim() &&
       destination.address.trim() &&
       !sameAddress &&
       !sameCoordinates &&
@@ -517,6 +497,17 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
 
   // Submit Order
   const handleOrderRide = async () => {
+    if (isSubmittingRef.current || isSubmitting) return;
+
+    if (activeRideOrder) {
+      Alert.alert(
+        "Perjalanan Aktif Ditemukan",
+        "Anda masih memiliki perjalanan aktif yang sedang berlangsung. Selesaikan atau batalkan perjalanan sebelumnya terlebih dahulu.",
+        [{ text: "Buka Pelacakan", onPress: () => navigate("c_ride_tracking") }]
+      );
+      return;
+    }
+
     if (!pickup.address.trim()) {
       Alert.alert("Lokasi Penjemputan Kosong", "Silakan tentukan lokasi penjemputan.");
       return;
@@ -554,8 +545,10 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
+      const idempotencyKey = `ride_${authAccount?.id || "guest"}_${Date.now()}`;
       const res = await createRideBooking({
         customerId: authAccount?.id,
         customerName: authAccount?.name,
@@ -570,6 +563,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         routeDistanceKm: rideRoute.distanceKm,
         routeDurationMinutes: rideRoute.durationMinutes,
         estimatedFare,
+        idempotencyKey,
       });
 
       if (!res.success || !res.data) {
@@ -577,7 +571,10 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         return;
       }
 
-      // Success -> If cash, go straight to tracking. If digital, open payment modal first
+      // Success -> Save targeted ID and go to tracking (or payment modal first if digital)
+      if (res.data._id) {
+        await AsyncStorage.setItem("selected_ride_tracking_id", String(res.data._id));
+      }
       if (selectedPaymentMethod === "CASH") {
         navigate("c_ride_tracking");
       } else {
@@ -588,6 +585,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       const message = error instanceof Error ? error.message : "Gagal menghubungkan ke server.";
       Alert.alert("Terjadi Kesalahan", message);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -624,6 +622,40 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
             <Text style={styles.bannerSub}>Perjalanan nyaman bersama Rangers.</Text>
           </View>
         </View>
+
+        {/* Active Trip Alert Banner */}
+        {activeRideOrder && (
+          <TouchableOpacity
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: "#EFF6FF",
+              borderColor: "#3B82F6",
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 16,
+            }}
+            onPress={async () => {
+              if (activeRideOrder?._id) {
+                await AsyncStorage.setItem("selected_ride_tracking_id", String(activeRideOrder._id));
+              }
+              navigate("c_ride_tracking");
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1D4ED8" }}>
+                Perjalanan Aktif Sedang Berlangsung
+              </Text>
+              <Text style={{ fontSize: 11, color: "#2563EB", marginTop: 2 }}>
+                Status: {activeRideOrder.status}. Ketuk untuk melihat pelacakan.
+              </Text>
+            </View>
+            <ArrowRight size={18} color="#1D4ED8" />
+          </TouchableOpacity>
+        )}
 
         {/* Location Card */}
         <View style={styles.card}>
@@ -1073,6 +1105,22 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       <CustomerLocationPicker
         visible={locationPickerVisible}
         initialLocation={pickerInitialLocation}
+        fallbackLocation={
+          pickerTarget === "destination" && hasPickupCoordinates
+            ? {
+                latitude: pickup.latitude as number,
+                longitude: pickup.longitude as number,
+                detectedAddress: pickup.address,
+              }
+            : undefined
+        }
+        title={pickerTarget === "destination" ? "Pilih Lokasi Tujuan" : "Pilih Titik Penjemputan"}
+        subtitle={
+          pickerTarget === "destination"
+            ? "Cari nama tempat / geser pin ke tujuan perjalanan"
+            : "Tentukan titik penjemputan driver Rangers"
+        }
+        badgeText={pickerTarget === "destination" ? "Pin Tujuan" : "Pin Jemput"}
         onClose={() => setLocationPickerVisible(false)}
         onConfirm={handleLocationConfirmed}
       />

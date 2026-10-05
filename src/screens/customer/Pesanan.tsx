@@ -55,6 +55,7 @@ import {
   uploadFileToBackend,
 } from "../../services/api";
 import { MarketplaceDigitalPaymentModal } from "../../components/MarketplaceDigitalPaymentModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface PesananProps {
   orders: OrderItem[];
@@ -390,6 +391,7 @@ export const Pesanan: React.FC<PesananProps> = ({
 
   const handleOpenTracking = (order: OrderItem) => {
     if (order.type?.toLowerCase().includes("ride")) {
+      void AsyncStorage.setItem("selected_ride_tracking_id", order.id);
       if (navigate) {
         navigate("c_ride_tracking");
         return;

@@ -27,6 +27,7 @@ export interface CreateRideParams {
   routeDistanceKm: number;
   routeDurationMinutes: number;
   estimatedFare?: number;
+  idempotencyKey?: string;
 }
 
 export type RideStatus =
@@ -257,7 +258,10 @@ export const fetchDriverRides = async (
   try {
     const headers = await getAuthHeaders(driverId);
     const res = await fetch(getApiUrl(`/rides/driver/${driverId}?t=${Date.now()}`), {
-      headers,
+      headers: {
+        ...(driverId ? { "x-driver-id": driverId } : {}),
+        ...headers,
+      },
       cache: "no-store",
     });
     return await readJson(res);
@@ -295,8 +299,10 @@ export const acceptRide = async (
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(driverId ? { "x-driver-id": driverId } : {}),
         ...headers,
       },
+      body: JSON.stringify({ driverId }),
     });
     return await readJson(res);
   } catch (err: any) {
@@ -316,8 +322,10 @@ export const declineRide = async (
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(driverId ? { "x-driver-id": driverId } : {}),
         ...headers,
       },
+      body: JSON.stringify({ driverId }),
     });
     return await readJson(res);
   } catch (err: any) {
@@ -339,9 +347,10 @@ export const updateRideStatus = async (
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
+        ...(actorId ? { "x-driver-id": actorId } : {}),
         ...headers,
       },
-      body: JSON.stringify({ status, cancelReason }),
+      body: JSON.stringify({ status, cancelReason, driverId: actorId }),
     });
     return await readJson(res);
   } catch (err: any) {

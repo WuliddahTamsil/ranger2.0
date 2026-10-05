@@ -150,7 +150,67 @@ const createRideOrder = async (req, res) => {
       discount = 0,
       routeDistanceKm,
       routeDurationMinutes,
+      idempotencyKey,
     } = req.body;
+
+    // 1. Idempotency Check: prevent duplicate submission with same client key
+    if (idempotencyKey) {
+      const existingIdempotent = await RideOrder.findOne({ idempotencyKey }).lean();
+      if (existingIdempotent) {
+        return res.status(200).json({
+          success: true,
+          message: "Pesanan Kanyaah Ride sudah berhasil dibuat.",
+          data: existingIdempotent,
+        });
+      }
+    }
+
+    // 2. Auto-cancel stale SEARCHING_DRIVER orders older than 15 minutes before checking active orders
+    const staleThreshold = new Date(Date.now() - 15 * 60 * 1000);
+    await RideOrder.updateMany(
+      {
+        customerId,
+        status: "SEARCHING_DRIVER",
+        createdAt: { $lt: staleThreshold },
+      },
+      {
+        $set: {
+          status: "CANCELLED",
+          cancelledBy: "SYSTEM",
+          cancelReason: "Waktu pencarian driver berakhir (tidak ada driver tersedia).",
+        },
+      }
+    ).catch(() => {});
+
+    // Active Ride Check: Customer cannot create a new ride while having an active ongoing ride
+    const activeOrder = await RideOrder.findOne({
+      customerId,
+      status: { $in: ["SEARCHING_DRIVER", "DRIVER_ASSIGNED", "DRIVER_ON_THE_WAY", "DRIVER_ARRIVED", "TRIP_STARTED"] },
+    }).lean();
+
+    if (activeOrder) {
+      return res.status(409).json({
+        success: false,
+        message: "Anda masih memiliki perjalanan aktif yang sedang berjalan. Mohon selesaikan atau batalkan pesanan tersebut sebelum memesan perjalanan baru.",
+        data: activeOrder,
+      });
+    }
+
+    // 3. Debounce Check: Prevent double-click duplicates within 15 seconds
+    const recentDuplicate = await RideOrder.findOne({
+      customerId,
+      "pickup.address": pickup?.address,
+      "destination.address": destination?.address,
+      createdAt: { $gte: new Date(Date.now() - 15000) },
+    }).lean();
+
+    if (recentDuplicate) {
+      return res.status(200).json({
+        success: true,
+        message: "Pesanan serupa baru saja dibuat.",
+        data: recentDuplicate,
+      });
+    }
 
     if (!pickup?.address || !destination?.address) {
       return res.status(400).json({
@@ -197,15 +257,20 @@ const createRideOrder = async (req, res) => {
     // Driver gets 80% of total fare
     const driverEarnings = Math.round(totalAmount * 0.8);
 
-    const orderCode = `RNG-RIDE-${Date.now().toString().slice(-8)}`;
+    let finalCustomerPhone = String(customerPhone || "").trim();
+    if (!finalCustomerPhone && customerId) {
+      const custUser = await User.findById(customerId).select("phone").lean().catch(() => null);
+      if (custUser?.phone) finalCustomerPhone = String(custUser.phone).trim();
+    }
 
     const rideOrder = await RideOrder.create({
       orderCode,
+      idempotencyKey: idempotencyKey || null,
       orderType: "KANYAAH_RIDE",
       serviceType: "KANYAAH_RIDE",
       customerId,
       customerName,
-      customerPhone,
+      customerPhone: finalCustomerPhone,
       vehicleType: "MOTOR",
       pickup: {
         address: pickup.address,
@@ -301,6 +366,23 @@ const getActiveCustomerRide = async (req, res) => {
       return res.status(401).json({ success: false, message: "Akses tidak diizinkan." });
     }
 
+    // Auto-cancel stale SEARCHING_DRIVER orders older than 15 minutes
+    const staleThreshold = new Date(Date.now() - 15 * 60 * 1000);
+    await RideOrder.updateMany(
+      {
+        customerId,
+        status: "SEARCHING_DRIVER",
+        createdAt: { $lt: staleThreshold },
+      },
+      {
+        $set: {
+          status: "CANCELLED",
+          cancelledBy: "SYSTEM",
+          cancelReason: "Waktu pencarian driver berakhir (tidak ada driver tersedia).",
+        },
+      }
+    ).catch(() => {});
+
     const activeOrder = await RideOrder.findOne({
       customerId,
       status: { $in: ["SEARCHING_DRIVER", "DRIVER_ASSIGNED", "DRIVER_ON_THE_WAY", "DRIVER_ARRIVED", "TRIP_STARTED"] },
@@ -318,7 +400,7 @@ const getActiveCustomerRide = async (req, res) => {
 // 5. Get ride orders for Driver (available incoming and assigned)
 const getDriverRideOrders = async (req, res) => {
   try {
-    const driverId = String(req.authUser?._id || req.params.driverId || "");
+    const driverId = String(req.authUser?._id || req.params.driverId || req.headers?.["x-driver-id"] || "");
 
     const query = {
       $or: [
@@ -352,7 +434,11 @@ const getRideOrderById = async (req, res) => {
 // 7. Atomic Driver Acceptance
 const acceptRideOrder = async (req, res) => {
   try {
-    const driver = req.authUser;
+    let driver = req.authUser;
+    const fallbackDriverId = String(req.body?.driverId || req.headers?.["x-driver-id"] || "");
+    if (!driver && fallbackDriverId) {
+      driver = await User.findById(fallbackDriverId).lean();
+    }
     if (!driver || driver.role !== "driver") {
       return res.status(403).json({ success: false, message: "Hanya akun Driver Rangers yang dapat menerima pesanan." });
     }
@@ -385,7 +471,11 @@ const acceptRideOrder = async (req, res) => {
       driver.roleData?.get?.("plate") ||
       driver.roleData?.plate ||
       "";
-    const driverPhone = driver.phone || "";
+    let driverPhone = String(driver.phone || "").trim();
+    if (!driverPhone && driver._id) {
+      const u = await User.findById(driver._id).select("phone").lean().catch(() => null);
+      if (u?.phone) driverPhone = String(u.phone).trim();
+    }
     const driverPhoto = driver.profilePhoto || "";
     const driverRating = typeof driver.driverRating === "number" && driver.driverRating > 0 ? driver.driverRating : 4.9;
 
@@ -465,10 +555,14 @@ const acceptRideOrder = async (req, res) => {
     // Broadcast Realtime Events
     if (req.io) {
       req.io.emit("ride:status_changed", { orderId: order._id, status: order.status, driverId });
+      req.io.emit("ride_status_updated", order);
       emitToUser(req.io, order.customerId, "ride:driver_assigned", order);
+      emitToUser(req.io, order.customerId, "ride_driver_assigned", order);
+      emitToUser(req.io, order.customerId, "ride:status_changed", order);
       emitToUser(req.io, order.customerId, "ride_status_updated", order);
       emitToUser(req.io, order.customerId, "order_status_updated", order);
       emitToRideRoom(req.io, order._id, "ride:status_changed", order);
+      emitToRideRoom(req.io, order._id, "ride_status_updated", order);
     }
 
     return res.json({
@@ -485,7 +579,10 @@ const acceptRideOrder = async (req, res) => {
 // 8. Driver declines an order
 const declineRideOrder = async (req, res) => {
   try {
-    const driverId = String(req.authUser?._id || req.body.driverId || "");
+    const driverId = String(req.authUser?._id || req.body?.driverId || req.headers?.["x-driver-id"] || "");
+    if (!driverId) {
+      return res.status(400).json({ success: false, message: "Driver ID diperlukan untuk menolak pesanan." });
+    }
     const order = await RideOrder.findOneAndUpdate(
       { _id: req.params.id, status: "SEARCHING_DRIVER" },
       { $addToSet: { declinedByDrivers: driverId } },
@@ -493,6 +590,9 @@ const declineRideOrder = async (req, res) => {
     );
     if (!order) {
       return res.status(409).json({ success: false, message: "Pesanan tidak lagi tersedia untuk ditolak." });
+    }
+    if (req.io) {
+      req.io.emit("ride:declined", { orderId: order._id, driverId });
     }
     return res.json({ success: true, message: "Pesanan dilewati.", data: order });
   } catch (error) {
@@ -597,8 +697,14 @@ const updateRideStatus = async (req, res) => {
       }).catch(() => {});
 
       emitToUser(req.io, current.customerId, "ride_status_updated", current);
+      emitToUser(req.io, current.customerId, "ride:status_changed", current);
       emitToUser(req.io, current.customerId, "order_status_updated", current);
       emitToRideRoom(req.io, current._id, "ride:status_changed", current);
+      emitToRideRoom(req.io, current._id, "ride_status_updated", current);
+      if (req.io) {
+        req.io.emit("ride:status_changed", { orderId: current._id, status: current.status, driverId: current.driverId });
+        req.io.emit("ride_status_updated", current);
+      }
     }
 
     return res.json({ success: true, message: "Status perjalanan diperbarui", data: current });
@@ -798,12 +904,10 @@ const submitRideComplaint = async (req, res) => {
     const { category, description, attachments = [] } = req.body;
     const authUser = req.authUser;
 
-    if (!category || !description?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Kategori dan deskripsi pengaduan wajib diisi.",
-      });
-    }
+    const resolvedCategory = category || "Lainnya";
+    const resolvedDescription = (description && String(description).trim())
+      ? String(description).trim()
+      : `Laporan pengaduan: ${resolvedCategory}`;
 
     const order = await RideOrder.findById(orderId);
     if (!order) {
@@ -820,18 +924,21 @@ const submitRideComplaint = async (req, res) => {
       customerPhone: order.customerPhone,
       driverId: order.driverId,
       driverName: order.driverName,
-      category,
-      description: description.trim(),
+      category: resolvedCategory,
+      description: resolvedDescription,
       attachments,
       status: "OPEN",
     });
 
-    order.status = "DISPUTED";
+    if (order.status !== "CANCELLED" && order.status !== "COMPLETED") {
+      order.status = "DISPUTED";
+    }
+
     order.statusHistory.push({
-      status: "DISPUTED",
+      status: order.status,
       actorId: String(authUser?._id || order.customerId),
       actorRole: "customer",
-      note: `Komplain diajukan (#${ticketId}): ${category}`,
+      note: `Komplain diajukan (#${ticketId}): ${resolvedCategory}`,
       createdAt: new Date(),
     });
     await order.save();

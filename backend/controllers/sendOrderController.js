@@ -445,14 +445,29 @@ const getOrderById = async (req, res) => {
 /**
  * 5. Driver: Get Available Orders (GET /api/send/orders/available)
  */
+const resolveDriverId = (req) => {
+  return String(
+    req.authUser?._id ||
+    req.headers["x-driver-id"] ||
+    req.headers["x-user-id"] ||
+    req.headers["x-account-id"] ||
+    req.body?.driverId ||
+    req.query?.driverId ||
+    ""
+  );
+};
+
+/**
+ * 5. Driver: Get Available Orders (GET /api/send/orders/available)
+ */
 const getAvailableOrders = async (req, res) => {
   try {
-    const driverId = String(req.authUser._id);
+    const driverId = resolveDriverId(req);
 
     const filter = {
       status: "SEARCHING_DRIVER",
       driverId: null,
-      declinedByDrivers: { $ne: driverId },
+      ...(driverId ? { declinedByDrivers: { $nin: [driverId] } } : {}),
     };
 
     const availableOrders = await SendOrder.find(filter)
@@ -476,7 +491,7 @@ const getAvailableOrders = async (req, res) => {
  */
 const getDriverOrders = async (req, res) => {
   try {
-    const driverId = String(req.authUser._id);
+    const driverId = resolveDriverId(req);
     const { status, limit = 20 } = req.query;
 
     const filter = { driverId };
@@ -504,9 +519,12 @@ const getDriverOrders = async (req, res) => {
  */
 const acceptOrder = async (req, res) => {
   try {
-    const driverId = String(req.authUser._id);
+    const driverId = resolveDriverId(req);
+    if (!driverId) {
+      return res.status(401).json({ success: false, message: "Driver ID diperlukan." });
+    }
 
-    const driver = await User.findById(driverId);
+    const driver = req.authUser || await User.findById(driverId);
     if (!driver) {
       return res.status(404).json({ success: false, message: "Data driver tidak ditemukan." });
     }
@@ -575,13 +593,22 @@ const acceptOrder = async (req, res) => {
  */
 const declineOrder = async (req, res) => {
   try {
-    const driverId = String(req.authUser._id);
+    const driverId = resolveDriverId(req);
+    if (!driverId) {
+      return res.status(400).json({ success: false, message: "Driver ID tidak valid." });
+    }
 
-    await SendOrder.findByIdAndUpdate(req.params.id, {
-      $addToSet: { declinedByDrivers: driverId },
-    });
+    const updated = await SendOrder.findByIdAndUpdate(
+      req.params.id,
+      { $addToSet: { declinedByDrivers: driverId } },
+      { new: true }
+    );
 
-    return res.status(200).json({ success: true, message: "Order diabaikan." });
+    if (req.io) {
+      req.io.emit("send:declined", { orderId: req.params.id, driverId });
+    }
+
+    return res.status(200).json({ success: true, message: "Order diabaikan.", data: updated });
   } catch (error) {
     console.error("declineOrder error:", error);
     return res.status(500).json({ success: false, message: "Gagal menolak order." });

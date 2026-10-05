@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Home,
   Map,
@@ -507,11 +508,20 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         })) : null;
 
         const currentOrders = ordersRef.current;
-        const allCustomerOrders = [
+        const rawOrders = [
           ...(marketplaceOrders ?? currentOrders.filter((order) => order.type === "Marketplace")),
           ...(cateringOrders ?? currentOrders.filter((order) => order.type === "Catering")),
           ...(rideOrders ?? currentOrders.filter((order) => order.type === "Kanyaah Ride")),
         ];
+
+        const seenOrderIds = new Set<string>();
+        const allCustomerOrders: OrderItem[] = [];
+        for (const o of rawOrders) {
+          if (o?.id && !seenOrderIds.has(o.id)) {
+            seenOrderIds.add(o.id);
+            allCustomerOrders.push(o);
+          }
+        }
 
         allCustomerOrders.sort((a, b) => {
           const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -1307,6 +1317,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   style={styles.activeOrderCtaBtn}
                   onPress={() => {
                     if (activeOrder.type === "Kanyaah Ride") {
+                      if (activeOrder.id) {
+                        void AsyncStorage.setItem("selected_ride_tracking_id", String(activeOrder.id));
+                      }
                       navigate("c_ride_tracking");
                     } else if (activeOrder.type === "Catering") {
                       navigate("c_catering_tracking");

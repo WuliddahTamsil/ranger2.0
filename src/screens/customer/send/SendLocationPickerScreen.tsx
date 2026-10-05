@@ -33,6 +33,7 @@ import {
   safeForwardGeocode,
   searchPlacesSmart,
   PlaceSuggestion,
+  getCurrentUserCoordinates,
 } from "../../../utils/geocoding";
 
 interface SendLocationPickerScreenProps extends Nav {}
@@ -107,17 +108,14 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
   const handleGetCurrentLocation = async () => {
     setIsLocating(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
+      const userLoc = await getCurrentUserCoordinates();
+      if (!userLoc) {
         showToast("Izin lokasi diperlukan untuk mendeteksi posisi GPS Anda.");
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const lat = loc.coords.latitude;
-      const lon = loc.coords.longitude;
-      setCoords({ latitude: lat, longitude: lon });
-      performReverseGeocode(lat, lon);
+      setCoords({ latitude: userLoc.latitude, longitude: userLoc.longitude });
+      setAddressTitle(userLoc.address);
       showToast("Titik lokasi diperbarui ke koordinat GPS Anda.");
     } catch (e: any) {
       showToast("Gagal mendeteksi lokasi GPS: " + (e.message || ""));

@@ -209,9 +209,18 @@ const acceptDriverOrder = async (req, res) => {
 
 const declineDriverOrder = async (req, res) => {
   try {
+    const driverId = String(
+      req.authUser?._id ||
+      req.headers["x-driver-id"] ||
+      req.body?.driverId ||
+      ""
+    );
+    if (!driverId) {
+      return res.status(400).json({ success: false, message: "Driver ID diperlukan." });
+    }
     const order = await MarketplaceOrder.findOneAndUpdate(
       { _id: req.params.id, status: "Siap", driverId: { $in: ["", null] } },
-      { $addToSet: { declinedByDrivers: String(req.authUser._id) } },
+      { $addToSet: { declinedByDrivers: driverId } },
       { new: true }
     );
     if (!order) return res.status(409).json({ success: false, message: "Pesanan tidak lagi tersedia untuk ditolak." });

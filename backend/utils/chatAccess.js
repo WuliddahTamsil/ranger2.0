@@ -5,6 +5,7 @@ const CateringOrder = require("../models/CateringOrder");
 const LaundryOrder = require("../models/LaundryOrder");
 const Booking = require("../models/Booking");
 const RideOrder = require("../models/RideOrder");
+const SendOrder = require("../models/SendOrder");
 const Kost = require("../models/Kost");
 
 const ownerRoles = new Set([
@@ -17,13 +18,16 @@ const ownerRoles = new Set([
 
 const findOrderByIdentifier = async (identifier) => {
   if (!identifier) return null;
-  const value = String(identifier);
+  const value = String(identifier).trim();
+  const cleanValue = value.replace(/^#/, "").trim();
+
   const models = [
     [MarketplaceOrder, "marketplace", "orderCode"],
     [CateringOrder, "catering", "orderCode"],
     [LaundryOrder, "laundry", "orderCode"],
     [Booking, "kos", "bookingCode"],
     [RideOrder, "ride", "orderCode"],
+    [SendOrder, "send", "orderCode"],
   ];
 
   for (const [Model, orderType, codeField] of models) {
@@ -31,7 +35,15 @@ const findOrderByIdentifier = async (identifier) => {
     if (mongoose.Types.ObjectId.isValid(value)) {
       order = await Model.findById(value).lean().catch(() => null);
     }
+    if (!order && mongoose.Types.ObjectId.isValid(cleanValue)) {
+      order = await Model.findById(cleanValue).lean().catch(() => null);
+    }
     if (!order) order = await Model.findOne({ [codeField]: value }).lean().catch(() => null);
+    if (!order) order = await Model.findOne({ [codeField]: cleanValue }).lean().catch(() => null);
+    if (!order && cleanValue.length >= 6) {
+      const escaped = cleanValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      order = await Model.findOne({ [codeField]: new RegExp(escaped + "$", "i") }).lean().catch(() => null);
+    }
     if (order) return { order, orderType, codeField };
   }
 
@@ -106,41 +118,61 @@ const resolveParticipant = async (userId, record) => {
     }
   }
 
-  if (user.role === "customer" && id === participants.customerId) {
-    return { role: "customer", user, ...participants };
+  if (user.role === "admin") {
+    return { role: "admin", user, ...participants, isAdmin: true };
   }
-  if (user.role === "driver" && participants.driverIds.includes(id)) {
-    return { role: "driver", user, ...participants };
+
+  if (user.role === "customer") {
+    if (!participants.customerId || id === participants.customerId) {
+      return { role: "customer", user, ...participants };
+    }
   }
-  if (ownerRoles.has(user.role) && id === participants.ownerId) {
-    return { role: "owner", user, ...participants };
+
+  if (user.role === "driver") {
+    if (participants.driverIds.length === 0 || participants.driverIds.includes(id)) {
+      return { role: "driver", user, ...participants };
+    }
   }
+
+  if (ownerRoles.has(user.role)) {
+    if (!participants.ownerId || id === participants.ownerId) {
+      return { role: "owner", user, ...participants };
+    }
+  }
+
   return null;
 };
 
 const resolveReceiverId = (participant, target) => {
-  const normalizedTarget = target || (participant.role === "driver" ? "customer" : "owner");
-  if (normalizedTarget === participant.role) return null;
+  let normalizedTarget = target;
+  if (!normalizedTarget) {
+    if (participant.role === "driver") {
+      normalizedTarget = participant.customerId ? "customer" : "owner";
+    } else if (participant.role === "customer") {
+      normalizedTarget = participant.driverId ? "driver" : "owner";
+    } else {
+      normalizedTarget = participant.customerId ? "customer" : "driver";
+    }
+  }
 
   if (participant.role === "customer") {
-    if (normalizedTarget === "driver") return participant.driverId || null;
-    if (normalizedTarget === "owner") return participant.ownerId || null;
+    if (normalizedTarget === "driver") return participant.driverId || participant.ownerId || null;
+    if (normalizedTarget === "owner") return participant.ownerId || participant.driverId || null;
   }
   if (participant.role === "owner") {
-    if (normalizedTarget === "driver") return participant.driverId || null;
-    if (normalizedTarget === "customer") return participant.customerId || null;
+    if (normalizedTarget === "driver") return participant.driverId || participant.customerId || null;
+    if (normalizedTarget === "customer") return participant.customerId || participant.driverId || null;
   }
   if (participant.role === "driver") {
-    if (normalizedTarget === "owner") return participant.ownerId || null;
-    if (normalizedTarget === "customer") return participant.customerId || null;
+    if (normalizedTarget === "owner") return participant.ownerId || participant.customerId || null;
+    if (normalizedTarget === "customer") return participant.customerId || participant.ownerId || null;
   }
-  return null;
+
+  return participant.customerId || participant.driverId || participant.ownerId || null;
 };
 
 const isArchivedStatus = (status) => [
-  "selesai",
   "dibatalkan",
-  "completed",
   "cancelled",
   "batal",
 ].includes(String(status || "").toLowerCase());

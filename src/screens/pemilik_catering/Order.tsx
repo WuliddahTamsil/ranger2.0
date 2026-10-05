@@ -1268,7 +1268,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
             <View style={{ marginTop: 10 }}>
               <LiveOrderTrackingMap
                 storeName={selectedOrder.storeName || "Dapur Catering Saya"}
-                storeAddress={selectedOrder.storeAddress || "Dapur Catering, Bangkalan"}
+                storeAddress={selectedOrder.storeAddress || selectedOrder.storeName || "Dapur Catering"}
                 customerAddress={selectedOrder.address || selectedOrder.customer}
                 driverName={selectedOrder.driver?.name}
                 driverVehicle={selectedOrder.driver?.plateNumber || selectedOrder.driver?.vehicle}

@@ -19,7 +19,7 @@ const {
   adminGetOrders,
   adminUpdatePricing,
 } = require("../controllers/sendOrderController");
-const { requireAuth } = require("../middleware/authMiddleware");
+const { requireAuth, optionalAuth } = require("../middleware/authMiddleware");
 const { requireRole } = require("../middleware/requireRole");
 
 const router = express.Router();
@@ -34,18 +34,18 @@ router.post("/", requireAuth, createOrder);
 router.get("/orders/customer/:customerId", requireAuth, getCustomerOrders);
 router.get("/customer/:customerId", requireAuth, getCustomerOrders);
 
-// 3. Driver endpoints (requireAuth enforced)
-router.get("/orders/available", requireAuth, getAvailableOrders);
-router.get("/available", requireAuth, getAvailableOrders);
+// 3. Driver endpoints (supports optionalAuth with driverId header/body fallback)
+router.get("/orders/available", optionalAuth, getAvailableOrders);
+router.get("/available", optionalAuth, getAvailableOrders);
 
-router.get("/orders/driver", requireAuth, getDriverOrders);
-router.get("/driver", requireAuth, getDriverOrders);
+router.get("/orders/driver", optionalAuth, getDriverOrders);
+router.get("/driver", optionalAuth, getDriverOrders);
 
-router.post("/orders/:id/accept", requireAuth, acceptOrder);
-router.post("/:id/accept", requireAuth, acceptOrder);
+router.post("/orders/:id/accept", optionalAuth, acceptOrder);
+router.post("/:id/accept", optionalAuth, acceptOrder);
 
-router.post("/orders/:id/decline", requireAuth, declineOrder);
-router.post("/:id/decline", requireAuth, declineOrder);
+router.post("/orders/:id/decline", optionalAuth, declineOrder);
+router.post("/:id/decline", optionalAuth, declineOrder);
 
 // 4. Operational & Status endpoints (requireAuth enforced)
 router.get("/orders/:id", requireAuth, getOrderById);

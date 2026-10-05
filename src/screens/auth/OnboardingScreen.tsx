@@ -34,8 +34,8 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
-      <View pointerEvents="none" style={styles.backgroundArcTop} />
-      <View pointerEvents="none" style={styles.backgroundArcBottom} />
+      <View style={[styles.backgroundArcTop, { pointerEvents: "none" }]} />
+      <View style={[styles.backgroundArcBottom, { pointerEvents: "none" }]} />
 
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigate("login")} activeOpacity={0.7}>

@@ -111,6 +111,8 @@ interface OrderProps {
   driverName?: string;
   driverVehicle?: string;
   driverPlate?: string;
+  selectedOrderId?: string | null;
+  onClearSelectedOrder?: () => void;
 }
 
 interface ChatAttachment {
@@ -143,12 +145,23 @@ export const Order: React.FC<OrderProps> = ({
   driverName,
   driverVehicle,
   driverPlate,
+  selectedOrderId,
+  onClearSelectedOrder,
 }) => {
   const effectiveDriverName = driverName || "Driver Rangers";
   const effectiveDriverVehicle = [driverVehicle, driverPlate].filter(Boolean).join(" • ") || "Sepeda Motor";
 
   const [activeTab, setActiveTab] = useState<"Semua" | "Ride" | "Delivery" | "Aktif" | "Selesai">("Semua");
   const [selectedOrder, setSelectedOrder] = useState<DriverOrder | null>(null);
+
+  useEffect(() => {
+    if (selectedOrderId) {
+      const match = orders.find((o) => o.id === selectedOrderId);
+      if (match) {
+        setSelectedOrder(match);
+      }
+    }
+  }, [selectedOrderId, orders]);
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [chatTarget, setChatTarget] = useState<"owner" | "customer">("owner");
 
@@ -160,6 +173,7 @@ export const Order: React.FC<OrderProps> = ({
   const [cardNavMode, setCardNavMode] = useState<Record<string, "overview" | "store" | "customer">>({});
   const [navMode, setNavMode] = useState<"overview" | "store" | "customer">("store");
   const [fullscreenMapVisible, setFullscreenMapVisible] = useState(false);
+  const [isNavigatingMap, setIsNavigatingMap] = useState(false);
   const [mutatingOrderId, setMutatingOrderId] = useState<string | null>(null);
   const [proofUploadOrderId, setProofUploadOrderId] = useState<string | null>(null);
   const [proofUploadError, setProofUploadError] = useState<{ orderId: string; message: string } | null>(null);
@@ -222,15 +236,16 @@ export const Order: React.FC<OrderProps> = ({
     setSelectedOrder(order);
   };
 
-  const openPhoneCall = (phoneNumber?: string, name?: string) => {
-    if (!phoneNumber) {
-      Alert.alert("Telepon", `Nomor telepon untuk ${name || "kontak ini"} belum tersedia.`);
-      return;
-    }
-    const cleanNumber = phoneNumber.replace(/[^0-9+]/g, "");
-    Linking.openURL(`tel:${cleanNumber}`).catch(() => {
-      Alert.alert("Panggilan Gagal", `Tidak dapat menghubungi ${phoneNumber}.`);
+  const openPhoneCall = (phoneNumber?: string, name?: string, role?: string, order?: DriverOrder) => {
+    const targetOrder = order || selectedOrder;
+    const phone = phoneNumber || targetOrder?.phone || targetOrder?.storePhone || "";
+    setSafeCallTarget({
+      name: name || (targetOrder?.type === "Kanyaah Ride" ? targetOrder.customer : targetOrder?.storeName || "Kontak"),
+      role: role || (targetOrder?.type === "Kanyaah Ride" ? "Penumpang" : "Customer"),
+      phone,
+      orderCode: targetOrder?.orderCode || targetOrder?.id || "",
     });
+    setSafeCallVisible(true);
   };
 
   // Image picking helpers
@@ -413,6 +428,10 @@ export const Order: React.FC<OrderProps> = ({
       return;
     }
     if (order.type === "Kanyaah Ride" && nextStatus === "Selesai") {
+      if (Platform.OS === "web") {
+        void handleUpdateStatus(order.id, "Selesai");
+        return;
+      }
       Alert.alert(
         "Selesaikan Perjalanan",
         "Pastikan penumpang telah sampai di lokasi tujuan dengan selamat. Selesaikan perjalanan?",
@@ -491,36 +510,62 @@ export const Order: React.FC<OrderProps> = ({
     if (!order || mutationLockRef.current.has(orderId)) return;
     mutationLockRef.current.add(orderId);
     setMutatingOrderId(orderId);
-    let continueLegacyFlow = false;
     try {
       const result = onAcceptOrder ? await onAcceptOrder(orderId) : true;
       if (result === false) return;
-      if (order.type === "Marketplace" || order.type === "Catering") {
-        if (typeof result !== "object") {
-          Alert.alert("Pesanan belum diterima", "Server belum mengirim status pesanan terbaru. Coba muat ulang lalu ulangi.");
-          return;
-        }
-        setOrders((current) => current.map((item) => item.id === orderId ? result : item));
-        if (selectedOrder?.id === orderId) setSelectedOrder(result);
-        setActiveTab("Aktif");
-        Alert.alert("Pesanan diterima", "Status pesanan diperbarui. Silakan menuju lokasi pickup.");
-      } else {
-        continueLegacyFlow = true;
-      }
+
+      const updatedOrder: DriverOrder = (result && typeof result === "object") ? result : {
+        ...order,
+        status: (order.type === "Kanyaah Ride" ? "Menuju Pickup" : "Menuju Pickup") as DriverOrder["status"],
+        driverId: driverId || order.driverId,
+      };
+
+      setOrders((current) => current.map((item) => item.id === orderId ? updatedOrder : item));
+      if (selectedOrder?.id === orderId) setSelectedOrder(updatedOrder);
+      setActiveTab("Aktif");
+      Alert.alert(
+        order.type === "Kanyaah Ride" ? "Ride Diterima! 🏍" : "Pesanan Diterima! 📦",
+        order.type === "Kanyaah Ride"
+          ? "Pesanan berhasil diterima. Silakan bersiap menuju lokasi penjemputan penumpang."
+          : "Status pesanan diperbarui. Silakan menuju lokasi pickup."
+      );
     } catch (error) {
       console.error("Accept order error:", error);
       Alert.alert("Pesanan belum diterima", "Periksa koneksi lalu coba lagi.");
     } finally {
       mutationLockRef.current.delete(orderId);
-      setMutatingOrderId((current) => current === orderId ? null : current);
-    }
-    if (continueLegacyFlow) {
-      await handleUpdateStatus(orderId, "Menuju Pickup");
-      setActiveTab("Aktif");
+      setMutatingOrderId((current) => (current === orderId ? null : current));
     }
   };
 
   const handleDeclineOrder = (orderId: string) => {
+    const executeDecline = async () => {
+      if (mutationLockRef.current.has(orderId)) return;
+      mutationLockRef.current.add(orderId);
+      setMutatingOrderId(orderId);
+      try {
+        if (onDeclineOrder) {
+          const success = await onDeclineOrder(orderId);
+          if (!success) return;
+        }
+        setOrders((current) => current.filter((item) => item.id !== orderId));
+        if (selectedOrder?.id === orderId) setSelectedOrder(null);
+      } catch (err: any) {
+        console.error("Decline order error:", err);
+        if (Platform.OS !== "web") {
+          Alert.alert("Gagal Menolak", err.message || "Periksa koneksi lalu coba lagi.");
+        }
+      } finally {
+        mutationLockRef.current.delete(orderId);
+        setMutatingOrderId((current) => (current === orderId ? null : current));
+      }
+    };
+
+    if (Platform.OS === "web") {
+      void executeDecline();
+      return;
+    }
+
     Alert.alert(
       "Konfirmasi Penolakan",
       "Apakah Anda ingin menolak pesanan ini?",
@@ -529,17 +574,7 @@ export const Order: React.FC<OrderProps> = ({
         {
           text: "Tolak Pesanan",
           style: "destructive",
-          onPress: async () => {
-            const order = orders.find((item) => item.id === orderId);
-            if ((order?.type === "Marketplace" || order?.type === "Catering") && onDeclineOrder) {
-              const success = await onDeclineOrder(orderId);
-              if (!success) return;
-              setOrders((current) => current.filter((item) => item.id !== orderId));
-            } else {
-              await handleUpdateStatus(orderId, "Dibatalkan");
-            }
-            if (selectedOrder?.id === orderId) setSelectedOrder(null);
-          },
+          onPress: () => void executeDecline(),
         },
       ]
     );
@@ -711,18 +746,24 @@ export const Order: React.FC<OrderProps> = ({
       <Modal
         visible={Boolean(selectedOrder)}
         animationType="slide"
-        onRequestClose={() => setSelectedOrder(null)}
+        onRequestClose={() => {
+          setSelectedOrder(null);
+          onClearSelectedOrder?.();
+        }}
       >
         <ResponsiveSafeAreaView style={styles.fullPageContainer}>
           {/* Sticky Top Bar */}
           <View style={styles.fullPageHeader}>
             <TouchableOpacity
               style={styles.fullPageBackBtn}
-              onPress={() => setSelectedOrder(null)}
+              onPress={() => {
+                setSelectedOrder(null);
+                onClearSelectedOrder?.();
+              }}
               activeOpacity={0.7}
             >
               <ArrowLeft size={20} color="#0F172A" />
-              <Text style={styles.fullPageBackText}>Daftar Orderan</Text>
+              <Text style={styles.fullPageBackText}>Kembali</Text>
             </TouchableOpacity>
 
           <View style={styles.fullPageHeaderRight}>
@@ -781,6 +822,10 @@ export const Order: React.FC<OrderProps> = ({
                 storeName={selectedOrder.type === "Kanyaah Ride" ? "Titik Penjemputan" : (selectedOrder.storeName || selectedOrder.from)}
                 storeAddress={selectedOrder.type === "Kanyaah Ride" ? (selectedOrder.pickup?.address || selectedOrder.from) : (selectedOrder.storeAddress || selectedOrder.from)}
                 customerAddress={selectedOrder.to}
+                pickupCoordinates={selectedOrder.pickup}
+                destinationCoordinates={selectedOrder.destination}
+                orderType={selectedOrder.type}
+                distance={selectedOrder.dist}
                 marketplaceMode={selectedOrder.type === "Marketplace"}
                 driverName={effectiveDriverName}
                 driverVehicle={effectiveDriverVehicle}
@@ -790,11 +835,13 @@ export const Order: React.FC<OrderProps> = ({
                 onNavigationModeChange={(mode) => setNavMode(mode)}
                 showTurnInstructions={true}
                 onToggleFullscreen={() => setFullscreenMapVisible(true)}
+                isNavigating={isNavigatingMap}
+                onToggleNavigation={(v) => setIsNavigatingMap(v)}
               />
 
               {/* Interactive Start Journey Navigation Controller */}
               {selectedOrder.type !== "Marketplace" && <View style={styles.startJourneyCard}>
-                {/* 1. Mode Rute ke Toko */}
+                {/* 1. Mode Rute ke Pickup / Toko */}
                 {navMode === "store" && (
                   <View style={{ gap: 8 }}>
                     {["Menunggu", "Diproses", "Siap"].includes(selectedOrder.status) ? (
@@ -809,9 +856,19 @@ export const Order: React.FC<OrderProps> = ({
                           <Navigation size={18} color="#FFFFFF" />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.startTripTitle}>MULAI JALAN KE TOKO</Text>
+                          <Text style={styles.startTripTitle}>
+                            {selectedOrder.type === "Kanyaah Ride"
+                              ? "MULAI JEMPUT PENUMPANG"
+                              : selectedOrder.type === "Kanyaah Send"
+                              ? "MULAI JALAN KE PENGIRIM"
+                              : "MULAI JALAN KE TOKO"}
+                          </Text>
                           <Text style={styles.startTripSubtitle}>
-                            Aktifkan tracking & kirim notifikasi ke pemilik toko
+                            {selectedOrder.type === "Kanyaah Ride"
+                              ? "Aktifkan rute navigasi menuju lokasi jemput penumpang"
+                              : selectedOrder.type === "Kanyaah Send"
+                              ? "Aktifkan tracking menuju lokasi pengirim paket"
+                              : "Aktifkan tracking & kirim notifikasi ke pemilik toko"}
                           </Text>
                         </View>
                         <ChevronRight size={18} color="#FFFFFF" />
@@ -820,29 +877,66 @@ export const Order: React.FC<OrderProps> = ({
                       <View style={styles.tripActiveStatusBox}>
                         <View style={styles.tripLiveRow}>
                           <View style={styles.tripLiveDot} />
-                          <Text style={styles.tripLiveText}>SEDANG DALAM PERJALANAN KE TOKO</Text>
+                          <Text style={styles.tripLiveText}>
+                            {selectedOrder.type === "Kanyaah Ride"
+                              ? "SEDANG MENUJU PENUMPANG"
+                              : selectedOrder.type === "Kanyaah Send"
+                              ? "SEDANG MENUJU PENGIRIM"
+                              : "SEDANG DALAM PERJALANAN KE TOKO"}
+                          </Text>
                         </View>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.startNavMainButton,
+                            isNavigatingMap ? styles.startNavMainButtonActive : null,
+                          ]}
+                          onPress={() => setIsNavigatingMap(!isNavigatingMap)}
+                          activeOpacity={0.85}
+                        >
+                          <Navigation size={16} color="#FFFFFF" />
+                          <Text style={styles.startNavMainButtonText}>
+                            {isNavigatingMap
+                              ? "Navigasi Berjalan (Ketuk untuk Jeda)"
+                              : "Mulai Navigasi (Start Navigation)"}
+                          </Text>
+                        </TouchableOpacity>
+
                         <TouchableOpacity
                           style={styles.tripNextActionButton}
                           onPress={() => handleUpdateStatus(selectedOrder.id, "Sampai Pickup")}
                           activeOpacity={0.85}
                         >
-                          <Store size={15} color="#FFFFFF" />
-                          <Text style={styles.tripNextActionText}>Konfirmasi Tiba di Toko</Text>
+                          {selectedOrder.type === "Kanyaah Ride" ? (
+                            <Bike size={15} color="#FFFFFF" />
+                          ) : (
+                            <Store size={15} color="#FFFFFF" />
+                          )}
+                          <Text style={styles.tripNextActionText}>
+                            {selectedOrder.type === "Kanyaah Ride"
+                              ? "Konfirmasi Tiba di Lokasi Jemput"
+                              : selectedOrder.type === "Kanyaah Send"
+                              ? "Konfirmasi Tiba di Pengirim"
+                              : "Konfirmasi Tiba di Toko"}
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     ) : (
                       <View style={styles.tripCompletedNotice}>
                         <CheckCircle size={15} color="#0D7A53" />
                         <Text style={styles.tripCompletedNoticeText}>
-                          Anda sudah sampai di toko. Silakan periksa pesanan & ambil barang.
+                          {selectedOrder.type === "Kanyaah Ride"
+                            ? "Anda sudah tiba di lokasi penjemputan. Silakan tunggu penumpang naik."
+                            : selectedOrder.type === "Kanyaah Send"
+                            ? "Anda sudah di lokasi pengirim. Ambil paket & verifikasi kode pickup."
+                            : "Anda sudah sampai di toko. Silakan periksa pesanan & ambil barang."}
                         </Text>
                       </View>
                     )}
                   </View>
                 )}
 
-                {/* 2. Mode Rute ke Customer */}
+                {/* 2. Mode Rute ke Customer / Tujuan */}
                 {navMode === "customer" && (
                   <View style={{ gap: 8 }}>
                     {["Menuju Pickup", "Sampai Pickup"].includes(selectedOrder.status) ? (
@@ -857,9 +951,19 @@ export const Order: React.FC<OrderProps> = ({
                           <Bike size={18} color="#FFFFFF" />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.startTripTitle}>MULAI ANTAR KE CUSTOMER</Text>
+                          <Text style={styles.startTripTitle}>
+                            {selectedOrder.type === "Kanyaah Ride"
+                              ? "MULAI PERJALANAN KE TUJUAN"
+                              : selectedOrder.type === "Kanyaah Send"
+                              ? "MULAI ANTAR KE PENERIMA"
+                              : "MULAI ANTAR KE CUSTOMER"}
+                          </Text>
                           <Text style={styles.startTripSubtitle}>
-                            Aktifkan tracking & kirim notifikasi ke customer
+                            {selectedOrder.type === "Kanyaah Ride"
+                              ? "Penumpang sudah naik, mulai perjalanan menuju titik tujuan"
+                              : selectedOrder.type === "Kanyaah Send"
+                              ? "Paket sudah dibawa, mulai antar menuju alamat penerima"
+                              : "Aktifkan tracking & kirim notifikasi ke customer"}
                           </Text>
                         </View>
                         <ChevronRight size={18} color="#FFFFFF" />
@@ -868,8 +972,31 @@ export const Order: React.FC<OrderProps> = ({
                       <View style={styles.tripActiveStatusBox}>
                         <View style={styles.tripLiveRow}>
                           <View style={styles.tripLiveDot} />
-                          <Text style={styles.tripLiveText}>SEDANG MENGANTAR KE CUSTOMER</Text>
+                          <Text style={styles.tripLiveText}>
+                            {selectedOrder.type === "Kanyaah Ride"
+                              ? "SEDANG MENGANTAR PENUMPANG"
+                              : selectedOrder.type === "Kanyaah Send"
+                              ? "SEDANG MENGANTAR KE PENERIMA"
+                              : "SEDANG MENGANTAR KE CUSTOMER"}
+                          </Text>
                         </View>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.startNavMainButton,
+                            isNavigatingMap ? styles.startNavMainButtonActive : null,
+                          ]}
+                          onPress={() => setIsNavigatingMap(!isNavigatingMap)}
+                          activeOpacity={0.85}
+                        >
+                          <Navigation size={16} color="#FFFFFF" />
+                          <Text style={styles.startNavMainButtonText}>
+                            {isNavigatingMap
+                              ? "Navigasi Berjalan (Ketuk untuk Jeda)"
+                              : "Mulai Navigasi (Start Navigation)"}
+                          </Text>
+                        </TouchableOpacity>
+
                         <TouchableOpacity
                           style={[styles.tripNextActionButton, { backgroundColor: "#15803D" }]}
                           disabled={mutatingOrderId === selectedOrder.id || proofUploadOrderId === selectedOrder.id}
@@ -880,7 +1007,9 @@ export const Order: React.FC<OrderProps> = ({
                             ? <ActivityIndicator size="small" color="#FFFFFF" />
                             : <CheckCircle size={15} color="#FFFFFF" />}
                           <Text style={styles.tripNextActionText}>
-                            Selesaikan Pengantaran
+                            {selectedOrder.type === "Kanyaah Ride"
+                              ? "Selesaikan Perjalanan"
+                              : "Selesaikan Pengantaran"}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -888,7 +1017,9 @@ export const Order: React.FC<OrderProps> = ({
                       <View style={styles.tripCompletedNotice}>
                         <CheckCircle size={15} color="#0D7A53" />
                         <Text style={styles.tripCompletedNoticeText}>
-                          Pengantaran selesai dilakukan. Terima kasih!
+                          {selectedOrder.type === "Kanyaah Ride"
+                            ? "Perjalanan telah selesai dengan selamat. Terima kasih!"
+                            : "Pengantaran selesai dilakukan. Terima kasih!"}
                         </Text>
                       </View>
                     ) : null}
@@ -900,7 +1031,11 @@ export const Order: React.FC<OrderProps> = ({
                   <View style={styles.tripCompletedNotice}>
                     <Compass size={15} color="#0D7A53" />
                     <Text style={styles.tripCompletedNoticeText}>
-                      Menampilkan keseluruhan lintasan penjemputan dari toko hingga ke customer.
+                      {selectedOrder.type === "Kanyaah Ride"
+                        ? "Menampilkan rute penjemputan hingga ke lokasi tujuan penumpang."
+                        : selectedOrder.type === "Kanyaah Send"
+                        ? "Menampilkan rute penjemputan dari pengirim hingga ke penerima."
+                        : "Menampilkan keseluruhan lintasan penjemputan dari toko hingga ke customer."}
                     </Text>
                   </View>
                 )}
@@ -1210,14 +1345,14 @@ export const Order: React.FC<OrderProps> = ({
                 disabled={mutatingOrderId === selectedOrder.id}
                 onPress={() => handleAcceptOrder(selectedOrder.id)}
               >
-                {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.sheetBtnTextSolid}>Terima Pesanan</Text>}
+                {mutatingOrderId === selectedOrder.id ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.sheetBtnTextSolid}>{selectedOrder.type === "Kanyaah Ride" ? "Terima Ride" : "Terima Pesanan"}</Text>}
               </TouchableOpacity>
             </View>
           )}
 
           {selectedOrder.status === "Menuju Pickup" && (
             <TouchableOpacity
-              style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#2563EB" }]}
+              style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#15803D" }]}
               disabled={mutatingOrderId === selectedOrder.id}
               onPress={() => handleDriverTransition(selectedOrder, "Sampai Pickup")}
               activeOpacity={0.85}
@@ -1228,7 +1363,7 @@ export const Order: React.FC<OrderProps> = ({
 
           {selectedOrder.status === "Sampai Pickup" && (
             <TouchableOpacity
-              style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#7E22CE" }]}
+              style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#EA580C" }]}
               disabled={mutatingOrderId === selectedOrder.id}
               onPress={() => handleDriverTransition(selectedOrder, "Mengantar")}
               activeOpacity={0.85}
@@ -1251,10 +1386,21 @@ export const Order: React.FC<OrderProps> = ({
           )}
 
           {selectedOrder.status === "Selesai" && (
-            <View style={styles.completedBadgeBtn}>
+            <TouchableOpacity
+              style={styles.completedBadgeBtn}
+              activeOpacity={0.8}
+              onPress={() => {
+                Alert.alert(
+                  selectedOrder.type === "Kanyaah Ride" ? "Perjalanan Selesai" : "Pengantaran Selesai",
+                  "Pesanan ini telah selesai dijalankan dan pembayaran telah berhasil tercatat."
+                );
+              }}
+            >
               <CheckCircle size={18} color="#15803D" />
-              <Text style={styles.completedBadgeBtnText}>Pengantaran Selesai</Text>
-            </View>
+              <Text style={styles.completedBadgeBtnText}>
+                {selectedOrder.type === "Kanyaah Ride" ? "Perjalanan Telah Selesai ✓" : "Pengantaran Telah Selesai ✓"}
+              </Text>
+            </TouchableOpacity>
           )}
           {proofUploadError?.orderId === selectedOrder.id && (
             <Text style={styles.proofUploadError}>{proofUploadError.message}</Text>
@@ -1303,6 +1449,10 @@ export const Order: React.FC<OrderProps> = ({
                 storeName={selectedOrder?.type === "Kanyaah Ride" ? "Titik Penjemputan" : (selectedOrder?.storeName || selectedOrder?.from)}
                 storeAddress={selectedOrder?.type === "Kanyaah Ride" ? (selectedOrder?.pickup?.address || selectedOrder?.from) : (selectedOrder?.storeAddress || selectedOrder?.from)}
                 customerAddress={selectedOrder?.to}
+                pickupCoordinates={selectedOrder?.pickup}
+                destinationCoordinates={selectedOrder?.destination}
+                orderType={selectedOrder?.type}
+                distance={selectedOrder?.dist}
                 marketplaceMode={selectedOrder?.type === "Marketplace"}
                 driverName={effectiveDriverName}
                 driverVehicle={effectiveDriverVehicle}
@@ -1311,6 +1461,8 @@ export const Order: React.FC<OrderProps> = ({
                 navigationMode={navMode}
                 onNavigationModeChange={(mode) => setNavMode(mode)}
                 showTurnInstructions={true}
+                isNavigating={isNavigatingMap}
+                onToggleNavigation={(v) => setIsNavigatingMap(v)}
               />
 
               {/* Quick Trip Action Button inside Fullscreen View */}
@@ -1347,6 +1499,16 @@ export const Order: React.FC<OrderProps> = ({
         </ResponsiveSafeAreaView>
       </Modal>
       {renderDeliveryProofPicker()}
+      {safeCallTarget && (
+        <SafeCallModal
+          visible={safeCallVisible}
+          onClose={() => setSafeCallVisible(false)}
+          targetName={safeCallTarget.name}
+          targetRole={safeCallTarget.role}
+          targetPhone={safeCallTarget.phone}
+          orderCode={safeCallTarget.orderCode}
+        />
+      )}
       </>
     );
   }
@@ -1838,12 +2000,16 @@ export const Order: React.FC<OrderProps> = ({
               {isOngoing && isMapOpen && (
                 <View style={styles.inlineMapBox}>
                   <LiveOrderTrackingMap
-                    storeName={item.storeName || item.from}
-                    storeAddress={item.storeAddress || item.from}
+                    storeName={item.type === "Kanyaah Ride" ? "Titik Penjemputan" : (item.storeName || item.from)}
+                    storeAddress={item.type === "Kanyaah Ride" ? (item.pickup?.address || item.from) : (item.storeAddress || item.from)}
                     customerAddress={item.to}
+                    pickupCoordinates={item.pickup}
+                    destinationCoordinates={item.destination}
+                    orderType={item.type}
+                    distance={item.dist}
                     marketplaceMode={item.type === "Marketplace"}
-                    driverName="Anda (Kurir)"
-                    driverVehicle="Motor Kurir"
+                    driverName="Anda (Driver)"
+                    driverVehicle="Motor Driver"
                     orderStatus={item.status}
                     height={230}
                     navigationMode={cardNavMode[item.id] || "overview"}
@@ -2117,6 +2283,16 @@ export const Order: React.FC<OrderProps> = ({
           </View>
         }
       />
+      {safeCallTarget && (
+        <SafeCallModal
+          visible={safeCallVisible}
+          onClose={() => setSafeCallVisible(false)}
+          targetName={safeCallTarget.name}
+          targetRole={safeCallTarget.role}
+          targetPhone={safeCallTarget.phone}
+          orderCode={safeCallTarget.orderCode}
+        />
+      )}
     </ResponsiveSafeAreaView>
   );
 };
@@ -2453,6 +2629,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    cursor: "pointer" as any,
   },
   actionBtnOutline: {
     borderWidth: 1.5,
@@ -2738,6 +2915,31 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#FFFFFF",
   },
+  startNavMainButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#15803D",
+    paddingVertical: 10,
+    borderRadius: 8,
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+    cursor: "pointer" as any,
+  },
+  startNavMainButtonActive: {
+    backgroundColor: "#EA580C",
+    shadowColor: "#EA580C",
+  },
+  startNavMainButtonText: {
+    fontSize: 12.5,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
+  },
   tripCompletedNotice: {
     flexDirection: "row",
     alignItems: "center",
@@ -3004,6 +3206,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
+    cursor: "pointer" as any,
   },
   sheetBtnOutline: {
     borderWidth: 1.5,

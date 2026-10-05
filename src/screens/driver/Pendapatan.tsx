@@ -54,9 +54,22 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
   const todayStart = startOfDay(now).getTime();
   const weekStart = startOfWeek(now).getTime();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+  const countOrders = (predicate: (date: Date) => boolean) => completedOrders.filter((order) => {
+    const date = getCompletedDate(order);
+    return date ? predicate(date) : false;
+  }).length;
+
   const todayRevenue = sumOrders(completedOrders, (date) => startOfDay(date).getTime() === todayStart);
+  const todayCount = countOrders((date) => startOfDay(date).getTime() === todayStart);
+
   const weekRevenue = sumOrders(completedOrders, (date) => date.getTime() >= weekStart);
+  const weekCount = countOrders((date) => date.getTime() >= weekStart);
+
   const monthRevenue = sumOrders(completedOrders, (date) => date.getTime() >= monthStart);
+  const monthCount = countOrders((date) => date.getTime() >= monthStart);
+
+  const totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.driverShare || 0), 0);
 
   const dayLabels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
   const currentWeekStart = startOfWeek(now);
@@ -87,6 +100,28 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
   const maxChartValue = Math.max(...currentChartPoints.map((p) => p.value), 1);
   const hasChartData = currentChartPoints.some((p) => p.value > 0);
 
+  const formatBarVal = (val: number) => {
+    if (!val || val <= 0) return "0";
+    if (val >= 1000) {
+      const k = val / 1000;
+      return k % 1 === 0 ? `${k}rb` : `${k.toFixed(1).replace(".", ",")}rb`;
+    }
+    return `${val}`;
+  };
+
+  const serviceStats = [
+    { type: "Kanyaah Ride", color: "#1B7A4E" },
+    { type: "Marketplace", color: "#2563EB" },
+    { type: "Kanyaah Send", color: "#EA580C" },
+    { type: "Catering", color: "#D97706" },
+    { type: "Laundry", color: "#7C3AED" },
+  ].map((srv) => {
+    const srvOrders = completedOrders.filter((o) => o.type === srv.type);
+    const count = srvOrders.length;
+    const revenue = srvOrders.reduce((sum, o) => sum + Number(o.driverShare || 0), 0);
+    return { ...srv, count, revenue };
+  }).filter((srv) => srv.count > 0);
+
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -97,10 +132,12 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
         <View style={styles.revenueBanner}>
           <Text style={styles.revenueBannerLabel}>PENDAPATAN DRIVER HARI INI</Text>
           <Text style={styles.revenueBannerValue}>
-            {todayRevenue > 0 ? rp(todayRevenue) : "Rp0"}
+            {todayRevenue > 0 ? rp(todayRevenue) : "Rp 0"}
           </Text>
           <Text style={styles.revenueBannerSub}>
-            {completedCount} order selesai diselesaikan hari ini.
+            {todayCount > 0
+              ? `${todayCount} order selesai diselesaikan hari ini.`
+              : "Belum ada order yang diselesaikan hari ini."}
           </Text>
         </View>
 
@@ -112,6 +149,7 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
             <Text style={styles.gridVal} numberOfLines={1}>
               {rp(todayRevenue)}
             </Text>
+            <Text style={styles.gridSubText}>{todayCount} Order</Text>
           </View>
           <View style={styles.gridCard}>
             <CalendarRange size={18} color="#1B7A4E" />
@@ -119,6 +157,7 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
             <Text style={styles.gridVal} numberOfLines={1}>
               {rp(weekRevenue)}
             </Text>
+            <Text style={styles.gridSubText}>{weekCount} Order</Text>
           </View>
           <View style={styles.gridCard}>
             <Calendar size={18} color="#1B7A4E" />
@@ -126,13 +165,15 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
             <Text style={styles.gridVal} numberOfLines={1}>
               {rp(monthRevenue)}
             </Text>
+            <Text style={styles.gridSubText}>{monthCount} Order</Text>
           </View>
           <View style={styles.gridCard}>
             <CheckCircle size={18} color="#1B7A4E" />
             <Text style={styles.gridLabel}>Total Selesai</Text>
             <Text style={styles.gridVal} numberOfLines={1}>
-              {completedCount > 0 ? `${completedCount} Order` : "Belum ada"}
+              {rp(totalRevenue)}
             </Text>
+            <Text style={styles.gridSubText}>{completedCount} Order</Text>
           </View>
         </View>
 
@@ -180,7 +221,7 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
                     </View>
                     <Text style={styles.barLabel}>{pt.label}</Text>
                     <Text style={styles.barValText} numberOfLines={1}>
-                      {pt.value > 1000 ? `${Math.round(pt.value / 1000)}rb` : pt.value}
+                      {formatBarVal(pt.value)}
                     </Text>
                   </View>
                 );
@@ -194,14 +235,35 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
           )}
         </View>
 
+        {/* Rincian Berdasarkan Layanan */}
+        {serviceStats.length > 0 && (
+          <View style={styles.breakdownCard}>
+            <Text style={styles.breakdownCardTitle}>Rincian Penghasilan Per Layanan</Text>
+            <View style={styles.breakdownList}>
+              {serviceStats.map((item) => (
+                <View key={item.type} style={styles.breakdownRow}>
+                  <View style={styles.breakdownLeft}>
+                    <View style={[styles.serviceDot, { backgroundColor: item.color }]} />
+                    <View>
+                      <Text style={styles.serviceName}>{item.type}</Text>
+                      <Text style={styles.serviceCount}>{item.count} order selesai</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.serviceRevenue}>{rp(item.revenue)}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Extra info cards */}
         <View style={styles.insightCard}>
           <Text style={styles.insightTitle}>Performa & Bonus Driver</Text>
           <Text style={styles.insightText}>
-            Data pendapatan di halaman ini hanya berasal dari order yang sudah berstatus selesai.
+            Data pendapatan di halaman ini dihitung secara transparan dan otomatis dari order yang telah Anda selesaikan.
           </Text>
           <Text style={[styles.insightText, { color: "#6B7280", marginTop: 8 }]}>
-            Belum ada order selesai berarti belum ada pendapatan yang ditampilkan.
+            Saldo hasil pesanan langsung tersedia dan dapat ditarik melalui menu Keuangan.
           </Text>
         </View>
       </ScrollView>
@@ -279,6 +341,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: "#111827",
+  },
+  gridSubText: {
+    fontSize: 10,
+    color: "#6B7280",
+    fontWeight: "600",
   },
   chartHeader: {
     flexDirection: "row",
@@ -409,5 +476,51 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#4B5563",
     lineHeight: 18,
+  },
+  breakdownCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 16,
+    marginBottom: 16,
+  },
+  breakdownCardTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  breakdownList: {
+    gap: 12,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  breakdownLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  serviceDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  serviceName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  serviceCount: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  serviceRevenue: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
   },
 });

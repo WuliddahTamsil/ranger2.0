@@ -13,11 +13,21 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
     ]);
     const session = sessionRaw ? JSON.parse(sessionRaw) : null;
     const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
-    const requestedAccountId = accountId || session?.accountId;
+    const requestedAccountId = accountId || session?.accountId || session?.currentAccountId;
     const account = Array.isArray(accounts)
       ? accounts.find((item: any) => String(item.id) === String(requestedAccountId))
       : null;
-    return account?.token ? { Authorization: `Bearer ${account.token}` } : {};
+    const targetAccount = account || session?.currentAccount || (Array.isArray(accounts) ? accounts[0] : null);
+    const headers: Record<string, string> = {};
+    if (targetAccount?.token) {
+      headers.Authorization = `Bearer ${targetAccount.token}`;
+    }
+    const resolvedId = targetAccount?.id || requestedAccountId;
+    if (resolvedId) {
+      headers["x-driver-id"] = String(resolvedId);
+      headers["x-user-id"] = String(resolvedId);
+    }
+    return headers;
   } catch {
     return {};
   }

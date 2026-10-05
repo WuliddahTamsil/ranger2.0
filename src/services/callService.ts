@@ -1,4 +1,4 @@
-import { Linking, Alert } from "react-native";
+import { Linking, Alert, Platform } from "react-native";
 
 export const maskPhoneNumber = (phone?: string): string => {
   if (!phone) return "+62 812-****-****";
@@ -42,6 +42,10 @@ export const callPhone = async (phone?: string): Promise<boolean> => {
   const clean = cleanPhoneNumber(phone);
   const url = `tel:${clean}`;
   try {
+    if (Platform.OS === "web") {
+      window.location.href = url;
+      return true;
+    }
     const supported = await Linking.canOpenURL(url);
     if (supported) {
       await Linking.openURL(url);
@@ -65,6 +69,10 @@ export const openWhatsApp = async (phone?: string, text?: string): Promise<boole
   const message = text ? `?text=${encodeURIComponent(text)}` : "";
   const url = `https://wa.me/${waNumber}${message}`;
   try {
+    if (Platform.OS === "web") {
+      window.open(url, "_blank");
+      return true;
+    }
     await Linking.openURL(url);
     return true;
   } catch (err: any) {

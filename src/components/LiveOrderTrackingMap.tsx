@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   Platform,
   ActivityIndicator,
+  Linking,
+  Alert,
 } from "react-native";
 import {
   MapPin,
@@ -20,8 +22,10 @@ import {
   ChevronUp,
   Layers,
   Maximize2,
+  Bike,
+  User,
+  Package,
 } from "lucide-react-native";
-import { Linking, Alert } from "react-native";
 
 export interface LiveOrderTrackingMapProps {
   storeName?: string;
@@ -37,12 +41,19 @@ export interface LiveOrderTrackingMapProps {
   currentLocationName?: string;
   onToggleFullscreen?: () => void;
   marketplaceMode?: boolean;
+  orderType?: "Catering" | "Marketplace" | "Laundry" | "Kanyaah Ride" | "Kanyaah Send" | string;
+  pickupCoordinates?: { latitude?: number; longitude?: number };
+  destinationCoordinates?: { latitude?: number; longitude?: number };
+  driverCoordinates?: { latitude?: number; longitude?: number };
+  distance?: string;
+  isNavigating?: boolean;
+  onToggleNavigation?: (navigating: boolean) => void;
 }
 
-const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
-  storeName = "Dapur Catering",
-  storeAddress = "Kamal, Bangkalan, Madura",
-  customerAddress = "Telang Indah, Bangkalan, Madura",
+const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
+  storeName,
+  storeAddress,
+  customerAddress,
   driverName = "Driver Rangers",
   driverVehicle = "Motor",
   orderStatus,
@@ -50,12 +61,45 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
   navigationMode,
   onNavigationModeChange,
   showTurnInstructions = true,
-  currentLocationName = "Kamal, Bangkalan, Madura",
+  currentLocationName,
   onToggleFullscreen,
+  orderType,
+  pickupCoordinates,
+  destinationCoordinates,
+  driverCoordinates,
+  distance,
+  isNavigating: isNavigatingProp,
+  onToggleNavigation,
 }) => {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isGuidanceExpanded, setIsGuidanceExpanded] = useState(false);
+  const [internalNavigating, setInternalNavigating] = useState(false);
+  const effectiveNavigating = isNavigatingProp !== undefined ? isNavigatingProp : internalNavigating;
+
+  const toggleNavigation = (val: boolean) => {
+    setInternalNavigating(val);
+    if (onToggleNavigation) onToggleNavigation(val);
+  };
+
+  const [navProgress, setNavProgress] = useState(0.28);
+  const [simulatedSpeed, setSimulatedSpeed] = useState(34);
+
+  // Animate progress and speed variation when navigating
+  useEffect(() => {
+    if (!effectiveNavigating) return;
+    const interval = setInterval(() => {
+      setNavProgress((prev) => {
+        if (prev >= 0.88) return 0.20;
+        return Number((prev + 0.035).toFixed(3));
+      });
+      setSimulatedSpeed(Math.floor(28 + Math.random() * 12));
+    }, 1300);
+    return () => clearInterval(interval);
+  }, [effectiveNavigating]);
+
+  const isRide = orderType === "Kanyaah Ride";
+  const isSend = orderType === "Kanyaah Send";
 
   // Status mapping
   const isHeadingToPickup =
@@ -82,98 +126,161 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     setRefreshKey((k) => k + 1);
   };
 
-  // Helper to ensure queries always resolve locally to Kamal / Bangkalan / Madura
-  const formatLocationQuery = (name?: string, addr?: string, fallback: string = "Kamal, Bangkalan") => {
-    let clean = [addr, name].filter(Boolean).join(", ").replace(/[#]/g, "").trim();
-    if (!clean || clean.length === 0) return `${fallback}, Bangkalan, Madura, Jawa Timur`;
-    // If text contains non-Madura words from test data (like Kuningan or Kamojang), anchor locally to Bangkalan
-    if (clean.toLowerCase().includes("kuningan") || clean.toLowerCase().includes("kamojang")) {
-      clean = name ? `${name}, Kamal, Bangkalan` : "Jl. Raya Telang, Kamal, Bangkalan";
+  // Marker coordinates on the map container (percentages)
+  const markerPos = useMemo(() => {
+    const p = effectiveNavigating ? navProgress : 0.35;
+    if (activeMode === "customer") {
+      const x = Math.min(84, Math.max(16, 26 + p * 54));
+      const y = Math.min(78, Math.max(24, 52 - Math.sin(p * Math.PI) * 14));
+      return { x, y };
+    } else if (activeMode === "store") {
+      const x = Math.min(84, Math.max(16, 22 + p * 56));
+      const y = Math.min(78, Math.max(24, 48 + Math.sin(p * Math.PI) * 12));
+      return { x, y };
+    } else {
+      const x = Math.min(80, Math.max(20, 34 + p * 38));
+      const y = 50;
+      return { x, y };
     }
-    if (!clean.toLowerCase().includes("bangkalan")) {
-      clean = `${clean}, Bangkalan, Madura, Jawa Timur`;
+  }, [activeMode, effectiveNavigating, navProgress]);
+
+  // Helper to convert coordinate or text address to reliable Google Maps query
+  const formatLocationQuery = (
+    coord?: { latitude?: number; longitude?: number },
+    addr?: string,
+    name?: string,
+    fallback: string = "Indonesia"
+  ) => {
+    if (
+      coord &&
+      typeof coord.latitude === "number" &&
+      typeof coord.longitude === "number" &&
+      !isNaN(coord.latitude) &&
+      !isNaN(coord.longitude) &&
+      (coord.latitude !== 0 || coord.longitude !== 0)
+    ) {
+      return `${coord.latitude},${coord.longitude}`;
     }
-    return clean;
+    const clean = [addr, name].filter(Boolean).join(", ").replace(/[#]/g, "").trim();
+    return clean || fallback;
   };
 
-  const originQuery = formatLocationQuery(undefined, currentLocationName, "Kamal, Bangkalan");
-  const storeQuery = formatLocationQuery(storeName, storeAddress, "Kamal, Bangkalan");
-  const customerQuery = formatLocationQuery("Customer", customerAddress, "Telang, Bangkalan");
+  const pickupQuery = formatLocationQuery(
+    pickupCoordinates,
+    storeAddress,
+    storeName,
+    "Titik Penjemputan"
+  );
+  const destinationQuery = formatLocationQuery(
+    destinationCoordinates,
+    customerAddress,
+    undefined,
+    "Titik Tujuan"
+  );
+  const driverQuery = formatLocationQuery(
+    driverCoordinates,
+    currentLocationName,
+    undefined,
+    pickupQuery
+  );
 
   // Google Maps directions embed URL
   const googleMapsUrl = useMemo(() => {
     if (activeMode === "store") {
-      return `https://maps.google.com/maps?saddr=${encodeURIComponent(originQuery)}&daddr=${encodeURIComponent(storeQuery)}&output=embed`;
+      // Heading to pickup: if driver location known, route driver -> pickup; otherwise show pickup -> destination
+      const hasDriverCoord =
+        driverCoordinates?.latitude &&
+        driverCoordinates?.longitude &&
+        driverCoordinates.latitude !== 0;
+      if (hasDriverCoord) {
+        return `https://maps.google.com/maps?saddr=${encodeURIComponent(driverQuery)}&daddr=${encodeURIComponent(pickupQuery)}&output=embed`;
+      }
+      return `https://maps.google.com/maps?saddr=${encodeURIComponent(pickupQuery)}&daddr=${encodeURIComponent(destinationQuery)}&output=embed`;
     } else if (activeMode === "customer") {
-      return `https://maps.google.com/maps?saddr=${encodeURIComponent(storeQuery)}&daddr=${encodeURIComponent(customerQuery)}&output=embed`;
+      return `https://maps.google.com/maps?saddr=${encodeURIComponent(pickupQuery)}&daddr=${encodeURIComponent(destinationQuery)}&output=embed`;
     } else {
-      return `https://maps.google.com/maps?saddr=${encodeURIComponent(originQuery)}&daddr=${encodeURIComponent(customerQuery)}&output=embed`;
+      return `https://maps.google.com/maps?saddr=${encodeURIComponent(pickupQuery)}&daddr=${encodeURIComponent(destinationQuery)}&output=embed`;
     }
-  }, [activeMode, originQuery, storeQuery, customerQuery]);
+  }, [activeMode, driverQuery, pickupQuery, destinationQuery, driverCoordinates]);
+
+  // Clean labels for guidance display
+  const effectivePickupName = isRide
+    ? "Titik Jemput Penumpang"
+    : isSend
+    ? "Titik Pengirim"
+    : storeName || "Toko / Mitra";
+
+  const effectivePickupAddress = storeAddress || storeName || "Lokasi penjemputan";
+  const effectiveDestAddress = customerAddress || "Lokasi tujuan";
+  const pickupShort = effectivePickupAddress.split(",")[0] || "Lokasi Jemput";
+  const destShort = effectiveDestAddress.split(",")[0] || "Lokasi Tujuan";
 
   // Guidance telemetry
   const guidanceData = useMemo(() => {
     if (activeMode === "store") {
       return {
-        title: "Rute ke Toko",
-        targetLabel: "Toko / Mitra",
-        targetName: storeName,
-        targetAddress: storeAddress,
-        distance: "1.2 km",
-        eta: "4 menit",
-        speed: "32 km/jam",
-        nextManeuver: "Belok Kanan di Simpang Telang",
-        maneuverDistance: "250 m lagi",
-        maneuverIcon: "right",
+        title: isRide ? "Rute ke Penumpang" : isSend ? "Rute ke Pengirim" : "Rute ke Toko",
+        targetLabel: isRide ? "Penjemputan" : isSend ? "Pengirim" : "Toko / Mitra",
+        targetName: effectivePickupName,
+        targetAddress: effectivePickupAddress,
+        distance: distance || "Menuju titik jemput",
+        eta: "Sesuai rute",
+        speed: "Navigasi Aktif",
+        nextManeuver: `Menuju ${pickupShort}`,
+        maneuverDistance: "Titik Jemput",
+        maneuverIcon: isRide ? "bike" : "right",
         steps: [
           {
-            instruction: "Mulai perjalanan dari lokasi Anda di Jl. Raya Kamal",
-            distance: "350 m",
+            instruction: isRide
+              ? `Mulai perjalanan menuju lokasi penjemputan penumpang`
+              : isSend
+              ? `Mulai perjalanan menuju lokasi pengirim paket`
+              : `Mulai perjalanan menuju ${effectivePickupName}`,
+            distance: "Awal",
             type: "straight",
           },
           {
-            instruction: `Belok kanan di Simpang Tiga Telang menuju ${storeAddress.split(",")[0] || "lokasi toko"}`,
-            distance: "600 m",
+            instruction: `Ikuti rute tercepat ke ${pickupShort}`,
+            distance: distance || "Dalam perjalanan",
             type: "right",
           },
           {
-            instruction: `Tiba di tujuan penjemputan: ${storeName}`,
-            distance: "250 m",
+            instruction: `Tiba di titik penjemputan: ${effectivePickupAddress}`,
+            distance: "Tiba",
             type: "dest",
           },
         ],
       };
     } else if (activeMode === "customer") {
       return {
-        title: "Rute ke Customer",
-        targetLabel: "Customer / Penerima",
-        targetName: "Customer",
-        targetAddress: customerAddress,
-        distance: "2.4 km",
-        eta: "7 menit",
-        speed: "36 km/jam",
-        nextManeuver: "Lurus terus melintasi Jl. Raya Telang Indah",
-        maneuverDistance: "500 m lagi",
+        title: isRide ? "Rute ke Tujuan" : isSend ? "Rute ke Penerima" : "Rute ke Customer",
+        targetLabel: isRide ? "Tujuan Penumpang" : isSend ? "Penerima" : "Customer / Penerima",
+        targetName: isRide ? "Tujuan Penumpang" : "Pelanggan",
+        targetAddress: effectiveDestAddress,
+        distance: distance || "Menuju tujuan",
+        eta: "Sesuai rute",
+        speed: "Navigasi Aktif",
+        nextManeuver: `Menuju ${destShort}`,
+        maneuverDistance: "Tujuan Akhir",
         maneuverIcon: "straight",
         steps: [
           {
-            instruction: "Bawa pesanan dari toko dan masuk ke jalan utama",
-            distance: "200 m",
+            instruction: isRide
+              ? `Berangkat bersama penumpang dari ${pickupShort}`
+              : isSend
+              ? `Bawa paket dari pengirim menuju alamat penerima`
+              : `Bawa pesanan dari toko menuju alamat pengantaran`,
+            distance: "Awal",
             type: "straight",
           },
           {
-            instruction: "Lurus 1.4 km melewati area kampus UTM",
-            distance: "1.4 km",
+            instruction: `Ikuti jalur lintasan ke ${destShort}`,
+            distance: distance || "Dalam perjalanan",
             type: "straight",
           },
           {
-            instruction: `Belok kiri masuk ke ${customerAddress.split(",")[0] || "gang tujuan"}`,
-            distance: "500 m",
-            type: "left",
-          },
-          {
-            instruction: `Tiba di alamat pengantaran customer: ${customerAddress}`,
-            distance: "300 m",
+            instruction: `Tiba di alamat tujuan: ${effectiveDestAddress}`,
+            distance: "Tiba",
             type: "dest",
           },
         ],
@@ -181,44 +288,64 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     } else {
       return {
         title: "Semua Rute",
-        targetLabel: "Pengantaran Lengkap",
-        targetName: `${storeName} ➔ Customer`,
-        targetAddress: `${storeAddress} menuju ${customerAddress}`,
-        distance: "3.6 km",
-        eta: "11 menit",
-        speed: "34 km/jam",
-        nextManeuver: "Jalur Pengantaran Toko ke Alamat Customer",
-        maneuverDistance: "Jalur Lengkap",
+        targetLabel: isRide ? "Rute Perjalanan Lengkap" : "Pengantaran Lengkap",
+        targetName: `${pickupShort} ➔ ${destShort}`,
+        targetAddress: `${effectivePickupAddress} menuju ${effectiveDestAddress}`,
+        distance: distance || "Rute Lengkap",
+        eta: "Lintasan Peta",
+        speed: "Navigasi Aktif",
+        nextManeuver: `Perjalanan ${pickupShort} ke ${destShort}`,
+        maneuverDistance: distance || "Jalur Lengkap",
         maneuverIcon: "compass",
         steps: [
           {
-            instruction: `Titik Jemput: ${storeName} (${storeAddress})`,
-            distance: "1.2 km",
+            instruction: `Titik Jemput: ${effectivePickupAddress}`,
+            distance: "Jemput",
             type: "store",
           },
           {
-            instruction: "Koridor Jalan Raya Kamal - Telang - UTM",
-            distance: "2.0 km",
+            instruction: `Lintasan perjalanan rute (${distance || "Jarak Tempuh"})`,
+            distance: distance || "",
             type: "straight",
           },
           {
-            instruction: `Titik Antar: ${customerAddress}`,
-            distance: "400 m",
+            instruction: `Titik Tujuan: ${effectiveDestAddress}`,
+            distance: "Tujuan",
             type: "dest",
           },
         ],
       };
     }
-  }, [activeMode, storeName, storeAddress, customerAddress]);
+  }, [
+    activeMode,
+    isRide,
+    isSend,
+    effectivePickupName,
+    effectivePickupAddress,
+    effectiveDestAddress,
+    pickupShort,
+    destShort,
+    distance,
+  ]);
+
+  const openExternalGoogleMaps = async () => {
+    const dest = activeMode === "store" ? pickupQuery : destinationQuery;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Navigasi tidak tersedia", "Tidak dapat membuka aplikasi peta pada perangkat ini.");
+    }
+  };
 
   return (
     <View style={styles.wrapper}>
-      {/* 1. Map Container (Clean, Spacious, Uncluttered) */}
+      {/* 1. Map Container */}
       <View style={[styles.mapContainer, { height }]}>
         {Platform.OS === "web" ? (
           <iframe
             key={`${activeMode}-${refreshKey}`}
-            title="Google Maps Navigasi GEOVERSE"
+            title="Google Maps Navigasi"
             src={googleMapsUrl}
             style={{
               width: "100%",
@@ -247,18 +374,96 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           </View>
         )}
 
-        {/* Live Tracking Active Indicator */}
+        {/* Live Tracking / Navigation Active Indicator */}
         {(orderStatus === "Menuju Pickup" ||
           orderStatus === "Mengantar" ||
           orderStatus === "Diambil" ||
-          orderStatus === "Dikirim") && (
-          <View style={styles.mapLiveBadge}>
-            <View style={styles.mapLiveDot} />
-            <Text style={styles.mapLiveText}>LIVE TRACKING AKTIF</Text>
+          orderStatus === "Dikirim" ||
+          orderStatus === "Sampai Pickup" ||
+          effectiveNavigating) && (
+          <View style={[styles.mapLiveBadge, effectiveNavigating && styles.mapLiveBadgeNavigating]}>
+            <View style={[styles.mapLiveDot, effectiveNavigating && styles.mapLiveDotNavigating]} />
+            <Text style={styles.mapLiveText}>
+              {effectiveNavigating ? `NAVIGASI AKTIF • ${simulatedSpeed} KM/J` : "LIVE TRACKING AKTIF"}
+            </Text>
           </View>
         )}
 
-        {/* Floating Quick Action Icons in Top Right Corner */}
+        {/* Driver Motorcycle Indicator Overlay */}
+        {(isHeadingToPickup || isDelivering || effectiveNavigating) && (
+          <View
+            style={[
+              styles.motorcycleMarkerOverlay,
+              {
+                left: `${Math.round(markerPos.x)}%`,
+                top: `${Math.round(markerPos.y)}%`,
+              },
+            ]}
+          >
+            {/* Pulsing radar rings */}
+            <View style={styles.radarRing1} />
+            <View style={styles.radarRing2} />
+
+            {/* Glowing Motorcycle Beacon */}
+            <View style={[styles.motorcycleBeacon, effectiveNavigating && styles.motorcycleBeaconNavigating]}>
+              <Bike size={18} color="#FFFFFF" />
+            </View>
+
+            {/* Floating Info Tag */}
+            <View style={styles.driverCalloutBubble}>
+              <View style={styles.driverCalloutDot} />
+              <View>
+                <Text style={styles.driverCalloutTitle} numberOfLines={1}>
+                  {effectiveNavigating
+                    ? "Motor Driver (Melaju) 🏍️"
+                    : activeMode === "customer"
+                    ? "Motor Driver ➔ Customer"
+                    : "Motor Driver ➔ Jemput"}
+                </Text>
+                <Text style={styles.driverCalloutSub}>
+                  {effectiveNavigating ? `${simulatedSpeed} km/j • Menuju Lokasi` : "Posisi Driver (GPS)"}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Floating Start Navigation Bar / HUD */}
+        {(isHeadingToPickup || isDelivering || effectiveNavigating) && (
+          <View style={styles.mapBottomNavHud}>
+            {!effectiveNavigating ? (
+              <TouchableOpacity
+                style={styles.startNavFloatingBtn}
+                onPress={() => toggleNavigation(true)}
+                activeOpacity={0.88}
+              >
+                <View style={styles.startNavPulseIcon}>
+                  <Navigation size={14} color="#FFFFFF" />
+                </View>
+                <Text style={styles.startNavFloatingBtnText}>Mulai Navigasi (Start Navigation)</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.navActiveHudBar}>
+                <View style={styles.navActiveHudLeft}>
+                  <View style={styles.navPulseDotLive} />
+                  <Text style={styles.navActiveHudStatus}>NAVIGASI AKTIF</Text>
+                  <View style={styles.navSpeedPill}>
+                    <Text style={styles.navActiveHudSpeed}>{simulatedSpeed} km/j</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.navStopBtn}
+                  onPress={() => toggleNavigation(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.navStopBtnText}>Hentikan</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Floating Quick Action Icons */}
         <View style={styles.mapCornerActions}>
           <TouchableOpacity
             style={styles.cornerActionBtn}
@@ -283,7 +488,7 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
         </View>
       </View>
 
-      {/* 2. Route Segmented Control Tabs (Clean Horizontal Buttons, No Text Overlap) */}
+      {/* 2. Route Segmented Control Tabs */}
       <View style={styles.routeSegmentedBar}>
         <TouchableOpacity
           style={[
@@ -293,7 +498,13 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           onPress={() => handleSelectMode("store")}
           activeOpacity={0.8}
         >
-          <Store size={13} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
+          {isRide ? (
+            <User size={13} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
+          ) : isSend ? (
+            <Package size={13} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
+          ) : (
+            <Store size={13} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
+          )}
           <Text
             style={[
               styles.segmentTabText,
@@ -301,7 +512,7 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             ]}
             numberOfLines={1}
           >
-            Ke Toko
+            {isRide ? "Ke Penumpang" : isSend ? "Ke Pengirim" : "Ke Toko"}
           </Text>
         </TouchableOpacity>
 
@@ -313,7 +524,7 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           onPress={() => handleSelectMode("customer")}
           activeOpacity={0.8}
         >
-          <Navigation size={13} color={activeMode === "customer" ? "#FFFFFF" : "#0D7A53"} />
+          <MapPin size={13} color={activeMode === "customer" ? "#FFFFFF" : "#0D7A53"} />
           <Text
             style={[
               styles.segmentTabText,
@@ -321,7 +532,7 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             ]}
             numberOfLines={1}
           >
-            Ke Customer
+            {isRide ? "Ke Tujuan" : isSend ? "Ke Penerima" : "Ke Customer"}
           </Text>
         </TouchableOpacity>
 
@@ -346,6 +557,73 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
         </TouchableOpacity>
       </View>
 
+      {/* 2.5 Live Journey Track Progress Card */}
+      {(isHeadingToPickup || isDelivering || effectiveNavigating) && (
+        <View style={styles.journeyTrackCard}>
+          <View style={styles.journeyTrackEndpoints}>
+            <View style={styles.trackEndpointItem}>
+              <MapPin size={12} color="#15803D" />
+              <Text style={styles.trackEndpointText} numberOfLines={1}>
+                {activeMode === "store" ? "Posisi Awal" : pickupShort}
+              </Text>
+            </View>
+            <View style={[styles.trackEndpointItem, { alignItems: "flex-end" }]}>
+              <MapPin size={12} color="#D97706" />
+              <Text style={styles.trackEndpointText} numberOfLines={1}>
+                {activeMode === "store" ? pickupShort : destShort}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.trackLineContainer}>
+            <View
+              style={[
+                styles.trackLineFill,
+                { width: `${Math.round((effectiveNavigating ? navProgress : 0.35) * 100)}%` },
+              ]}
+            />
+            <View
+              style={[
+                styles.trackBikeMarker,
+                {
+                  left: `${Math.min(90, Math.max(8, Math.round((effectiveNavigating ? navProgress : 0.35) * 100)))}%`,
+                },
+              ]}
+            >
+              <View style={[styles.trackBikeCircle, effectiveNavigating && styles.trackBikeCircleNavigating]}>
+                <Bike size={13} color="#FFFFFF" />
+              </View>
+              {effectiveNavigating && <View style={styles.trackBikePulse} />}
+            </View>
+          </View>
+
+          <View style={styles.trackFooterRow}>
+            <Text style={styles.trackStatusHint}>
+              {effectiveNavigating
+                ? `🏍️ Motor driver sedang menuju ${activeMode === "store" ? "penjemputan" : "customer"} (${simulatedSpeed} km/j)`
+                : `Klik "Start Navigation" untuk memulai panduan rute & pelacakan motor`}
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.trackToggleMiniBtn,
+                effectiveNavigating && styles.trackToggleMiniBtnNavigating,
+              ]}
+              onPress={() => toggleNavigation(!effectiveNavigating)}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.trackToggleMiniBtnText,
+                  effectiveNavigating && styles.trackToggleMiniBtnNavigatingText,
+                ]}
+              >
+                {effectiveNavigating ? "Jeda" : "Start"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* 3. Next Turn Maneuver Card */}
       <View style={styles.maneuverCard}>
         <View style={styles.maneuverIconBox}>
@@ -355,6 +633,8 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             <CornerUpLeft size={18} color="#FFFFFF" />
           ) : guidanceData.maneuverIcon === "straight" ? (
             <ArrowUp size={18} color="#FFFFFF" />
+          ) : guidanceData.maneuverIcon === "bike" ? (
+            <Bike size={18} color="#FFFFFF" />
           ) : (
             <Compass size={18} color="#FFFFFF" />
           )}
@@ -365,14 +645,18 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             {guidanceData.nextManeuver}
           </Text>
           <Text style={styles.maneuverSubtitleText} numberOfLines={1}>
-            {guidanceData.maneuverDistance} • {guidanceData.targetName}
+            {guidanceData.targetAddress}
           </Text>
         </View>
 
-        <View style={styles.etaPill}>
-          <Text style={styles.etaPillText}>{guidanceData.distance}</Text>
-          <Text style={styles.etaPillSubText}>{guidanceData.eta}</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.etaPill}
+          onPress={openExternalGoogleMaps}
+          activeOpacity={0.8}
+        >
+          <Navigation size={12} color="#0D7A53" />
+          <Text style={styles.etaPillText}>Maps</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 4. Turn-by-Turn Instruction Accordion */}
@@ -432,6 +716,153 @@ const LegacyLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
   );
 };
 
+const MarketplaceLocationMap: React.FC<LiveOrderTrackingMapProps> = ({
+  storeName,
+  storeAddress,
+  customerAddress,
+  orderStatus,
+  height = 270,
+  navigationMode,
+  onNavigationModeChange,
+}) => {
+  const [internalMode, setInternalMode] = useState<"overview" | "store" | "customer">("store");
+  const mode = navigationMode || internalMode;
+  const pickup = storeAddress?.trim() || "Alamat toko belum tersedia";
+  const delivery = customerAddress?.trim() || "Alamat pelanggan belum tersedia";
+  const destination = mode === "customer" ? delivery : pickup;
+
+  const openDirections = async () => {
+    if (destination.includes("belum tersedia")) {
+      Alert.alert("Alamat belum tersedia", "Navigasi bisa dibuka setelah alamat tujuan tersedia.");
+      return;
+    }
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Navigasi tidak tersedia", "Tidak dapat membuka aplikasi peta pada perangkat ini.");
+    }
+  };
+
+  const selectMode = (next: "overview" | "store" | "customer") => {
+    setInternalMode(next);
+    onNavigationModeChange?.(next);
+  };
+
+  const routeButton = (label: string, next: "overview" | "store" | "customer", Icon: typeof Compass) => (
+    <TouchableOpacity
+      key={next}
+      onPress={() => selectMode(next)}
+      style={{
+        flex: 1,
+        minHeight: 42,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        borderRadius: 10,
+        backgroundColor: mode === next ? "#0D7A53" : "#FFFFFF",
+        borderWidth: 1,
+        borderColor: mode === next ? "#0D7A53" : "#CBD5E1",
+      }}
+      accessibilityRole="button"
+      accessibilityState={{ selected: mode === next }}
+    >
+      <Icon size={15} color={mode === next ? "#FFFFFF" : "#0D7A53"} />
+      <Text style={{ color: mode === next ? "#FFFFFF" : "#0F172A", fontSize: 12, fontWeight: "700" }}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View
+      style={{
+        height,
+        minHeight: 220,
+        padding: 14,
+        justifyContent: "space-between",
+        gap: 10,
+        backgroundColor: "#F8FAFC",
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <MapPin size={18} color="#0D7A53" />
+        <Text style={{ color: "#0F172A", fontSize: 14, fontWeight: "800" }}>Informasi lokasi pesanan</Text>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {routeButton("Ringkasan", "overview", Compass)}
+        {routeButton("Toko", "store", Store)}
+        {routeButton("Pelanggan", "customer", MapPin)}
+      </View>
+      {mode === "overview" ? (
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: "#334155", fontSize: 12 }}>
+            <Text style={{ fontWeight: "800" }}>{storeName || "Toko"}: </Text>
+            {pickup}
+          </Text>
+          <Text style={{ color: "#334155", fontSize: 12 }}>
+            <Text style={{ fontWeight: "800" }}>Pelanggan: </Text>
+            {delivery}
+          </Text>
+        </View>
+      ) : (
+        <View style={{ gap: 3 }}>
+          <Text style={{ color: "#64748B", fontSize: 11, fontWeight: "700" }}>
+            {mode === "customer" ? "TUJUAN PENGANTARAN" : "LOKASI PICKUP"}
+          </Text>
+          <Text style={{ color: "#0F172A", fontSize: 13, fontWeight: "700" }}>
+            {mode === "customer" ? delivery : `${storeName ? `${storeName} · ` : ""}${pickup}`}
+          </Text>
+        </View>
+      )}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-start",
+          gap: 7,
+          padding: 9,
+          backgroundColor: "#FFF7ED",
+          borderRadius: 9,
+        }}
+      >
+        <Navigation size={15} color="#C2410C" />
+        <Text style={{ flex: 1, color: "#9A3412", fontSize: 11, lineHeight: 16 }}>
+          {orderStatus === "Selesai"
+            ? "Pengantaran selesai."
+            : "Lokasi driver belum tersedia. GPS real-time Marketplace belum terhubung."}
+        </Text>
+      </View>
+      {mode !== "overview" && (
+        <TouchableOpacity
+          onPress={() => void openDirections()}
+          style={{
+            minHeight: 42,
+            borderRadius: 10,
+            backgroundColor: "#0D7A53",
+            flexDirection: "row",
+            gap: 8,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          accessibilityRole="button"
+        >
+          <Navigation size={16} color="#FFFFFF" />
+          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800" }}>
+            Buka navigasi ke {mode === "customer" ? "pelanggan" : "toko"}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+
+export const LiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = (props) =>
+  props.marketplaceMode ? <MarketplaceLocationMap {...props} /> : <InteractiveLiveOrderTrackingMap {...props} />;
+
 const styles = StyleSheet.create({
   wrapper: {
     width: "100%",
@@ -471,7 +902,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F0FDF4",
   },
   fallbackTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
     color: "#0D7A53",
     marginTop: 8,
@@ -479,10 +910,9 @@ const styles = StyleSheet.create({
   fallbackSub: {
     fontSize: 12,
     color: "#475569",
-    marginTop: 4,
+    marginTop: 3,
     textAlign: "center",
   },
-  // Live Tracking Active Indicator Badge
   mapLiveBadge: {
     position: "absolute",
     top: 10,
@@ -490,31 +920,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    paddingHorizontal: 10,
+    backgroundColor: "rgba(13, 122, 83, 0.92)",
+    paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: "#86EFAC",
-    shadowColor: "#0D7A53",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 3,
   },
   mapLiveDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
-    backgroundColor: "#16A34A",
+    backgroundColor: "#4ADE80",
   },
   mapLiveText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "900",
-    color: "#15803D",
+    color: "#FFFFFF",
     letterSpacing: 0.5,
   },
-  // Corner Actions (Subtle, Top Right)
   mapCornerActions: {
     position: "absolute",
     top: 10,
@@ -527,25 +949,23 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 8,
     backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderWidth: 1,
-    borderColor: "#C6E7D4",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    cursor: "pointer" as any,
   },
-  // Segmented Control Tabs (Clean, Spacious, No Text Overlap)
   routeSegmentedBar: {
     flexDirection: "row",
-    backgroundColor: "#E8F5EE",
+    gap: 8,
+    backgroundColor: "#F1F5F9",
     padding: 4,
     borderRadius: 12,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: "#C6E7D4",
   },
   segmentTab: {
     flex: 1,
@@ -553,109 +973,101 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 9,
-    borderRadius: 9,
-  },
-  segmentTabInactive: {
-    backgroundColor: "transparent",
+    paddingVertical: 8,
+    borderRadius: 8,
+    cursor: "pointer" as any,
   },
   segmentTabActive: {
     backgroundColor: "#0D7A53",
     shadowColor: "#0D7A53",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
-    shadowRadius: 3,
+    shadowRadius: 2,
     elevation: 2,
   },
+  segmentTabInactive: {
+    backgroundColor: "transparent",
+  },
   segmentTabText: {
-    fontSize: 11.5,
-    fontWeight: "800",
-    color: "#0D7A53",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
   },
   segmentTabTextActive: {
     color: "#FFFFFF",
+    fontWeight: "800",
   },
-  // Maneuver Banner Card
   maneuverCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    padding: 12,
     borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "#C6E7D4",
-    shadowColor: "#0D7A53",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   maneuverIconBox: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 10,
     backgroundColor: "#0D7A53",
     alignItems: "center",
     justifyContent: "center",
   },
   maneuverTitleText: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: "800",
-    color: "#14532D",
+    color: "#0F172A",
   },
   maneuverSubtitleText: {
     fontSize: 11,
     color: "#64748B",
     marginTop: 2,
-    fontWeight: "600",
   },
   etaPill: {
-    backgroundColor: "#E8F5EE",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
-    alignItems: "flex-end",
     borderWidth: 1,
-    borderColor: "#C6E7D4",
+    borderColor: "#86EFAC",
+    cursor: "pointer" as any,
   },
   etaPillText: {
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: 11,
+    fontWeight: "800",
     color: "#0D7A53",
   },
-  etaPillSubText: {
-    fontSize: 9.5,
-    fontWeight: "700",
-    color: "#15803D",
-  },
-  // Guidance Accordion Card
   guidanceCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#C6E7D4",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
   },
   guidanceHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    cursor: "pointer" as any,
   },
   guidanceIconBox: {
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
     borderRadius: 6,
-    backgroundColor: "#E8F5EE",
+    backgroundColor: "#E2F7ED",
     alignItems: "center",
     justifyContent: "center",
   },
   guidanceTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#0D7A53",
+    color: "#0F172A",
   },
   guidanceToggleText: {
     fontSize: 11,
@@ -663,120 +1075,333 @@ const styles = StyleSheet.create({
     color: "#0D7A53",
   },
   stepsList: {
-    marginTop: 8,
-    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#E8F5EE",
+    borderTopColor: "#F1F5F9",
+    padding: 10,
     gap: 8,
   },
   stepItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 8,
+    gap: 10,
+    paddingVertical: 4,
   },
   stepIconWrap: {
     width: 22,
     height: 22,
     borderRadius: 6,
-    backgroundColor: "#E8F5EE",
+    backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 1,
   },
   stepInstruction: {
-    fontSize: 11,
-    color: "#1E293B",
+    fontSize: 12,
     fontWeight: "600",
-    lineHeight: 15,
+    color: "#1E293B",
   },
   stepDistance: {
-    fontSize: 9.5,
-    color: "#0D7A53",
+    fontSize: 10,
+    color: "#64748B",
     marginTop: 1,
+  },
+  mapLiveBadgeNavigating: {
+    backgroundColor: "#15803D",
+    borderWidth: 1.5,
+    borderColor: "#FEF08A",
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  mapLiveDotNavigating: {
+    backgroundColor: "#FEF08A",
+  },
+  motorcycleMarkerOverlay: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    transform: [{ translateX: -40 }, { translateY: -36 }],
+    zIndex: 10,
+    pointerEvents: "none" as any,
+  },
+  radarRing1: {
+    position: "absolute",
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
+    borderColor: "rgba(234, 88, 12, 0.45)",
+    backgroundColor: "rgba(254, 240, 138, 0.25)",
+  },
+  radarRing2: {
+    position: "absolute",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: "rgba(234, 88, 12, 0.7)",
+    backgroundColor: "rgba(253, 186, 116, 0.35)",
+  },
+  motorcycleBeacon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#15803D",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2.5,
+    borderColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  motorcycleBeaconNavigating: {
+    backgroundColor: "#EA580C",
+    borderColor: "#FEF08A",
+    borderWidth: 2.5,
+  },
+  driverCalloutBubble: {
+    position: "absolute",
+    top: -34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#EA580C",
+    shadowColor: "#EA580C",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    minWidth: 95,
+    justifyContent: "center",
+  },
+  driverCalloutDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#16A34A",
+  },
+  driverCalloutTitle: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#15803D",
+  },
+  driverCalloutSub: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#EA580C",
+  },
+  mapBottomNavHud: {
+    position: "absolute",
+    bottom: 8,
+    left: 10,
+    right: 10,
+    zIndex: 12,
+  },
+  startNavFloatingBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#15803D",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 5,
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+    cursor: "pointer" as any,
+  },
+  startNavPulseIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  startNavFloatingBtnText: {
+    fontSize: 12.5,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
+  },
+  navActiveHudBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#15803D",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: "#86EFAC",
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  navActiveHudLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  navPulseDotLive: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#FEF08A",
+  },
+  navActiveHudStatus: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  navSpeedPill: {
+    backgroundColor: "#EA580C",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+  },
+  navActiveHudSpeed: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  navStopBtn: {
+    backgroundColor: "#DC2626",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    cursor: "pointer" as any,
+  },
+  navStopBtnText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  journeyTrackCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+    gap: 8,
+  },
+  journeyTrackEndpoints: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  trackEndpointItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    maxWidth: "48%",
+  },
+  trackEndpointText: {
+    fontSize: 11,
     fontWeight: "700",
+    color: "#334155",
+  },
+  trackLineContainer: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#E2E8F0",
+    position: "relative",
+    justifyContent: "center",
+    marginVertical: 6,
+  },
+  trackLineFill: {
+    height: "100%",
+    borderRadius: 5,
+    backgroundColor: "#15803D",
+  },
+  trackBikeMarker: {
+    position: "absolute",
+    top: -11,
+    transform: [{ translateX: -16 }],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  trackBikeCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#15803D",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  trackBikeCircleNavigating: {
+    backgroundColor: "#EA580C",
+    borderColor: "#FEF08A",
+  },
+  trackBikePulse: {
+    position: "absolute",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: "rgba(234, 88, 12, 0.5)",
+  },
+  trackFooterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginTop: 2,
+  },
+  trackStatusHint: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+    flex: 1,
+  },
+  trackToggleMiniBtn: {
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    cursor: "pointer" as any,
+  },
+  trackToggleMiniBtnText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  trackToggleMiniBtnNavigating: {
+    backgroundColor: "#FEF3C7",
+    borderColor: "#FCD34D",
+  },
+  trackToggleMiniBtnNavigatingText: {
+    color: "#D97706",
   },
 });
-
-const MarketplaceLocationMap: React.FC<LiveOrderTrackingMapProps> = ({
-  storeName,
-  storeAddress,
-  customerAddress,
-  orderStatus,
-  height = 270,
-  navigationMode,
-  onNavigationModeChange,
-}) => {
-  const [internalMode, setInternalMode] = useState<"overview" | "store" | "customer">("store");
-  const mode = navigationMode || internalMode;
-  const pickup = storeAddress?.trim() || "Alamat toko belum tersedia";
-  const delivery = customerAddress?.trim() || "Alamat pelanggan belum tersedia";
-  const destination = mode === "customer" ? delivery : pickup;
-  const openDirections = async () => {
-    if (destination.includes("belum tersedia")) {
-      Alert.alert("Alamat belum tersedia", "Navigasi bisa dibuka setelah alamat tujuan tersedia.");
-      return;
-    }
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
-    try {
-      await Linking.openURL(url);
-    } catch {
-      Alert.alert("Navigasi tidak tersedia", "Tidak dapat membuka aplikasi peta pada perangkat ini.");
-    }
-  };
-  const selectMode = (next: "overview" | "store" | "customer") => {
-    setInternalMode(next);
-    onNavigationModeChange?.(next);
-  };
-  const routeButton = (label: string, next: "overview" | "store" | "customer", Icon: typeof Compass) => (
-    <TouchableOpacity
-      key={next}
-      onPress={() => selectMode(next)}
-      style={{ flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 10, backgroundColor: mode === next ? "#0D7A53" : "#FFFFFF", borderWidth: 1, borderColor: mode === next ? "#0D7A53" : "#CBD5E1" }}
-      accessibilityRole="button"
-      accessibilityState={{ selected: mode === next }}
-    >
-      <Icon size={15} color={mode === next ? "#FFFFFF" : "#0D7A53"} />
-      <Text style={{ color: mode === next ? "#FFFFFF" : "#0F172A", fontSize: 12, fontWeight: "700" }}>{label}</Text>
-    </TouchableOpacity>
-  );
-
-  return (
-    <View style={{ height, minHeight: 220, padding: 14, justifyContent: "space-between", gap: 10, backgroundColor: "#F8FAFC", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0" }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <MapPin size={18} color="#0D7A53" />
-        <Text style={{ color: "#0F172A", fontSize: 14, fontWeight: "800" }}>Informasi lokasi pesanan</Text>
-      </View>
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        {routeButton("Ringkasan", "overview", Compass)}
-        {routeButton("Toko", "store", Store)}
-        {routeButton("Pelanggan", "customer", MapPin)}
-      </View>
-      {mode === "overview" ? (
-        <View style={{ gap: 8 }}>
-          <Text style={{ color: "#334155", fontSize: 12 }}><Text style={{ fontWeight: "800" }}>{storeName || "Toko"}: </Text>{pickup}</Text>
-          <Text style={{ color: "#334155", fontSize: 12 }}><Text style={{ fontWeight: "800" }}>Pelanggan: </Text>{delivery}</Text>
-        </View>
-      ) : (
-        <View style={{ gap: 3 }}>
-          <Text style={{ color: "#64748B", fontSize: 11, fontWeight: "700" }}>{mode === "customer" ? "TUJUAN PENGANTARAN" : "LOKASI PICKUP"}</Text>
-          <Text style={{ color: "#0F172A", fontSize: 13, fontWeight: "700" }}>{mode === "customer" ? delivery : `${storeName ? `${storeName} · ` : ""}${pickup}`}</Text>
-        </View>
-      )}
-      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 7, padding: 9, backgroundColor: "#FFF7ED", borderRadius: 9 }}>
-        <Navigation size={15} color="#C2410C" />
-        <Text style={{ flex: 1, color: "#9A3412", fontSize: 11, lineHeight: 16 }}>
-          {orderStatus === "Selesai" ? "Pengantaran selesai." : "Lokasi driver belum tersedia. GPS real-time Marketplace belum terhubung."}
-        </Text>
-      </View>
-      {mode !== "overview" && (
-        <TouchableOpacity onPress={() => void openDirections()} style={{ minHeight: 42, borderRadius: 10, backgroundColor: "#0D7A53", flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center" }} accessibilityRole="button">
-          <Navigation size={16} color="#FFFFFF" />
-          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800" }}>Buka navigasi ke {mode === "customer" ? "pelanggan" : "toko"}</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-};
-
-export const LiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = (props) =>
-  props.marketplaceMode ? <MarketplaceLocationMap {...props} /> : <LegacyLiveOrderTrackingMap {...props} />;

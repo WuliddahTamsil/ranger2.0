@@ -222,7 +222,10 @@ export const fetchAvailableSendOrders = async (
   try {
     const headers = await getAuthHeaders(accountId);
     const res = await fetch(getApiUrl("/send/orders/available"), {
-      headers,
+      headers: {
+        ...headers,
+        ...(accountId ? { "x-driver-id": accountId } : {}),
+      },
     });
     return await parseJsonResponse(res, "Gagal memuat order pengiriman");
   } catch (error: any) {
@@ -240,16 +243,44 @@ export const acceptSendOrder = async (
   accountId?: string
 ): Promise<{ success: boolean; data?: SendOrderUI; message?: string }> => {
   try {
-    const headers = await getAuthHeaders(accountId);
+    const headers = await getAuthHeaders(accountId || driverId);
     const res = await fetch(getApiUrl(`/send/orders/${orderId}/accept`), {
       method: "POST",
-      headers,
+      headers: {
+        ...headers,
+        "x-driver-id": driverId,
+      },
       body: JSON.stringify({ driverId }),
     });
     return await parseJsonResponse(res, "Gagal menerima pesanan");
   } catch (error: any) {
     console.error("acceptSendOrder error:", error);
     return { success: false, message: error.message || "Gagal menerima order pengiriman." };
+  }
+};
+
+/**
+  * 9b. Driver: Decline Send Order
+  */
+export const declineSendOrder = async (
+  orderId: string,
+  driverId: string,
+  accountId?: string
+): Promise<{ success: boolean; data?: SendOrderUI; message?: string }> => {
+  try {
+    const headers = await getAuthHeaders(accountId || driverId);
+    const res = await fetch(getApiUrl(`/send/orders/${orderId}/decline`), {
+      method: "POST",
+      headers: {
+        ...headers,
+        "x-driver-id": driverId,
+      },
+      body: JSON.stringify({ driverId }),
+    });
+    return await parseJsonResponse(res, "Gagal menolak pesanan");
+  } catch (error: any) {
+    console.error("declineSendOrder error:", error);
+    return { success: false, message: error.message || "Gagal menolak order pengiriman." };
   }
 };
 

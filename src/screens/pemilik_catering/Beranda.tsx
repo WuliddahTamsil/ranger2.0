@@ -255,9 +255,9 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             paymentReminder: o.paymentReminder,
             time: new Date(o.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
             status: frontendStatus,
-            address: o.address || "Jl. Telang Indah, Kamal",
+            address: o.address || "Alamat pengantaran pelanggan",
             storeName: o.storeName || storeInfo.storeName || "Dapur Catering",
-            storeAddress: o.storeAddress || storeInfo.address || "Kamal, Bangkalan, Madura",
+            storeAddress: o.storeAddress || storeInfo.address || "Alamat outlet catering",
             driver: hasDriver ? {
               name: o.driverName || "Driver GEOVERSE",
               vehicle: "Motor",

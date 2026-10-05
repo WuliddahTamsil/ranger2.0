@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Location from "expo-location";
 import {
   ActivityIndicator,
   Alert,
@@ -14,9 +13,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Check, Crosshair, MapPin, Search, X } from "lucide-react-native";
+import { Check, Crosshair, MapPin, Search, X, Navigation } from "lucide-react-native";
 import { NativeMapComponent, Region, MapPressEvent } from "./NativeMapComponent";
-import { PlaceSuggestion, safeForwardGeocode, searchPlacesSmart } from "../utils/geocoding";
+import {
+  PlaceSuggestion,
+  safeForwardGeocode,
+  safeReverseGeocode,
+  searchPlacesSmart,
+  getCurrentUserCoordinates,
+} from "../utils/geocoding";
 
 export interface CustomerLocationValue {
   latitude: number;
@@ -24,55 +29,56 @@ export interface CustomerLocationValue {
   detectedAddress?: string;
 }
 
-interface CustomerLocationPickerProps {
+export interface CustomerLocationPickerProps {
   visible: boolean;
   initialLocation?: CustomerLocationValue;
+  fallbackLocation?: CustomerLocationValue;
+  title?: string;
+  subtitle?: string;
+  badgeText?: string;
   onClose: () => void;
   onConfirm: (location: CustomerLocationValue) => void;
 }
 
 const DEFAULT_REGION: Region = {
-  latitude: -6.9175,
-  longitude: 107.6191,
-  latitudeDelta: 0.02,
-  longitudeDelta: 0.02,
-};
-
-const formatReverseGeocode = (items: Location.LocationGeocodedAddress[]) => {
-  const item = items[0];
-  if (!item) return "";
-  return [
-    item.street,
-    item.name && item.name !== item.street ? item.name : "",
-    item.district,
-    item.subregion,
-    item.city,
-    item.region,
-    item.postalCode,
-  ].filter(Boolean).join(", ");
+  latitude: -6.5962,
+  longitude: 106.8040,
+  latitudeDelta: 0.015,
+  longitudeDelta: 0.015,
 };
 
 export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
   visible,
   initialLocation,
+  fallbackLocation,
+  title = "Pilih Lokasi di Maps",
+  subtitle = "Geser pin atau ketuk peta tepat di lokasi yang diinginkan",
+  badgeText = "Pin Lokasi",
   onClose,
   onConfirm,
 }) => {
   const insets = useSafeAreaInsets();
-  const initialRegion = useMemo<Region>(() => ({
-    latitude: initialLocation?.latitude ?? DEFAULT_REGION.latitude,
-    longitude: initialLocation?.longitude ?? DEFAULT_REGION.longitude,
-    latitudeDelta: DEFAULT_REGION.latitudeDelta,
-    longitudeDelta: DEFAULT_REGION.longitudeDelta,
-  }), [initialLocation]);
+  const initialRegion = useMemo<Region>(() => {
+    const lat = initialLocation?.latitude ?? fallbackLocation?.latitude ?? DEFAULT_REGION.latitude;
+    const lon = initialLocation?.longitude ?? fallbackLocation?.longitude ?? DEFAULT_REGION.longitude;
+    return {
+      latitude: lat,
+      longitude: lon,
+      latitudeDelta: DEFAULT_REGION.latitudeDelta,
+      longitudeDelta: DEFAULT_REGION.longitudeDelta,
+    };
+  }, [initialLocation, fallbackLocation]);
+
   const [region, setRegion] = useState<Region>(initialRegion);
   const [pin, setPin] = useState({
     latitude: initialRegion.latitude,
     longitude: initialRegion.longitude,
   });
-  const [detectedAddress, setDetectedAddress] = useState(initialLocation?.detectedAddress || "");
+  const [detectedAddress, setDetectedAddress] = useState(
+    initialLocation?.detectedAddress || fallbackLocation?.detectedAddress || ""
+  );
   const [webMapQuery, setWebMapQuery] = useState(
-    initialLocation ? `${initialLocation.latitude},${initialLocation.longitude}` : `${DEFAULT_REGION.latitude},${DEFAULT_REGION.longitude}`,
+    `${initialRegion.latitude},${initialRegion.longitude}`
   );
   const [searchText, setSearchText] = useState("");
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -90,20 +96,61 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
     setSearching(false);
     if (!visible) return;
 
-    setRegion(initialRegion);
-    setPin({ latitude: initialRegion.latitude, longitude: initialRegion.longitude });
-    setDetectedAddress(initialLocation?.detectedAddress || "");
-    setSearchText("");
-    setWebMapQuery(initialLocation ? `${initialLocation.latitude},${initialLocation.longitude}` : `${initialRegion.latitude},${initialRegion.longitude}`);
-  }, [visible, initialRegion, initialLocation]);
+    if (
+      initialLocation?.latitude != null &&
+      Number.isFinite(initialLocation.latitude) &&
+      initialLocation?.longitude != null &&
+      Number.isFinite(initialLocation.longitude)
+    ) {
+      const lat = initialLocation.latitude;
+      const lon = initialLocation.longitude;
+      setRegion({
+        latitude: lat,
+        longitude: lon,
+        latitudeDelta: DEFAULT_REGION.latitudeDelta,
+        longitudeDelta: DEFAULT_REGION.longitudeDelta,
+      });
+      setPin({ latitude: lat, longitude: lon });
+      setDetectedAddress(initialLocation.detectedAddress || "");
+      setSearchText("");
+      setWebMapQuery(`${lat},${lon}`);
+    } else if (
+      fallbackLocation?.latitude != null &&
+      Number.isFinite(fallbackLocation.latitude) &&
+      fallbackLocation?.longitude != null &&
+      Number.isFinite(fallbackLocation.longitude)
+    ) {
+      const lat = fallbackLocation.latitude;
+      const lon = fallbackLocation.longitude;
+      setRegion({
+        latitude: lat,
+        longitude: lon,
+        latitudeDelta: DEFAULT_REGION.latitudeDelta,
+        longitudeDelta: DEFAULT_REGION.longitudeDelta,
+      });
+      setPin({ latitude: lat, longitude: lon });
+      setDetectedAddress(fallbackLocation.detectedAddress || "");
+      setSearchText("");
+      setWebMapQuery(`${lat},${lon}`);
+    } else {
+      // Auto-detect GPS location when modal opens without fixed coords
+      setRegion(initialRegion);
+      setPin({ latitude: initialRegion.latitude, longitude: initialRegion.longitude });
+      setDetectedAddress("");
+      setSearchText("");
+      setWebMapQuery(`${initialRegion.latitude},${initialRegion.longitude}`);
+      void useCurrentLocation();
+    }
+  }, [visible, initialRegion, initialLocation, fallbackLocation]);
 
   const reverseGeocode = async (latitude: number, longitude: number) => {
     try {
-      const result = await Location.reverseGeocodeAsync({ latitude, longitude });
-      const address = formatReverseGeocode(result);
-      if (address) setDetectedAddress(address);
+      const result = await safeReverseGeocode(latitude, longitude);
+      if (result?.formattedAddress) {
+        setDetectedAddress(result.formattedAddress);
+      }
     } catch {
-      // Reverse geocoding is best effort; coordinates remain valid when provider is unavailable.
+      // Reverse geocoding is best effort; coordinates remain valid
     }
   };
 
@@ -138,10 +185,11 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
       void (async () => {
         setSearching(true);
         try {
+          // Pass user's pin coordinates to prioritize closest Indonesian places
           const list = await searchPlacesSmart(query, {
             lat: pin.latitude,
             lon: pin.longitude,
-            limit: 6,
+            limit: 8,
           });
           if (requestId !== searchRequestRef.current) return;
           setSuggestions(list);
@@ -194,7 +242,7 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
       if (!match) {
         Alert.alert(
           "Lokasi tidak ditemukan",
-          "Coba gunakan nama tempat, jalan, kelurahan, atau kota yang lebih lengkap.",
+          "Coba gunakan nama tempat, jalan, kelurahan, atau kota yang lebih lengkap di Indonesia.",
         );
         return;
       }
@@ -221,30 +269,28 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
   const useCurrentLocation = async () => {
     setLocating(true);
     try {
-      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.geolocation) {
-        await new Promise<void>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              movePin(position.coords.latitude, position.coords.longitude);
-              setRegion((current) => ({ ...current, latitude: position.coords.latitude, longitude: position.coords.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 }));
-              resolve();
-            },
-            reject,
-            { enableHighAccuracy: true, timeout: 12000 },
-          );
-        });
-        return;
+      const userLoc = await getCurrentUserCoordinates();
+      if (userLoc) {
+        movePin(userLoc.latitude, userLoc.longitude);
+        setRegion((current) => ({
+          ...current,
+          latitude: userLoc.latitude,
+          longitude: userLoc.longitude,
+          latitudeDelta: 0.012,
+          longitudeDelta: 0.012,
+        }));
+        setDetectedAddress(userLoc.address);
+      } else {
+        Alert.alert(
+          "Lokasi tidak tersedia",
+          "Pastikan GPS aktif dan izin lokasi diberikan. Anda tetap dapat menentukan titik dengan mengetuk peta."
+        );
       }
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== Location.PermissionStatus.GRANTED) {
-        Alert.alert("Izin lokasi diperlukan", "Izinkan akses lokasi agar titik rumah dapat diposisikan secara otomatis.");
-        return;
-      }
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      movePin(current.coords.latitude, current.coords.longitude);
-      setRegion((currentRegion) => ({ ...currentRegion, latitude: current.coords.latitude, longitude: current.coords.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 }));
     } catch {
-      Alert.alert("Lokasi tidak tersedia", "Pastikan GPS aktif. Anda tetap dapat menentukan titik dengan mengetuk atau menggeser pin di peta.");
+      Alert.alert(
+        "Lokasi tidak tersedia",
+        "Pastikan GPS aktif. Anda tetap dapat menentukan titik dengan mengetuk atau menggeser pin di peta."
+      );
     } finally {
       setLocating(false);
     }
@@ -259,8 +305,8 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
         <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={styles.header}>
             <View style={styles.headerCopy}>
-              <Text style={styles.title}>Pilih Lokasi di Maps</Text>
-              <Text style={styles.subtitle}>Geser pin atau ketuk peta tepat di lokasi rumah</Text>
+              <Text style={styles.title}>{title}</Text>
+              <Text style={styles.subtitle}>{subtitle}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton} accessibilityLabel="Tutup peta">
               <X size={20} color="#0F172A" />
@@ -274,7 +320,7 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
                 value={searchText}
                 onChangeText={handleSearchTextChange}
                 onSubmitEditing={() => void handleSearch()}
-                placeholder="Cari tempat, jalan, atau area"
+                placeholder="Cari tempat, jalan, atau area di Indonesia..."
                 placeholderTextColor="#94A3B8"
                 style={styles.searchInput}
                 returnKeyType="search"
@@ -313,9 +359,21 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
                         <MapPin size={15} color="#059669" />
                       </View>
                       <View style={styles.suggestionTextBox}>
-                        <Text style={styles.suggestionName} numberOfLines={1}>
-                          {item.name}
-                        </Text>
+                        <View style={styles.suggestionHeaderRow}>
+                          <Text style={styles.suggestionName} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          {item.distanceKm != null && Number.isFinite(item.distanceKm) && (
+                            <View style={styles.distanceBadge}>
+                              <Navigation size={10} color="#15803D" />
+                              <Text style={styles.distanceText}>
+                                {item.distanceKm < 1
+                                  ? `${Math.round(item.distanceKm * 1000)} m`
+                                  : `${item.distanceKm} km`}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={styles.suggestionSubtitle} numberOfLines={2}>
                           {item.subtitle || item.formattedAddress}
                         </Text>
@@ -336,10 +394,13 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
               pin={pin}
               onPinDragEnd={(coord: { latitude: number; longitude: number }) => movePin(coord.latitude, coord.longitude)}
             />
-            <View style={styles.mapBadge}><MapPin size={13} color="#1B7A4E" /><Text style={styles.mapBadgeText}>Pin rumah</Text></View>
+            <View style={styles.mapBadge}>
+              <MapPin size={13} color="#1B7A4E" />
+              <Text style={styles.mapBadgeText}>{badgeText}</Text>
+            </View>
             <TouchableOpacity style={styles.gpsButton} onPress={() => void useCurrentLocation()} disabled={locating}>
               {locating ? <ActivityIndicator size="small" color="#1B7A4E" /> : <Crosshair size={18} color="#1B7A4E" />}
-              <Text style={styles.gpsButtonText}>{locating ? "Mencari..." : "Gunakan lokasi saya"}</Text>
+              <Text style={styles.gpsButtonText}>{locating ? "Mencari GPS..." : "Gunakan lokasi saya"}</Text>
             </TouchableOpacity>
           </View>
 
@@ -347,8 +408,10 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
             <View style={styles.locationSummary}>
               <View style={styles.pinIcon}><MapPin size={18} color="#1B7A4E" /></View>
               <View style={styles.summaryCopy}>
-                <Text style={styles.summaryTitle}>Lokasi rumah</Text>
-                <Text style={styles.summaryAddress} numberOfLines={2}>{detectedAddress || "Alamat akan terdeteksi setelah pin dipindahkan"}</Text>
+                <Text style={styles.summaryTitle}>{badgeText}</Text>
+                <Text style={styles.summaryAddress} numberOfLines={2}>
+                  {detectedAddress || "Alamat akan terdeteksi setelah pin dipindahkan"}
+                </Text>
                 <Text style={styles.coordinates}>Lat {pin.latitude.toFixed(6)} · Lng {pin.longitude.toFixed(6)}</Text>
               </View>
             </View>
@@ -379,7 +442,10 @@ const styles = StyleSheet.create({
   suggestionItemLast: { borderBottomWidth: 0 },
   suggestionIconBox: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#ECFDF5" },
   suggestionTextBox: { flex: 1, gap: 2 },
-  suggestionName: { color: "#0F172A", fontSize: 12.5, fontWeight: "800" },
+  suggestionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  suggestionName: { color: "#0F172A", fontSize: 12.5, fontWeight: "800", flex: 1 },
+  distanceBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  distanceText: { fontSize: 10, fontWeight: "800", color: "#15803D" },
   suggestionSubtitle: { color: "#64748B", fontSize: 10.5, lineHeight: 14 },
   mapWrap: { flex: 1, minHeight: 260, position: "relative", backgroundColor: "#E2E8F0" },
   mapBadge: { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.96)" },

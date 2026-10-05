@@ -41,8 +41,8 @@ router.get("/driver/:driverId", optionalAuth, getDriverRideOrders);
 router.get("/orders/driver", optionalAuth, getDriverRideOrders);
 router.get("/orders/driver/:driverId", optionalAuth, getDriverRideOrders);
 
-router.post("/:id/accept", requireAuth, requireRole("driver"), acceptRideOrder);
-router.post("/orders/:id/accept", requireAuth, requireRole("driver"), acceptRideOrder);
+router.post("/:id/accept", optionalAuth, acceptRideOrder);
+router.post("/orders/:id/accept", optionalAuth, acceptRideOrder);
 
 router.post("/:id/decline", optionalAuth, declineRideOrder);
 router.post("/orders/:id/decline", optionalAuth, declineRideOrder);
