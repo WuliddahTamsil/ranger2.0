@@ -33,6 +33,7 @@ import {
   X,
   ExternalLink,
   Clock,
+  AlertTriangle,
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { useRecycle } from "../../context/RecycleContext";
@@ -221,9 +222,11 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
     }
   };
 
+  const isDisputed = deposit.status === "DISPUTED";
   const isWeighed = deposit.status === "WAITING_CUSTOMER_CONFIRMATION";
   const isCompleted = deposit.status === "COMPLETED" || deposit.status === "POINT_ISSUED";
-  const isFinished = isWeighed || isCompleted;
+  const [reweighMode, setReweighMode] = useState<boolean>(isDisputed);
+  const isFinished = isCompleted || (isWeighed && !reweighMode && !isDisputed);
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -243,6 +246,23 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Status Dispute Banner */}
+        {isDisputed && (
+          <View style={styles.disputeCard}>
+            <View style={styles.disputeHeader}>
+              <AlertTriangle size={20} color="#DC2626" />
+              <Text style={styles.disputeTitle}>Nasabah Mengajukan Komplain Timbangan!</Text>
+            </View>
+            <View style={styles.disputeReasonBox}>
+              <Text style={styles.disputeReasonLabel}>Alasan Komplain dari Nasabah:</Text>
+              <Text style={styles.disputeReasonText}>"{deposit.disputeReason || 'Hasil timbang tidak sesuai'}"</Text>
+            </View>
+            <Text style={styles.disputeHelpText}>
+              Silakan periksa kembali, lakukan penimbangan ulang di bawah, ganti foto bukti jika perlu, dan tuliskan pesan balik penjelasan ke nasabah.
+            </Text>
+          </View>
+        )}
+
         {/* Status Finished / Waiting Banner */}
         {isCompleted ? (
           <View style={styles.statusBannerCompleted}>
@@ -251,12 +271,29 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
               Setoran Selesai • Poin telah resmi diterbitkan ke dompet nasabah
             </Text>
           </View>
-        ) : isWeighed ? (
+        ) : isWeighed && !isDisputed ? (
           <View style={styles.statusBannerWaiting}>
-            <Clock size={16} color="#D97706" />
-            <Text style={styles.statusBannerTextWaiting}>
-              Penimbangan Selesai • Menunggu persetujuan / konfirmasi dari nasabah
-            </Text>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Clock size={16} color="#D97706" />
+                <Text style={styles.statusBannerTextWaiting}>
+                  Menunggu Konfirmasi Nasabah (Belum ACC)
+                </Text>
+              </View>
+              <Text style={styles.statusBannerSubWaiting}>
+                Hasil timbang telah terkirim. Jika perlu koreksi, ketuk Timbang Ulang.
+              </Text>
+            </View>
+            {!reweighMode && (
+              <TouchableOpacity
+                style={styles.btnTriggerReweigh}
+                onPress={() => setReweighMode(true)}
+                activeOpacity={0.8}
+              >
+                <RefreshCw size={12} color="#FFFFFF" />
+                <Text style={styles.btnTriggerReweighText}>Timbang Ulang</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : null}
 
@@ -427,14 +464,20 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
           ) : null}
         </View>
 
-        {/* Officer Notes */}
+        {/* Officer Notes / Pesan Balik */}
         <View style={styles.notesCard}>
-          <Text style={styles.notesTitle}>Catatan Petugas (Opsional)</Text>
+          <Text style={styles.notesTitle}>
+            {isDisputed ? "Pesan Balik / Klarifikasi untuk Nasabah" : "Catatan Petugas (Opsional)"}
+          </Text>
           <TextInput
             style={[styles.notesInput, isFinished && styles.notesInputDisabled]}
             value={notes}
             onChangeText={setNotes}
-            placeholder="Tuliskan catatan kondisi sampah / timbangan..."
+            placeholder={
+              isDisputed
+                ? "Tuliskan pesan klarifikasi hasil penimbangan ulang ke nasabah..."
+                : "Tuliskan catatan kondisi sampah / timbangan..."
+            }
             placeholderTextColor="#94A3B8"
             multiline
             numberOfLines={2}
@@ -479,7 +522,11 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.btnSubmit, (submitting || totalActualKg <= 0) && { opacity: 0.7 }]}
+            style={[
+              styles.btnSubmit,
+              isDisputed && { backgroundColor: "#DC2626" },
+              (submitting || totalActualKg <= 0) && { opacity: 0.7 },
+            ]}
             onPress={handleSubmitWeighing}
             disabled={submitting || totalActualKg <= 0}
             activeOpacity={0.85}
@@ -488,9 +535,17 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <>
-                <CheckCircle2 size={18} color="#FFFFFF" />
+                {isDisputed ? (
+                  <Scale size={18} color="#FFFFFF" />
+                ) : (
+                  <CheckCircle2 size={18} color="#FFFFFF" />
+                )}
                 <Text style={styles.btnSubmitText}>
-                  Simpan & Terbitkan Hasil Timbang
+                  {isDisputed
+                    ? "Simpan & Kirim Revisi Timbangan ke Nasabah"
+                    : isWeighed
+                    ? "Simpan Perubahan Timbangan"
+                    : "Simpan & Terbitkan Hasil Timbang"}
                 </Text>
               </>
             )}
@@ -1236,5 +1291,67 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+  },
+  disputeCard: {
+    backgroundColor: "#FEF2F2",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#FECACA",
+    padding: 14,
+    marginBottom: 14,
+  },
+  disputeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  disputeTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  disputeReasonBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    padding: 10,
+    marginBottom: 8,
+  },
+  disputeReasonLabel: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#991B1B",
+    marginBottom: 2,
+  },
+  disputeReasonText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#B91C1C",
+  },
+  disputeHelpText: {
+    fontSize: 11,
+    color: "#7F1D1D",
+    lineHeight: 16,
+  },
+  statusBannerSubWaiting: {
+    fontSize: 10.5,
+    color: "#78350F",
+    marginTop: 3,
+  },
+  btnTriggerReweigh: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#D97706",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  btnTriggerReweighText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 });

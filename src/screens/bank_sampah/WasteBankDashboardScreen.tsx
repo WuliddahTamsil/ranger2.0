@@ -448,11 +448,12 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     ["REQUESTED", "ACCEPTED", "PICKED_UP", "AT_BANK", "WEIGHING"].includes(d.status)
   );
   const waitingCustomerConfirm = deposits.filter(
-    (d) => d.status === "WAITING_CUSTOMER_CONFIRMATION"
+    (d) => d.status === "WAITING_CUSTOMER_CONFIRMATION" || d.status === "DISPUTED"
   );
   const completedDeposits = deposits.filter(
     (d) => d.status === "COMPLETED" || d.status === "POINT_ISSUED"
   );
+  const disputedCount = deposits.filter((d) => d.status === "DISPUTED").length;
   const totalKg = deposits.reduce(
     (sum, d) => sum + (d.actualTotalWeightKg || d.estimatedTotalWeightKg || 0),
     0
@@ -699,6 +700,7 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
               numberOfLines={1}
             >
               Menunggu ({waitingCustomerConfirm.length})
+              {disputedCount > 0 ? ` • ⚠️ ${disputedCount} Komplain` : ""}
             </Text>
           </TouchableOpacity>
 
@@ -791,6 +793,8 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                     styles.statusPill,
                     item.status === "COMPLETED" || item.status === "POINT_ISSUED"
                       ? styles.statusPillGreen
+                      : item.status === "DISPUTED"
+                      ? styles.statusPillRed
                       : item.status === "WAITING_CUSTOMER_CONFIRMATION"
                       ? styles.statusPillAmber
                       : styles.statusPillBlue,
@@ -801,19 +805,33 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                       styles.statusPillText,
                       item.status === "COMPLETED" || item.status === "POINT_ISSUED"
                         ? styles.statusPillTextGreen
+                        : item.status === "DISPUTED"
+                        ? styles.statusPillTextRed
                         : item.status === "WAITING_CUSTOMER_CONFIRMATION"
                         ? styles.statusPillTextAmber
                         : styles.statusPillTextBlue,
                     ]}
                   >
-                    {item.status === "WAITING_CUSTOMER_CONFIRMATION"
-                      ? "Menunggu"
+                    {item.status === "DISPUTED"
+                      ? "⚠️ Komplain / Ditolak"
+                      : item.status === "WAITING_CUSTOMER_CONFIRMATION"
+                      ? "Menunggu ACC"
                       : item.status === "COMPLETED" || item.status === "POINT_ISSUED"
                       ? "Poin Terbit"
                       : "Perlu Timbang"}
                   </Text>
                 </View>
               </View>
+
+              {/* Dispute Alert Box inside Card */}
+              {item.status === "DISPUTED" && (
+                <View style={styles.cardDisputeNotice}>
+                  <AlertCircle size={14} color="#DC2626" />
+                  <Text style={styles.cardDisputeNoticeText} numberOfLines={2}>
+                    Komplain Nasabah: "{item.disputeReason || 'Hasil timbang tidak sesuai'}"
+                  </Text>
+                </View>
+              )}
 
               {/* Categories list */}
               <View style={styles.categoryTagsWrap}>
@@ -844,6 +862,8 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                     styles.btnTimbangAction,
                     item.status === "COMPLETED" || item.status === "POINT_ISSUED"
                       ? { backgroundColor: "#047857" }
+                      : item.status === "DISPUTED"
+                      ? { backgroundColor: "#DC2626" }
                       : item.status === "WAITING_CUSTOMER_CONFIRMATION"
                       ? { backgroundColor: "#D97706" }
                       : { backgroundColor: "#15803D" },
@@ -851,7 +871,9 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                 >
                   <Scale size={13} color="#FFFFFF" />
                   <Text style={styles.btnTimbangActionText}>
-                    {item.status === "WAITING_CUSTOMER_CONFIRMATION"
+                    {item.status === "DISPUTED"
+                      ? "Tinjau Komplain & Timbang Ulang"
+                      : item.status === "WAITING_CUSTOMER_CONFIRMATION"
                       ? "Lihat Hasil"
                       : item.status === "COMPLETED" || item.status === "POINT_ISSUED"
                       ? "Rincian"
@@ -1510,6 +1532,9 @@ const styles = StyleSheet.create({
   statusPillGreen: {
     backgroundColor: "#DCFCE7",
   },
+  statusPillRed: {
+    backgroundColor: "#FEE2E2",
+  },
   statusPillText: {
     fontSize: 9,
     fontWeight: "800",
@@ -1522,6 +1547,28 @@ const styles = StyleSheet.create({
   },
   statusPillTextGreen: {
     color: "#15803D",
+  },
+  statusPillTextRed: {
+    color: "#DC2626",
+  },
+  cardDisputeNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  cardDisputeNoticeText: {
+    flex: 1,
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#991B1B",
   },
   categoryTagsWrap: {
     flexDirection: "row",

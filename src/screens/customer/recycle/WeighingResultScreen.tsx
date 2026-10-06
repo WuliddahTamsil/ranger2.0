@@ -136,6 +136,19 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Disputed Alert Banner */}
+        {deposit.status === "DISPUTED" && (
+          <View style={styles.disputeNoticeCard}>
+            <AlertTriangle size={20} color="#DC2626" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.disputeNoticeTitle}>Komplain Anda Sedang Diproses</Text>
+              <Text style={styles.disputeNoticeSub}>
+                Alasan: "{deposit.disputeReason}". Bank Sampah sedang meninjau dan melakukan penimbangan ulang.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Officer & Scale Notice Card */}
         <View style={styles.officerCard}>
           <View style={styles.officerRow}>
@@ -242,12 +255,15 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
         )}
 
         {/* Officer Notes if any */}
-        {deposit.weighingNotes && (
+        {deposit.weighingNotes ? (
           <View style={styles.notesBox}>
-            <Info size={16} color="#4B5563" />
-            <Text style={styles.notesText}>{deposit.weighingNotes}</Text>
+            <Info size={16} color="#15803D" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.notesTitle}>Pesan / Catatan dari Petugas Bank Sampah:</Text>
+              <Text style={styles.notesText}>{deposit.weighingNotes}</Text>
+            </View>
           </View>
-        )}
+        ) : null}
 
         {/* Grand Total Summary */}
         <View style={styles.totalCard}>
@@ -681,17 +697,46 @@ const styles = StyleSheet.create({
   },
   notesBox: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 8,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
     padding: 12,
     borderRadius: 10,
     marginBottom: 14,
   },
-  notesText: {
-    flex: 1,
+  notesTitle: {
     fontSize: 11,
-    color: "#4B5563",
+    fontWeight: "800",
+    color: "#15803D",
+    marginBottom: 3,
+  },
+  notesText: {
+    fontSize: 11,
+    color: "#166534",
+    lineHeight: 16,
+  },
+  disputeNoticeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#FECACA",
+    padding: 12,
+    marginBottom: 14,
+  },
+  disputeNoticeTitle: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  disputeNoticeSub: {
+    fontSize: 11,
+    color: "#991B1B",
+    marginTop: 2,
+    lineHeight: 15,
   },
   totalCard: {
     backgroundColor: "#1B7A4E",
