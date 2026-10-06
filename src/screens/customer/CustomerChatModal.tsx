@@ -60,6 +60,9 @@ interface CustomerChatModalProps {
   participantName: string;
   participantType: CustomerChatParticipantType;
   initialMessage?: string;
+  orderType?: string;
+  serviceType?: string;
+  currentUserRole?: "customer" | "driver" | "merchant" | "owner";
 }
 
 interface AttachmentItem {
@@ -77,12 +80,27 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   participantName,
   participantType,
   initialMessage,
+  orderType,
+  serviceType,
+  currentUserRole = "customer",
 }) => {
-  const isOwnerView = participantType === "customer";
-  const isDriver = !isOwnerView && participantType === "driver";
+  const isDriverUser = currentUserRole === "driver";
+  const isOwnerView = !isDriverUser && participantType === "customer";
+  const isDriverChat = participantType === "driver" || isDriverUser;
+  const isDriver = !isOwnerView && !isDriverUser && participantType === "driver";
   const nameLower = (participantName || "").toLowerCase();
   const orderLower = (orderId || "").toLowerCase();
-  const isKost = isOwnerView || (!isDriver && (
+  const orderTypeLower = (orderType || "").toLowerCase();
+  const serviceTypeLower = (serviceType || "").toLowerCase();
+
+  const isRide = isDriverChat && (
+    orderTypeLower.includes("ride") ||
+    serviceTypeLower.includes("ride") ||
+    nameLower.includes("driver") ||
+    orderLower.includes("ride")
+  );
+
+  const isKost = !isDriverChat && (isOwnerView || (
     nameLower.includes("kos") ||
     nameLower.includes("hotel") ||
     nameLower.includes("resort") ||
@@ -110,10 +128,12 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     setConversationId(null);
     setCanSend(true);
 
-    const defaultGreeting = isOwnerView
+    const defaultGreeting = isDriverUser
+      ? "Halo, saya driver untuk perjalanan Anda."
+      : isOwnerView
       ? "Halo kak, ada yang bisa kami bantu mengenai ketersediaan kamar / unit properti kami?"
       : isDriver
-      ? "Halo Pak Kurir, saya customer pesanan ini."
+      ? (isRide ? "Halo Pak Driver, saya sudah di titik jemput." : "Halo Pak Kurir, saya customer pesanan ini.")
       : isKost
       ? `Halo, saya ingin bertanya mengenai properti ${participantName}. Apakah masih tersedia?`
       : "Halo Toko, ada yang ingin saya tanyakan mengenai pesanan ini.";
@@ -139,7 +159,8 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           setConversationId(String(conversation.data._id || conversation.data.id));
           setCanSend(conversation.data.canSend !== false);
         }
-        const res = await getChatMessages(orderId, isOwnerView ? "owner" : (isDriver ? "driver" : "owner"));
+        const senderRoleForFetch = isDriverUser ? "driver" : (isOwnerView ? "owner" : (isDriver ? "driver" : "owner"));
+        const res = await getChatMessages(orderId, senderRoleForFetch);
         if (res.success && Array.isArray(res.data)) {
           const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
             id: m._id,
@@ -181,7 +202,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       unsubscribeRealtime();
       unsubscribe();
     };
-  }, [initialMessage, isDriver, isKost, orderId, participantName, participantType, threadId, visible]);
+  }, [initialMessage, isDriver, isDriverChat, isDriverUser, isKost, isRide, orderId, participantName, participantType, threadId, visible]);
 
   const handlePickImage = async () => {
     setIsAttachMenuOpen(false);
@@ -307,7 +328,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     const nowTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
     const message: CustomerChatMessage = {
       id: `${threadId}_${Date.now()}`,
-      sender: isOwnerView ? "other" : "customer",
+      sender: (isOwnerView || isDriverUser) ? "other" : "customer",
       text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : selectedAttachment?.type === "video" ? "🎥 Video terkirim" : "📎 File terlampir"),
       time: nowTime,
       attachment: attachmentToSend ? { ...attachmentToSend } : undefined,
@@ -335,13 +356,16 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     }
 
     // 3. Send to backend & Socket.io asynchronously
+    const senderRole = isDriverUser ? "driver" : (isOwnerView ? "owner" : "customer");
+    const recipientRole = isDriverUser ? "customer" : (isOwnerView ? "customer" : (isDriver ? "driver" : "owner"));
+
     sendChatMessage(
       orderId,
-      isOwnerView ? "owner" : "customer",
+      senderRole,
       text,
       attachmentToSend,
       customerId,
-      isOwnerView ? "customer" : (isDriver ? "driver" : "owner"),
+      recipientRole,
       undefined,
       conversationId || undefined
     ).catch((err) => {
@@ -349,18 +373,33 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     });
   };
 
-  const Icon = isOwnerView ? User : isDriver ? Bike : isKost ? Building2 : Store;
-  const suggestions = isOwnerView
+  const Icon = (isOwnerView || isDriverUser) ? User : isDriver ? Bike : isKost ? Building2 : Store;
+  const suggestions = isDriverUser
+    ? ["Saya sudah sampai di titik jemput", "Saya sedang menuju ke lokasi ya", "Mohon ditunggu sebentar ya Kak"]
+    : isOwnerView
     ? ["Kamar masih tersedia ya kak 👍", "Bisa langsung survei hari ini", "Lokasi kami share ya kak", "Harga sudah include WiFi & Listrik"]
     : isDriver
-    ? ["Saya tunggu di depan ya Pak", "Tolong titip di pos satpam", "Sudah dekat dengan lokasi?"]
+    ? (isRide
+        ? ["Saya tunggu di depan ya Pak", "Sesuai titik di peta ya Pak", "Saya pakai baju/jaket warna...", "Sudah dekat dengan lokasi?"]
+        : ["Saya tunggu di depan ya Pak", "Tolong titip di pos satpam", "Sudah dekat dengan lokasi?"])
     : isKost
     ? ["Apakah kamar masih tersedia?", "Bisa minta shareloc lokasi?", "Apakah harga sudah termasuk listrik & WiFi?", "Boleh tahu aturan jam malam?"]
     : ["Mohon pastikan pesanan sesuai", "Kira-kira siap berapa menit lagi?", "Terima kasih banyak!"];
 
   const handleOpenWhatsApp = () => {
     const waNumber = "6287805987309";
-    const waText = encodeURIComponent(`Halo, saya tertarik dengan ${participantName}. Apakah kamar/layanan masih tersedia?`);
+    const shortCode = String(orderId).slice(-6);
+    const waText = encodeURIComponent(
+      isDriverUser
+        ? `Halo ${participantName}, saya driver untuk perjalanan #${shortCode}.`
+        : isDriver
+        ? (isRide
+            ? `Halo ${participantName}, saya penumpang untuk perjalanan #${shortCode}. Apakah sedang menuju ke titik jemput?`
+            : `Halo ${participantName}, saya pemesan untuk order #${shortCode}. Mau tanya update pesanan ya.`)
+        : (isKost || isOwnerView)
+        ? `Halo, saya tertarik dengan ${participantName}. Apakah kamar/layanan masih tersedia?`
+        : `Halo ${participantName}, ada yang ingin saya tanyakan mengenai pesanan #${shortCode}.`
+    );
     Linking.openURL(`https://wa.me/${waNumber}?text=${waText}`).catch(() => {
       Alert.alert("WhatsApp", "Gagal membuka WhatsApp. Silakan hubungi 0878-0598-7309.");
     });
@@ -382,15 +421,11 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             <View style={styles.avatarContainer}>
               <View style={[
                 styles.avatar,
-                isOwnerView
-                  ? { backgroundColor: "#DCFCE7" }
-                  : isDriver
-                  ? { backgroundColor: "#DCFCE7" }
-                  : isKost
+                (isOwnerView || isDriverChat || isKost)
                   ? { backgroundColor: "#DCFCE7" }
                   : { backgroundColor: "#FFEDD5" }
               ]}>
-                <Icon size={20} color={isOwnerView ? "#0D7A53" : isDriver ? "#15803D" : isKost ? "#0D7A53" : "#C2410C"} />
+                <Icon size={20} color={(isOwnerView || isDriverChat || isKost) ? "#0D7A53" : "#C2410C"} />
               </View>
               <View style={styles.onlineBadgeDot} />
             </View>
@@ -400,38 +435,42 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                 <Text style={styles.title} numberOfLines={1}>{participantName}</Text>
                 <View style={[
                   styles.rolePill,
-                  isOwnerView
-                    ? { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }
-                    : isDriver
-                    ? { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }
-                    : isKost
+                  (isOwnerView || isDriverChat || isKost)
                     ? { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }
                     : { backgroundColor: "#FFEDD5", borderColor: "#FDBA74" }
                 ]}>
                   <Text style={[
                     styles.rolePillText,
-                    isOwnerView
-                      ? { color: "#15803D" }
-                      : isDriver
-                      ? { color: "#15803D" }
-                      : isKost
+                    (isOwnerView || isDriverChat || isKost)
                       ? { color: "#15803D" }
                       : { color: "#C2410C" }
                   ]}>
-                    {isOwnerView ? "PELANGGAN" : isDriver ? "KURIR" : isKost ? "PEMILIK KOS" : "TOKO"}
+                    {isDriverUser
+                      ? "PENUMPANG"
+                      : isOwnerView
+                      ? "PELANGGAN"
+                      : isDriver
+                      ? (isRide ? "DRIVER" : "KURIR")
+                      : isKost
+                      ? "PEMILIK KOS"
+                      : "TOKO"}
                   </Text>
                 </View>
               </View>
               <View style={styles.headerSubtitleRow}>
                 <View style={styles.onlineIndicatorMini} />
                 <Text style={styles.subtitle} numberOfLines={1}>
-                  {isOwnerView
+                  {isDriverUser
+                    ? `Perjalanan #${String(orderId).slice(-6)} • Penumpang Aktif`
+                    : isOwnerView
                     ? "Calon Tamu / Penghuni • Aktif"
                     : isDriver
-                    ? `Order #${orderId} • Siap Antar`
+                    ? (isRide
+                        ? `Perjalanan #${String(orderId).slice(-6)} • Driver Siap`
+                        : `Order #${String(orderId).slice(-6)} • Siap Antar`)
                     : isKost
                     ? `Properti & Homestay • Online`
-                    : `Order #${orderId} • Toko Aktif`}
+                    : `Order #${String(orderId).slice(-6)} • Toko Aktif`}
                 </Text>
               </View>
             </View>
@@ -450,15 +489,13 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           {/* Channel Identification Banner */}
           <View style={[
             styles.channelBanner,
-            isOwnerView
+            (isOwnerView || isKost)
               ? styles.channelBannerKost
-              : isDriver
+              : isDriverChat
               ? styles.channelBannerDriver
-              : isKost
-              ? styles.channelBannerKost
               : styles.channelBannerStore
           ]}>
-            {isOwnerView ? (
+            {(isOwnerView || isDriverUser) ? (
               <User size={13} color="#0D7A53" />
             ) : isDriver ? (
               <Bike size={13} color="#15803D" />
@@ -469,18 +506,18 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             )}
             <Text style={[
               styles.channelBannerText,
-              isOwnerView
+              (isOwnerView || isKost)
                 ? styles.channelBannerTextKost
-                : isDriver
+                : isDriverChat
                 ? styles.channelBannerTextDriver
-                : isKost
-                ? styles.channelBannerTextKost
                 : styles.channelBannerTextStore
             ]} numberOfLines={1}>
-              {isOwnerView
+              {isDriverUser
+                ? "Terhubung langsung dengan Penumpang Pesanan"
+                : isOwnerView
                 ? "Terhubung langsung dengan Pelanggan / Calon Penghuni"
                 : isDriver
-                ? "Terhubung langsung dengan Kurir Pengantar Pesanan"
+                ? (isRide ? "Terhubung langsung dengan Driver Rangers" : "Terhubung langsung dengan Kurir Pengantar Pesanan")
                 : isKost
                 ? "Terhubung langsung dengan Pemilik Properti / Homestay"
                 : "Terhubung langsung dengan Mitra Toko / Penjual"}
@@ -505,30 +542,30 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
               <View style={styles.emptyWrap}>
                 <View style={[
                   styles.emptyIconBg,
-                  isOwnerView
-                    ? { backgroundColor: "#DCFCE7" }
-                    : isDriver
-                    ? { backgroundColor: "#DCFCE7" }
-                    : isKost
+                  (isOwnerView || isDriverChat || isKost)
                     ? { backgroundColor: "#DCFCE7" }
                     : { backgroundColor: "#FFEDD5" }
                 ]}>
-                  <Icon size={28} color={isOwnerView ? "#0D7A53" : isDriver ? "#15803D" : isKost ? "#0D7A53" : "#EA580C"} />
+                  <Icon size={28} color={(isOwnerView || isDriverChat || isKost) ? "#0D7A53" : "#EA580C"} />
                 </View>
                 <Text style={styles.emptyTitle}>
-                  {isOwnerView
+                  {isDriverUser
+                    ? "Percakapan dengan Penumpang"
+                    : isOwnerView
                     ? "Percakapan dengan Pelanggan"
                     : isDriver
-                    ? "Mulai Percakapan dengan Kurir"
+                    ? (isRide ? "Mulai Percakapan dengan Driver" : "Mulai Percakapan dengan Kurir")
                     : isKost
                     ? "Mulai Percakapan dengan Pemilik Kos"
                     : "Mulai Percakapan dengan Toko"}
                 </Text>
                 <Text style={styles.emptyText}>
-                  {isOwnerView
+                  {isDriverUser
+                    ? "Koordinasikan penjemputan atau beri kabar posisi Anda kepada penumpang."
+                    : isOwnerView
                     ? "Jawab pertanyaan calon penyewa, kirim foto kamar, atau konfirmasi survei properti secara real-time."
                     : isDriver
-                    ? "Tanyakan posisi driver atau koordinasi titik antar pesanan."
+                    ? (isRide ? "Koordinasikan titik jemput atau tanyakan perkiraan waktu tiba driver." : "Tanyakan posisi driver atau koordinasi titik antar pesanan.")
                     : isKost
                     ? "Tanyakan ketersediaan kamar, aturan kos, atau jadwalkan survei lokasi langsung ke pemilik."
                     : "Tanyakan rincian atau catatan khusus pesanan Anda langsung ke toko."}
@@ -536,13 +573,13 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
               </View>
             }
             renderItem={({ item }) => {
-              const isMe = isOwnerView ? (item.sender === "other") : (item.sender === "customer");
+              const isMe = (isOwnerView || isDriverUser) ? (item.sender === "other") : (item.sender === "customer");
               const hasAttachment = !!item.attachment;
               const isImg = item.attachment?.type === "image";
 
               return (
                 <View style={[styles.messageWrap, isMe ? styles.messageRight : styles.messageLeft]}>
-                  {!isMe && (
+                  {!isMe && !isDriverChat && (
                     <Text style={styles.senderNameLabel}>
                       {isOwnerView ? "👤 Pelanggan" : isKost ? "🏠 Pemilik Kos" : "📦 Toko"}
                     </Text>

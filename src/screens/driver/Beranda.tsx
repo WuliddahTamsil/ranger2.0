@@ -225,6 +225,9 @@ const mapRideDriverOrder = (order: any): DriverOrder => {
     pickup: order.pickup,
     destination: order.destination,
     addressSnapshot: null,
+    rating: (order.rating && typeof order.rating.score === "number" && order.rating.score > 0)
+      ? { score: order.rating.score, review: order.rating.review || "", createdAt: order.rating.createdAt }
+      : undefined,
   };
 };
 
@@ -2083,9 +2086,12 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           visible={chatModalVisible}
           onClose={() => setChatModalVisible(false)}
           orderId={chatTargetOrder.id}
-          participantType="driver"
+          currentUserRole="driver"
+          participantType="customer"
           participantName={chatTargetOrder.customer}
           customerId={authAccount?.id}
+          orderType={chatTargetOrder.serviceType || "RIDE"}
+          serviceType={chatTargetOrder.serviceType || "KANYAAH_RIDE"}
         />
       )}
     </ResponsiveSafeAreaView>

@@ -263,6 +263,8 @@ const createRideOrder = async (req, res) => {
       if (custUser?.phone) finalCustomerPhone = String(custUser.phone).trim();
     }
 
+    const orderCode = `RNG-RIDE-${Date.now().toString().slice(-8)}`;
+
     const rideOrder = await RideOrder.create({
       orderCode,
       idempotencyKey: idempotencyKey || null,
@@ -875,6 +877,7 @@ const rateRideOrder = async (req, res) => {
     await order.save();
 
     // Update driver cumulative rating
+    let updatedAvgRating = numericRating;
     if (order.driverId && isValidUserId(order.driverId)) {
       try {
         const ratedOrders = await RideOrder.find({
@@ -883,12 +886,40 @@ const rateRideOrder = async (req, res) => {
         }).lean();
         if (ratedOrders.length > 0) {
           const avg = ratedOrders.reduce((sum, o) => sum + (o.rating?.score || 5), 0) / ratedOrders.length;
-          await User.findByIdAndUpdate(order.driverId, { driverRating: Math.round(avg * 10) / 10 });
+          updatedAvgRating = Math.round(avg * 10) / 10;
+          await User.findByIdAndUpdate(order.driverId, {
+            driverRating: updatedAvgRating,
+            driverRatingCount: ratedOrders.length,
+          });
         }
+
+        // Notify driver
+        await Notification.create({
+          userId: order.driverId,
+          title: "Penilaian Perjalanan Baru ⭐",
+          message: `Penumpang memberikan rating ${numericRating} bintang${review ? `: "${review}"` : " untuk perjalanan Anda"}.`,
+          type: "order_status",
+          relatedId: order._id,
+        }).catch(() => {});
+
+        // Emit real-time updates to driver
+        emitToUser(req.io, order.driverId, "ride:rating_submitted", {
+          orderId: order._id,
+          rating: order.rating,
+          driverRating: updatedAvgRating,
+        });
+        emitToUser(req.io, order.driverId, "ride_status_updated", order);
+        emitToUser(req.io, order.driverId, "order_status_updated", order);
       } catch (rateErr) {
         console.warn("Update driver rating error:", rateErr);
       }
     }
+
+    emitToRideRoom(req.io, order._id, "ride:rating_submitted", {
+      orderId: order._id,
+      rating: order.rating,
+    });
+    emitToRideRoom(req.io, order._id, "ride_status_updated", order);
 
     return res.json({ success: true, message: "Terima kasih atas ulasan perjalanan Anda!", data: order });
   } catch (error) {

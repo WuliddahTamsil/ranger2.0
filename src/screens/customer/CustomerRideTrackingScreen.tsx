@@ -707,75 +707,154 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
         {/* ========================================================================= */}
         {/* RATING & REVIEW CARD (Once completed) */}
         {/* ========================================================================= */}
-        {isCompleted && (
-          <View style={styles.card}>
-            <Text style={styles.cardHeaderTitle}>PENILAIAN PERJALANAN</Text>
+        {isCompleted && (() => {
+          const hasUserRated = ratingSubmitted || Boolean(
+            typeof currentRide.rating === "number"
+              ? currentRide.rating > 0
+              : (currentRide.rating?.score != null && Number(currentRide.rating.score) > 0)
+          );
+          const finalScore = typeof currentRide.rating === "number"
+            ? currentRide.rating
+            : (currentRide.rating?.score != null && Number(currentRide.rating.score) > 0)
+            ? Number(currentRide.rating.score)
+            : ratingVal;
+          const finalReview = (typeof currentRide.rating === "object" && currentRide.rating?.review)
+            ? currentRide.rating.review
+            : reviewText;
 
-            {ratingSubmitted || currentRide.rating ? (
-              <View style={styles.ratingSuccessBox}>
-                <CheckCircle size={24} color="#15803D" />
-                <Text style={styles.ratingSuccessTitle}>Penilaian Terkirim</Text>
-                <View style={styles.starRow}>
-                  {[1, 2, 3, 4, 5].map((s) => {
-                    const currentScore = typeof currentRide.rating === "number" ? currentRide.rating : currentRide.rating?.score || ratingVal;
-                    return (
+          const ratingLabels: Record<number, string> = {
+            5: "Sangat Puas ⭐⭐⭐⭐⭐",
+            4: "Puas ⭐⭐⭐⭐",
+            3: "Cukup ⭐⭐⭐",
+            2: "Kurang ⭐⭐",
+            1: "Kecewa ⭐",
+          };
+
+          const quickTags = [
+            "Driver Ramah 👍",
+            "Perjalanan Nyaman 🛵",
+            "Tepat Waktu ⏱️",
+            "Kendaraan Bersih ✨",
+            "Mengemudi Aman 🛡️",
+          ];
+
+          return (
+            <View style={styles.card}>
+              <Text style={styles.cardHeaderTitle}>PENILAIAN PERJALANAN</Text>
+
+              {hasUserRated ? (
+                <View style={styles.ratingSuccessBox}>
+                  <CheckCircle size={28} color="#15803D" />
+                  <Text style={styles.ratingSuccessTitle}>Penilaian Terkirim</Text>
+                  <View style={styles.starRow}>
+                    {[1, 2, 3, 4, 5].map((s) => (
                       <Star
                         key={s}
-                        size={20}
-                        color={s <= currentScore ? "#D97706" : "#E2E8F0"}
-                        fill={s <= currentScore ? "#D97706" : "transparent"}
+                        size={22}
+                        color={s <= finalScore ? "#D97706" : "#E2E8F0"}
+                        fill={s <= finalScore ? "#D97706" : "transparent"}
                       />
-                    );
-                  })}
-                </View>
-                <Text style={styles.ratingSuccessSub}>Terima kasih atas ulasan Anda!</Text>
-              </View>
-            ) : (
-              <View style={styles.ratingFormWrap}>
-                <Text style={styles.ratingPromptText}>Bagaimana pengalaman perjalanan Anda?</Text>
-                <View style={styles.starSelectRow}>
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <TouchableOpacity
-                      key={s}
-                      onPress={() => setRatingVal(s)}
-                      style={styles.starBtn}
-                      activeOpacity={0.7}
-                    >
-                      <Star
-                        size={28}
-                        color={s <= ratingVal ? "#D97706" : "#CBD5E1"}
-                        fill={s <= ratingVal ? "#D97706" : "transparent"}
-                      />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <TextInput
-                  style={styles.reviewTextInput}
-                  placeholder="Tulis ulasan perjalanan (opsional)..."
-                  placeholderTextColor="#94A3B8"
-                  value={reviewText}
-                  onChangeText={setReviewText}
-                  multiline
-                  numberOfLines={3}
-                />
-
-                <TouchableOpacity
-                  style={styles.submitRatingBtn}
-                  onPress={handleSubmitRating}
-                  disabled={isSubmittingRating}
-                  activeOpacity={0.85}
-                >
-                  {isSubmittingRating ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.submitRatingBtnText}>Kirim Penilaian</Text>
+                    ))}
+                  </View>
+                  <Text style={styles.ratingScoreDesc}>{ratingLabels[finalScore] || `${finalScore} / 5`}</Text>
+                  {Boolean(finalReview) && (
+                    <View style={styles.reviewQuoteBox}>
+                      <Text style={styles.reviewQuoteText}>"{finalReview}"</Text>
+                    </View>
                   )}
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
+                  <Text style={styles.ratingSuccessSub}>
+                    Terima kasih atas ulasan Anda! Penilaian Anda membantu menjaga kualitas mitra driver.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.ratingFormWrap}>
+                  <View style={styles.ratingDriverHeader}>
+                    <View style={styles.ratingDriverAvatar}>
+                      <Bike size={20} color="#15803D" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ratingDriverName}>{currentRide.driverName || "Driver Rangers"}</Text>
+                      <Text style={styles.ratingDriverSub}>
+                        {currentRide.driverVehicle || "Kanyaah Motor"} • {currentRide.driverPlate || "Plat Terverifikasi"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.ratingPromptText}>Bagaimana pengalaman perjalanan Anda?</Text>
+                  
+                  {/* Interactive Star Buttons */}
+                  <View style={styles.starSelectRow}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <TouchableOpacity
+                        key={s}
+                        onPress={() => setRatingVal(s)}
+                        style={styles.starBtn}
+                        activeOpacity={0.7}
+                      >
+                        <Star
+                          size={32}
+                          color={s <= ratingVal ? "#D97706" : "#CBD5E1"}
+                          fill={s <= ratingVal ? "#D97706" : "transparent"}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Emotion Label */}
+                  <Text style={styles.ratingEmotionText}>
+                    {ratingLabels[ratingVal] || `${ratingVal} dari 5`}
+                  </Text>
+
+                  {/* Quick Review Feedback Tags */}
+                  <View style={styles.quickTagsWrap}>
+                    {quickTags.map((tag) => {
+                      const isSelected = reviewText.includes(tag);
+                      return (
+                        <TouchableOpacity
+                          key={tag}
+                          style={[styles.quickTagChip, isSelected && styles.quickTagChipActive]}
+                          onPress={() => {
+                            if (isSelected) {
+                              setReviewText((prev) => prev.replace(tag, "").replace(/,\s*,/g, ",").trim());
+                            } else {
+                              setReviewText((prev) => (prev ? `${prev}, ${tag}` : tag));
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.quickTagText, isSelected && styles.quickTagTextActive]}>{tag}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <TextInput
+                    style={styles.reviewTextInput}
+                    placeholder="Tulis ulasan tambahan untuk driver (opsional)..."
+                    placeholderTextColor="#94A3B8"
+                    value={reviewText}
+                    onChangeText={setReviewText}
+                    multiline
+                    numberOfLines={3}
+                  />
+
+                  <TouchableOpacity
+                    style={styles.submitRatingBtn}
+                    onPress={handleSubmitRating}
+                    disabled={isSubmittingRating}
+                    activeOpacity={0.85}
+                  >
+                    {isSubmittingRating ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.submitRatingBtnText}>Kirim Penilaian ({ratingVal} ★)</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          );
+        })()}
 
         {/* Cancel Button (Available before trip starts) */}
         {(isSearching || status === "DRIVER_ASSIGNED" || status === "DRIVER_ON_THE_WAY" || status === "DRIVER_ARRIVED") && (
@@ -828,6 +907,8 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           participantType="driver"
           participantName={currentRide.driverName || "Driver Rangers"}
           customerId={authAccount?.id}
+          orderType="RIDE"
+          serviceType="KANYAAH_RIDE"
         />
       )}
 
@@ -1288,34 +1369,122 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   ratingSuccessTitle: {
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 16,
+    fontWeight: "900",
     color: "#15803D",
   },
   starRow: {
     flexDirection: "row",
-    gap: 4,
+    gap: 6,
+    marginVertical: 4,
+  },
+  ratingScoreDesc: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#D97706",
+  },
+  reviewQuoteBox: {
+    backgroundColor: "#F8FAFC",
+    borderLeftWidth: 3,
+    borderLeftColor: "#15803D",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginVertical: 4,
+    width: "100%",
+  },
+  reviewQuoteText: {
+    fontSize: 12,
+    fontStyle: "italic",
+    color: "#334155",
+    lineHeight: 18,
   },
   ratingSuccessSub: {
     fontSize: 11.5,
     color: "#64748B",
+    textAlign: "center",
+    lineHeight: 16,
   },
   ratingFormWrap: {
     gap: 12,
   },
+  ratingDriverHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F0FDF4",
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  ratingDriverAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ratingDriverName: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  ratingDriverSub: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
+  },
   ratingPromptText: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: "700",
     color: "#0F172A",
+    textAlign: "center",
   },
   starSelectRow: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   starBtn: {
     padding: 4,
+  },
+  ratingEmotionText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#D97706",
+    textAlign: "center",
+    marginTop: -4,
+  },
+  quickTagsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "center",
+    marginVertical: 4,
+  },
+  quickTagChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  quickTagChipActive: {
+    backgroundColor: "#DCFCE7",
+    borderColor: "#86EFAC",
+  },
+  quickTagText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  quickTagTextActive: {
+    color: "#15803D",
+    fontWeight: "800",
   },
   reviewTextInput: {
     backgroundColor: "#F8FAFC",
@@ -1330,14 +1499,19 @@ const styles = StyleSheet.create({
   },
   submitRatingBtn: {
     backgroundColor: "#1B7A4E",
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    elevation: 2,
+    shadowColor: "#1B7A4E",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   submitRatingBtnText: {
     color: "#FFFFFF",
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: "800",
   },
   cancelTripBtn: {

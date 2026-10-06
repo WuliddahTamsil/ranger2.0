@@ -45,6 +45,7 @@ import {
   ArrowLeft,
   User,
   ShieldCheck,
+  Star,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { rp } from "../../utils/formatters";
@@ -94,6 +95,11 @@ export interface DriverOrder {
     latitude?: number;
     longitude?: number;
   } | null;
+  rating?: {
+    score: number;
+    review?: string;
+    createdAt?: string;
+  };
 }
 
 interface OrderProps {
@@ -1490,6 +1496,73 @@ export const Order: React.FC<OrderProps> = ({
               </View>
             )}
           </View>
+
+          {/* Rating Recap Card when Selesai */}
+          {selectedOrder.status === "Selesai" && (
+            <View style={styles.driverRatingRecapCard}>
+              <View style={styles.driverRatingRecapHeader}>
+                <View style={styles.driverRatingTitleRow}>
+                  <Star size={16} color="#D97706" fill="#D97706" />
+                  <Text style={styles.driverRatingRecapTitle}>
+                    PENILAIAN DARI {selectedOrder.type === "Kanyaah Ride" ? "PENUMPANG" : "PELANGGAN"}
+                  </Text>
+                </View>
+                {selectedOrder.rating?.score ? (
+                  <View style={styles.driverRatingScoreBadge}>
+                    <Text style={styles.driverRatingScoreBadgeText}>{selectedOrder.rating.score}.0 ★</Text>
+                  </View>
+                ) : (
+                  <View style={styles.driverRatingPendingBadge}>
+                    <Text style={styles.driverRatingPendingBadgeText}>Menunggu Ulasan</Text>
+                  </View>
+                )}
+              </View>
+
+              {selectedOrder.rating?.score ? (
+                <View style={{ gap: 8 }}>
+                  <View style={styles.driverRatingStarsRow}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star
+                        key={s}
+                        size={20}
+                        color={s <= (selectedOrder.rating?.score || 0) ? "#D97706" : "#E2E8F0"}
+                        fill={s <= (selectedOrder.rating?.score || 0) ? "#D97706" : "transparent"}
+                      />
+                    ))}
+                    <Text style={styles.driverRatingScoreLabel}>
+                      {selectedOrder.rating.score === 5
+                        ? "Sangat Puas ⭐ 5/5"
+                        : selectedOrder.rating.score === 4
+                        ? "Puas ⭐ 4/5"
+                        : selectedOrder.rating.score === 3
+                        ? "Cukup ⭐ 3/5"
+                        : `${selectedOrder.rating.score} / 5`}
+                    </Text>
+                  </View>
+                  {Boolean(selectedOrder.rating?.review) ? (
+                    <View style={styles.driverRatingReviewBubble}>
+                      <Text style={styles.driverRatingReviewText}>
+                        "{selectedOrder.rating.review}"
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.driverRatingNoReviewText}>
+                      Penumpang memberikan {selectedOrder.rating.score} bintang tanpa ulasan tertulis.
+                    </Text>
+                  )}
+                  <Text style={styles.driverRatingNoticeText}>
+                    ✓ Rating ini telah diakumulasikan ke profil performa driver Anda.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.driverRatingWaitingWrap}>
+                  <Text style={styles.driverRatingWaitingText}>
+                    Penumpang belum mengisi ulasan bintang. Rekapan akan otomatis terisi saat penumpang mengirimkan penilaian di aplikasinya.
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
         </ScrollView>
 
         {/* Sticky Action Footer */}
@@ -2090,20 +2163,28 @@ export const Order: React.FC<OrderProps> = ({
                       </Text>
                     </View>
                   </View>
-                  <View
-                    style={[
-                      styles.badge,
-                      { backgroundColor: getStatusBg(item.status, item) },
-                    ]}
-                  >
-                    <Text
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    {item.status === "Selesai" && Boolean(item.rating?.score) && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#FEF3C7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: "#FDE68A" }}>
+                        <Star size={11} color="#D97706" fill="#D97706" />
+                        <Text style={{ fontSize: 11, fontWeight: "900", color: "#B45309" }}>{item.rating?.score}.0</Text>
+                      </View>
+                    )}
+                    <View
                       style={[
-                        styles.badgeText,
-                        { color: getStatusColor(item.status, item) },
+                        styles.badge,
+                        { backgroundColor: getStatusBg(item.status, item) },
                       ]}
                     >
-                      {getStatusBadgeLabel(item.status, item)}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          { color: getStatusColor(item.status, item) },
+                        ]}
+                      >
+                        {getStatusBadgeLabel(item.status, item)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
@@ -4021,5 +4102,108 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#166534",
     marginTop: 1,
+  },
+
+  // Driver Rating Recap Card Styles
+  driverRatingRecapCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#FEF3C7",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+  },
+  driverRatingRecapHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  driverRatingTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  driverRatingRecapTitle: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#92400E",
+    letterSpacing: 0.5,
+  },
+  driverRatingScoreBadge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  driverRatingScoreBadgeText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#B45309",
+  },
+  driverRatingPendingBadge: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  driverRatingPendingBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  driverRatingStarsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  driverRatingScoreLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#D97706",
+    marginLeft: 8,
+  },
+  driverRatingReviewBubble: {
+    backgroundColor: "#F8FAFC",
+    borderLeftWidth: 3,
+    borderLeftColor: "#D97706",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginVertical: 4,
+  },
+  driverRatingReviewText: {
+    fontSize: 12,
+    fontStyle: "italic",
+    color: "#334155",
+    lineHeight: 18,
+  },
+  driverRatingNoReviewText: {
+    fontSize: 11.5,
+    color: "#64748B",
+    fontStyle: "italic",
+  },
+  driverRatingNoticeText: {
+    fontSize: 10.5,
+    color: "#15803D",
+    fontWeight: "600",
+  },
+  driverRatingWaitingWrap: {
+    backgroundColor: "#F8FAFC",
+    padding: 10,
+    borderRadius: 10,
+  },
+  driverRatingWaitingText: {
+    fontSize: 11.5,
+    color: "#64748B",
+    lineHeight: 16,
   },
 });

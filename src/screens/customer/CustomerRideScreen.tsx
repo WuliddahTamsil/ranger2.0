@@ -42,6 +42,7 @@ import {
   RideLocation,
   RideOrderData,
   fetchActiveCustomerRide,
+  cancelRide,
 } from "../../services/rideService";
 import { fetchDrivingRoute, RideRoute } from "../../services/routeService";
 import { CustomerLocationPicker, CustomerLocationValue } from "../../components/CustomerLocationPicker";
@@ -513,7 +514,10 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       return;
     }
     if (!destination.address.trim()) {
-      Alert.alert("Lokasi Tujuan Kosong", "Silakan tentukan lokasi tujuan Anda.");
+      Alert.alert("Lokasi Tujuan Belum Dipilih", "Silakan tentukan lokasi tujuan perjalanan Anda.", [
+        { text: "Pilih Tujuan Sekarang", onPress: () => openLocationPicker("destination") },
+        { text: "Batal", style: "cancel" },
+      ]);
       return;
     }
     if (selectedVehicle === "CAR") {
@@ -624,37 +628,69 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         </View>
 
         {/* Active Trip Alert Banner */}
-        {activeRideOrder && (
-          <TouchableOpacity
+        {Boolean(activeRideOrder) && (
+          <View
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
               backgroundColor: "#EFF6FF",
               borderColor: "#3B82F6",
               borderWidth: 1,
-              borderRadius: 12,
-              padding: 12,
+              borderRadius: 14,
+              padding: 14,
               marginBottom: 16,
             }}
-            onPress={async () => {
-              if (activeRideOrder?._id) {
-                await AsyncStorage.setItem("selected_ride_tracking_id", String(activeRideOrder._id));
-              }
-              navigate("c_ride_tracking");
-            }}
-            activeOpacity={0.8}
           >
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1D4ED8" }}>
-                Perjalanan Aktif Sedang Berlangsung
-              </Text>
-              <Text style={{ fontSize: 11, color: "#2563EB", marginTop: 2 }}>
-                Status: {activeRideOrder.status}. Ketuk untuk melihat pelacakan.
-              </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#1D4ED8" }}>
+                  Perjalanan Aktif Sedang Berlangsung
+                </Text>
+                <Text style={{ fontSize: 11, color: "#2563EB", marginTop: 2 }}>
+                  Status: {activeRideOrder?.status}. Selesaikan atau batalkan untuk memesan baru.
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {activeRideOrder?.status === "SEARCHING_DRIVER" && (
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: "#FEE2E2",
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: "#FCA5A5",
+                    }}
+                    onPress={async () => {
+                      if (activeRideOrder?._id) {
+                        await cancelRide(activeRideOrder._id, "Dibatalkan oleh pelanggan");
+                        setActiveRideOrder(null);
+                        Alert.alert("Pesanan Dibatalkan", "Pesanan sebelumnya telah dibatalkan. Anda dapat memesan kembali sekarang.");
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#DC2626" }}>Batalkan</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: "#2563EB",
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                  }}
+                  onPress={async () => {
+                    if (activeRideOrder?._id) {
+                      await AsyncStorage.setItem("selected_ride_tracking_id", String(activeRideOrder._id));
+                    }
+                    navigate("c_ride_tracking");
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>Lacak</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <ArrowRight size={18} color="#1D4ED8" />
-          </TouchableOpacity>
+          </View>
         )}
 
         {/* Location Card */}
@@ -797,13 +833,13 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
             )}
           </View>
         </View>
-        {routeError && (
+        {Boolean(routeError) && (
           <View style={styles.routeStatusError}>
             <AlertCircle size={16} color="#B91C1C" />
             <Text style={styles.routeStatusText}>{routeError}</Text>
           </View>
         )}
-        {fareError && (
+        {Boolean(fareError) && (
           <View style={styles.routeStatusError}>
             <AlertCircle size={16} color="#B91C1C" />
             <Text style={styles.routeStatusText}>{fareError}</Text>
@@ -1066,7 +1102,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         <TouchableOpacity
           style={[styles.orderButton, !canOrder && styles.orderButtonDisabled]}
           onPress={handleOrderRide}
-          disabled={!canOrder}
+          disabled={isSubmitting}
           activeOpacity={0.85}
         >
           {isSubmitting ? (
