@@ -333,57 +333,57 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
   // Merge items according to currently selected mainCategory
   const currentItemsList = React.useMemo(() => {
-    const matchingFromDb = dbKosts.filter((k) => (k.categoryType || "kost") === mainCategory);
+    const matchingFromDb = (dbKosts || []).filter((k) => (k?.categoryType || "kost") === mainCategory);
     if (matchingFromDb.length > 0) {
       return matchingFromDb;
     }
 
     if (mainCategory === "kost") {
-      return dbKosts.filter((k) => !k.categoryType || k.categoryType === "kost");
+      return (dbKosts || []).filter((k) => !k?.categoryType || k.categoryType === "kost");
     } else if (mainCategory === "hotel") {
-      return MOCK_HOTELS_AND_VILLAS.map((h) => ({
+      return (MOCK_HOTELS_AND_VILLAS || []).map((h) => ({
         id: h.id || h._id,
         _id: h._id || h.id,
         categoryType: "hotel" as LodgingCategoryType,
-        name: h.name,
-        type: h.type,
+        name: h.name || "Hotel & Villa",
+        type: h.type || "Hotel",
         status: "Tersedia",
-        location: h.address,
-        city: h.city,
-        areaTag: h.areaTag,
+        location: h.address || h.city || "Garut",
+        city: h.city || "Garut",
+        areaTag: h.areaTag || "Garut Kota",
         badgeTag: h.badgeTag,
         rating: h.rating || 4.8,
         reviews: h.reviewCount || 100,
-        price: h.price,
+        price: h.price || 500000,
         cashbackPoints: h.cashbackPoints || 25000,
-        facilities: h.facilities,
-        img: h.images[0],
-        images: h.images,
-        photoCount: h.images.length,
-        stars: h.stars || 4,
+        facilities: h.facilities || [],
+        img: (h.images && h.images[0]) ? h.images[0] : "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80",
+        images: h.images || [],
+        photoCount: (h.images && h.images.length) ? h.images.length : 3,
+        stars: typeof h.stars === "number" ? Math.min(5, Math.max(1, Math.round(h.stars))) : 4,
         raw: h,
       }));
     } else {
-      return MOCK_TOURIST_ATTRACTIONS.map((w) => ({
+      return (MOCK_TOURIST_ATTRACTIONS || []).map((w) => ({
         id: w.id || w._id,
         _id: w._id || w.id,
         categoryType: "wisata" as LodgingCategoryType,
-        name: w.name,
-        type: w.type,
+        name: w.name || "Tiket Wisata",
+        type: w.type || "Wisata",
         status: "Buka Hari Ini",
-        location: w.address,
-        city: w.city,
-        areaTag: w.areaTag,
+        location: w.address || w.city || "Garut",
+        city: w.city || "Garut",
+        areaTag: w.areaTag || "Garut Kota",
         badgeTag: w.badgeTag,
         rating: w.rating || 4.8,
         reviews: w.reviewCount || 150,
-        price: w.price,
+        price: w.price || 40000,
         cashbackPoints: w.cashbackPoints || 5000,
         openHours: w.openHours || "08:00 - 17:00 WIB",
-        facilities: w.facilities,
-        img: w.images[0],
-        images: w.images,
-        photoCount: w.images.length,
+        facilities: w.facilities || [],
+        img: (w.images && w.images[0]) ? w.images[0] : "https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?auto=format&fit=crop&w=800&q=80",
+        images: w.images || [],
+        photoCount: (w.images && w.images.length) ? w.images.length : 3,
         raw: w,
       }));
     }
@@ -391,38 +391,45 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
   // Filter items based on search query, area chip, and specific subcategory
   const filteredList = React.useMemo(() => {
-    return currentItemsList.filter((item: any) => {
+    return (currentItemsList || []).filter((item: any) => {
+      if (!item) return false;
+      const itemLocation = (item.location || item.address || "").toLowerCase();
+      const itemCity = (item.city || "").toLowerCase();
+      const areaQuery = (selectedArea || "").toLowerCase();
+
       // Area match
       const matchesArea =
         selectedArea === "Semua Area" ||
         item.areaTag === selectedArea ||
-        item.location.toLowerCase().includes(selectedArea.toLowerCase()) ||
-        item.city.toLowerCase().includes(selectedArea.toLowerCase());
+        itemLocation.includes(areaQuery) ||
+        itemCity.includes(areaQuery);
 
       // Specific Sub-category match
       let matchesSub = true;
+      const itemType = (item.type || "").toLowerCase();
       if (mainCategory === "kost") {
         matchesSub =
           activeKostGender === "semua" ||
-          item.type.toLowerCase() === activeKostGender.toLowerCase();
+          itemType === activeKostGender.toLowerCase();
       } else if (mainCategory === "hotel") {
         matchesSub =
           hotelTypeFilter === "Semua" ||
-          item.type.toLowerCase().includes(hotelTypeFilter.toLowerCase());
+          itemType.includes(hotelTypeFilter.toLowerCase());
       } else if (mainCategory === "wisata") {
         matchesSub =
           wisataTypeFilter === "Semua" ||
-          item.type.toLowerCase().includes(wisataTypeFilter.toLowerCase());
+          itemType.includes(wisataTypeFilter.toLowerCase());
       }
 
       // Search text match
       const query = searchQuery.trim().toLowerCase();
+      const itemName = (item.name || "").toLowerCase();
       const matchesSearch =
         query === "" ||
-        item.name.toLowerCase().includes(query) ||
-        item.location.toLowerCase().includes(query) ||
+        itemName.includes(query) ||
+        itemLocation.includes(query) ||
         (Array.isArray(item.facilities) &&
-          item.facilities.some((f: string) => f.toLowerCase().includes(query)));
+          item.facilities.some((f: string) => f && typeof f === "string" && f.toLowerCase().includes(query)));
 
       return matchesArea && matchesSub && matchesSearch;
     });
@@ -502,10 +509,11 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               activeOpacity={0.85}
             >
               <Building2
-                size={18}
+                size={16}
                 color={mainCategory === "kost" ? "#0D7A53" : "#64748B"}
               />
               <Text
+                numberOfLines={1}
                 style={[
                   styles.switcherTabText,
                   mainCategory === "kost" && styles.switcherTabTextActiveKost,
@@ -513,7 +521,6 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               >
                 Kost & Coliving
               </Text>
-              {mainCategory === "kost" && <View style={styles.activeIndicatorKost} />}
             </TouchableOpacity>
 
             {/* Tab 2: Hotel & Villa */}
@@ -526,10 +533,11 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               activeOpacity={0.85}
             >
               <Hotel
-                size={18}
+                size={16}
                 color={mainCategory === "hotel" ? "#0284C7" : "#64748B"}
               />
               <Text
+                numberOfLines={1}
                 style={[
                   styles.switcherTabText,
                   mainCategory === "hotel" && styles.switcherTabTextActiveHotel,
@@ -537,7 +545,6 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               >
                 Hotel & Villa
               </Text>
-              {mainCategory === "hotel" && <View style={styles.activeIndicatorHotel} />}
             </TouchableOpacity>
 
             {/* Tab 3: Wisata & Atraksi */}
@@ -550,10 +557,11 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               activeOpacity={0.85}
             >
               <Ticket
-                size={18}
+                size={16}
                 color={mainCategory === "wisata" ? "#D97706" : "#64748B"}
               />
               <Text
+                numberOfLines={1}
                 style={[
                   styles.switcherTabText,
                   mainCategory === "wisata" && styles.switcherTabTextActiveWisata,
@@ -561,7 +569,6 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               >
                 Tiket Wisata
               </Text>
-              {mainCategory === "wisata" && <View style={styles.activeIndicatorWisata} />}
             </TouchableOpacity>
           </View>
         </View>
@@ -986,9 +993,9 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                       </Text>
                     </View>
 
-                    {item.stars ? (
+                    {typeof item.stars === "number" && item.stars > 0 ? (
                       <View style={styles.starsBadge}>
-                        {[...Array(item.stars)].map((_, i) => (
+                        {Array.from({ length: Math.min(5, Math.max(1, Math.round(item.stars))) }).map((_, i) => (
                           <Star key={i} size={11} color="#FBBF24" fill="#FBBF24" />
                         ))}
                       </View>
@@ -1270,12 +1277,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#F1F5F9",
   },
   switcherPillContainer: {
     flexDirection: "row",
     backgroundColor: "#F1F5F9",
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 4,
     gap: 4,
   },
@@ -1284,34 +1291,43 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
-    borderRadius: 11,
-    gap: 6,
-    position: "relative",
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 9,
+    gap: 5,
   },
   switcherTabActiveKost: {
     backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
     shadowColor: "#0D7A53",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
     elevation: 2,
   },
   switcherTabActiveHotel: {
     backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
     shadowColor: "#0284C7",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
     elevation: 2,
   },
   switcherTabActiveWisata: {
     backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
     shadowColor: "#D97706",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
     elevation: 2,
   },
   switcherTabText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: "700",
     color: "#64748B",
   },
@@ -1326,30 +1342,6 @@ const styles = StyleSheet.create({
   switcherTabTextActiveWisata: {
     color: "#D97706",
     fontWeight: "800",
-  },
-  activeIndicatorKost: {
-    position: "absolute",
-    bottom: -4,
-    width: 20,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: "#0D7A53",
-  },
-  activeIndicatorHotel: {
-    position: "absolute",
-    bottom: -4,
-    width: 20,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: "#0284C7",
-  },
-  activeIndicatorWisata: {
-    position: "absolute",
-    bottom: -4,
-    width: 20,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: "#D97706",
   },
 
   // Active Booking Card
