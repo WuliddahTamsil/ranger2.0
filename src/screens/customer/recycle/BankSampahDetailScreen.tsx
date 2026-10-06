@@ -28,11 +28,14 @@ import { useRecycle } from "../../../context/RecycleContext";
 import { getWasteBankById, getWasteBankPrices } from "../../../services/recycleService";
 import { WasteCategoryPriceUI } from "../../../types/recycleTypes";
 import { rp } from "../../../utils/formatters";
+import { checkBankOperationalStatus } from "../../../utils/bankOperationalUtils";
 
 export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
   const { selectedBank, updateDraftDeposit, resetDraftDeposit } = useRecycle();
   const [prices, setPrices] = useState<WasteCategoryPriceUI[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const opStatus = checkBankOperationalStatus(selectedBank?.openingHours);
 
   useEffect(() => {
     if (!selectedBank?._id) return;
@@ -56,6 +59,15 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
 
   const handleStartDeposit = (method: "DROP_OFF" | "PICKUP") => {
     if (!selectedBank) return;
+
+    if (!opStatus.isOpen) {
+      Alert.alert(
+        "Bank Sampah Sedang Tutup",
+        `Bank Sampah ${selectedBank.name} sedang tutup saat ini (${opStatus.reason || `Jam operasional: ${opStatus.hoursText}`}). Anda hanya dapat menyetor sampah pada jam operasional.`
+      );
+      return;
+    }
+
     resetDraftDeposit();
     updateDraftDeposit({
       bankSampahId: selectedBank._id,
@@ -101,6 +113,19 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Closed Alert Banner */}
+        {!opStatus.isOpen && (
+          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FEF2F2", borderColor: "#FCA5A5", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 14 }}>
+            <AlertCircle size={20} color="#DC2626" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: "#B91C1C" }}>Bank Sampah Sedang Tutup</Text>
+              <Text style={{ fontSize: 11, color: "#991B1B", marginTop: 2 }}>
+                {opStatus.reason || `Layanan setor sampah hanya dapat diakses pada jam operasional (${opStatus.hoursText}).`}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.profileIconRow}>
@@ -115,6 +140,35 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
                 <Text style={styles.ratingCount}>({selectedBank.ratingCount || 15} ulasan)</Text>
               </View>
             </View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 8,
+                backgroundColor: opStatus.isOpen ? "#DCFCE7" : "#FEE2E2",
+              }}
+            >
+              <View
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: opStatus.isOpen ? "#15803D" : "#DC2626",
+                }}
+              />
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: "800",
+                  color: opStatus.isOpen ? "#15803D" : "#DC2626",
+                }}
+              >
+                {opStatus.isOpen ? "Buka" : "Tutup"}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.divider} />
@@ -126,8 +180,10 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
           </View>
 
           <View style={styles.detailRow}>
-            <Clock size={16} color="#6B7280" style={styles.detailIcon} />
-            <Text style={styles.detailText}>{selectedBank.openingHours}</Text>
+            <Clock size={16} color="#15803D" style={styles.detailIcon} />
+            <Text style={[styles.detailText, { color: "#15803D", fontWeight: "700" }]}>
+              {opStatus.hoursText}
+            </Text>
           </View>
 
           <View style={styles.detailRow}>
@@ -203,38 +259,58 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
 
       {/* Sticky Bottom Actions */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.btnDropOff, !selectedBank.acceptsPickup && { flex: 1.2 }]}
-          onPress={() => handleStartDeposit("DROP_OFF")}
-          activeOpacity={0.8}
-        >
-          <Package size={18} color="#15803D" />
-          <Text style={styles.btnDropOffText}>Setor Langsung</Text>
-        </TouchableOpacity>
-
-        {selectedBank.acceptsPickup ? (
+        {!opStatus.isOpen ? (
           <TouchableOpacity
-            style={[styles.actionBtn, styles.btnPickup]}
-            onPress={() => handleStartDeposit("PICKUP")}
-            activeOpacity={0.8}
-          >
-            <Truck size={18} color="#FFFFFF" />
-            <Text style={styles.btnPickupText}>Minta Pickup</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.btnPickup, { backgroundColor: "#F1F5F9", borderColor: "#E2E8F0" }]}
+            style={[styles.actionBtn, { backgroundColor: "#9CA3AF", flex: 1 }]}
             onPress={() => {
               Alert.alert(
-                "Layanan Pickup Nonaktif",
-                `${selectedBank.name} sedang menonaktifkan layanan penjemputan driver. Silakan gunakan tombol Setor Langsung.`
+                "Bank Sampah Sedang Tutup",
+                `Bank Sampah ${selectedBank.name} sedang tutup saat ini (${opStatus.reason || `Jam operasional: ${opStatus.hoursText}`}). Layanan setor sampah hanya dapat diakses pada jam buka.`
               );
             }}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <Truck size={18} color="#94A3B8" />
-            <Text style={[styles.btnPickupText, { color: "#94A3B8" }]}>Pickup Nonaktif</Text>
+            <Clock size={18} color="#FFFFFF" />
+            <Text style={[styles.btnPickupText, { color: "#FFFFFF" }]}>
+              Sedang Tutup (Jam Buka: {opStatus.hoursText})
+            </Text>
           </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.btnDropOff, !selectedBank.acceptsPickup && { flex: 1.2 }]}
+              onPress={() => handleStartDeposit("DROP_OFF")}
+              activeOpacity={0.8}
+            >
+              <Package size={18} color="#15803D" />
+              <Text style={styles.btnDropOffText}>Setor Langsung</Text>
+            </TouchableOpacity>
+
+            {selectedBank.acceptsPickup ? (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.btnPickup]}
+                onPress={() => handleStartDeposit("PICKUP")}
+                activeOpacity={0.8}
+              >
+                <Truck size={18} color="#FFFFFF" />
+                <Text style={styles.btnPickupText}>Pesan Pickup Driver</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.btnPickup, { backgroundColor: "#F1F5F9", borderColor: "#E2E8F0" }]}
+                onPress={() => {
+                  Alert.alert(
+                    "Layanan Pickup Nonaktif",
+                    `${selectedBank.name} sedang menonaktifkan layanan penjemputan driver. Silakan gunakan tombol Setor Langsung.`
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <Truck size={18} color="#94A3B8" />
+                <Text style={[styles.btnPickupText, { color: "#94A3B8" }]}>Pickup Nonaktif</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </View>
     </ResponsiveSafeAreaView>

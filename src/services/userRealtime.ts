@@ -25,6 +25,9 @@ export const subscribeToUserRealtime = async (
   socket.on("ride:driver_assigned", update);
   socket.on("ride_status_updated", update);
   socket.on("ride:driver_location_updated", update);
+  socket.on("recycle:status_updated", update);
+  socket.on("recycle:completed", update);
+  socket.on("recycle:new_deposit", update);
   return () => {
     socket.off("notification:new", refresh);
     socket.off("order_status_updated", update);
@@ -35,6 +38,9 @@ export const subscribeToUserRealtime = async (
     socket.off("ride:driver_assigned", update);
     socket.off("ride_status_updated", update);
     socket.off("ride:driver_location_updated", update);
+    socket.off("recycle:status_updated", update);
+    socket.off("recycle:completed", update);
+    socket.off("recycle:new_deposit", update);
     socket.disconnect();
   };
 };

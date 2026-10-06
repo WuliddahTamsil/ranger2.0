@@ -37,6 +37,7 @@ import {
   X,
   Store,
   Clock,
+  RefreshCw,
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
 import { Nav } from "../../types";
@@ -80,6 +81,12 @@ import {
   verifySendPickupCode,
   verifySendDeliveryOtp,
 } from "../../services/sendService";
+import {
+  getDriverAvailableWastePickups,
+  assignWasteDepositDriver,
+  driverPickupWasteDeposit,
+  driverDeliverWasteDeposit,
+} from "../../services/recycleService";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 
 // Import other screens
@@ -285,6 +292,95 @@ const mapSendDriverOrder = (order: any): DriverOrder => {
   };
 };
 
+const mapWastePickupDriverOrder = (deposit: any): DriverOrder => {
+  const customerName = deposit.customerId?.name || "Nasabah Sampah";
+  const customerPhone = deposit.customerId?.phone || "";
+  const bankName = deposit.bankSampahId?.name || "Bank Sampah";
+  const bankAddress = deposit.bankSampahId?.address || "Bank Sampah";
+  const bankPhone = deposit.bankSampahId?.phone || "";
+
+  const fare = 10000;
+  const driverShare = 9000;
+
+  let status: DriverOrder["status"] = "Menunggu";
+  if (deposit.status === "ACCEPTED") {
+    status = "Menunggu";
+  } else if (deposit.status === "DRIVER_ASSIGNED" || deposit.status === "PICKUP_ON_THE_WAY") {
+    status = "Menuju Pickup";
+  } else if (deposit.status === "PICKED_UP") {
+    status = "Mengantar";
+  } else if (["AT_BANK", "WEIGHING", "WAITING_CUSTOMER_CONFIRMATION", "DISPUTED"].includes(deposit.status)) {
+    status = "Mengantar"; // Tetap Aktif sampai Customer ACC / Transaksi Selesai
+  } else if (["POINT_ISSUED", "COMPLETED"].includes(deposit.status)) {
+    status = "Selesai";
+  } else if (["CANCELLED", "REJECTED"].includes(deposit.status)) {
+    status = "Dibatalkan";
+  }
+
+  const items = Array.isArray(deposit.categories)
+    ? deposit.categories.map((c: any) => ({
+        name: `${c.category} - ${c.subCategory || "Campur"}`,
+        quantity: c.actualWeightKg || c.estimatedWeightKg || 1,
+        price: c.totalRupiah || 0,
+        notes: `Estimasi ~${c.estimatedWeightKg || 0} kg`,
+      }))
+    : [
+        {
+          name: "Sampah Daur Ulang",
+          quantity: 1,
+          price: 0,
+          notes: "Siap ditimbang di Bank Sampah",
+        },
+      ];
+
+  return {
+    id: String(deposit._id || deposit.id),
+    orderCode: deposit.depositCode || `#RNG-RCY-${String(deposit._id || deposit.id).slice(-8)}`,
+    orderCategory: "DELIVERY",
+    serviceType: "WASTE_PICKUP",
+    driverId: deposit.driverId ? String(deposit.driverId._id || deposit.driverId) : null,
+    rawStatus: deposit.status || "ACCEPTED",
+    customer: customerName,
+    phone: customerPhone,
+    type: "Setor Sampah",
+    paymentMethod: "Dompet Point",
+    paymentStatus: "Lunas",
+    time: deposit.createdAt
+      ? new Date(deposit.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+      : "",
+    from: deposit.pickupAddress || "Lokasi Nasabah",
+    to: bankAddress,
+    dist: "Jemput Sampah",
+    distanceKm: 2.5,
+    pay: fare,
+    driverShare: driverShare,
+    completedAt: deposit.completedAt || deposit.updatedAt || deposit.createdAt,
+    status,
+    items,
+    storeName: "Tujuan: " + bankName,
+    storeAddress: bankAddress,
+    storePhone: bankPhone,
+    ownerId: deposit.customerId?._id || deposit.customerId,
+    notes: deposit.pickupNotes || "Jemput sampah nasabah dan serahkan ke Bank Sampah",
+    pickup: deposit.pickupLatitude && deposit.pickupLongitude
+      ? {
+          address: deposit.pickupAddress || "Lokasi Nasabah",
+          latitude: Number(deposit.pickupLatitude),
+          longitude: Number(deposit.pickupLongitude),
+        }
+      : undefined,
+    destination: deposit.bankSampahId?.latitude && deposit.bankSampahId?.longitude
+      ? {
+          address: bankAddress,
+          latitude: Number(deposit.bankSampahId.latitude),
+          longitude: Number(deposit.bankSampahId.longitude),
+        }
+      : undefined,
+    deliveryProofUrl: deposit.weighingProofPhotos?.[0] || "",
+    addressSnapshot: null,
+  };
+};
+
 interface DriverHomeProps extends Nav {
   authAccount?: AuthAccount | null;
 }
@@ -419,12 +515,13 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       if (loading) return;
       loading = true;
       try {
-        const [mktRes, catRes, laundryJobs, rideRes, sendRes] = await Promise.all([
+        const [mktRes, catRes, laundryJobs, rideRes, sendRes, wasteRes] = await Promise.all([
           getMarketplaceOrdersForDriver(authAccount.id),
           getCateringOrdersForDriver(authAccount.id),
           fetchDriverLaundryJobs(authAccount.id),
           fetchDriverRides(authAccount.id),
           fetchAvailableSendOrders(authAccount.id),
+          getDriverAvailableWastePickups(authAccount.id),
         ]);
         if (!active) return;
 
@@ -506,6 +603,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           ? sendRes.data.map(mapSendDriverOrder)
           : [];
 
+        const wasteOrders: DriverOrder[] = (wasteRes?.success && Array.isArray(wasteRes.data))
+          ? wasteRes.data.map(mapWastePickupDriverOrder)
+          : [];
+
         setOrders((current) => {
           const marketplaceOrders = mktRes.success && Array.isArray(mktRes.data)
             ? mktOrders
@@ -516,7 +617,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           const existingSendOrders = sendRes?.success && Array.isArray(sendRes.data)
             ? sendOrders
             : current.filter((order) => order.type === "Kanyaah Send");
-          const allList = [...existingRideOrders, ...existingSendOrders, ...marketplaceOrders, ...catOrders, ...lndOrders];
+          const existingWasteOrders = wasteRes?.success && Array.isArray(wasteRes.data)
+            ? wasteOrders
+            : current.filter((order) => order.type === "Setor Sampah");
+          const allList = [...existingRideOrders, ...existingSendOrders, ...marketplaceOrders, ...catOrders, ...lndOrders, ...existingWasteOrders];
           const seenIds = new Set<string>();
           const uniqueList: DriverOrder[] = [];
           for (const item of allList) {
@@ -677,6 +781,53 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         }
         Alert.alert("Status Diperbarui", alertMsg);
         return;
+      } else if (targetOrder.type === "Setor Sampah") {
+        if (nextStatus === "Menuju Pickup") {
+          const res = await assignWasteDepositDriver(orderId, authAccount?.id || "driver");
+          if (!res.success) {
+            Alert.alert("Gagal", res.message || "Tugas penjemputan sampah gagal diambil");
+            return;
+          }
+          setOrders((current) =>
+            current.map((order) =>
+              order.id === orderId
+                ? { ...order, status: "Menuju Pickup", driverId: authAccount?.id }
+                : order
+            )
+          );
+          Alert.alert("Penjemputan Diterima!", "Anda telah mengambil tugas jemput sampah. Silakan menuju rumah customer.");
+          return;
+        } else if (nextStatus === "Sampai Pickup" || nextStatus === "Mengantar") {
+          const res = await driverPickupWasteDeposit(orderId, authAccount?.id);
+          if (!res.success) {
+            Alert.alert("Gagal", res.message || "Status gagal diperbarui");
+            return;
+          }
+          setOrders((current) =>
+            current.map((order) =>
+              order.id === orderId
+                ? { ...order, status: "Mengantar" }
+                : order
+            )
+          );
+          Alert.alert("Status Diperbarui", "Sampah telah dijemput dari customer. Silakan antar ke Bank Sampah tujuan.");
+          return;
+        } else if (nextStatus === "Selesai") {
+          const res = await driverDeliverWasteDeposit(orderId, authAccount?.id);
+          if (!res.success) {
+            Alert.alert("Gagal", res.message || "Status gagal diperbarui");
+            return;
+          }
+          setOrders((current) =>
+            current.map((order) =>
+              order.id === orderId
+                ? { ...order, status: "Selesai", completedAt: new Date().toISOString() }
+                : order
+            )
+          );
+          Alert.alert("Pengantaran Selesai!", `Sampah telah tiba di Bank Sampah. Pendapatan ${rp(targetOrder.driverShare)} ditambahkan.`);
+          return;
+        }
       } else {
         const result = await updateMarketplaceOrderStatus(orderId, nextStatus, authAccount);
         if (!result.success || !result.data) {
@@ -927,6 +1078,16 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             }}
             onStatusChange={async (orderId, status, deliveryProofUrl) => {
               const targetOrder = orders.find((o) => o.id === orderId);
+              if (targetOrder?.type === "Setor Sampah") {
+                if (status === "Menuju Pickup") {
+                  await assignWasteDepositDriver(orderId, authAccount?.id || "driver");
+                } else if (status === "Sampai Pickup" || status === "Mengantar") {
+                  await driverPickupWasteDeposit(orderId, authAccount?.id);
+                } else if (status === "Selesai") {
+                  await driverDeliverWasteDeposit(orderId, authAccount?.id);
+                }
+                return true;
+              }
               if (targetOrder?.type === "Laundry") {
                 if (status === "Menuju Pickup") {
                   await takeLaundryPickupJob(orderId, {
@@ -982,6 +1143,14 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             }}
             onAcceptOrder={async (orderId) => {
               const targetOrder = orders.find((o) => o.id === orderId);
+              if (targetOrder?.type === "Setor Sampah") {
+                const res = await assignWasteDepositDriver(orderId, authAccount?.id || "driver");
+                if (!res.success) {
+                  Alert.alert("Gagal", res.message || "Tugas penjemputan sampah gagal diambil");
+                  return false;
+                }
+                return true;
+              }
               if (targetOrder?.type === "Laundry") {
                 if (targetOrder.items?.[0]?.name?.includes("Jemput")) {
                   await takeLaundryPickupJob(orderId, {
@@ -1206,8 +1375,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     </TouchableOpacity>
   );
 
-  // Render Incoming Available Delivery Card (Marketplace / Catering / Laundry / Send)
+  // Render Incoming Available Delivery Card (Marketplace / Catering / Laundry / Send / Recycle)
   const renderIncomingDeliveryCard = (order: DriverOrder) => {
+    const isWaste = order.type === "Setor Sampah";
+    const isLaundry = order.type === "Laundry";
     const serviceName =
       order.type === "Marketplace"
         ? "Kanyaah Mart"
@@ -1215,8 +1386,14 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         ? "Kanyaah Catering"
         : order.type === "Kanyaah Send"
         ? "Kanyaah Send"
+        : isWaste
+        ? "Kanyaah Recycle"
         : "Kanyaah Laundry";
-    const subtitle = "Pengantaran Pesanan";
+    const subtitle = isWaste
+      ? "Jemput Sampah Daur Ulang"
+      : isLaundry
+      ? "Pengantaran Laundry"
+      : "Pengantaran Pesanan";
 
     return (
       <TouchableOpacity
@@ -1227,11 +1404,15 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       >
         {/* Header */}
         <View style={styles.cardHeaderRow}>
-          <View style={styles.deliveryBadge}>
-            <ShoppingBag size={15} color="#2563EB" />
+          <View style={[styles.deliveryBadge, isWaste && { backgroundColor: "#DCFCE7" }]}>
+            {isWaste ? (
+              <RefreshCw size={15} color="#15803D" />
+            ) : (
+              <ShoppingBag size={15} color="#2563EB" />
+            )}
             <View>
-              <Text style={styles.deliveryBadgeTitle}>{serviceName}</Text>
-              <Text style={styles.deliveryBadgeSubtitle}>{subtitle}</Text>
+              <Text style={[styles.deliveryBadgeTitle, isWaste && { color: "#15803D" }]}>{serviceName}</Text>
+              <Text style={[styles.deliveryBadgeSubtitle, isWaste && { color: "#166534" }]}>{subtitle}</Text>
             </View>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -1267,7 +1448,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           </View>
           <View style={[styles.metricItem, { alignItems: "flex-end" }]}>
             <Text style={styles.metricLabel}>Pendapatan</Text>
-            <Text style={[styles.metricPriceValue, { color: "#2563EB" }]}>{rp(order.driverShare)}</Text>
+            <Text style={[styles.metricPriceValue, { color: isWaste ? "#15803D" : "#2563EB" }]}>{rp(order.driverShare)}</Text>
           </View>
         </View>
 
@@ -1293,7 +1474,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionBtn, styles.btnAcceptDelivery]}
+            style={[styles.actionBtn, styles.btnAcceptDelivery, isWaste && { backgroundColor: "#15803D" }]}
             disabled={homeActionOrderId === order.id}
             onPress={async (e) => {
               e?.stopPropagation?.();
@@ -1316,6 +1497,28 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                   homeActionLock.current.delete(order.id);
                   setHomeActionOrderId(null);
                 }
+              } else if (order.type === "Setor Sampah") {
+                if (homeActionLock.current.has(order.id)) return;
+                homeActionLock.current.add(order.id);
+                setHomeActionOrderId(order.id);
+                try {
+                  const res = await assignWasteDepositDriver(order.id, authAccount?.id || "driver");
+                  if (res.success) {
+                    setOrders((current) =>
+                      current.map((o) =>
+                        o.id === order.id
+                          ? { ...o, status: "Menuju Pickup", driverId: authAccount?.id }
+                          : o
+                      )
+                    );
+                    Alert.alert("Penjemputan Diterima!", `Order penjemputan sampah #${order.orderCode || order.id.slice(-8)} berhasil diambil.`);
+                  } else {
+                    Alert.alert("Gagal", res.message || "Tugas penjemputan sampah gagal diambil.");
+                  }
+                } finally {
+                  homeActionLock.current.delete(order.id);
+                  setHomeActionOrderId(null);
+                }
               } else {
                 await handleUpdateStatus(order.id, "Menuju Pickup");
               }
@@ -1327,7 +1530,9 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             ) : (
               <>
                 <CheckCircle2 size={14} color="#FFFFFF" />
-                <Text style={styles.btnTextAcceptDelivery}>Terima Pengantaran</Text>
+                <Text style={styles.btnTextAcceptDelivery}>
+                  {isWaste ? "Terima Penjemputan" : "Terima Pengantaran"}
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -1502,24 +1707,32 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   };
 
   // Render Active Delivery Card
-  const renderActiveDeliveryCard = (order: DriverOrder) => (
-    <TouchableOpacity
-      style={styles.activeOrderCard}
-      onPress={() => openOrderDetail(order)}
-      activeOpacity={0.92}
-    >
-      <View style={styles.activeOrderHeader}>
-        <View style={styles.activeOrderBadge}>
-          <Truck size={14} color="#1B7A4E" />
-          <Text style={styles.activeOrderBadgeText}>{order.type} Delivery</Text>
+  const renderActiveDeliveryCard = (order: DriverOrder) => {
+    const isWaste = order.type === "Setor Sampah";
+    return (
+      <TouchableOpacity
+        style={styles.activeOrderCard}
+        onPress={() => openOrderDetail(order)}
+        activeOpacity={0.92}
+      >
+        <View style={styles.activeOrderHeader}>
+          <View style={[styles.activeOrderBadge, isWaste && { backgroundColor: "#DCFCE7" }]}>
+            {isWaste ? (
+              <RefreshCw size={14} color="#15803D" />
+            ) : (
+              <Truck size={14} color="#1B7A4E" />
+            )}
+            <Text style={[styles.activeOrderBadgeText, isWaste && { color: "#15803D" }]}>
+              {isWaste ? "Kanyaah Recycle" : `${order.type} Delivery`}
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={styles.activeOrderId} accessibilityLabel={`#${order.id}`}>
+              #{order.id.slice(-8)}
+            </Text>
+            <ChevronRight size={16} color="#94A3B8" />
+          </View>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={styles.activeOrderId} accessibilityLabel={`#${order.id}`}>
-            #{order.id.slice(-8)}
-          </Text>
-          <ChevronRight size={16} color="#94A3B8" />
-        </View>
-      </View>
 
       <Text style={styles.activeOrderCustomer}>{order.customer}</Text>
 
@@ -1593,7 +1806,8 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         <ChevronRight size={13} color="#15803D" />
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   // Dashboard content of Beranda Tab
   const renderBerandaContent = () => {

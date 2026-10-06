@@ -14,6 +14,9 @@ const {
   getBankDeposits,
   acceptDeposit,
   assignDriver,
+  driverPickupWaste,
+  driverDeliverToBank,
+  getDriverAvailableWastePickups,
   weighDeposit,
   confirmWeighing,
   disputeWeighing,
@@ -51,10 +54,13 @@ router.put("/banks/:id/operational", optionalAuth, updateWasteBankOperational);
 router.post("/deposits", optionalAuth, createDeposit);
 router.get("/deposits/customer/:customerId", optionalAuth, getCustomerDeposits);
 router.get("/deposits/bank/:bankSampahId", optionalAuth, getBankDeposits);
+router.get("/deposits/driver/available", optionalAuth, getDriverAvailableWastePickups);
 router.get("/deposits/:id", optionalAuth, getDepositById);
 
 router.post("/deposits/:id/accept", optionalAuth, acceptDeposit);
 router.post("/deposits/:id/assign-driver", optionalAuth, assignDriver);
+router.post("/deposits/:id/pickup", optionalAuth, driverPickupWaste);
+router.post("/deposits/:id/deliver-to-bank", optionalAuth, driverDeliverToBank);
 router.post("/deposits/:id/weigh", optionalAuth, weighDeposit);
 router.post("/deposits/:id/confirm", optionalAuth, confirmWeighing);
 router.post("/deposits/:id/complaint", optionalAuth, disputeWeighing);

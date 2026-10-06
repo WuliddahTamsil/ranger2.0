@@ -54,8 +54,8 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
   const [submitting, setSubmitting] = useState(false);
   const [successWeighedDeposit, setSuccessWeighedDeposit] = useState<WasteDepositUI | null>(null);
 
-  const getItemKey = (cat: WasteCategoryPriceUI) => {
-    return cat._id || `${cat.category}:::${cat.subCategory || "Standard"}`;
+  const getCatKey = (cat: { category: string; subCategory?: string }) => {
+    return `${(cat.category || "").trim().toLowerCase()}:::${(cat.subCategory || "standard").trim().toLowerCase()}`;
   };
 
   useEffect(() => {
@@ -71,10 +71,22 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
           // De-duplicate by category + subCategory
           const seen = new Set<string>();
           const uniquePrices = res.data.filter((item) => {
-            const sig = `${(item.category || "").trim().toLowerCase()}:::${(item.subCategory || "").trim().toLowerCase()}`;
+            const sig = getCatKey(item);
             if (seen.has(sig)) return false;
             seen.add(sig);
             return true;
+          });
+
+          // Sort deposit's requested categories first
+          const depositCategoryKeys = new Set(
+            (selectedDeposit.categories || []).map((c) => getCatKey(c))
+          );
+          uniquePrices.sort((a, b) => {
+            const aInDeposit = depositCategoryKeys.has(getCatKey(a));
+            const bInDeposit = depositCategoryKeys.has(getCatKey(b));
+            if (aInDeposit && !bInDeposit) return -1;
+            if (!aInDeposit && bInDeposit) return 1;
+            return a.category.localeCompare(b.category);
           });
           setAvailablePrices(uniquePrices);
         }
@@ -84,14 +96,17 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
         if (active) setLoadingPrices(false);
       });
 
-    // Populate existing weights if previously weighed
+    // Populate existing weights strictly by exact category + subcategory signature
     const initial: Record<string, number> = {};
     if (Array.isArray(selectedDeposit.categories)) {
       selectedDeposit.categories.forEach((c) => {
-        if (c.actualWeightKg && c.actualWeightKg > 0) {
-          const key = c._id || `${c.category}:::${c.subCategory || "Standard"}`;
-          initial[key] = c.actualWeightKg;
-          initial[c.category] = c.actualWeightKg;
+        const key = getCatKey(c);
+        const weight =
+          c.actualWeightKg !== undefined && c.actualWeightKg > 0
+            ? c.actualWeightKg
+            : c.estimatedWeightKg || 0;
+        if (weight > 0) {
+          initial[key] = weight;
         }
       });
     }
@@ -175,8 +190,8 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
   let totalActualRupiah = 0;
 
   availablePrices.forEach((cat) => {
-    const key = getItemKey(cat);
-    const w = actualWeights[key] || actualWeights[cat.category] || 0;
+    const key = getCatKey(cat);
+    const w = actualWeights[key] || 0;
     if (w > 0) {
       totalActualKg += w;
       totalActualRupiah += Math.round(w * cat.pricePerKg);
@@ -194,12 +209,12 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
     setSubmitting(true);
     try {
       const activeWeighedCats = availablePrices
-        .filter((cat) => (actualWeights[getItemKey(cat)] || actualWeights[cat.category] || 0) > 0)
+        .filter((cat) => (actualWeights[getCatKey(cat)] || 0) > 0)
         .map((cat) => ({
           category: cat.category,
           subCategory: cat.subCategory || "Standard",
           pricePerKg: cat.pricePerKg,
-          actualWeightKg: actualWeights[getItemKey(cat)] || actualWeights[cat.category] || 0,
+          actualWeightKg: actualWeights[getCatKey(cat)] || 0,
         }));
 
       const payload = {
@@ -332,8 +347,8 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
           </View>
         ) : (
           availablePrices.map((cat, idx) => {
-            const itemKey = getItemKey(cat);
-            const currentWeight = actualWeights[itemKey] !== undefined ? actualWeights[itemKey] : (actualWeights[cat.category] || 0);
+            const itemKey = getCatKey(cat);
+            const currentWeight = actualWeights[itemKey] || 0;
             const subtotalRp = Math.round(currentWeight * cat.pricePerKg);
             const isFilled = currentWeight > 0;
 

@@ -6,6 +6,7 @@ const WasteCategoryPrice = require("../models/WasteCategoryPrice");
 const Notification = require("../models/Notification");
 const { computeEnvironmentalImpact, calculateCategoryPointAndRupiah } = require("../services/recycleFareService");
 const { creditPoints } = require("../services/pointWalletService");
+const { checkBankOperationalStatus } = require("../utils/bankOperationalUtils");
 
 /**
  * Helper to emit real-time socket updates
@@ -66,6 +67,15 @@ const createDeposit = async (req, res) => {
     const bank = await WasteBank.findById(bankSampahId).lean();
     if (!bank) {
       return res.status(404).json({ success: false, message: "Bank Sampah tidak ditemukan." });
+    }
+
+    // Operational hours validation
+    const opStatus = checkBankOperationalStatus(bank.openingHours);
+    if (!opStatus.isOpen) {
+      return res.status(400).json({
+        success: false,
+        message: `Bank Sampah ${bank.name} sedang tutup. ${opStatus.reason || `Layanan hanya dapat diakses pada jam operasional (${opStatus.hoursText}).`}`,
+      });
     }
 
     // Lookup active prices from this bank
@@ -355,6 +365,9 @@ const assignDriver = async (req, res) => {
     }).catch(() => {});
 
     emitToDepositRoom(req.io, deposit._id, "recycle:status_updated", deposit);
+    if (req.io) {
+      req.io.emit("recycle:status_updated", deposit);
+    }
 
     return res.status(200).json({
       success: true,
@@ -364,6 +377,147 @@ const assignDriver = async (req, res) => {
   } catch (error) {
     console.error("assignDriver error:", error);
     return res.status(500).json({ success: false, message: "Gagal mengambil tugas pickup." });
+  }
+};
+
+/**
+ * 6b. Driver: Pickup Waste from Customer
+ * POST /api/waste/deposits/:id/pickup
+ */
+const driverPickupWaste = async (req, res) => {
+  try {
+    const deposit = await WasteDeposit.findById(req.params.id);
+    if (!deposit) {
+      return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
+    }
+    const driverId = req.authUser?._id || req.user?._id || req.body.driverId || deposit.driverId;
+
+    deposit.status = "PICKED_UP";
+    deposit.statusHistory.push({
+      status: "PICKED_UP",
+      actorId: driverId,
+      actorRole: "driver",
+      note: `Driver (${req.authUser?.name || "Driver"}) telah mengambil sampah dari nasabah & menuju Bank Sampah.`,
+      createdAt: new Date(),
+    });
+    await deposit.save();
+
+    await Notification.create({
+      userId: deposit.customerId,
+      title: "Sampah Telah Diambil Driver!",
+      message: `Driver telah mengambil sampah Anda dan sedang mengantarnya ke Bank Sampah tujuan.`,
+      type: "order_status",
+      relatedId: deposit._id,
+    }).catch(() => {});
+
+    emitToDepositRoom(req.io, deposit._id, "recycle:status_updated", deposit);
+    if (req.io) {
+      req.io.emit("recycle:status_updated", deposit);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Status berhasil diubah: Sampah telah dijemput oleh driver.",
+      data: deposit,
+    });
+  } catch (error) {
+    console.error("driverPickupWaste error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memperbarui status penjemputan sampah." });
+  }
+};
+
+/**
+ * 6c. Driver: Deliver Waste to Bank Sampah
+ * POST /api/waste/deposits/:id/deliver-to-bank
+ */
+const driverDeliverToBank = async (req, res) => {
+  try {
+    const deposit = await WasteDeposit.findById(req.params.id);
+    if (!deposit) {
+      return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
+    }
+    const driverId = req.authUser?._id || req.user?._id || req.body.driverId || deposit.driverId;
+
+    deposit.status = "AT_BANK";
+    deposit.statusHistory.push({
+      status: "AT_BANK",
+      actorId: driverId,
+      actorRole: "driver",
+      note: `Driver telah mengantarkan sampah sampai ke Bank Sampah tujuan. Siap ditimbang!`,
+      createdAt: new Date(),
+    });
+    await deposit.save();
+
+    await Notification.create({
+      userId: deposit.customerId,
+      title: "Sampah Telah Tiba di Bank Sampah!",
+      message: `Sampah Anda telah tiba di Bank Sampah dan siap ditimbang oleh petugas.`,
+      type: "order_status",
+      relatedId: deposit._id,
+    }).catch(() => {});
+
+    emitToDepositRoom(req.io, deposit._id, "recycle:status_updated", deposit);
+    if (req.io) {
+      req.io.emit("recycle:status_updated", deposit);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Status berhasil diubah: Sampah telah tiba di Bank Sampah.",
+      data: deposit,
+    });
+  } catch (error) {
+    console.error("driverDeliverToBank error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memperbarui status pengantaran sampah." });
+  }
+};
+
+/**
+ * 6d. Driver: Get Available and Active Waste Pickup Orders
+ * GET /api/waste/deposits/driver/available
+ */
+const getDriverAvailableWastePickups = async (req, res) => {
+  try {
+    const driverId = req.authUser?._id || req.user?._id || req.query.driverId;
+
+    const queryConditions = [
+      { status: "ACCEPTED" }, // Bank Sampah approved, calling drivers
+    ];
+    if (driverId) {
+      queryConditions.push({
+        driverId,
+        status: {
+          $in: [
+            "DRIVER_ASSIGNED",
+            "PICKED_UP",
+            "AT_BANK",
+            "WEIGHING",
+            "WAITING_CUSTOMER_CONFIRMATION",
+            "POINT_ISSUED",
+            "COMPLETED",
+            "DISPUTED",
+          ],
+        },
+      });
+    }
+
+    const deposits = await WasteDeposit.find({
+      method: "PICKUP",
+      $or: queryConditions,
+    })
+      .populate("bankSampahId", "name phone address photoUrl rating openingHours")
+      .populate("customerId", "name phone address profilePhoto")
+      .populate("driverId", "name phone profilePhoto")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      data: deposits,
+    });
+  } catch (error) {
+    console.error("getDriverAvailableWastePickups error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memuat tugas penjemputan sampah." });
   }
 };
 
@@ -464,6 +618,10 @@ const weighDeposit = async (req, res) => {
     }).catch(() => {});
 
     emitToDepositRoom(req.io, deposit._id, "recycle:weighing_ready", deposit);
+    if (req.io) {
+      req.io.emit("recycle:status_updated", deposit);
+      req.io.emit("recycle:weighing_ready", deposit);
+    }
 
     return res.status(200).json({
       success: true,
@@ -550,7 +708,22 @@ const confirmWeighing = async (req, res) => {
       relatedId: deposit._id,
     }).catch(() => {});
 
+    // Notify Driver if assigned
+    if (deposit.driverId) {
+      await Notification.create({
+        userId: deposit.driverId,
+        title: "✅ Setoran Sampah Selesai!",
+        message: `Customer telah menyetujui hasil timbang. Tugas jemput sampah #${deposit.depositCode} telah selesai.`,
+        type: "order_status",
+        relatedId: deposit._id,
+      }).catch(() => {});
+    }
+
     emitToDepositRoom(req.io, deposit._id, "recycle:completed", deposit);
+    if (req.io) {
+      req.io.emit("recycle:status_updated", deposit);
+      req.io.emit("recycle:completed", deposit);
+    }
 
     return res.status(200).json({
       success: true,
@@ -596,6 +769,10 @@ const disputeWeighing = async (req, res) => {
     await deposit.save();
 
     emitToDepositRoom(req.io, deposit._id, "recycle:disputed", deposit);
+    if (req.io) {
+      req.io.emit("recycle:status_updated", deposit);
+      req.io.emit("recycle:disputed", deposit);
+    }
 
     return res.status(200).json({
       success: true,
@@ -669,6 +846,9 @@ module.exports = {
   getBankDeposits,
   acceptDeposit,
   assignDriver,
+  driverPickupWaste,
+  driverDeliverToBank,
+  getDriverAvailableWastePickups,
   weighDeposit,
   confirmWeighing,
   disputeWeighing,

@@ -32,6 +32,7 @@ import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
 import { createWasteDeposit } from "../../../services/recycleService";
 import { WasteDepositUI } from "../../../types/recycleTypes";
+import { checkBankOperationalStatus } from "../../../utils/bankOperationalUtils";
 
 export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
   const {
@@ -47,6 +48,7 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
   const [createdSuccessDeposit, setCreatedSuccessDeposit] = useState<WasteDepositUI | null>(null);
 
   const isPickupAvailable = selectedBank?.acceptsPickup !== false;
+  const opStatus = checkBankOperationalStatus(selectedBank?.openingHours);
 
   useEffect(() => {
     if (!isPickupAvailable && method === "PICKUP") {
@@ -55,6 +57,14 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
   }, [isPickupAvailable, method]);
 
   const handleProceed = async () => {
+    if (!opStatus.isOpen) {
+      Alert.alert(
+        "Bank Sampah Sedang Tutup",
+        `Bank Sampah ${selectedBank?.name || ""} sedang tutup saat ini (${opStatus.reason || `Jam operasional: ${opStatus.hoursText}`}). Layanan setor sampah hanya dapat diakses pada jam buka.`
+      );
+      return;
+    }
+
     if (!selectedBank?._id) {
       Alert.alert("Error", "Pilih Bank Sampah tujuan terlebih dahulu.");
       return;

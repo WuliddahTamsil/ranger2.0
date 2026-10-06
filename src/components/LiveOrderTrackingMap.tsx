@@ -100,6 +100,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
 
   const isRide = orderType === "Kanyaah Ride";
   const isSend = orderType === "Kanyaah Send";
+  const isWaste = orderType === "Setor Sampah";
 
   // Status mapping
   const isHeadingToPickup =
@@ -184,10 +185,10 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     pickupQuery
   );
 
-  // Google Maps directions embed URL
+  // Google Maps embed URL
   const googleMapsUrl = useMemo(() => {
     if (activeMode === "store") {
-      // Heading to pickup: if driver location known, route driver -> pickup; otherwise show pickup -> destination
+      // Heading to pickup: if driver location known, route driver -> pickup; otherwise show pickup location pin directly
       const hasDriverCoord =
         driverCoordinates?.latitude &&
         driverCoordinates?.longitude &&
@@ -195,16 +196,20 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
       if (hasDriverCoord) {
         return `https://maps.google.com/maps?saddr=${encodeURIComponent(driverQuery)}&daddr=${encodeURIComponent(pickupQuery)}&output=embed`;
       }
-      return `https://maps.google.com/maps?saddr=${encodeURIComponent(pickupQuery)}&daddr=${encodeURIComponent(destinationQuery)}&output=embed`;
+      return `https://maps.google.com/maps?q=${encodeURIComponent(pickupQuery)}&output=embed`;
     } else if (activeMode === "customer") {
+      // Heading to bank sampah / destination
       return `https://maps.google.com/maps?saddr=${encodeURIComponent(pickupQuery)}&daddr=${encodeURIComponent(destinationQuery)}&output=embed`;
     } else {
+      // Overview complete route
       return `https://maps.google.com/maps?saddr=${encodeURIComponent(pickupQuery)}&daddr=${encodeURIComponent(destinationQuery)}&output=embed`;
     }
   }, [activeMode, driverQuery, pickupQuery, destinationQuery, driverCoordinates]);
 
   // Clean labels for guidance display
-  const effectivePickupName = isRide
+  const effectivePickupName = isWaste
+    ? (storeName || "Rumah Customer (Jemput Sampah)")
+    : isRide
     ? "Titik Jemput Penumpang"
     : isSend
     ? "Titik Pengirim"
@@ -219,19 +224,21 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
   const guidanceData = useMemo(() => {
     if (activeMode === "store") {
       return {
-        title: isRide ? "Rute ke Penumpang" : isSend ? "Rute ke Pengirim" : "Rute ke Toko",
-        targetLabel: isRide ? "Penjemputan" : isSend ? "Pengirim" : "Toko / Mitra",
-        targetName: effectivePickupName,
+        title: isWaste ? "Rute ke Customer (Jemput)" : isRide ? "Rute ke Penumpang" : isSend ? "Rute ke Pengirim" : "Rute ke Toko",
+        targetLabel: isWaste ? "Penjemputan Sampah" : isRide ? "Penjemputan" : isSend ? "Pengirim" : "Toko / Mitra",
+        targetName: isWaste ? (storeName || "Rumah Customer") : effectivePickupName,
         targetAddress: effectivePickupAddress,
         distance: distance || "Menuju titik jemput",
         eta: "Sesuai rute",
         speed: "Navigasi Aktif",
-        nextManeuver: `Menuju ${pickupShort}`,
+        nextManeuver: isWaste ? `Menuju Rumah Customer (${pickupShort})` : `Menuju ${pickupShort}`,
         maneuverDistance: "Titik Jemput",
-        maneuverIcon: isRide ? "bike" : "right",
+        maneuverIcon: isWaste ? "bike" : isRide ? "bike" : "right",
         steps: [
           {
-            instruction: isRide
+            instruction: isWaste
+              ? `Mulai perjalanan menuju rumah customer untuk menjemput sampah`
+              : isRide
               ? `Mulai perjalanan menuju lokasi penjemputan penumpang`
               : isSend
               ? `Mulai perjalanan menuju lokasi pengirim paket`
@@ -245,7 +252,9 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             type: "right",
           },
           {
-            instruction: `Tiba di titik penjemputan: ${effectivePickupAddress}`,
+            instruction: isWaste
+              ? `Tiba di rumah customer: ${effectivePickupAddress}`
+              : `Tiba di titik penjemputan: ${effectivePickupAddress}`,
             distance: "Tiba",
             type: "dest",
           },
@@ -253,19 +262,21 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
       };
     } else if (activeMode === "customer") {
       return {
-        title: isRide ? "Rute ke Tujuan" : isSend ? "Rute ke Penerima" : "Rute ke Customer",
-        targetLabel: isRide ? "Tujuan Penumpang" : isSend ? "Penerima" : "Customer / Penerima",
-        targetName: isRide ? "Tujuan Penumpang" : "Pelanggan",
+        title: isWaste ? "Rute ke Bank Sampah" : isRide ? "Rute ke Tujuan" : isSend ? "Rute ke Penerima" : "Rute ke Customer",
+        targetLabel: isWaste ? "Tujuan Bank Sampah" : isRide ? "Tujuan Penumpang" : isSend ? "Penerima" : "Customer / Penerima",
+        targetName: isWaste ? (customerAddress || "Bank Sampah") : isRide ? "Tujuan Penumpang" : "Pelanggan",
         targetAddress: effectiveDestAddress,
         distance: distance || "Menuju tujuan",
         eta: "Sesuai rute",
         speed: "Navigasi Aktif",
-        nextManeuver: `Menuju ${destShort}`,
+        nextManeuver: isWaste ? `Menuju Bank Sampah (${destShort})` : `Menuju ${destShort}`,
         maneuverDistance: "Tujuan Akhir",
-        maneuverIcon: "straight",
+        maneuverIcon: isWaste ? "store" : "straight",
         steps: [
           {
-            instruction: isRide
+            instruction: isWaste
+              ? `Bawa sampah daur ulang dari customer menuju Bank Sampah`
+              : isRide
               ? `Berangkat bersama penumpang dari ${pickupShort}`
               : isSend
               ? `Bawa paket dari pengirim menuju alamat penerima`
@@ -279,7 +290,9 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             type: "straight",
           },
           {
-            instruction: `Tiba di alamat tujuan: ${effectiveDestAddress}`,
+            instruction: isWaste
+              ? `Tiba di Bank Sampah: ${effectiveDestAddress}`
+              : `Tiba di alamat tujuan: ${effectiveDestAddress}`,
             distance: "Tiba",
             type: "dest",
           },
@@ -288,18 +301,18 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     } else {
       return {
         title: "Semua Rute",
-        targetLabel: isRide ? "Rute Perjalanan Lengkap" : "Pengantaran Lengkap",
+        targetLabel: isWaste ? "Rute Jemput Customer ➔ Antar Bank Sampah" : isRide ? "Rute Perjalanan Lengkap" : "Pengantaran Lengkap",
         targetName: `${pickupShort} ➔ ${destShort}`,
         targetAddress: `${effectivePickupAddress} menuju ${effectiveDestAddress}`,
         distance: distance || "Rute Lengkap",
         eta: "Lintasan Peta",
         speed: "Navigasi Aktif",
-        nextManeuver: `Perjalanan ${pickupShort} ke ${destShort}`,
+        nextManeuver: isWaste ? `Jemput ${pickupShort} ➔ Antar ${destShort}` : `Perjalanan ${pickupShort} ke ${destShort}`,
         maneuverDistance: distance || "Jalur Lengkap",
         maneuverIcon: "compass",
         steps: [
           {
-            instruction: `Titik Jemput: ${effectivePickupAddress}`,
+            instruction: isWaste ? `Titik Jemput Sampah (Customer): ${effectivePickupAddress}` : `Titik Jemput: ${effectivePickupAddress}`,
             distance: "Jemput",
             type: "store",
           },
@@ -309,7 +322,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             type: "straight",
           },
           {
-            instruction: `Titik Tujuan: ${effectiveDestAddress}`,
+            instruction: isWaste ? `Titik Tujuan (Bank Sampah): ${effectiveDestAddress}` : `Titik Tujuan: ${effectiveDestAddress}`,
             distance: "Tujuan",
             type: "dest",
           },
@@ -318,6 +331,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     }
   }, [
     activeMode,
+    isWaste,
     isRide,
     isSend,
     effectivePickupName,
@@ -389,8 +403,8 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           </View>
         )}
 
-        {/* Driver Motorcycle Indicator Overlay */}
-        {(isHeadingToPickup || isDelivering || effectiveNavigating) && (
+        {/* Driver Motorcycle Indicator Overlay - only shown when navigation is active */}
+        {effectiveNavigating && (
           <View
             style={[
               styles.motorcycleMarkerOverlay,
@@ -400,66 +414,32 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
               },
             ]}
           >
-            {/* Pulsing radar rings */}
-            <View style={styles.radarRing1} />
-            <View style={styles.radarRing2} />
-
             {/* Glowing Motorcycle Beacon */}
-            <View style={[styles.motorcycleBeacon, effectiveNavigating && styles.motorcycleBeaconNavigating]}>
-              <Bike size={18} color="#FFFFFF" />
-            </View>
-
-            {/* Floating Info Tag */}
-            <View style={styles.driverCalloutBubble}>
-              <View style={styles.driverCalloutDot} />
-              <View>
-                <Text style={styles.driverCalloutTitle} numberOfLines={1}>
-                  {effectiveNavigating
-                    ? "Motor Driver (Melaju) 🏍️"
-                    : activeMode === "customer"
-                    ? "Motor Driver ➔ Customer"
-                    : "Motor Driver ➔ Jemput"}
-                </Text>
-                <Text style={styles.driverCalloutSub}>
-                  {effectiveNavigating ? `${simulatedSpeed} km/j • Menuju Lokasi` : "Posisi Driver (GPS)"}
-                </Text>
-              </View>
+            <View style={[styles.motorcycleBeacon, styles.motorcycleBeaconNavigating]}>
+              <Bike size={16} color="#FFFFFF" />
             </View>
           </View>
         )}
 
-        {/* Floating Start Navigation Bar / HUD */}
-        {(isHeadingToPickup || isDelivering || effectiveNavigating) && (
+        {/* Floating Navigation Active HUD */}
+        {effectiveNavigating && (
           <View style={styles.mapBottomNavHud}>
-            {!effectiveNavigating ? (
-              <TouchableOpacity
-                style={styles.startNavFloatingBtn}
-                onPress={() => toggleNavigation(true)}
-                activeOpacity={0.88}
-              >
-                <View style={styles.startNavPulseIcon}>
-                  <Navigation size={14} color="#FFFFFF" />
+            <View style={styles.navActiveHudBar}>
+              <View style={styles.navActiveHudLeft}>
+                <View style={styles.navPulseDotLive} />
+                <Text style={styles.navActiveHudStatus}>NAVIGASI AKTIF</Text>
+                <View style={styles.navSpeedPill}>
+                  <Text style={styles.navActiveHudSpeed}>{simulatedSpeed} km/j</Text>
                 </View>
-                <Text style={styles.startNavFloatingBtnText}>Mulai Navigasi (Start Navigation)</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.navActiveHudBar}>
-                <View style={styles.navActiveHudLeft}>
-                  <View style={styles.navPulseDotLive} />
-                  <Text style={styles.navActiveHudStatus}>NAVIGASI AKTIF</Text>
-                  <View style={styles.navSpeedPill}>
-                    <Text style={styles.navActiveHudSpeed}>{simulatedSpeed} km/j</Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.navStopBtn}
-                  onPress={() => toggleNavigation(false)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.navStopBtnText}>Hentikan</Text>
-                </TouchableOpacity>
               </View>
-            )}
+              <TouchableOpacity
+                style={styles.navStopBtn}
+                onPress={() => toggleNavigation(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.navStopBtnText}>Hentikan</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -498,12 +478,14 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           onPress={() => handleSelectMode("store")}
           activeOpacity={0.8}
         >
-          {isRide ? (
-            <User size={13} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
+          {isWaste ? (
+            <User size={12} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
+          ) : isRide ? (
+            <User size={12} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
           ) : isSend ? (
-            <Package size={13} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
+            <Package size={12} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
           ) : (
-            <Store size={13} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
+            <Store size={12} color={activeMode === "store" ? "#FFFFFF" : "#0D7A53"} />
           )}
           <Text
             style={[
@@ -512,7 +494,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             ]}
             numberOfLines={1}
           >
-            {isRide ? "Ke Penumpang" : isSend ? "Ke Pengirim" : "Ke Toko"}
+            {isWaste ? "Ke Customer" : isRide ? "Ke Penumpang" : isSend ? "Ke Pengirim" : "Ke Toko"}
           </Text>
         </TouchableOpacity>
 
@@ -524,7 +506,11 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           onPress={() => handleSelectMode("customer")}
           activeOpacity={0.8}
         >
-          <MapPin size={13} color={activeMode === "customer" ? "#FFFFFF" : "#0D7A53"} />
+          {isWaste ? (
+            <Store size={12} color={activeMode === "customer" ? "#FFFFFF" : "#0D7A53"} />
+          ) : (
+            <MapPin size={12} color={activeMode === "customer" ? "#FFFFFF" : "#0D7A53"} />
+          )}
           <Text
             style={[
               styles.segmentTabText,
@@ -532,7 +518,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             ]}
             numberOfLines={1}
           >
-            {isRide ? "Ke Tujuan" : isSend ? "Ke Penerima" : "Ke Customer"}
+            {isWaste ? "Bank Sampah" : isRide ? "Ke Tujuan" : isSend ? "Ke Penerima" : "Ke Customer"}
           </Text>
         </TouchableOpacity>
 
@@ -544,7 +530,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           onPress={() => handleSelectMode("overview")}
           activeOpacity={0.8}
         >
-          <Layers size={13} color={activeMode === "overview" ? "#FFFFFF" : "#0D7A53"} />
+          <Layers size={12} color={activeMode === "overview" ? "#FFFFFF" : "#0D7A53"} />
           <Text
             style={[
               styles.segmentTabText,
@@ -555,6 +541,24 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             Semua Rute
           </Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Active Route Mode Explanation Hint */}
+      <View style={styles.activeRouteHintBox}>
+        <Compass size={12} color="#0D7A53" />
+        <Text style={styles.activeRouteHintText} numberOfLines={1}>
+          {isWaste
+            ? activeMode === "store"
+              ? "🏠 Rute Penjemputan: Menuju Rumah Customer"
+              : activeMode === "customer"
+              ? "🏛️ Rute Pengantaran: Menuju Bank Sampah"
+              : "🗺️ Rute Lengkap: Rumah Customer ➔ Bank Sampah"
+            : activeMode === "store"
+            ? "Titik Penjemputan"
+            : activeMode === "customer"
+            ? "Titik Pengantaran"
+            : "Rute Keseluruhan"}
+        </Text>
       </View>
 
       {/* 2.5 Live Journey Track Progress Card */}
@@ -972,8 +976,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 8,
+    gap: 4,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
     borderRadius: 8,
     cursor: "pointer" as any,
   },
@@ -989,13 +994,30 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   segmentTabText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: "700",
     color: "#475569",
   },
   segmentTabTextActive: {
     color: "#FFFFFF",
     fontWeight: "800",
+  },
+  activeRouteHintBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#ECFDF5",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  activeRouteHintText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#065F46",
+    flex: 1,
   },
   maneuverCard: {
     flexDirection: "row",

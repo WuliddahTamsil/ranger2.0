@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Modal,
   Switch,
+  Alert,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -46,6 +47,7 @@ import {
   getWasteBankPrices,
   getWasteDepositById,
   updateWasteBankOperational,
+  acceptWasteDeposit,
 } from "../../services/recycleService";
 import { WasteBankUI, WasteDepositUI, WasteCategoryPriceUI } from "../../types/recycleTypes";
 import { rp } from "../../utils/formatters";
@@ -272,6 +274,26 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
   const onRefresh = () => {
     setRefreshing(true);
     loadDashboard();
+  };
+
+  const handleAcceptAndCallDriver = async (item: WasteDepositUI) => {
+    try {
+      setLoading(true);
+      const res = await acceptWasteDeposit(item._id);
+      if (res.success) {
+        Alert.alert(
+          "Driver Dipanggil! 🛵",
+          `Permintaan setor sampah #${item.depositCode} berhasil disetujui. Tugas penjemputan telah disiarkan ke driver.`
+        );
+        loadDashboard(true);
+      } else {
+        Alert.alert("Gagal", res.message || "Gagal menyetujui setoran.");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err?.message || "Terjadi kesalahan.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOpenPriceModal = async () => {
@@ -767,8 +789,26 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
               key={item._id}
               style={styles.depositCard}
               onPress={() => {
-                setSelectedDeposit(item);
-                navigate("bank_sampah_weighing");
+                if (item.method === "PICKUP" && item.status === "REQUESTED") {
+                  handleAcceptAndCallDriver(item);
+                } else if (
+                  item.method === "PICKUP" &&
+                  (item.status === "ACCEPTED" || item.status === "DRIVER_ASSIGNED" || item.status === "PICKED_UP")
+                ) {
+                  Alert.alert(
+                    "Status Penjemputan Sampah",
+                    `Tiket #${item.depositCode}\nStatus: ${
+                      item.status === "ACCEPTED"
+                        ? "Menunggu konfirmasi penerimaan oleh driver."
+                        : item.status === "DRIVER_ASSIGNED"
+                        ? `Driver (${typeof item.driverId === "object" ? item.driverId?.name : "Driver"}) sedang menuju lokasi nasabah.`
+                        : "Driver telah mengambil sampah & sedang menuju Bank Sampah."
+                    }\n\nSetelah sampah tiba di Bank Sampah, Anda dapat langsung menimbang.`
+                  );
+                } else {
+                  setSelectedDeposit(item);
+                  navigate("bank_sampah_weighing");
+                }
               }}
               activeOpacity={0.85}
             >
@@ -818,6 +858,12 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                       ? styles.statusPillRed
                       : item.status === "WAITING_CUSTOMER_CONFIRMATION"
                       ? styles.statusPillAmber
+                      : item.method === "PICKUP" && item.status === "REQUESTED"
+                      ? { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }
+                      : item.method === "PICKUP" && item.status === "ACCEPTED"
+                      ? { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }
+                      : item.method === "PICKUP" && (item.status === "DRIVER_ASSIGNED" || item.status === "PICKED_UP")
+                      ? { backgroundColor: "#FAF5FF", borderColor: "#E9D5FF" }
                       : styles.statusPillBlue,
                   ]}
                 >
@@ -830,6 +876,14 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                         ? styles.statusPillTextRed
                         : item.status === "WAITING_CUSTOMER_CONFIRMATION"
                         ? styles.statusPillTextAmber
+                        : item.method === "PICKUP" && item.status === "REQUESTED"
+                        ? { color: "#1D4ED8", fontWeight: "700" }
+                        : item.method === "PICKUP" && item.status === "ACCEPTED"
+                        ? { color: "#15803D", fontWeight: "700" }
+                        : item.method === "PICKUP" && item.status === "DRIVER_ASSIGNED"
+                        ? { color: "#7E22CE", fontWeight: "700" }
+                        : item.method === "PICKUP" && item.status === "PICKED_UP"
+                        ? { color: "#9333EA", fontWeight: "700" }
                         : styles.statusPillTextBlue,
                     ]}
                   >
@@ -839,6 +893,16 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                       ? "Menunggu ACC"
                       : item.status === "COMPLETED" || item.status === "POINT_ISSUED"
                       ? "Poin Terbit"
+                      : item.method === "PICKUP" && item.status === "REQUESTED"
+                      ? "⚠️ Panggil Driver"
+                      : item.method === "PICKUP" && item.status === "ACCEPTED"
+                      ? "🛵 Cari Driver"
+                      : item.method === "PICKUP" && item.status === "DRIVER_ASSIGNED"
+                      ? "🛵 Driver Menuju Nasabah"
+                      : item.method === "PICKUP" && item.status === "PICKED_UP"
+                      ? "📦 Diantar ke Bank"
+                      : item.method === "PICKUP" && item.status === "AT_BANK"
+                      ? "🏢 Tiba di Bank"
                       : "Perlu Timbang"}
                   </Text>
                 </View>
@@ -878,30 +942,57 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                   )}
                 </View>
 
-                <View
-                  style={[
-                    styles.btnTimbangAction,
-                    item.status === "COMPLETED" || item.status === "POINT_ISSUED"
-                      ? { backgroundColor: "#047857" }
-                      : item.status === "DISPUTED"
-                      ? { backgroundColor: "#DC2626" }
-                      : item.status === "WAITING_CUSTOMER_CONFIRMATION"
-                      ? { backgroundColor: "#D97706" }
-                      : { backgroundColor: "#15803D" },
-                  ]}
-                >
-                  <Scale size={13} color="#FFFFFF" />
-                  <Text style={styles.btnTimbangActionText}>
-                    {item.status === "DISPUTED"
-                      ? "Tinjau Komplain & Timbang Ulang"
-                      : item.status === "WAITING_CUSTOMER_CONFIRMATION"
-                      ? "Lihat Hasil"
-                      : item.status === "COMPLETED" || item.status === "POINT_ISSUED"
-                      ? "Rincian"
-                      : "Timbang"}
-                  </Text>
-                  <ChevronRight size={13} color="#FFFFFF" />
-                </View>
+                {item.method === "PICKUP" && item.status === "REQUESTED" ? (
+                  <TouchableOpacity
+                    style={[styles.btnTimbangAction, { backgroundColor: "#0284C7" }]}
+                    onPress={() => handleAcceptAndCallDriver(item)}
+                    activeOpacity={0.85}
+                  >
+                    <Truck size={13} color="#FFFFFF" />
+                    <Text style={styles.btnTimbangActionText}>Setujui & Panggil Driver</Text>
+                    <ChevronRight size={13} color="#FFFFFF" />
+                  </TouchableOpacity>
+                ) : item.method === "PICKUP" && item.status === "ACCEPTED" ? (
+                  <View style={[styles.btnTimbangAction, { backgroundColor: "#64748B" }]}>
+                    <Clock size={13} color="#FFFFFF" />
+                    <Text style={styles.btnTimbangActionText}>Mencari Driver...</Text>
+                  </View>
+                ) : item.method === "PICKUP" && (item.status === "DRIVER_ASSIGNED" || item.status === "PICKUP_ON_THE_WAY") ? (
+                  <View style={[styles.btnTimbangAction, { backgroundColor: "#2563EB" }]}>
+                    <Truck size={13} color="#FFFFFF" />
+                    <Text style={styles.btnTimbangActionText}>Driver Menjemput</Text>
+                  </View>
+                ) : item.method === "PICKUP" && item.status === "PICKED_UP" ? (
+                  <View style={[styles.btnTimbangAction, { backgroundColor: "#9333EA" }]}>
+                    <Truck size={13} color="#FFFFFF" />
+                    <Text style={styles.btnTimbangActionText}>Menuju Bank</Text>
+                  </View>
+                ) : (
+                  <View
+                    style={[
+                      styles.btnTimbangAction,
+                      item.status === "COMPLETED" || item.status === "POINT_ISSUED"
+                        ? { backgroundColor: "#047857" }
+                        : item.status === "DISPUTED"
+                        ? { backgroundColor: "#DC2626" }
+                        : item.status === "WAITING_CUSTOMER_CONFIRMATION"
+                        ? { backgroundColor: "#D97706" }
+                        : { backgroundColor: "#15803D" },
+                    ]}
+                  >
+                    <Scale size={13} color="#FFFFFF" />
+                    <Text style={styles.btnTimbangActionText}>
+                      {item.status === "DISPUTED"
+                        ? "Tinjau Komplain & Timbang Ulang"
+                        : item.status === "WAITING_CUSTOMER_CONFIRMATION"
+                        ? "Lihat Hasil"
+                        : item.status === "COMPLETED" || item.status === "POINT_ISSUED"
+                        ? "Rincian"
+                        : "Timbang"}
+                    </Text>
+                    <ChevronRight size={13} color="#FFFFFF" />
+                  </View>
+                )}
               </View>
             </TouchableOpacity>
           ))

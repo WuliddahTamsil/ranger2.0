@@ -27,6 +27,7 @@ import { useRecycle } from "../../../context/RecycleContext";
 import { getWasteBanks } from "../../../services/recycleService";
 import { WasteBankUI } from "../../../types/recycleTypes";
 import { rp } from "../../../utils/formatters";
+import { checkBankOperationalStatus } from "../../../utils/bankOperationalUtils";
 
 export const BankSampahListScreen: React.FC<Nav> = ({ navigate }) => {
   const { setSelectedBank } = useRecycle();
@@ -60,10 +61,16 @@ export const BankSampahListScreen: React.FC<Nav> = ({ navigate }) => {
     loadBanks(activeFilter);
   };
 
-  const filteredBanks = banks.filter((b) =>
-    b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    b.address.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredBanks = banks.filter((b) => {
+    const matchesSearch =
+      b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      b.address.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    if (activeFilter === "open") {
+      return checkBankOperationalStatus(b.openingHours).isOpen;
+    }
+    return true;
+  });
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -164,49 +171,81 @@ export const BankSampahListScreen: React.FC<Nav> = ({ navigate }) => {
             <Text style={styles.emptySub}>Coba ubah filter pencarian atau kata kunci lokasi Anda.</Text>
           </View>
         ) : (
-          filteredBanks.map((bank) => (
-            <TouchableOpacity
-              key={bank._id}
-              style={styles.bankCard}
-              onPress={() => {
-                setSelectedBank(bank);
-                navigate("c_recycle_bank_detail");
-              }}
-              activeOpacity={0.85}
-            >
-              {/* Header row */}
-              <View style={styles.cardHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardBankName}>{bank.name}</Text>
-                  <View style={styles.ratingDistanceRow}>
-                    <View style={styles.ratingBadge}>
-                      <Star size={12} color="#EAB308" fill="#EAB308" />
-                      <Text style={styles.ratingText}>{bank.rating?.toFixed(1) || "5.0"}</Text>
-                      <Text style={styles.ratingCount}>({bank.ratingCount || 12})</Text>
+          filteredBanks.map((bank) => {
+            const bStatus = checkBankOperationalStatus(bank.openingHours);
+            return (
+              <TouchableOpacity
+                key={bank._id}
+                style={styles.bankCard}
+                onPress={() => {
+                  setSelectedBank(bank);
+                  navigate("c_recycle_bank_detail");
+                }}
+                activeOpacity={0.85}
+              >
+                {/* Header row */}
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardBankName}>{bank.name}</Text>
+                    <View style={styles.ratingDistanceRow}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 3,
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 6,
+                          backgroundColor: bStatus.isOpen ? "#DCFCE7" : "#FEE2E2",
+                          marginRight: 4,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 5,
+                            height: 5,
+                            borderRadius: 2.5,
+                            backgroundColor: bStatus.isOpen ? "#15803D" : "#DC2626",
+                          }}
+                        />
+                        <Text
+                          style={{
+                            fontSize: 9.5,
+                            fontWeight: "800",
+                            color: bStatus.isOpen ? "#15803D" : "#DC2626",
+                          }}
+                        >
+                          {bStatus.isOpen ? "Buka" : "Tutup"}
+                        </Text>
+                      </View>
+                      <View style={styles.ratingBadge}>
+                        <Star size={12} color="#EAB308" fill="#EAB308" />
+                        <Text style={styles.ratingText}>{bank.rating?.toFixed(1) || "5.0"}</Text>
+                        <Text style={styles.ratingCount}>({bank.ratingCount || 12})</Text>
+                      </View>
+                      <Text style={styles.dot}>•</Text>
+                      <MapPin size={12} color="#6B7280" />
+                      <Text style={styles.distanceText}>
+                        {bank.distanceKm !== undefined && bank.distanceKm !== null
+                          ? `${bank.distanceKm.toFixed(1)} km`
+                          : "Ring 1 Kamojang"}
+                      </Text>
                     </View>
-                    <Text style={styles.dot}>•</Text>
-                    <MapPin size={12} color="#6B7280" />
-                    <Text style={styles.distanceText}>
-                      {bank.distanceKm !== undefined && bank.distanceKm !== null
-                        ? `${bank.distanceKm.toFixed(1)} km`
-                        : "Ring 1 Kamojang"}
-                    </Text>
                   </View>
+
+                  {bank.acceptsPickup && (
+                    <View style={styles.pickupPill}>
+                      <Truck size={11} color="#047857" />
+                      <Text style={styles.pickupPillText}>Layanan Pickup</Text>
+                    </View>
+                  )}
                 </View>
 
-                {bank.acceptsPickup && (
-                  <View style={styles.pickupPill}>
-                    <Truck size={11} color="#047857" />
-                    <Text style={styles.pickupPillText}>Layanan Pickup</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Operating hours & address */}
-              <View style={styles.infoRow}>
-                <Clock size={13} color="#6B7280" />
-                <Text style={styles.infoText}>{bank.openingHours}</Text>
-              </View>
+                {/* Operating hours & address */}
+                <View style={styles.infoRow}>
+                  <Clock size={13} color="#6B7280" />
+                  <Text style={styles.infoText}>{bStatus.hoursText}</Text>
+                </View>
 
               <Text style={styles.addressText} numberOfLines={2}>
                 {bank.address}
@@ -234,8 +273,9 @@ export const BankSampahListScreen: React.FC<Nav> = ({ navigate }) => {
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
-          ))
-        )}
+          );
+        })
+      )}
       </ScrollView>
     </ResponsiveSafeAreaView>
   );

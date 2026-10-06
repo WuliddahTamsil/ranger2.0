@@ -14,65 +14,41 @@ import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-c
 import {
   ArrowLeft,
   MapPin,
-  Calendar,
   Clock,
   Truck,
   CheckCircle2,
   Sparkles,
   ChevronRight,
   AlertCircle,
+  Building2,
+  Zap,
+  ShieldCheck,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
 import { createWasteDeposit } from "../../../services/recycleService";
 import { WasteDepositUI } from "../../../types/recycleTypes";
-import { rp } from "../../../utils/formatters";
+import { checkBankOperationalStatus } from "../../../utils/bankOperationalUtils";
 
 interface Props extends Nav {
   authAccount?: any;
 }
 
-const TIME_SLOTS = [
-  "08:00 - 10:00 WIB",
-  "10:00 - 12:00 WIB",
-  "13:00 - 15:00 WIB",
-  "15:00 - 17:00 WIB",
-];
-
-const DATE_OPTIONS = [
-  { label: "Hari Ini", offset: 0 },
-  { label: "Besok", offset: 1 },
-  { label: "Lusa", offset: 2 },
-];
-
 export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccount }) => {
   const {
     selectedBank,
     draftDeposit,
-    updateDraftDeposit,
     setSelectedDeposit,
   } = useRecycle();
 
   const [address, setAddress] = useState(
     draftDeposit.pickupAddress || authAccount?.address || selectedBank?.address || "Pakuan, Bogor, Jawa Barat"
   );
-  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
-  const [selectedSlot, setSelectedSlot] = useState(TIME_SLOTS[0]);
   const [driverNotes, setDriverNotes] = useState(draftDeposit.pickupNotes || "");
   const [submitting, setSubmitting] = useState(false);
   const [createdSuccessDeposit, setCreatedSuccessDeposit] = useState<WasteDepositUI | null>(null);
 
-  // Compute date string
-  const getDateString = (offset: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + offset);
-    return d.toLocaleDateString("id-ID", {
-      weekday: "long",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  };
+  const opStatus = checkBankOperationalStatus(selectedBank?.openingHours);
 
   const totalWeight = draftDeposit.categories.reduce((sum, c) => sum + (c.estimatedWeightKg || 0), 0);
   const totalRupiah = draftDeposit.categories.reduce(
@@ -81,28 +57,34 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
   );
 
   const handleSubmitPickup = async () => {
+    if (!opStatus.isOpen) {
+      Alert.alert(
+        "Bank Sampah Sedang Tutup",
+        `Bank Sampah ${selectedBank?.name || ""} sedang tutup saat ini (${opStatus.reason || `Jam buka: ${opStatus.hoursText}`}). Layanan penjemputan hanya aktif pada jam operasional.`
+      );
+      return;
+    }
+
     if (!address.trim()) {
       Alert.alert("Alamat Diperlukan", "Masukkan alamat penjemputan sampah Anda.");
       return;
     }
 
     if (!selectedBank?._id) {
-      Alert.alert("Error", "Bank Sampah tidak valid.");
+      Alert.alert("Error", "Bank Sampah tujuan tidak valid.");
       return;
     }
 
     setSubmitting(true);
     try {
-      const scheduleString = `${getDateString(selectedDateIndex)}, Pukul ${selectedSlot}`;
       const payload = {
         bankSampahId: selectedBank._id,
         method: "PICKUP" as const,
         categories: [],
-        pickupAddress: address,
+        pickupAddress: address.trim(),
         pickupLatitude: -7.15,
         pickupLongitude: 107.8,
-        pickupSchedule: scheduleString,
-        pickupNotes: driverNotes,
+        pickupNotes: driverNotes.trim(),
       };
 
       const res = await createWasteDeposit(payload, `deposit_pickup_${Date.now()}`);
@@ -110,7 +92,7 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
         setSelectedDeposit(res.data);
         setCreatedSuccessDeposit(res.data);
       } else {
-        Alert.alert("Gagal", res.message || "Gagal membuat jadwal pickup.");
+        Alert.alert("Gagal", res.message || "Gagal membuat permohonan pickup.");
       }
     } catch (err: any) {
       Alert.alert("Error", err?.message || "Terjadi kendala pada koneksi.");
@@ -131,90 +113,117 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
           <ArrowLeft size={20} color="#111827" />
         </TouchableOpacity>
         <View style={styles.headerTitleCol}>
-          <Text style={styles.headerTitle}>Jadwal Penjemputan</Text>
-          <Text style={styles.headerSub}>Pickup sampah dari rumah oleh driver</Text>
+          <Text style={styles.headerTitle}>Penjemputan Sampah</Text>
+          <Text style={styles.headerSub}>Layanan penjemputan real-time oleh driver</Text>
+        </View>
+        <View style={styles.badgeRealtime}>
+          <Zap size={11} color="#15803D" />
+          <Text style={styles.badgeRealtimeText}>Real-time</Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Operational Hours Alert Banner if Closed */}
+        {!opStatus.isOpen && (
+          <View style={styles.closedAlertCard}>
+            <AlertCircle size={22} color="#DC2626" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.closedAlertTitle}>Bank Sampah Sedang Tutup</Text>
+              <Text style={styles.closedAlertSub}>
+                {opStatus.reason || `Layanan hanya dapat diakses pada jam operasional: ${opStatus.hoursText}`}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Bank Sampah Info Card */}
+        <View style={styles.bankCard}>
+          <View style={styles.bankCardTop}>
+            <View style={styles.bankAvatar}>
+              <Building2 size={20} color="#15803D" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.bankCardLabel}>Bank Sampah Tujuan:</Text>
+              <Text style={styles.bankCardName}>{selectedBank?.name || "Bank Sampah Mitra"}</Text>
+            </View>
+            <View
+              style={[
+                styles.opStatusPill,
+                opStatus.isOpen ? styles.opStatusPillOpen : styles.opStatusPillClosed,
+              ]}
+            >
+              <View
+                style={[
+                  styles.opStatusDot,
+                  opStatus.isOpen ? styles.opStatusDotOpen : styles.opStatusDotClosed,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.opStatusText,
+                  opStatus.isOpen ? styles.opStatusTextOpen : styles.opStatusTextClosed,
+                ]}
+              >
+                {opStatus.isOpen ? "Buka Sekarang" : "Tutup"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.bankDetailsRow}>
+            <Clock size={12} color="#64748B" />
+            <Text style={styles.bankHoursText}>
+              Jam Operasional: {opStatus.hoursText}
+            </Text>
+          </View>
+        </View>
+
+        {/* Real-time Pickup Flow Explanation Card */}
+        <View style={styles.flowCard}>
+          <View style={styles.flowHeader}>
+            <Zap size={16} color="#047857" />
+            <Text style={styles.flowTitle}>Sistem Penjemputan Langsung (Real-time)</Text>
+          </View>
+          <Text style={styles.flowDesc}>
+            Setelah Anda mengirim permintaan penjemputan, Bank Sampah akan langsung menyetujui dan sistem menyiarkan tugas ke driver terdekat untuk mengambil sampah di lokasi Anda.
+          </Text>
+          <View style={styles.flowStepsRow}>
+            <View style={styles.flowStepItem}>
+              <Text style={styles.flowStepNum}>1</Text>
+              <Text style={styles.flowStepLabel}>Kirim Order</Text>
+            </View>
+            <ChevronRight size={14} color="#9CA3AF" />
+            <View style={styles.flowStepItem}>
+              <Text style={styles.flowStepNum}>2</Text>
+              <Text style={styles.flowStepLabel}>ACC Bank</Text>
+            </View>
+            <ChevronRight size={14} color="#9CA3AF" />
+            <View style={styles.flowStepItem}>
+              <Text style={styles.flowStepNum}>3</Text>
+              <Text style={styles.flowStepLabel}>Driver Jemput</Text>
+            </View>
+            <ChevronRight size={14} color="#9CA3AF" />
+            <View style={styles.flowStepItem}>
+              <Text style={styles.flowStepNum}>4</Text>
+              <Text style={styles.flowStepLabel}>Timbang & Poin</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Address Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <MapPin size={16} color="#15803D" />
-            <Text style={styles.cardTitle}>Alamat Penjemputan</Text>
+            <Text style={styles.cardTitle}>Alamat Penjemputan Sampah</Text>
           </View>
           <TextInput
             style={styles.addressInput}
             value={address}
             onChangeText={setAddress}
-            placeholder="Tuliskan alamat lengkap rumah/titik temu..."
+            placeholder="Tuliskan alamat lengkap rumah, nomor rumah, atau patokan penjemputan..."
             placeholderTextColor="#9CA3AF"
             multiline
-            numberOfLines={2}
+            numberOfLines={3}
           />
-        </View>
-
-        {/* Date Selector */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Calendar size={16} color="#15803D" />
-            <Text style={styles.cardTitle}>Pilih Hari Penjemputan</Text>
-          </View>
-          <View style={styles.dateOptionsRow}>
-            {DATE_OPTIONS.map((opt, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={[
-                  styles.dateOptionBtn,
-                  selectedDateIndex === idx && styles.dateOptionBtnActive,
-                ]}
-                onPress={() => setSelectedDateIndex(idx)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.dateOptionLabel,
-                    selectedDateIndex === idx && styles.dateOptionLabelActive,
-                  ]}
-                >
-                  {opt.label}
-                </Text>
-                <Text
-                  style={[
-                    styles.dateOptionSub,
-                    selectedDateIndex === idx && styles.dateOptionSubActive,
-                  ]}
-                >
-                  {new Date(Date.now() + opt.offset * 86400000).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "short",
-                  })}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Time Slot Selector */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Clock size={16} color="#15803D" />
-            <Text style={styles.cardTitle}>Pilih Slot Waktu</Text>
-          </View>
-          <View style={styles.slotGrid}>
-            {TIME_SLOTS.map((slot) => (
-              <TouchableOpacity
-                key={slot}
-                style={[styles.slotChip, selectedSlot === slot && styles.slotChipActive]}
-                onPress={() => setSelectedSlot(slot)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.slotChipText, selectedSlot === slot && styles.slotChipTextActive]}>
-                  {slot}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
         </View>
 
         {/* Driver Notes */}
@@ -224,7 +233,7 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
             style={styles.notesInput}
             value={driverNotes}
             onChangeText={setDriverNotes}
-            placeholder="Contoh: Pagar abu-abu, sampah sudah di karung depan teras..."
+            placeholder="Contoh: Pagar hitam, sampah sudah dimasukkan dalam kardus/karung di depan teras..."
             placeholderTextColor="#9CA3AF"
             multiline
             numberOfLines={2}
@@ -238,12 +247,14 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
             <Text style={styles.summaryTitle}>Ringkasan Penjemputan</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Bank Sampah Tujuan:</Text>
-            <Text style={styles.summaryVal}>{selectedBank?.name || "Bank Sampah Terdekat"}</Text>
+            <Text style={styles.summaryLabel}>Waktu Penjemputan:</Text>
+            <Text style={[styles.summaryVal, { color: "#15803D", fontWeight: "800" }]}>
+              Langsung / Real-time
+            </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Jadwal Pickup:</Text>
-            <Text style={styles.summaryVal}>{getDateString(selectedDateIndex)}, {selectedSlot}</Text>
+            <Text style={styles.summaryLabel}>Bank Sampah Tujuan:</Text>
+            <Text style={styles.summaryVal}>{selectedBank?.name || "Bank Sampah Terdekat"}</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
@@ -256,9 +267,12 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
       {/* Submit Button */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={[styles.btnSubmit, submitting && { opacity: 0.7 }]}
+          style={[
+            styles.btnSubmit,
+            (!opStatus.isOpen || submitting) && styles.btnSubmitDisabled,
+          ]}
           onPress={handleSubmitPickup}
-          disabled={submitting}
+          disabled={!opStatus.isOpen || submitting}
           activeOpacity={0.85}
         >
           {submitting ? (
@@ -266,14 +280,16 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
           ) : (
             <>
               <Truck size={18} color="#FFFFFF" />
-              <Text style={styles.btnSubmitText}>Kirim Permintaan Pickup</Text>
+              <Text style={styles.btnSubmitText}>
+                {opStatus.isOpen ? "Panggil Driver Sekarang" : "Bank Sampah Tutup"}
+              </Text>
               <ChevronRight size={18} color="#FFFFFF" />
             </>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* Success Modal (Interactive on Web & Mobile) */}
+      {/* Success Modal */}
       <Modal
         visible={Boolean(createdSuccessDeposit)}
         transparent
@@ -285,25 +301,14 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
             <View style={styles.successIconCircle}>
               <CheckCircle2 size={36} color="#15803D" />
             </View>
-            <Text style={styles.successModalTitle}>Permintaan Pickup Berhasil!</Text>
+            <Text style={styles.successModalTitle}>Permintaan Pickup Berhasil Dikirim!</Text>
             <Text style={styles.successModalSubtitle}>
-              Bank Sampah {selectedBank?.name || "Mitra"} dan driver GEOVERSE akan menindaklanjuti jadwal penjemputan sampah Anda.
+              Bank Sampah {selectedBank?.name || "Mitra"} akan segera menyetujui dan memanggil driver untuk menjemput sampah Anda.
             </Text>
 
             <View style={styles.successCodeBox}>
-              <Text style={styles.successCodeLabel}>KODE SETORAN ANDA</Text>
+              <Text style={styles.successCodeLabel}>KODE TIKET SETORAN ANDA</Text>
               <Text style={styles.successCodeText}>{createdSuccessDeposit?.depositCode}</Text>
-            </View>
-
-            <View style={styles.successSummaryBox}>
-              <View style={styles.successSummaryRow}>
-                <Text style={styles.successSummaryLabel}>Total Berat:</Text>
-                <Text style={styles.successSummaryVal}>{totalWeight.toFixed(1)} kg</Text>
-              </View>
-              <View style={styles.successSummaryRow}>
-                <Text style={styles.successSummaryLabel}>Potensi Poin:</Text>
-                <Text style={styles.successSummaryValHighlight}>+{totalRupiah.toLocaleString("id-ID")} Pts</Text>
-              </View>
             </View>
 
             <TouchableOpacity
@@ -371,9 +376,181 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 1,
   },
+  badgeRealtime: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  badgeRealtimeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+  },
   scrollContent: {
     padding: 16,
     paddingBottom: 100,
+  },
+  closedAlertCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  closedAlertTitle: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: "#B91C1C",
+  },
+  closedAlertSub: {
+    fontSize: 11,
+    color: "#991B1B",
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  bankCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  bankCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  bankAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#DCFCE7",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bankCardLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  bankCardName: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: "#111827",
+    marginTop: 1,
+  },
+  opStatusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  opStatusPillOpen: {
+    backgroundColor: "#DCFCE7",
+  },
+  opStatusPillClosed: {
+    backgroundColor: "#FEE2E2",
+  },
+  opStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  opStatusDotOpen: {
+    backgroundColor: "#15803D",
+  },
+  opStatusDotClosed: {
+    backgroundColor: "#DC2626",
+  },
+  opStatusText: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  opStatusTextOpen: {
+    color: "#15803D",
+  },
+  opStatusTextClosed: {
+    color: "#DC2626",
+  },
+  bankDetailsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  bankHoursText: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  flowCard: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  flowHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  flowTitle: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  flowDesc: {
+    fontSize: 11,
+    color: "#15803D",
+    lineHeight: 16,
+    marginBottom: 12,
+  },
+  flowStepsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  flowStepItem: {
+    alignItems: "center",
+  },
+  flowStepNum: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#15803D",
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 2,
+  },
+  flowStepLabel: {
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: "#374151",
   },
   card: {
     backgroundColor: "#FFFFFF",
@@ -403,74 +580,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#111827",
     textAlignVertical: "top",
-  },
-  locationTag: {
-    marginTop: 6,
-  },
-  locationTagText: {
-    fontSize: 10,
-    color: "#059669",
-    fontWeight: "600",
-  },
-  dateOptionsRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  dateOptionBtn: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  dateOptionBtnActive: {
-    backgroundColor: "#F0FDF4",
-    borderColor: "#15803D",
-  },
-  dateOptionLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#374151",
-  },
-  dateOptionLabelActive: {
-    color: "#15803D",
-  },
-  dateOptionSub: {
-    fontSize: 10,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  dateOptionSubActive: {
-    color: "#15803D",
-  },
-  slotGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  slotChip: {
-    width: "48%",
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  slotChipActive: {
-    backgroundColor: "#15803D",
-    borderColor: "#15803D",
-  },
-  slotChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#4B5563",
-  },
-  slotChipTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "700",
+    minHeight: 60,
   },
   notesInput: {
     backgroundColor: "#F9FAFB",
@@ -482,20 +592,21 @@ const styles = StyleSheet.create({
     color: "#111827",
     textAlignVertical: "top",
     marginTop: 8,
+    minHeight: 50,
   },
   summaryCard: {
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#ECFDF5",
     borderRadius: 14,
     padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#BBF7D0",
-    marginTop: 4,
+    borderColor: "#A7F3D0",
   },
   summaryHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 12,
   },
   summaryTitle: {
     fontSize: 13,
@@ -506,31 +617,31 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginVertical: 3,
+    marginBottom: 6,
   },
   summaryLabel: {
     fontSize: 11,
-    color: "#4B5563",
+    color: "#047857",
   },
   summaryVal: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#111827",
+    color: "#064E3B",
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#A7F3D0",
     marginVertical: 8,
   },
   summaryPointLabel: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#854D0E",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#065F46",
   },
   summaryPointVal: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#15803D",
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#047857",
   },
   bottomBar: {
     position: "absolute",
@@ -539,8 +650,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
   },
@@ -548,132 +658,102 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
     backgroundColor: "#15803D",
     paddingVertical: 14,
     borderRadius: 12,
-    gap: 8,
+  },
+  btnSubmitDisabled: {
+    backgroundColor: "#9CA3AF",
   },
   btnSubmitText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: "800",
     color: "#FFFFFF",
   },
-  // Success Modal Styles
   successModalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: 24,
   },
   successModalCard: {
-    width: "100%",
-    maxWidth: 380,
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 24,
+    width: "100%",
+    maxWidth: 380,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 10,
   },
   successIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: "#DCFCE7",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 16,
   },
   successModalTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
     color: "#111827",
     textAlign: "center",
     marginBottom: 6,
   },
   successModalSubtitle: {
-    fontSize: 12,
-    color: "#6B7280",
+    fontSize: 11.5,
+    color: "#4B5563",
     textAlign: "center",
-    lineHeight: 18,
+    lineHeight: 16,
     marginBottom: 16,
   },
   successCodeBox: {
     width: "100%",
     backgroundColor: "#F0FDF4",
-    borderWidth: 1.5,
-    borderColor: "#86EFAC",
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
     padding: 12,
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: 16,
   },
   successCodeLabel: {
-    fontSize: 10,
-    fontWeight: "800",
+    fontSize: 9.5,
+    fontWeight: "700",
     color: "#15803D",
     letterSpacing: 0.5,
   },
   successCodeText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "900",
     color: "#166534",
     marginTop: 2,
-    letterSpacing: 0.5,
-  },
-  successSummaryBox: {
-    width: "100%",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 18,
-    gap: 4,
-  },
-  successSummaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  successSummaryLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-  successSummaryVal: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#374151",
-  },
-  successSummaryValHighlight: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#15803D",
+    letterSpacing: 1,
   },
   btnViewTracking: {
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
     backgroundColor: "#15803D",
     paddingVertical: 13,
     borderRadius: 12,
-    gap: 6,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   btnViewTrackingText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: "800",
     color: "#FFFFFF",
   },
   btnBackHome: {
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   btnBackHomeText: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11.5,
+    fontWeight: "700",
     color: "#6B7280",
   },
 });

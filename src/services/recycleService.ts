@@ -557,6 +557,60 @@ export const assignWasteDepositDriver = async (
   }
 };
 
+export const driverPickupWasteDeposit = async (
+  id: string,
+  driverId?: string
+): Promise<{ success: boolean; data?: WasteDepositUI; message?: string }> => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/waste/deposits/${id}/pickup`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ driverId }),
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("driverPickupWasteDeposit error:", err);
+    return { success: false, message: err?.message || "Gagal memperbarui status jemput sampah" };
+  }
+};
+
+export const driverDeliverWasteDeposit = async (
+  id: string,
+  driverId?: string
+): Promise<{ success: boolean; data?: WasteDepositUI; message?: string }> => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/waste/deposits/${id}/deliver-to-bank`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ driverId }),
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("driverDeliverWasteDeposit error:", err);
+    return { success: false, message: err?.message || "Gagal mengantar sampah ke Bank Sampah" };
+  }
+};
+
+export const getDriverAvailableWastePickups = async (
+  driverId?: string
+): Promise<{ success: boolean; data: WasteDepositUI[]; message?: string }> => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const url = driverId
+      ? `/waste/deposits/driver/available?driverId=${encodeURIComponent(driverId)}&t=${Date.now()}`
+      : `/waste/deposits/driver/available?t=${Date.now()}`;
+    const res = await fetch(getApiUrl(url), {
+      headers: authHeaders,
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("getDriverAvailableWastePickups error:", err);
+    return { success: false, data: [], message: err?.message || "Gagal memuat tugas pickup" };
+  }
+};
+
 export const weighWasteDeposit = async (
   id: string,
   payload: {

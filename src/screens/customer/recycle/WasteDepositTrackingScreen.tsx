@@ -40,10 +40,38 @@ import {
 import { WasteDepositStatus, WasteDepositUI } from "../../../types/recycleTypes";
 import { rp } from "../../../utils/formatters";
 
-const TRACKING_STEPS: Array<{ key: WasteDepositStatus; label: string; desc: string }> = [
+const DROP_OFF_TRACKING_STEPS = [
   { key: "REQUESTED", label: "Tiket Setoran Dibuat", desc: "Silakan bawa / siapkan sampah Anda untuk Bank Sampah" },
   { key: "WAITING_CUSTOMER_CONFIRMATION", label: "Konfirmasi Hasil Timbang", desc: "Silakan periksa & setujui hasil penimbangan poin" },
   { key: "COMPLETED", label: "Poin Diterbitkan & Selesai", desc: "Koin resmi masuk ke saldo Anda" },
+];
+
+const PICKUP_TRACKING_STEPS = [
+  {
+    key: "REQUESTED",
+    label: "Permintaan Pickup Dibuat",
+    desc: "Menunggu persetujuan Bank Sampah & pemanggilan driver",
+  },
+  {
+    key: "ACCEPTED",
+    label: "Bank Sampah Menyetujui & Panggil Driver",
+    desc: "Bank Sampah telah menyetujui, menyiarkan tugas ke driver terdekat",
+  },
+  {
+    key: "DRIVER_TRANSIT",
+    label: "Driver Mengambil & Mengantar Sampah",
+    desc: "Driver menjemput sampah di lokasi dan mengantarnya ke Bank Sampah",
+  },
+  {
+    key: "WAITING_CUSTOMER_CONFIRMATION",
+    label: "Konfirmasi Hasil Timbang",
+    desc: "Silakan periksa & setujui hasil penimbangan poin dari Bank Sampah",
+  },
+  {
+    key: "COMPLETED",
+    label: "Poin Diterbitkan & Selesai",
+    desc: "Poin resmi masuk ke saldo Dompet Poin Anda",
+  },
 ];
 
 export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
@@ -74,7 +102,7 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
   useEffect(() => {
     fetchLatest();
 
-    // Auto-polling every 3 seconds to catch status updates from Bank Sampah in realtime
+    // Auto-polling every 3 seconds to catch status updates from Bank Sampah & Driver in realtime
     const timer = setInterval(() => {
       fetchLatest();
     }, 3000);
@@ -134,16 +162,45 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
   const isCompleted = deposit.status === "COMPLETED" || deposit.status === "POINT_ISSUED";
   const canCancel = deposit.status === "REQUESTED" || deposit.status === "ACCEPTED";
 
+  // Calculate current step index based on method
   let currentStepIndex = 0;
-  if (isCompleted) {
-    currentStepIndex = 2;
-  } else if (isWeighingWaiting || deposit.status === "DISPUTED") {
-    currentStepIndex = 1;
-  } else if (deposit.status === "CANCELLED" || deposit.status === "REJECTED") {
+  if (deposit.status === "CANCELLED" || deposit.status === "REJECTED") {
     currentStepIndex = -1;
+  } else if (!isPickup) {
+    // DROP OFF: 3 steps
+    if (isCompleted) {
+      currentStepIndex = 2;
+    } else if (isWeighingWaiting || deposit.status === "DISPUTED" || deposit.status === "WEIGHING") {
+      currentStepIndex = 1;
+    } else {
+      currentStepIndex = 0;
+    }
   } else {
-    currentStepIndex = 0;
+    // PICKUP: 5 steps
+    // 0: REQUESTED
+    // 1: ACCEPTED
+    // 2: DRIVER_ASSIGNED / PICKUP_ON_THE_WAY / PICKED_UP / AT_BANK
+    // 3: WEIGHING / WAITING_CUSTOMER_CONFIRMATION / DISPUTED
+    // 4: POINT_ISSUED / COMPLETED
+    if (isCompleted) {
+      currentStepIndex = 4;
+    } else if (isWeighingWaiting || deposit.status === "DISPUTED" || deposit.status === "WEIGHING") {
+      currentStepIndex = 3;
+    } else if (
+      deposit.status === "DRIVER_ASSIGNED" ||
+      deposit.status === "PICKUP_ON_THE_WAY" ||
+      deposit.status === "PICKED_UP" ||
+      deposit.status === "AT_BANK"
+    ) {
+      currentStepIndex = 2;
+    } else if (deposit.status === "ACCEPTED") {
+      currentStepIndex = 1;
+    } else {
+      currentStepIndex = 0;
+    }
   }
+
+  const activeSteps = isPickup ? PICKUP_TRACKING_STEPS : DROP_OFF_TRACKING_STEPS;
 
   // Check if categories have been weighed
   const hasWeighedCategories =
@@ -259,6 +316,65 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
           </View>
         )}
 
+        {/* Pickup Driver Status Alert Banner */}
+        {isPickup && deposit.status === "ACCEPTED" && (
+          <View style={[styles.waitingAlertCard, { backgroundColor: "#F0FDF4", borderColor: "#86EFAC" }]}>
+            <View style={styles.waitingAlertLeft}>
+              <Truck size={24} color="#15803D" />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={[styles.waitingAlertTitle, { color: "#15803D" }]}>Bank Sampah Menyetujui & Memanggil Driver</Text>
+                <Text style={styles.waitingAlertSub}>
+                  Permintaan Anda telah disetujui Bank Sampah. Sistem sedang mencari driver terdekat untuk mengambil sampah.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {isPickup && (deposit.status === "DRIVER_ASSIGNED" || deposit.status === "PICKUP_ON_THE_WAY") && (
+          <View style={[styles.waitingAlertCard, { backgroundColor: "#EFF6FF", borderColor: "#93C5FD" }]}>
+            <View style={styles.waitingAlertLeft}>
+              <Truck size={24} color="#2563EB" />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={[styles.waitingAlertTitle, { color: "#1E40AF" }]}>Driver Menuju Lokasi Anda</Text>
+                <Text style={styles.waitingAlertSub}>
+                  {typeof deposit.driverId === "object" && deposit.driverId?.name
+                    ? `Driver ${deposit.driverId.name} sedang dalam perjalanan ke alamat penjemputan.`
+                    : "Driver telah menerima order dan bersiap menjemput sampah Anda."}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {isPickup && deposit.status === "PICKED_UP" && (
+          <View style={[styles.waitingAlertCard, { backgroundColor: "#FDF4FF", borderColor: "#F0ABFC" }]}>
+            <View style={styles.waitingAlertLeft}>
+              <Package size={24} color="#A21CAF" />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={[styles.waitingAlertTitle, { color: "#86198F" }]}>Sampah Telah Diambil Driver</Text>
+                <Text style={styles.waitingAlertSub}>
+                  Driver sedang mengantarkan sampah Anda menuju ke Bank Sampah tujuan.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {isPickup && deposit.status === "AT_BANK" && (
+          <View style={[styles.waitingAlertCard, { backgroundColor: "#FEFCE8", borderColor: "#FDE047" }]}>
+            <View style={styles.waitingAlertLeft}>
+              <Building2 size={24} color="#CA8A04" />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={[styles.waitingAlertTitle, { color: "#854D0E" }]}>Sampah Telah Tiba di Bank Sampah</Text>
+                <Text style={styles.waitingAlertSub}>
+                  Sampah telah diserahkan oleh driver dan sedang mengantre untuk ditimbang oleh petugas.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Bank Sampah Info Card */}
         <View style={styles.infoCard}>
           <View style={styles.infoCardRow}>
@@ -369,14 +485,26 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
         </View>
 
         <View style={styles.timelineCard}>
-          {TRACKING_STEPS.map((step, idx) => {
+          {activeSteps.map((step, idx) => {
             const isDone =
               currentStepIndex > idx ||
-              (isCompleted && idx === TRACKING_STEPS.length - 1);
+              (isCompleted && idx === activeSteps.length - 1);
             const isCurrent = currentStepIndex === idx;
 
+            // Contextual dynamic description for Step 3 if pickup
+            let stepDesc = step.desc;
+            if (isPickup && step.key === "DRIVER_TRANSIT") {
+              if (deposit.status === "DRIVER_ASSIGNED" || deposit.status === "PICKUP_ON_THE_WAY") {
+                stepDesc = "🛵 Driver ditugaskan & sedang menuju lokasi Anda untuk menjemput sampah.";
+              } else if (deposit.status === "PICKED_UP") {
+                stepDesc = "📦 Sampah telah diambil driver & sedang dalam perjalanan ke Bank Sampah.";
+              } else if (deposit.status === "AT_BANK") {
+                stepDesc = "🏢 Sampah telah tiba di Bank Sampah & siap ditimbang oleh petugas.";
+              }
+            }
+
             return (
-              <View key={step.key} style={styles.timelineStep}>
+              <View key={`${step.key}-${idx}`} style={styles.timelineStep}>
                 <View style={styles.timelineLeft}>
                   <View
                     style={[
@@ -391,7 +519,7 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
                       <View style={styles.stepDotInner} />
                     )}
                   </View>
-                  {idx < TRACKING_STEPS.length - 1 && (
+                  {idx < activeSteps.length - 1 && (
                     <View style={[styles.timelineLine, isDone && styles.timelineLineDone]} />
                   )}
                 </View>
@@ -405,7 +533,7 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
                   >
                     {step.label}
                   </Text>
-                  <Text style={styles.stepDesc}>{step.desc}</Text>
+                  <Text style={styles.stepDesc}>{stepDesc}</Text>
                 </View>
               </View>
             );
