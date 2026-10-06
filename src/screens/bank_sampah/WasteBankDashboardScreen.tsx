@@ -692,16 +692,27 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
             onPress={() => setActiveQueue("WAITING")}
             activeOpacity={0.8}
           >
-            <Text
-              style={[
-                styles.queueTabText,
-                activeQueue === "WAITING" && styles.queueTabTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              Menunggu ({waitingCustomerConfirm.length})
-              {disputedCount > 0 ? ` • ⚠️ ${disputedCount} Komplain` : ""}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <Text
+                style={[
+                  styles.queueTabText,
+                  activeQueue === "WAITING" && styles.queueTabTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                Menunggu ({waitingCustomerConfirm.length})
+              </Text>
+              {disputedCount > 0 && (
+                <View
+                  style={[
+                    styles.tabDisputeDot,
+                    activeQueue === "WAITING" && styles.tabDisputeDotActive,
+                  ]}
+                >
+                  <Text style={styles.tabDisputeDotText}>{disputedCount}</Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -720,6 +731,16 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Dispute Notice Banner under Tabs if any */}
+        {disputedCount > 0 && activeQueue === "WAITING" && (
+          <View style={styles.disputeTopBanner}>
+            <AlertCircle size={15} color="#DC2626" />
+            <Text style={styles.disputeTopBannerText}>
+              Ada {disputedCount} tiket komplain nasabah yang perlu ditinjau / ditimbang ulang.
+            </Text>
+          </View>
+        )}
 
         {/* Queue Items */}
         {loading ? (
@@ -1439,6 +1460,44 @@ const styles = StyleSheet.create({
   queueTabTextActive: {
     color: "#FFFFFF",
     fontWeight: "800",
+  },
+  tabDisputeDot: {
+    backgroundColor: "#DC2626",
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tabDisputeDotActive: {
+    backgroundColor: "#EF4444",
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+  },
+  tabDisputeDotText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  disputeTopBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  disputeTopBannerText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#991B1B",
+    lineHeight: 15,
   },
   emptyQueueCard: {
     backgroundColor: "#FFFFFF",
