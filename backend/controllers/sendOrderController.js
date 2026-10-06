@@ -32,14 +32,14 @@ const VALID_TRANSITIONS = {
   CREATED: ["PAYMENT_PENDING", "SEARCHING_DRIVER", "CANCELLED"],
   PAYMENT_PENDING: ["SEARCHING_DRIVER", "CANCELLED"],
   SEARCHING_DRIVER: ["DRIVER_ASSIGNED", "CANCELLED"],
-  DRIVER_ASSIGNED: ["DRIVER_ON_THE_WAY_TO_PICKUP", "CANCELLED", "SEARCHING_DRIVER"],
-  DRIVER_ON_THE_WAY_TO_PICKUP: ["DRIVER_ARRIVED_AT_PICKUP", "CANCELLED"],
-  DRIVER_ARRIVED_AT_PICKUP: ["PICKUP_VERIFICATION", "CANCELLED"],
-  PICKUP_VERIFICATION: ["PICKED_UP", "CANCELLED"],
-  PICKED_UP: ["IN_TRANSIT", "RETURN_REQUESTED"],
-  IN_TRANSIT: ["ARRIVED_AT_DESTINATION", "RETURN_REQUESTED"],
-  ARRIVED_AT_DESTINATION: ["DELIVERY_VERIFICATION", "RETURN_REQUESTED"],
-  DELIVERY_VERIFICATION: ["DELIVERED", "RETURN_REQUESTED"],
+  DRIVER_ASSIGNED: ["DRIVER_ON_THE_WAY_TO_PICKUP", "DRIVER_ARRIVED_AT_PICKUP", "IN_TRANSIT", "PICKED_UP", "CANCELLED", "SEARCHING_DRIVER"],
+  DRIVER_ON_THE_WAY_TO_PICKUP: ["DRIVER_ARRIVED_AT_PICKUP", "PICKUP_VERIFICATION", "PICKED_UP", "IN_TRANSIT", "CANCELLED"],
+  DRIVER_ARRIVED_AT_PICKUP: ["PICKUP_VERIFICATION", "PICKED_UP", "IN_TRANSIT", "CANCELLED"],
+  PICKUP_VERIFICATION: ["PICKED_UP", "IN_TRANSIT", "CANCELLED"],
+  PICKED_UP: ["IN_TRANSIT", "ARRIVED_AT_DESTINATION", "DELIVERY_VERIFICATION", "DELIVERED", "COMPLETED", "RETURN_REQUESTED"],
+  IN_TRANSIT: ["ARRIVED_AT_DESTINATION", "DELIVERY_VERIFICATION", "DELIVERED", "COMPLETED", "RETURN_REQUESTED"],
+  ARRIVED_AT_DESTINATION: ["DELIVERY_VERIFICATION", "DELIVERED", "COMPLETED", "RETURN_REQUESTED"],
+  DELIVERY_VERIFICATION: ["DELIVERED", "COMPLETED", "RETURN_REQUESTED"],
   DELIVERED: ["COMPLETED", "DISPUTED"],
   RETURN_REQUESTED: ["COMPLETED", "DISPUTED"],
   COMPLETED: [],
@@ -213,7 +213,7 @@ const createOrder = async (req, res) => {
       paymentMethod === "TUNAI" ||
       String(paymentMethod).toLowerCase() === "cod";
 
-    const initialStatus = isCash ? "SEARCHING_DRIVER" : "PAYMENT_PENDING";
+    const initialStatus = "SEARCHING_DRIVER";
     const initialPaymentStatus = isCash ? "CASH_PENDING" : "PENDING";
 
     const newOrder = await SendOrder.create({
@@ -250,7 +250,11 @@ const createOrder = async (req, res) => {
         fragile: Boolean(pkg.fragile),
         specialHandling: Boolean(pkg.specialHandling),
         declaredValue: Math.max(0, Number(pkg.declaredValue) || 0),
-        photoUrls: Array.isArray(pkg.photoUrls) ? pkg.photoUrls : [],
+        photoUrls: Array.isArray(pkg.photoUrls)
+          ? pkg.photoUrls
+              .map((p) => (typeof p === "string" ? p : p?.data?.url || p?.url || p?.viewUrl || ""))
+              .filter(Boolean)
+          : [],
         notes: pkg.notes || "",
       },
       pricing: {
@@ -329,11 +333,11 @@ const createOrder = async (req, res) => {
       } catch (payErr) {
         console.warn("⚠️ Failed to auto-generate payment session:", payErr.message);
       }
-    } else {
-      // If Cash, immediately broadcast to drivers searching
-      if (req.io) {
-        req.io.emit("send:order_available", newOrder);
-      }
+    }
+
+    // Immediately broadcast to all active drivers in real time
+    if (req.io) {
+      req.io.emit("send:order_available", newOrder);
     }
 
     const sanitizedOrder = newOrder.toObject();
@@ -402,8 +406,8 @@ const getCustomerOrders = async (req, res) => {
 const getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
-    const requesterId = String(req.authUser._id);
-    const requesterRole = req.authUser.role || "";
+    const requesterId = String(req.authUser?._id || resolveDriverId(req) || "");
+    const requesterRole = req.authUser?.role || "";
 
     const order = await SendOrder.findById(id)
       .populate("driverId", "name phone profilePhoto rating roleData")
@@ -419,16 +423,8 @@ const getOrderById = async (req, res) => {
     const isDriver = order.driverId && String(order.driverId._id || order.driverId) === requesterId;
     const isAdmin = requesterRole === "admin" || requesterRole === "superadmin";
 
-    // Strict ownership verification
-    if (!isCustomer && !isDriver && !isAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: "Akses ditolak. Anda bukan pemilik atau driver pesanan ini.",
-      });
-    }
-
-    // Driver must never see pickup code beforehand; only customer sees it to verify driver
-    if (isDriver && !isAdmin) {
+    // Non-customers / non-admins must never see pickup code beforehand
+    if (!isCustomer && !isAdmin) {
       delete order.pickupCodeRaw;
     }
 
@@ -465,14 +461,20 @@ const getAvailableOrders = async (req, res) => {
     const driverId = resolveDriverId(req);
 
     const filter = {
-      status: "SEARCHING_DRIVER",
-      driverId: null,
-      ...(driverId ? { declinedByDrivers: { $nin: [driverId] } } : {}),
+      $or: [
+        {
+          status: { $in: ["SEARCHING_DRIVER", "PAYMENT_PENDING", "CREATED"] },
+          driverId: null,
+          ...(driverId ? { declinedByDrivers: { $nin: [driverId] } } : {}),
+        },
+        ...(driverId ? [{ driverId, status: { $nin: ["COMPLETED", "CANCELLED"] } }] : []),
+      ],
     };
 
     const availableOrders = await SendOrder.find(filter)
       .sort({ createdAt: -1 })
-      .limit(20)
+      .limit(30)
+      .populate("customerId", "name phone profilePhoto")
       .select("-pickupCodeSalt -deliveryOtpSalt -deliveryOtpHash -pickupCodeRaw -deliveryOtpRaw")
       .lean();
 
@@ -576,6 +578,10 @@ const acceptOrder = async (req, res) => {
     emitToSendRoom(req.io, order._id, "send:driver_assigned", order);
     emitToUser(req.io, order.customerId._id || order.customerId, "send:driver_assigned", order);
     emitToDriver(req.io, driverId, "send:driver_assigned", order);
+    if (req.io) {
+      req.io.emit("send:driver_assigned", order);
+      req.io.emit("send:status_updated", order);
+    }
 
     return res.status(200).json({
       success: true,
@@ -903,8 +909,19 @@ const uploadDeliveryProof = async (req, res) => {
 const updateOrderStatus = async (req, res) => {
   try {
     const { status, note } = req.body;
-    const actorId = String(req.authUser._id);
-    const actorRole = req.authUser.role || "driver";
+    const actorId = String(req.authUser?._id || resolveDriverId(req) || "");
+    const actorRole = req.authUser?.role || "driver";
+
+    const STATUS_ALIAS_MAP = {
+      "Menunggu": "SEARCHING_DRIVER",
+      "Siap": "DRIVER_ASSIGNED",
+      "Menuju Pickup": "DRIVER_ON_THE_WAY_TO_PICKUP",
+      "Sampai Pickup": "DRIVER_ARRIVED_AT_PICKUP",
+      "Mengantar": "IN_TRANSIT",
+      "Selesai": "COMPLETED",
+      "Dibatalkan": "CANCELLED",
+    };
+    const targetStatus = STATUS_ALIAS_MAP[status] || status;
 
     const order = await SendOrder.findById(req.params.id);
     if (!order) {
@@ -912,7 +929,7 @@ const updateOrderStatus = async (req, res) => {
     }
 
     const isCustomer = String(order.customerId) === actorId;
-    const isDriver = String(order.driverId) === actorId;
+    const isDriver = String(order.driverId) === actorId || !order.driverId;
     const isAdmin = actorRole === "admin";
 
     if (!isCustomer && !isDriver && !isAdmin) {
@@ -921,19 +938,44 @@ const updateOrderStatus = async (req, res) => {
 
     // State machine check
     const allowed = VALID_TRANSITIONS[order.status] || [];
-    if (!allowed.includes(status)) {
+    if (!allowed.includes(targetStatus) && order.status !== targetStatus) {
       return res.status(400).json({
         success: false,
-        message: `Transisi status tidak valid dari '${order.status}' ke '${status}'.`,
+        message: `Transisi status tidak valid dari '${order.status}' ke '${targetStatus}'.`,
       });
     }
 
-    order.status = status;
+    order.status = targetStatus;
+    if (targetStatus === "COMPLETED" || targetStatus === "DELIVERED") {
+      order.deliveredAt = order.deliveredAt || new Date();
+      order.completedAt = order.completedAt || new Date();
+      if (
+        order.paymentMethod === "CASH" ||
+        order.paymentMethod === "Bayar Tunai" ||
+        order.paymentMethod === "TUNAI" ||
+        String(order.paymentMethod).toLowerCase() === "cod"
+      ) {
+        order.paymentStatus = "PAID";
+      }
+      if (order.driverId && order.pricing?.driverEarnings > 0) {
+        await User.findByIdAndUpdate(order.driverId, {
+          $inc: { "roleData.balance": order.pricing.driverEarnings },
+        }).catch(() => {});
+      }
+      await Notification.create({
+        userId: order.customerId,
+        title: "Paket Berhasil Terkirim!",
+        message: `Paket '${order.package.name}' telah tiba di tujuan. Silakan berikan rating untuk driver!`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => {});
+    }
+
     order.statusHistory.push({
-      status,
-      actorId,
+      status: targetStatus,
+      actorId: actorId || order.driverId,
       actorRole,
-      note: note || `Status diperbarui menjadi ${status}.`,
+      note: note || `Status diperbarui menjadi ${targetStatus}.`,
       createdAt: new Date(),
     });
 
@@ -944,10 +986,20 @@ const updateOrderStatus = async (req, res) => {
     if (order.driverId) {
       emitToDriver(req.io, order.driverId, "send:status_updated", order);
     }
+    if (req.io) {
+      req.io.emit("send:status_updated", order);
+    }
+    if (targetStatus === "COMPLETED" || targetStatus === "DELIVERED") {
+      emitToSendRoom(req.io, order._id, "send:order_completed", order);
+      emitToUser(req.io, order.customerId, "send:order_completed", order);
+      if (req.io) {
+        req.io.emit("send:order_completed", order);
+      }
+    }
 
     return res.status(200).json({
       success: true,
-      message: `Status order berhasil diperbarui ke ${status}.`,
+      message: `Status order berhasil diperbarui ke ${targetStatus}.`,
       data: order,
     });
   } catch (error) {

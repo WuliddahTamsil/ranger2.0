@@ -26,10 +26,15 @@ import { cancelSendOrder, fetchSendOrderById } from "../../../services/sendServi
 import { io } from "socket.io-client";
 import { API_BASE_URL } from "../../../services/api";
 
-interface SendSearchingDriverScreenProps extends Nav {}
+import { AuthAccount } from "../../auth/authTypes";
+
+interface SendSearchingDriverScreenProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
 
 export const SendSearchingDriverScreen: React.FC<SendSearchingDriverScreenProps> = ({
   navigate,
+  authAccount,
 }) => {
   const { activeOrder, setActiveOrder } = useSendContext();
 
@@ -37,6 +42,9 @@ export const SendSearchingDriverScreen: React.FC<SendSearchingDriverScreenProps>
   const [cancelling, setCancelling] = useState(false);
   const [searchSeconds, setSearchSeconds] = useState(35);
   const [showCancelModal, setShowCancelModal] = useState(false);
+
+  // Safe order ID extraction
+  const orderId = String(activeOrder?._id || (activeOrder as any)?.id || "");
 
   // Pulse animation for radar effect
   useEffect(() => {
@@ -66,47 +74,96 @@ export const SendSearchingDriverScreen: React.FC<SendSearchingDriverScreenProps>
     return () => clearInterval(timer);
   }, []);
 
+  // Immediate transition check on mount if order was already accepted
+  useEffect(() => {
+    if (
+      activeOrder?.status &&
+      activeOrder.status !== "SEARCHING_DRIVER" &&
+      activeOrder.status !== "PAYMENT_PENDING" &&
+      activeOrder.status !== "CREATED"
+    ) {
+      navigate("c_send_tracking");
+    }
+  }, [activeOrder?.status, navigate]);
+
   // Realtime Socket listener & Poll status
   useEffect(() => {
-    if (!activeOrder?._id) return;
+    if (!orderId) return;
 
-    const socket = io(API_BASE_URL, { transports: ["websocket", "polling"] });
-    socket.emit("join_send_room", { orderId: activeOrder._id });
+    let isMounted = true;
+    const socketUrl = API_BASE_URL.replace(/\/api\/?$/, "");
+    const socket = io(socketUrl, { transports: ["websocket", "polling"] });
+
+    const emitJoin = () => {
+      socket.emit("join_send_room", { orderId, token: authAccount?.token });
+    };
+
+    socket.on("connect", emitJoin);
+    emitJoin();
 
     const handleAssigned = (updatedOrder: any) => {
-      if (updatedOrder) {
-        setActiveOrder(updatedOrder);
+      if (!updatedOrder || !isMounted) return;
+      const incomingId = String(updatedOrder._id || updatedOrder.id || "");
+      const currentCode = activeOrder?.orderCode;
+      const incomingCode = updatedOrder.orderCode;
+      const isMatch =
+        (!incomingId && !incomingCode) ||
+        incomingId === orderId ||
+        (currentCode && incomingCode && currentCode === incomingCode);
+      if (isMatch) {
+        setActiveOrder({ ...(activeOrder || {}), ...updatedOrder } as any);
         navigate("c_send_tracking");
       }
     };
 
     socket.on("send:driver_assigned", handleAssigned);
     socket.on("send:status_updated", (order) => {
-      if (order && order.status !== "SEARCHING_DRIVER" && order.status !== "PAYMENT_PENDING") {
-        setActiveOrder(order);
+      if (!order || !isMounted) return;
+      const incomingId = String(order._id || order.id || "");
+      const currentCode = activeOrder?.orderCode;
+      const incomingCode = order.orderCode;
+      const isMatch =
+        (!incomingId && !incomingCode) ||
+        incomingId === orderId ||
+        (currentCode && incomingCode && currentCode === incomingCode);
+      if (
+        isMatch &&
+        order.status !== "SEARCHING_DRIVER" &&
+        order.status !== "PAYMENT_PENDING"
+      ) {
+        setActiveOrder({ ...(activeOrder || {}), ...order } as any);
         navigate("c_send_tracking");
       }
     });
 
-    // Backup polling every 3 seconds
-    const pollInterval = setInterval(async () => {
+    const checkStatus = async () => {
       try {
-        const res = await fetchSendOrderById(activeOrder._id);
-        if (res.success && res.data) {
-          if (res.data.status !== "SEARCHING_DRIVER" && res.data.status !== "PAYMENT_PENDING" && res.data.status !== "CREATED") {
-            setActiveOrder(res.data);
-            clearInterval(pollInterval);
+        const res = await fetchSendOrderById(orderId, authAccount?.id);
+        if (res.success && res.data && isMounted) {
+          if (
+            res.data.status !== "SEARCHING_DRIVER" &&
+            res.data.status !== "PAYMENT_PENDING" &&
+            res.data.status !== "CREATED"
+          ) {
+            setActiveOrder({ ...(activeOrder || {}), ...res.data } as any);
             navigate("c_send_tracking");
           }
         }
-      } catch {}
-    }, 3000);
+      } catch (pollErr) {
+        console.warn("Polling order error:", pollErr);
+      }
+    };
+
+    // Run immediately then poll every 2 seconds
+    checkStatus();
+    const pollInterval = setInterval(checkStatus, 2000);
 
     return () => {
+      isMounted = false;
       socket.disconnect();
       clearInterval(pollInterval);
     };
-  }, [activeOrder?._id]);
+  }, [orderId, authAccount?.token, authAccount?.id, navigate]);
 
   const confirmCancel = async () => {
     if (!activeOrder?._id) return;
@@ -148,7 +205,7 @@ export const SendSearchingDriverScreen: React.FC<SendSearchingDriverScreenProps>
 
   const centerCoord = (activeOrder?.sender?.latitude != null && activeOrder?.sender?.longitude != null)
     ? { latitude: activeOrder.sender.latitude as number, longitude: activeOrder.sender.longitude as number }
-    : { latitude: -6.9175, longitude: 107.6191 };
+    : { latitude: -6.5962, longitude: 106.8040 };
 
   return (
     <SafeAreaView style={styles.safeArea}>

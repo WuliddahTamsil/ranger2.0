@@ -45,12 +45,22 @@ export const DeliveryVerificationModal: React.FC<DeliveryVerificationModalProps>
       });
       if (!result.canceled && result.assets[0]?.uri) {
         setUploadingPhoto(true);
-        const uploadedUrl = await uploadFileToBackend(
-          result.assets[0].uri,
-          `delivery-proof-${Date.now()}.jpg`,
-          "image/jpeg"
-        );
-        setPhotoUri(uploadedUrl || result.assets[0].uri);
+        try {
+          const uploadRes = await uploadFileToBackend(
+            result.assets[0].uri,
+            `delivery-proof-${Date.now()}.jpg`,
+            "image/jpeg"
+          );
+          const finalUrl =
+            uploadRes?.data?.url ||
+            uploadRes?.data?.viewUrl ||
+            uploadRes?.url ||
+            (typeof uploadRes === "string" ? uploadRes : result.assets[0].uri);
+          setPhotoUri(finalUrl);
+        } catch (uploadErr) {
+          console.warn("Upload error, using local URI:", uploadErr);
+          setPhotoUri(result.assets[0].uri);
+        }
       }
     } catch (e) {
       console.warn("Camera pick error:", e);

@@ -87,6 +87,7 @@ const computeSendFare = async ({
   const config = await getPricingConfig();
 
   // 1. Calculate distance (km)
+  let distanceKm = 0;
   if (
     pickup?.latitude != null &&
     pickup?.longitude != null &&

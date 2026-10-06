@@ -42,6 +42,7 @@ export interface WebMapProps {
   initialRegion?: Region;
   onRegionChangeComplete?: (region: Region) => void;
   onPress?: (event: MapPressEvent) => void;
+  onMarkerPress?: (marker: MapMarkerItem) => void;
   pin?: { latitude: number; longitude: number };
   markers?: MapMarkerItem[];
   routeCoordinates?: Array<{ latitude: number; longitude: number }>;
@@ -59,6 +60,7 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
   initialRegion,
   onRegionChangeComplete,
   onPress,
+  onMarkerPress,
   pin,
   markers = [],
   routeCoordinates,
@@ -91,19 +93,19 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
     return list;
   }, [markers, pin]);
 
-  // Active target center
+  // Active target center (default: Kota Bogor)
   const centerLat =
     region?.latitude ||
     (allMarkers.length > 0 && allMarkers[0].coordinate?.latitude != null ? allMarkers[0].coordinate.latitude : null) ||
     initialRegion?.latitude ||
     pin?.latitude ||
-    -6.9175;
+    -6.5962;
   const centerLng =
     region?.longitude ||
     (allMarkers.length > 0 && allMarkers[0].coordinate?.longitude != null ? allMarkers[0].coordinate.longitude : null) ||
     initialRegion?.longitude ||
     pin?.longitude ||
-    107.6191;
+    106.8040;
   const routeSignature = routeCoordinates?.length
     ? `${routeCoordinates.length}:${routeCoordinates[0].latitude}:${routeCoordinates[0].longitude}:${routeCoordinates[routeCoordinates.length - 1].latitude}:${routeCoordinates[routeCoordinates.length - 1].longitude}`
     : "none";
@@ -129,6 +131,17 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
               },
             },
           });
+        } else if (data.type === "GEOVERSE_MARKER_CLICK" && onMarkerPress) {
+          const found = allMarkers.find((item) => item.id === data.id);
+          if (found) {
+            onMarkerPress(found);
+          } else {
+            onMarkerPress({
+              id: String(data.id || "marker"),
+              coordinate: { latitude: Number(data.lat), longitude: Number(data.lng) },
+              title: data.title,
+            });
+          }
         } else if (data.type === "GEOVERSE_PIN_DRAG_END" && onPinDragEnd) {
           onPinDragEnd({
             latitude: Number(data.lat),
@@ -149,7 +162,7 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [onPress, onPinDragEnd, onRegionChangeComplete]);
+  }, [onPress, onMarkerPress, onPinDragEnd, onRegionChangeComplete, allMarkers]);
 
   // Generate Leaflet HTML inside srcDoc
   const leafletHtml = useMemo(() => {
@@ -331,6 +344,16 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
               (m.description ? '<div class="popup-desc">' + m.description + '</div>' : '');
             marker.bindPopup(popupContent);
           }
+
+          marker.on('click', function() {
+            window.parent.postMessage({
+              type: 'GEOVERSE_MARKER_CLICK',
+              id: m.id,
+              title: m.title,
+              lat: lat,
+              lng: lng
+            }, '*');
+          });
 
           marker.on('dragend', function(e) {
             var pos = e.target.getLatLng();

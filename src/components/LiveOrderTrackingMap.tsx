@@ -100,6 +100,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
 
   const isRide = orderType === "Kanyaah Ride";
   const isSend = orderType === "Kanyaah Send";
+  const isCatering = orderType === "Catering";
   const isWaste = orderType === "Setor Sampah";
 
   // Status mapping
@@ -213,6 +214,8 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     ? "Titik Jemput Penumpang"
     : isSend
     ? "Titik Pengirim"
+    : isCatering
+    ? (storeName || "Dapur Catering")
     : storeName || "Toko / Mitra";
 
   const effectivePickupAddress = storeAddress || storeName || "Lokasi penjemputan";
@@ -224,8 +227,8 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
   const guidanceData = useMemo(() => {
     if (activeMode === "store") {
       return {
-        title: isWaste ? "Rute ke Customer (Jemput)" : isRide ? "Rute ke Penumpang" : isSend ? "Rute ke Pengirim" : "Rute ke Toko",
-        targetLabel: isWaste ? "Penjemputan Sampah" : isRide ? "Penjemputan" : isSend ? "Pengirim" : "Toko / Mitra",
+        title: isWaste ? "Rute ke Customer (Jemput)" : isRide ? "Rute ke Penumpang" : isSend ? "Rute ke Pengirim" : isCatering ? "Rute ke Dapur Catering" : "Rute ke Toko",
+        targetLabel: isWaste ? "Penjemputan Sampah" : isRide ? "Penjemputan" : isSend ? "Pengirim" : isCatering ? "Dapur Catering" : "Toko / Mitra",
         targetName: isWaste ? (storeName || "Rumah Customer") : effectivePickupName,
         targetAddress: effectivePickupAddress,
         distance: distance || "Menuju titik jemput",
@@ -242,6 +245,8 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
               ? `Mulai perjalanan menuju lokasi penjemputan penumpang`
               : isSend
               ? `Mulai perjalanan menuju lokasi pengirim paket`
+              : isCatering
+              ? `Mulai perjalanan menuju dapur catering untuk mengambil pesanan`
               : `Mulai perjalanan menuju ${effectivePickupName}`,
             distance: "Awal",
             type: "straight",
@@ -254,7 +259,13 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           {
             instruction: isWaste
               ? `Tiba di rumah customer: ${effectivePickupAddress}`
-              : `Tiba di titik penjemputan: ${effectivePickupAddress}`,
+              : isRide
+              ? `Tiba di titik penjemputan: ${effectivePickupAddress}`
+              : isSend
+              ? `Tiba di lokasi pengirim: ${effectivePickupAddress}`
+              : isCatering
+              ? `Tiba di dapur catering: ${effectivePickupAddress}`
+              : `Tiba di lokasi penjemputan: ${effectivePickupAddress}`,
             distance: "Tiba",
             type: "dest",
           },
@@ -262,9 +273,9 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
       };
     } else if (activeMode === "customer") {
       return {
-        title: isWaste ? "Rute ke Bank Sampah" : isRide ? "Rute ke Tujuan" : isSend ? "Rute ke Penerima" : "Rute ke Customer",
-        targetLabel: isWaste ? "Tujuan Bank Sampah" : isRide ? "Tujuan Penumpang" : isSend ? "Penerima" : "Customer / Penerima",
-        targetName: isWaste ? (customerAddress || "Bank Sampah") : isRide ? "Tujuan Penumpang" : "Pelanggan",
+        title: isWaste ? "Rute ke Bank Sampah" : isRide ? "Rute ke Tujuan" : isSend ? "Rute ke Penerima" : isCatering ? "Rute ke Pemesan" : "Rute ke Customer",
+        targetLabel: isWaste ? "Tujuan Bank Sampah" : isRide ? "Tujuan Penumpang" : isSend ? "Penerima" : isCatering ? "Pemesan Catering" : "Customer / Penerima",
+        targetName: isWaste ? (customerAddress || "Bank Sampah") : isRide ? "Tujuan Penumpang" : isSend ? "Penerima Paket" : isCatering ? "Pemesan Catering" : "Pelanggan",
         targetAddress: effectiveDestAddress,
         distance: distance || "Menuju tujuan",
         eta: "Sesuai rute",
@@ -280,6 +291,8 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
               ? `Berangkat bersama penumpang dari ${pickupShort}`
               : isSend
               ? `Bawa paket dari pengirim menuju alamat penerima`
+              : isCatering
+              ? `Bawa pesanan catering dari dapur menuju alamat pemesan`
               : `Bawa pesanan dari toko menuju alamat pengantaran`,
             distance: "Awal",
             type: "straight",
@@ -292,6 +305,12 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           {
             instruction: isWaste
               ? `Tiba di Bank Sampah: ${effectiveDestAddress}`
+              : isRide
+              ? `Tiba di tujuan penumpang: ${effectiveDestAddress}`
+              : isSend
+              ? `Tiba di alamat penerima paket: ${effectiveDestAddress}`
+              : isCatering
+              ? `Tiba di alamat pemesan: ${effectiveDestAddress}`
               : `Tiba di alamat tujuan: ${effectiveDestAddress}`,
             distance: "Tiba",
             type: "dest",
@@ -301,7 +320,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     } else {
       return {
         title: "Semua Rute",
-        targetLabel: isWaste ? "Rute Jemput Customer ➔ Antar Bank Sampah" : isRide ? "Rute Perjalanan Lengkap" : "Pengantaran Lengkap",
+        targetLabel: isWaste ? "Rute Jemput Customer ➔ Antar Bank Sampah" : isRide ? "Rute Perjalanan Lengkap" : isSend ? "Rute Pengirim ➔ Penerima" : isCatering ? "Rute Dapur ➔ Pemesan" : "Pengantaran Lengkap",
         targetName: `${pickupShort} ➔ ${destShort}`,
         targetAddress: `${effectivePickupAddress} menuju ${effectiveDestAddress}`,
         distance: distance || "Rute Lengkap",
@@ -494,7 +513,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             ]}
             numberOfLines={1}
           >
-            {isWaste ? "Ke Customer" : isRide ? "Ke Penumpang" : isSend ? "Ke Pengirim" : "Ke Toko"}
+            {isWaste ? "Ke Customer" : isRide ? "Ke Penumpang" : isSend ? "Ke Pengirim" : isCatering ? "Ke Dapur" : "Ke Toko"}
           </Text>
         </TouchableOpacity>
 
@@ -518,7 +537,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             ]}
             numberOfLines={1}
           >
-            {isWaste ? "Bank Sampah" : isRide ? "Ke Tujuan" : isSend ? "Ke Penerima" : "Ke Customer"}
+            {isWaste ? "Bank Sampah" : isRide ? "Ke Tujuan" : isSend ? "Ke Penerima" : isCatering ? "Ke Pemesan" : "Ke Customer"}
           </Text>
         </TouchableOpacity>
 

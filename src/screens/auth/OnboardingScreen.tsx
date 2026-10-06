@@ -1,6 +1,6 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
-import { Pressable, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, Pressable, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Nav } from "../../types";
 import { OnboardingVisual, OnboardingVisualKind } from "./components/OnboardingVisual";
 
@@ -81,7 +81,20 @@ const styles = StyleSheet.create({
   indicator: { height: 4, borderRadius: 2 },
   indicatorActive: { width: 24, backgroundColor: "#087A4B" },
   indicatorInactive: { width: 5, backgroundColor: "#CDD6D1" },
-  button: { width: "100%", alignSelf: "stretch", backgroundColor: "#087A4B", minHeight: 52, borderRadius: 11, alignItems: "center", justifyContent: "center", shadowColor: "#075B3A", shadowOpacity: 0.14, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  button: {
+    width: "100%",
+    alignSelf: "stretch",
+    backgroundColor: "#087A4B",
+    minHeight: 52,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: "0px 4px 8px rgba(7, 91, 58, 0.14)" as any },
+      default: { shadowColor: "#075B3A", shadowOpacity: 0.14, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+    }),
+  },
   buttonPressed: { opacity: 0.88, transform: [{ scale: 0.995 }] },
   buttonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700", letterSpacing: 0.1 },
 });

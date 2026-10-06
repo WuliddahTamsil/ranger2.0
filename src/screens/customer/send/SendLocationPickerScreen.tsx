@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -27,13 +27,14 @@ import {
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useSendContext } from "../../../context/SendContext";
-import { NativeMapComponent, Region } from "../../../components/NativeMapComponent";
+import { NativeMapComponent, Region, MapMarkerItem } from "../../../components/NativeMapComponent";
 import {
   safeReverseGeocode,
   safeForwardGeocode,
   searchPlacesSmart,
   PlaceSuggestion,
   getCurrentUserCoordinates,
+  formatDistance,
 } from "../../../utils/geocoding";
 
 interface SendLocationPickerScreenProps extends Nav {}
@@ -51,6 +52,21 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
     currentTargetData.latitude != null && currentTargetData.longitude != null
       ? { latitude: currentTargetData.latitude, longitude: currentTargetData.longitude }
       : null
+  );
+
+  // User's own GPS anchor coordinates (used as search proximity center)
+  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  // Controlled map region for smooth focusing/panning
+  const [mapRegion, setMapRegion] = useState<Region | undefined>(
+    currentTargetData.latitude != null && currentTargetData.longitude != null
+      ? {
+          latitude: currentTargetData.latitude,
+          longitude: currentTargetData.longitude,
+          latitudeDelta: 0.008,
+          longitudeDelta: 0.008,
+        }
+      : undefined
   );
 
   const [addressTitle, setAddressTitle] = useState(currentTargetData.address || "");
@@ -92,17 +108,45 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
 
   const triggerReverseGeocode = (lat: number, lon: number) => {
     setCoords({ latitude: lat, longitude: lon });
+    setMapRegion({
+      latitude: lat,
+      longitude: lon,
+      latitudeDelta: 0.008,
+      longitudeDelta: 0.008,
+    });
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       performReverseGeocode(lat, lon);
     }, 600);
   };
 
-  // Detect GPS Location on mount if no coordinates yet
+  // Proximity anchor: strictly uses User GPS -> Selected Pin -> Default Bogor operational center
+  const anchorLat = userCoords?.latitude ?? coords?.latitude ?? -6.5962;
+  const anchorLng = userCoords?.longitude ?? coords?.longitude ?? 106.8040;
+
+  // Detect GPS Location on mount to initialize user anchor & position
   useEffect(() => {
-    if (!coords) {
-      handleGetCurrentLocation();
-    }
+    (async () => {
+      try {
+        const userLoc = await getCurrentUserCoordinates();
+        if (userLoc) {
+          const pos = { latitude: userLoc.latitude, longitude: userLoc.longitude };
+          setUserCoords(pos);
+          if (!coords) {
+            setCoords(pos);
+            setMapRegion({
+              latitude: pos.latitude,
+              longitude: pos.longitude,
+              latitudeDelta: 0.008,
+              longitudeDelta: 0.008,
+            });
+            setAddressTitle(userLoc.address || "Lokasi Saya");
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })();
   }, []);
 
   const handleGetCurrentLocation = async () => {
@@ -114,8 +158,16 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
         return;
       }
 
-      setCoords({ latitude: userLoc.latitude, longitude: userLoc.longitude });
-      setAddressTitle(userLoc.address);
+      const pos = { latitude: userLoc.latitude, longitude: userLoc.longitude };
+      setUserCoords(pos);
+      setCoords(pos);
+      setMapRegion({
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      });
+      setAddressTitle(userLoc.address || "Lokasi Saya");
       showToast("Titik lokasi diperbarui ke koordinat GPS Anda.");
     } catch (e: any) {
       showToast("Gagal mendeteksi lokasi GPS: " + (e.message || ""));
@@ -124,7 +176,7 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
     }
   };
 
-  // Live Auto-complete Search with Debounce (Google Maps / Gojek style)
+  // Live Auto-complete Search with Debounce (Gojek / Grab style anchored to user location)
   const handleSearchChange = (text: string) => {
     setSearchQuery(text);
     if (!text.trim() || text.trim().length < 2) {
@@ -138,9 +190,9 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
       setIsSearching(true);
       try {
         const list = await searchPlacesSmart(text.trim(), {
-          lat: centerLat,
-          lon: centerLng,
-          limit: 6,
+          lat: anchorLat,
+          lon: anchorLng,
+          limit: 8,
         });
         setSuggestions(list);
         setShowSuggestions(list.length > 0);
@@ -149,17 +201,23 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
       } finally {
         setIsSearching(false);
       }
-    }, 300);
+    }, 250);
   };
 
-  // User taps a suggestion from dropdown
+  // User selects a suggestion: auto-focus map, update pin and populate address
   const handleSelectSuggestion = (item: PlaceSuggestion) => {
-    setCoords({ latitude: item.latitude, longitude: item.longitude });
-    const full = item.name + (item.subtitle ? `, ${item.subtitle}` : "");
+    const newCoords = { latitude: item.latitude, longitude: item.longitude };
+    setCoords(newCoords);
+    setMapRegion({
+      latitude: item.latitude,
+      longitude: item.longitude,
+      latitudeDelta: 0.008,
+      longitudeDelta: 0.008,
+    });
+    const full = item.formattedAddress || (item.name + (item.subtitle ? `, ${item.subtitle}` : ""));
     setAddressTitle(full);
     setSearchQuery(item.name);
     setShowSuggestions(false);
-    setSuggestions([]);
     showToast(`Lokasi dipilih: ${item.name}`);
   };
 
@@ -174,11 +232,18 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
         return;
       }
       const geocoded = await safeForwardGeocode(searchQuery.trim(), {
-        lat: centerLat,
-        lon: centerLng,
+        lat: anchorLat,
+        lon: anchorLng,
       });
       if (geocoded) {
-        setCoords({ latitude: geocoded.latitude, longitude: geocoded.longitude });
+        const newPos = { latitude: geocoded.latitude, longitude: geocoded.longitude };
+        setCoords(newPos);
+        setMapRegion({
+          latitude: newPos.latitude,
+          longitude: newPos.longitude,
+          latitudeDelta: 0.008,
+          longitudeDelta: 0.008,
+        });
         if (geocoded.formattedAddress) {
           setAddressTitle(geocoded.formattedAddress);
         } else {
@@ -214,7 +279,7 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
 
       // If geocoding service is unavailable/offline, fallback to center coords to allow manual entry
       if (!finalCoords) {
-        finalCoords = { latitude: centerLat, longitude: centerLng };
+        finalCoords = { latitude: anchorLat, longitude: anchorLng };
       }
     }
 
@@ -251,9 +316,67 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
     navigate("c_send");
   };
 
-  const centerLat = coords?.latitude || -6.9175;
-  const centerLng = coords?.longitude || 107.6191;
   const themeColor = isSender ? "#059669" : "#E11D48";
+
+  // Markers to display on the map: selected pin + search suggestion pins
+  const mapMarkers = useMemo(() => {
+    const list: MapMarkerItem[] = [];
+
+    // 1. Primary selected point
+    if (coords) {
+      list.push({
+        id: "selected_point",
+        coordinate: coords,
+        title: isSender ? "Titik Penjemputan" : "Titik Tujuan",
+        description: addressTitle || "Lokasi Terpilih",
+        pinColor: themeColor,
+        type: isSender ? "pickup" : "dropoff",
+      });
+    }
+
+    // 2. Search suggestions as interactive markers on the map
+    if (suggestions.length > 0) {
+      suggestions.forEach((item, idx) => {
+        // Skip duplicate of active selected coordinates
+        if (
+          coords &&
+          Math.abs(item.latitude - coords.latitude) < 0.0001 &&
+          Math.abs(item.longitude - coords.longitude) < 0.0001
+        ) {
+          return;
+        }
+
+        const distText = item.distanceKm != null ? formatDistance(item.distanceKm) : "";
+        list.push({
+          id: `sugg-${item.id || idx}`,
+          coordinate: { latitude: item.latitude, longitude: item.longitude },
+          title: item.name,
+          description: [distText, item.subtitle || item.formattedAddress]
+            .filter(Boolean)
+            .join(" • "),
+          pinColor: "#2563EB",
+          type: "custom",
+        });
+      });
+    }
+
+    return list;
+  }, [coords, suggestions, isSender, addressTitle, themeColor]);
+
+  // When user taps a marker on the map: focus & select it
+  const handleMarkerPress = (marker: MapMarkerItem) => {
+    const matched = suggestions.find(
+      (s) =>
+        `sugg-${s.id}` === marker.id ||
+        (Math.abs(s.latitude - marker.coordinate.latitude) < 0.0001 &&
+          Math.abs(s.longitude - marker.coordinate.longitude) < 0.0001)
+    );
+    if (matched) {
+      handleSelectSuggestion(matched);
+    } else if (marker.coordinate) {
+      triggerReverseGeocode(marker.coordinate.latitude, marker.coordinate.longitude);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -314,9 +437,19 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
                   <MapPin size={15} color="#059669" />
                 </View>
                 <View style={styles.suggestionTextBox}>
-                  <Text style={styles.suggestionName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
+                  <View style={styles.suggestionHeaderRow}>
+                    <Text style={styles.suggestionName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    {item.distanceKm != null ? (
+                      <View style={styles.distanceBadge}>
+                        <Navigation size={10} color="#059669" style={styles.distanceIcon} />
+                        <Text style={styles.distanceText}>
+                          {formatDistance(item.distanceKm)}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
                   {item.subtitle ? (
                     <Text style={styles.suggestionSubtitle} numberOfLines={1}>
                       {item.subtitle}
@@ -340,42 +473,22 @@ export const SendLocationPickerScreen: React.FC<SendLocationPickerScreenProps> =
       {/* 2. Fullscreen Interactive Map */}
       <View style={styles.mapContainer}>
         <NativeMapComponent
-          region={
-            coords
-              ? {
-                  latitude: coords.latitude,
-                  longitude: coords.longitude,
-                  latitudeDelta: 0.012,
-                  longitudeDelta: 0.012,
-                }
-              : undefined
-          }
+          region={mapRegion}
           initialRegion={{
-            latitude: centerLat,
-            longitude: centerLng,
+            latitude: anchorLat,
+            longitude: anchorLng,
             latitudeDelta: 0.012,
             longitudeDelta: 0.012,
           }}
           onPress={(e) => {
+            setShowSuggestions(false);
             const coordinate = e.nativeEvent?.coordinate;
             if (coordinate) {
               triggerReverseGeocode(coordinate.latitude, coordinate.longitude);
             }
           }}
-          markers={
-            coords
-              ? [
-                  {
-                    id: "selected_point",
-                    coordinate: coords,
-                    title: isSender ? "Titik Penjemputan" : "Titik Tujuan",
-                    description: addressTitle,
-                    pinColor: themeColor,
-                    type: isSender ? "pickup" : "dropoff",
-                  },
-                ]
-              : []
-          }
+          onMarkerPress={handleMarkerPress}
+          markers={mapMarkers}
           interactive={true}
         />
 
@@ -634,7 +747,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   suggestionsList: {
-    maxHeight: 280,
+    maxHeight: 320,
   },
   suggestionItem: {
     flexDirection: "row",
@@ -656,11 +769,36 @@ const styles = StyleSheet.create({
   suggestionTextBox: {
     flex: 1,
   },
+  suggestionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 2,
+    gap: 8,
+  },
   suggestionName: {
     fontSize: 13,
     fontWeight: "700",
     color: "#0F172A",
-    marginBottom: 2,
+    flex: 1,
+  },
+  distanceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  distanceIcon: {
+    marginRight: 3,
+  },
+  distanceText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#059669",
   },
   suggestionSubtitle: {
     fontSize: 11,

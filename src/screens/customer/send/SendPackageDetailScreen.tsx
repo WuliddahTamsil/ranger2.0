@@ -110,13 +110,25 @@ export const SendPackageDetailScreen: React.FC<SendPackageDetailScreenProps> = (
       });
 
       if (!result.canceled && result.assets[0]?.uri) {
+        const localUri = result.assets[0].uri;
         setUploadingPhoto(true);
-        const url = await uploadFileToBackend(
-          result.assets[0].uri,
-          `pkg-${Date.now()}.jpg`,
-          "image/jpeg"
-        );
-        setPhotos((prev) => [...prev, url || result.assets[0].uri]);
+        try {
+          const uploadRes = await uploadFileToBackend(
+            localUri,
+            `pkg-${Date.now()}.jpg`,
+            "image/jpeg"
+          );
+          const finalUrl =
+            uploadRes?.data?.url ||
+            uploadRes?.data?.viewUrl ||
+            uploadRes?.url ||
+            (typeof uploadRes === "string" ? uploadRes : localUri);
+
+          setPhotos((prev) => [...prev, finalUrl]);
+        } catch (uploadErr) {
+          console.warn("Upload to backend error, using localUri fallback:", uploadErr);
+          setPhotos((prev) => [...prev, localUri]);
+        }
       }
     } catch (e) {
       console.warn("Photo pick error:", e);
@@ -152,7 +164,7 @@ export const SendPackageDetailScreen: React.FC<SendPackageDetailScreenProps> = (
       fragile,
       specialHandling,
       declaredValue: Number(declaredValue.replace(/[^0-9]/g, "")) || 0,
-      photoUrls: photos,
+      photoUrls: photos.map((p: any) => (typeof p === "string" ? p : p?.data?.url || p?.url || "")).filter(Boolean),
       notes: packageNotes.trim(),
     }));
 
@@ -359,14 +371,17 @@ export const SendPackageDetailScreen: React.FC<SendPackageDetailScreenProps> = (
           {/* Foto Paket (Max 3) */}
           <Text style={[styles.inputLabel, { marginTop: 14 }]}>Foto paket (Maksimal 3 foto)</Text>
           <View style={styles.photosGrid}>
-            {photos.map((uri, idx) => (
-              <View key={idx} style={styles.photoThumbWrapper}>
-                <Image source={{ uri }} style={styles.photoThumb} />
-                <TouchableOpacity style={styles.photoDeleteBtn} onPress={() => handleRemovePhoto(idx)}>
-                  <X size={12} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            ))}
+            {photos.map((item, idx) => {
+              const photoUri = typeof item === "string" ? item : (item as any)?.data?.url || (item as any)?.url || "";
+              return (
+                <View key={idx} style={styles.photoThumbWrapper}>
+                  <Image source={{ uri: photoUri }} style={styles.photoThumb} />
+                  <TouchableOpacity style={styles.photoDeleteBtn} onPress={() => handleRemovePhoto(idx)}>
+                    <X size={12} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
 
             {photos.length < 3 && (
               <TouchableOpacity

@@ -40,6 +40,8 @@ router.get("/available", optionalAuth, getAvailableOrders);
 
 router.get("/orders/driver", optionalAuth, getDriverOrders);
 router.get("/driver", optionalAuth, getDriverOrders);
+router.get("/driver/:driverId", optionalAuth, getAvailableOrders);
+router.get("/orders/driver/:driverId", optionalAuth, getAvailableOrders);
 
 router.post("/orders/:id/accept", optionalAuth, acceptOrder);
 router.post("/:id/accept", optionalAuth, acceptOrder);
@@ -47,14 +49,14 @@ router.post("/:id/accept", optionalAuth, acceptOrder);
 router.post("/orders/:id/decline", optionalAuth, declineOrder);
 router.post("/:id/decline", optionalAuth, declineOrder);
 
-// 4. Operational & Status endpoints (requireAuth enforced)
-router.get("/orders/:id", requireAuth, getOrderById);
-router.get("/:id", requireAuth, getOrderById);
-router.get("/orders/:id/tracking", requireAuth, getOrderById);
-router.get("/:id/tracking", requireAuth, getOrderById);
+// 4. Operational & Status endpoints
+router.get("/orders/:id", optionalAuth, getOrderById);
+router.get("/:id", optionalAuth, getOrderById);
+router.get("/orders/:id/tracking", optionalAuth, getOrderById);
+router.get("/:id/tracking", optionalAuth, getOrderById);
 
-router.put("/orders/:id/status", requireAuth, updateOrderStatus);
-router.put("/:id/status", requireAuth, updateOrderStatus);
+router.put("/orders/:id/status", optionalAuth, updateOrderStatus);
+router.put("/:id/status", optionalAuth, updateOrderStatus);
 
 router.put("/orders/:id/location", requireAuth, updateDriverLocation);
 router.put("/:id/location", requireAuth, updateDriverLocation);

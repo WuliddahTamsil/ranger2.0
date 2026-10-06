@@ -96,6 +96,8 @@ const syncOrderPaymentStatus = async (orderId, orderType, paymentStatus, payment
         if (io) {
           io.to(`send:${String(existingOrder._id)}`).emit("send:payment_updated", existingOrder);
           io.to(`user:${String(existingOrder.customerId)}`).emit("send:payment_updated", existingOrder);
+          io.emit("send:payment_updated", existingOrder);
+          io.emit("send:status_updated", existingOrder);
           if (isPaid) {
             io.emit("send:order_available", existingOrder);
           }
@@ -332,14 +334,22 @@ const handlePaymentWebhook = async (req, res) => {
  */
 const simulatePaymentWebhook = async (req, res) => {
   try {
-    const paymentId = req.params.paymentId || req.body.paymentId;
-    const { status = "PAID" } = req.body;
+    const paymentId = req.params.paymentId || req.body.paymentId || req.body.orderId;
+    const { status = "PAID", orderId, orderType = "KANYAAH_SEND" } = req.body;
 
     const payment = await Payment.findOne({
-      $or: [{ paymentId }, { orderId: paymentId }],
+      $or: [{ paymentId }, { orderId: paymentId }, ...(orderId ? [{ orderId }] : [])],
     });
 
     if (!payment) {
+      const targetOrderId = orderId || paymentId;
+      if (targetOrderId) {
+        await syncOrderPaymentStatus(targetOrderId, orderType, status, req.body.paymentMethod || "QRIS", req.io);
+        return res.json({
+          success: true,
+          message: `Status order ${targetOrderId} berhasil disimulasikan menjadi ${status}`,
+        });
+      }
       return res.status(404).json({
         success: false,
         message: "Data pembayaran tidak ditemukan",

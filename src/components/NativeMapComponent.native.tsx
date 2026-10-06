@@ -19,6 +19,7 @@ interface NativeMapProps {
   initialRegion?: Region;
   onRegionChangeComplete?: (region: Region) => void;
   onPress?: (event: MapPressEvent) => void;
+  onMarkerPress?: (marker: MapMarkerItem) => void;
   pin?: { latitude: number; longitude: number };
   markers?: MapMarkerItem[];
   routeCoordinates?: Array<{ latitude: number; longitude: number }>;
@@ -36,6 +37,7 @@ export const NativeMapComponent: React.FC<NativeMapProps> = ({
   initialRegion,
   onRegionChangeComplete,
   onPress,
+  onMarkerPress,
   pin,
   markers = [],
   routeCoordinates,
@@ -126,6 +128,7 @@ export const NativeMapComponent: React.FC<NativeMapProps> = ({
             title={m.title}
             description={m.description}
             pinColor={pinColor}
+            onPress={() => onMarkerPress?.(m)}
           />
         );
       })}

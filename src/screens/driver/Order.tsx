@@ -367,9 +367,24 @@ export const Order: React.FC<OrderProps> = ({
       setOrders((current) => current.map((order) => order.id === orderId ? updatedOrder : order));
       if (selectedOrder?.id === orderId) setSelectedOrder(updatedOrder);
 
+      const getArrivalTitle = (order: DriverOrder) => {
+        if (order.type === "Kanyaah Ride") return "Tiba di Titik Jemput";
+        if (order.type === "Kanyaah Send") return "Tiba di Pengirim";
+        if (order.type === "Catering") return "Tiba di Dapur Catering";
+        if (order.type === "Setor Sampah") return "Tiba di Rumah Customer";
+        return "Tiba di Toko / Resto";
+      };
+
+      const getPickupTitle = (order: DriverOrder) => {
+        if (order.type === "Kanyaah Ride") return "Perjalanan Dimulai";
+        if (order.type === "Kanyaah Send") return "Paket Diambil";
+        if (order.type === "Catering") return "Makanan Diambil";
+        return "Pesanan Diambil";
+      };
+
       const alertCopy: Record<string, [string, string]> = {
-        "Sampai Pickup": ["Tiba di Toko", "Konfirmasi kedatangan tersimpan."],
-        Mengantar: ["Pesanan Diambil", "Pesanan dikonfirmasi telah diambil dan status pengantaran diperbarui."],
+        "Sampai Pickup": [getArrivalTitle(updatedOrder), "Konfirmasi kedatangan tersimpan."],
+        Mengantar: [getPickupTitle(updatedOrder), "Dikonfirmasi telah diambil dan status pengantaran diperbarui."],
         Selesai: ["Pengantaran Selesai", `${deliveryProofUrl ? "Bukti foto tersimpan. " : ""}Pendapatan ${rp(updatedOrder.driverShare)} ditambahkan ke saldo.`],
       };
       const [title, message] = alertCopy[nextStatus] || ["Status Diperbarui", `Status pesanan sekarang ${nextStatus}.`];
@@ -441,6 +456,26 @@ export const Order: React.FC<OrderProps> = ({
       Alert.alert(
         "Selesaikan Perjalanan",
         "Pastikan penumpang telah sampai di lokasi tujuan dengan selamat. Selesaikan perjalanan?",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Selesai",
+            onPress: () => {
+              void handleUpdateStatus(order.id, "Selesai");
+            },
+          },
+        ]
+      );
+      return;
+    }
+    if (order.type === "Kanyaah Send" && nextStatus === "Selesai") {
+      if (Platform.OS === "web") {
+        void handleUpdateStatus(order.id, "Selesai");
+        return;
+      }
+      Alert.alert(
+        "Selesaikan Pengantaran Paket",
+        "Pastikan paket telah diserahkan dengan aman kepada penerima. Selesaikan pesanan pengiriman?",
         [
           { text: "Batal", style: "cancel" },
           {
@@ -530,10 +565,20 @@ export const Order: React.FC<OrderProps> = ({
       if (selectedOrder?.id === orderId) setSelectedOrder(updatedOrder);
       setActiveTab("Aktif");
       Alert.alert(
-        order.type === "Kanyaah Ride" ? "Ride Diterima! 🏍" : "Pesanan Diterima! 📦",
+        order.type === "Kanyaah Ride"
+          ? "Ride Diterima! 🏍"
+          : order.type === "Kanyaah Send"
+          ? "Paket Diterima! 📦"
+          : order.type === "Catering"
+          ? "Catering Diterima! 🍱"
+          : "Pesanan Diterima! 🛍️",
         order.type === "Kanyaah Ride"
           ? "Pesanan berhasil diterima. Silakan bersiap menuju lokasi penjemputan penumpang."
-          : "Status pesanan diperbarui. Silakan menuju lokasi pickup."
+          : order.type === "Kanyaah Send"
+          ? "Pesanan berhasil diterima. Silakan menuju ke lokasi pengirim untuk mengambil paket."
+          : order.type === "Catering"
+          ? "Pesanan berhasil diterima. Silakan menuju ke dapur katering untuk mengambil makanan."
+          : "Status pesanan diperbarui. Silakan menuju lokasi toko/resto."
       );
     } catch (error) {
       console.error("Accept order error:", error);
@@ -738,11 +783,33 @@ export const Order: React.FC<OrderProps> = ({
         }
       }
     }
+    if (order?.type === "Kanyaah Send") {
+      switch (status) {
+        case "Menunggu": return "Mencari Driver";
+        case "Siap": return "Siap Dijemput";
+        case "Menuju Pickup": return "Menuju Pengirim";
+        case "Sampai Pickup": return "Tiba di Pengirim";
+        case "Mengantar": return "Mengantar ke Penerima";
+        case "Selesai": return "Paket Terkirim";
+        default: return "Dibatalkan";
+      }
+    }
+    if (order?.type === "Catering") {
+      switch (status) {
+        case "Menunggu": return "Order Catering";
+        case "Siap": return "Siap Diambil";
+        case "Menuju Pickup": return "Menuju Dapur Catering";
+        case "Sampai Pickup": return "Tiba di Dapur Catering";
+        case "Mengantar": return "Mengantar ke Pemesan";
+        case "Selesai": return "Catering Diterima";
+        default: return "Dibatalkan";
+      }
+    }
     switch (status) {
       case "Menunggu": return "Order Masuk";
       case "Siap": return "Siap Dijemput";
-      case "Menuju Pickup": return "Menuju Toko";
-      case "Sampai Pickup": return "Tiba di Toko";
+      case "Menuju Pickup": return "Menuju Toko / Resto";
+      case "Sampai Pickup": return "Tiba di Toko / Resto";
       case "Mengantar": return "Mengantar ke Customer";
       case "Selesai": return "Selesai";
       default: return "Dibatalkan";
@@ -755,6 +822,10 @@ export const Order: React.FC<OrderProps> = ({
         return { bg: "#ECFDF5", text: "#047857", border: "#A7F3D0" };
       case "Kanyaah Ride":
         return { bg: "#EFF6FF", text: "#1D4ED8", border: "#BFDBFE" };
+      case "Kanyaah Send":
+        return { bg: "#FFF7ED", text: "#C2410C", border: "#FFEDD5" };
+      case "Catering":
+        return { bg: "#FEF2F2", text: "#B91C1C", border: "#FECACA" };
       case "Laundry":
         return { bg: "#F5F3FF", text: "#6D28D9", border: "#DDD6FE" };
       case "Marketplace":
@@ -768,8 +839,10 @@ export const Order: React.FC<OrderProps> = ({
     if (type === "Setor Sampah") return "Jemput di Customer";
     if (type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")) return "Jemput di Customer";
     if (type === "Laundry") return "Ambil di Laundry";
-    if (type === "Kanyaah Ride") return "Titik Penjemputan";
-    return "Ambil di Toko";
+    if (type === "Kanyaah Ride") return "Titik Jemput Penumpang";
+    if (type === "Kanyaah Send") return "Ambil di Pengirim Paket";
+    if (type === "Catering") return "Ambil di Dapur Catering";
+    return "Ambil di Toko / Resto";
   };
 
   const getOriginTitle = (type: string, item: DriverOrder) => {
@@ -779,6 +852,12 @@ export const Order: React.FC<OrderProps> = ({
     if (type === "Kanyaah Ride") {
       return item.customer || "Penumpang";
     }
+    if (type === "Kanyaah Send") {
+      return item.customer || "Pengirim Paket";
+    }
+    if (type === "Catering") {
+      return item.storeName || "Dapur Catering";
+    }
     return (item.storeName || item.from || "Toko").replace(/^Tujuan:\s*/i, "").trim();
   };
 
@@ -786,13 +865,24 @@ export const Order: React.FC<OrderProps> = ({
     if (type === "Setor Sampah") return "Antar ke Bank Sampah";
     if (type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")) return "Antar ke Laundry";
     if (type === "Laundry") return "Antar ke Customer";
-    if (type === "Kanyaah Ride") return "Titik Tujuan";
+    if (type === "Kanyaah Ride") return "Lokasi Tujuan Penumpang";
+    if (type === "Kanyaah Send") return "Antar ke Penerima Paket";
+    if (type === "Catering") return "Antar ke Alamat Pemesan";
     return "Antar ke Customer";
   };
 
   const getDestinationTitle = (type: string, item: DriverOrder) => {
     if (type === "Setor Sampah" || (type === "Laundry" && item.items?.[0]?.name?.includes("Jemput"))) {
       return (item.storeName || item.to || "Bank Sampah").replace(/^Tujuan:\s*/i, "").trim();
+    }
+    if (type === "Kanyaah Ride") {
+      return item.customer || "Tujuan Penumpang";
+    }
+    if (type === "Kanyaah Send") {
+      return item.to || "Penerima Paket";
+    }
+    if (type === "Catering") {
+      return item.customer || "Pemesan Catering";
     }
     return item.customer || "Customer";
   };
@@ -814,19 +904,63 @@ export const Order: React.FC<OrderProps> = ({
     }
   };
 
-  const quickMessagesOwner = [
-    "Saya sudah sampai di depan toko",
-    "Pesanan atas nama ini apakah sudah siap?",
-    "Mohon ditunggu sebentar, saya sedang dalam perjalanan",
-    "Pesanan sudah saya ambil, terima kasih",
-  ];
+  const getQuickMessagesOwner = (order?: DriverOrder | null) => {
+    if (order?.type === "Kanyaah Send") {
+      return [
+        "Saya sedang menuju lokasi pengambilan paket",
+        "Saya sudah sampai di lokasi penjemputan",
+        "Paket sudah siap untuk diambil?",
+        "Paket telah saya ambil, terima kasih",
+      ];
+    }
+    if (order?.type === "Catering") {
+      return [
+        "Saya sedang menuju dapur catering",
+        "Saya sudah sampai di dapur catering",
+        "Pesanan katering sudah siap dipickup?",
+        "Pesanan telah saya ambil, terima kasih",
+      ];
+    }
+    return [
+      "Saya sudah sampai di depan toko",
+      "Pesanan atas nama ini apakah sudah siap?",
+      "Mohon ditunggu sebentar, saya sedang dalam perjalanan",
+      "Pesanan sudah saya ambil, terima kasih",
+    ];
+  };
 
-  const quickMessagesCustomer = [
-    "Kurir sedang dalam perjalanan mengantar pesanan Anda",
-    "Saya sudah tiba di lokasi alamat Anda",
-    "Bisa tolong informasikan patokan rumah atau nomor pagar?",
-    "Pesanan telah dititipkan sesuai petunjuk, terima kasih",
-  ];
+  const getQuickMessagesCustomer = (order?: DriverOrder | null) => {
+    if (order?.type === "Kanyaah Send") {
+      return [
+        "Kurir sedang dalam perjalanan mengantar paket Anda",
+        "Saya sudah tiba di alamat tujuan penerima",
+        "Bisa tolong informasikan patokan rumah penerima?",
+        "Paket telah diterima sesuai alamat, terima kasih",
+      ];
+    }
+    if (order?.type === "Kanyaah Ride") {
+      return [
+        "Driver sedang dalam perjalanan menuju titik jemput",
+        "Saya sudah sampai di titik penjemputan",
+        "Saya menunggu di titik jemput, helm sudah siap",
+        "Terima kasih telah menggunakan Kanyaah Ride",
+      ];
+    }
+    if (order?.type === "Catering") {
+      return [
+        "Kurir sedang mengantar pesanan catering Anda",
+        "Saya sudah sampai di lokasi pengantaran",
+        "Bisa tolong konfirmasi penerimaan pesanan?",
+        "Pesanan catering telah diserahkan, terima kasih",
+      ];
+    }
+    return [
+      "Kurir sedang dalam perjalanan mengantar pesanan Anda",
+      "Saya sudah tiba di lokasi alamat Anda",
+      "Bisa tolong informasikan patokan rumah atau nomor pagar?",
+      "Pesanan telah dititipkan sesuai petunjuk, terima kasih",
+    ];
+  };
 
   // =========================================================================
   // RENDER: FULL PAGE VIEW WHEN AN ORDER IS SELECTED (NO POPUPS)
@@ -890,14 +1024,32 @@ export const Order: React.FC<OrderProps> = ({
                     ? "Driver sedang menuju ke rumah customer untuk mengambil sampah daur ulang."
                     : selectedOrder.type === "Marketplace"
                     ? "Anda sedang menuju toko. Lokasi GPS real-time belum tersedia di aplikasi."
+                    : selectedOrder.type === "Kanyaah Send"
+                    ? "Kurir sedang dalam perjalanan menuju lokasi pengirim untuk mengambil paket."
+                    : selectedOrder.type === "Kanyaah Ride"
+                    ? "Driver sedang dalam perjalanan menuju lokasi penjemputan penumpang."
+                    : selectedOrder.type === "Catering"
+                    ? "Kurir sedang dalam perjalanan menuju dapur catering untuk mengambil pesanan."
                     : "Kurir sedang dalam perjalanan ke lokasi penjemputan."
                   : selectedOrder.status === "Sampai Pickup"
                   ? selectedOrder.type === "Setor Sampah"
                     ? "Driver telah tiba di rumah customer. Silakan ambil sampah dan bersiap berangkat ke Bank Sampah."
-                    : "Kurir telah tiba di lokasi pickup. Silakan periksa pesanan dan konfirmasi saat siap berangkat."
+                    : selectedOrder.type === "Kanyaah Send"
+                    ? "Kurir telah tiba di lokasi pengirim. Silakan periksa paket dan konfirmasi saat siap berangkat."
+                    : selectedOrder.type === "Kanyaah Ride"
+                    ? "Driver telah tiba di titik jemput. Harap beri tahu penumpang bahwa Anda sudah sampai."
+                    : selectedOrder.type === "Catering"
+                    ? "Kurir telah tiba di dapur catering. Silakan periksa pesanan makanan dan konfirmasi saat siap."
+                    : "Kurir telah tiba di toko / outlet. Silakan periksa pesanan dan konfirmasi saat siap berangkat."
                   : selectedOrder.status === "Mengantar"
                   ? selectedOrder.type === "Setor Sampah"
                     ? "Sampah telah diambil dari customer. Driver sedang mengantar sampah menuju Bank Sampah tujuan."
+                    : selectedOrder.type === "Kanyaah Send"
+                    ? "Paket telah diambil. Kurir sedang mengantar paket ke alamat penerima."
+                    : selectedOrder.type === "Kanyaah Ride"
+                    ? "Perjalanan dimulai. Driver sedang mengantar penumpang ke lokasi tujuan."
+                    : selectedOrder.type === "Catering"
+                    ? "Pesanan catering telah diambil. Kurir sedang mengantar pesanan ke alamat pemesan."
                     : "Pesanan telah diambil. Kurir sedang mengantar pesanan ke alamat tujuan."
                   : selectedOrder.status === "Selesai"
                   ? selectedOrder.type === "Setor Sampah"
@@ -1022,7 +1174,7 @@ export const Order: React.FC<OrderProps> = ({
                           onPress={() => handleDriverTransition(selectedOrder, "Sampai Pickup")}
                           activeOpacity={0.85}
                         >
-                          {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride" ? (
+                          {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride" || selectedOrder.type === "Kanyaah Send" ? (
                             <MapPin size={15} color="#FFFFFF" />
                           ) : (
                             <Store size={15} color="#FFFFFF" />
@@ -1034,7 +1186,9 @@ export const Order: React.FC<OrderProps> = ({
                               ? "Konfirmasi Tiba di Lokasi Jemput"
                               : selectedOrder.type === "Kanyaah Send"
                               ? "Konfirmasi Tiba di Pengirim"
-                              : "Konfirmasi Tiba di Toko"}
+                              : selectedOrder.type === "Catering"
+                              ? "Konfirmasi Tiba di Dapur Catering"
+                              : "Konfirmasi Tiba di Toko / Resto"}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -1048,7 +1202,9 @@ export const Order: React.FC<OrderProps> = ({
                             ? "Anda sudah tiba di lokasi penjemputan. Silakan tunggu penumpang naik."
                             : selectedOrder.type === "Kanyaah Send"
                             ? "Anda sudah di lokasi pengirim. Ambil paket & verifikasi kode pickup."
-                            : "Anda sudah sampai di toko. Silakan periksa pesanan & ambil barang."}
+                            : selectedOrder.type === "Catering"
+                            ? "Anda sudah tiba di dapur katering. Silakan periksa pesanan & ambil makanan."
+                            : "Anda sudah sampai di toko / resto. Silakan periksa pesanan & ambil barang."}
                         </Text>
                       </View>
                     )}
@@ -1077,6 +1233,8 @@ export const Order: React.FC<OrderProps> = ({
                               ? "MULAI PERJALANAN KE TUJUAN"
                               : selectedOrder.type === "Kanyaah Send"
                               ? "MULAI ANTAR KE PENERIMA"
+                              : selectedOrder.type === "Catering"
+                              ? "MULAI ANTAR KE PEMESAN"
                               : "MULAI ANTAR KE CUSTOMER"}
                           </Text>
                           <Text style={styles.startTripSubtitle}>
@@ -1086,6 +1244,8 @@ export const Order: React.FC<OrderProps> = ({
                               ? "Penumpang sudah naik, mulai perjalanan menuju titik tujuan"
                               : selectedOrder.type === "Kanyaah Send"
                               ? "Paket sudah dibawa, mulai antar menuju alamat penerima"
+                              : selectedOrder.type === "Catering"
+                              ? "Pesanan catering sudah diambil, mulai antar ke pemesan"
                               : "Aktifkan tracking & kirim notifikasi ke customer"}
                           </Text>
                         </View>
@@ -1102,6 +1262,8 @@ export const Order: React.FC<OrderProps> = ({
                               ? "SEDANG MENGANTAR PENUMPANG"
                               : selectedOrder.type === "Kanyaah Send"
                               ? "SEDANG MENGANTAR KE PENERIMA"
+                              : selectedOrder.type === "Catering"
+                              ? "SEDANG MENGANTAR KE PEMESAN"
                               : "SEDANG MENGANTAR KE CUSTOMER"}
                           </Text>
                         </View>
@@ -1136,6 +1298,10 @@ export const Order: React.FC<OrderProps> = ({
                               ? "Tiba di Bank Sampah & Selesaikan"
                               : selectedOrder.type === "Kanyaah Ride"
                               ? "Selesaikan Perjalanan"
+                              : selectedOrder.type === "Kanyaah Send"
+                              ? "Paket Terkirim & Selesai"
+                              : selectedOrder.type === "Catering"
+                              ? "Catering Diterima & Selesai"
                               : "Selesaikan Pengantaran"}
                           </Text>
                         </TouchableOpacity>
@@ -1148,6 +1314,10 @@ export const Order: React.FC<OrderProps> = ({
                             ? "Sampah telah tiba di Bank Sampah dan siap ditimbang. Terima kasih!"
                             : selectedOrder.type === "Kanyaah Ride"
                             ? "Perjalanan telah selesai dengan selamat. Terima kasih!"
+                            : selectedOrder.type === "Kanyaah Send"
+                            ? "Paket telah diterima oleh penerima. Terima kasih!"
+                            : selectedOrder.type === "Catering"
+                            ? "Pesanan catering telah diterima pemesan. Terima kasih!"
                             : "Pengantaran selesai dilakukan. Terima kasih!"}
                         </Text>
                       </View>
@@ -1213,22 +1383,22 @@ export const Order: React.FC<OrderProps> = ({
             <View style={styles.stepperLabelsRow}>
               <View style={styles.stepperLabelCol}>
                 <Text style={[styles.stepperLabel, step === 1 && styles.stepperLabelHighlight]} numberOfLines={1}>
-                  {selectedOrder.type === "Setor Sampah" ? "Ke Customer" : selectedOrder.type === "Kanyaah Ride" ? "Menuju Penumpang" : "Ke Toko"}
+                  {selectedOrder.type === "Setor Sampah" ? "Ke Customer" : selectedOrder.type === "Kanyaah Ride" ? "Menuju Penumpang" : selectedOrder.type === "Kanyaah Send" ? "Ke Pengirim" : selectedOrder.type === "Catering" ? "Ke Dapur" : "Ke Toko"}
                 </Text>
               </View>
               <View style={styles.stepperLabelCol}>
                 <Text style={[styles.stepperLabel, step === 2 && styles.stepperLabelHighlight]} numberOfLines={1}>
-                  {selectedOrder.type === "Setor Sampah" ? "Tiba di Cust" : selectedOrder.type === "Kanyaah Ride" ? "Driver Tiba" : "Di Toko"}
+                  {selectedOrder.type === "Setor Sampah" ? "Tiba di Cust" : selectedOrder.type === "Kanyaah Ride" ? "Driver Tiba" : selectedOrder.type === "Kanyaah Send" ? "Tiba Pengirim" : selectedOrder.type === "Catering" ? "Tiba di Dapur" : "Di Toko"}
                 </Text>
               </View>
               <View style={styles.stepperLabelCol}>
                 <Text style={[styles.stepperLabel, step === 3 && styles.stepperLabelHighlight]} numberOfLines={1}>
-                  {selectedOrder.type === "Setor Sampah" ? "Ke Bank Sampah" : selectedOrder.type === "Kanyaah Ride" ? "Mulai Perjalanan" : "Ke Customer"}
+                  {selectedOrder.type === "Setor Sampah" ? "Ke Bank Sampah" : selectedOrder.type === "Kanyaah Ride" ? "Mulai Perjalanan" : selectedOrder.type === "Kanyaah Send" ? "Ke Penerima" : selectedOrder.type === "Catering" ? "Ke Pemesan" : "Ke Customer"}
                 </Text>
               </View>
               <View style={styles.stepperLabelCol}>
                 <Text style={[styles.stepperLabel, step === 4 && styles.stepperLabelHighlight]} numberOfLines={1}>
-                  {selectedOrder.type === "Setor Sampah" ? "Tiba di Bank" : "Selesai"}
+                  {selectedOrder.type === "Setor Sampah" ? "Tiba di Bank" : selectedOrder.type === "Kanyaah Send" ? "Terkirim" : selectedOrder.type === "Catering" ? "Diterima" : "Selesai"}
                 </Text>
               </View>
             </View>
@@ -1238,7 +1408,7 @@ export const Order: React.FC<OrderProps> = ({
           <View style={styles.infoCard}>
             <View style={styles.infoCardHeader}>
               <View style={styles.infoIconBox}>
-                {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride" ? (
+                {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride" || selectedOrder.type === "Kanyaah Send" ? (
                   <MapPin size={18} color="#15803D" />
                 ) : (
                   <Store size={18} color="#0D7A53" />
@@ -1250,10 +1420,14 @@ export const Order: React.FC<OrderProps> = ({
                     ? "LOKASI JEMPUT SAMPAH (RUMAH CUSTOMER)"
                     : selectedOrder.type === "Kanyaah Ride"
                     ? "LOKASI PENJEMPUTAN (PENUMPANG)"
+                    : selectedOrder.type === "Kanyaah Send"
+                    ? "LOKASI PENJEMPUTAN (PENGIRIM)"
+                    : selectedOrder.type === "Catering"
+                    ? "LOKASI PENJEMPUTAN (DAPUR CATERING)"
                     : "LOKASI PENJEMPUTAN (TOKO)"}
                 </Text>
                 <Text style={styles.infoCardTitle}>
-                  {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride"
+                  {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride" || selectedOrder.type === "Kanyaah Send"
                     ? selectedOrder.customer
                     : (selectedOrder.storeName || selectedOrder.from)}
                 </Text>
@@ -1261,7 +1435,7 @@ export const Order: React.FC<OrderProps> = ({
             </View>
 
             <Text style={styles.infoCardAddress}>
-              {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride"
+              {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride" || selectedOrder.type === "Kanyaah Send"
                 ? selectedOrder.from
                 : (selectedOrder.storeAddress || selectedOrder.from)}
             </Text>
@@ -1275,7 +1449,7 @@ export const Order: React.FC<OrderProps> = ({
                     activeOpacity={0.8}
                   >
                     <MessageSquare size={14} color="#0D7A53" />
-                    <Text style={styles.actionPillText}>Chat Customer</Text>
+                    <Text style={styles.actionPillText}>{selectedOrder.type === "Kanyaah Ride" ? "Chat Penumpang" : "Chat Customer"}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1284,7 +1458,47 @@ export const Order: React.FC<OrderProps> = ({
                     activeOpacity={0.8}
                   >
                     <Phone size={14} color="#334155" />
-                    <Text style={styles.actionPillOutlineText}>Telepon Customer</Text>
+                    <Text style={styles.actionPillOutlineText}>{selectedOrder.type === "Kanyaah Ride" ? "Telepon Penumpang" : "Telepon Customer"}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : selectedOrder.type === "Kanyaah Send" ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.actionPill}
+                    onPress={() => openChatRoom(selectedOrder, "owner")}
+                    activeOpacity={0.8}
+                  >
+                    <MessageSquare size={14} color="#0D7A53" />
+                    <Text style={styles.actionPillText}>Chat Pengirim</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionPillOutline}
+                    onPress={() => openPhoneCall(selectedOrder.phone || selectedOrder.storePhone, selectedOrder.customer || "Pengirim")}
+                    activeOpacity={0.8}
+                  >
+                    <Phone size={14} color="#334155" />
+                    <Text style={styles.actionPillOutlineText}>Telepon Pengirim</Text>
+                  </TouchableOpacity>
+                </>
+              ) : selectedOrder.type === "Catering" ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.actionPill}
+                    onPress={() => openChatRoom(selectedOrder, "owner")}
+                    activeOpacity={0.8}
+                  >
+                    <MessageSquare size={14} color="#0D7A53" />
+                    <Text style={styles.actionPillText}>Chat Dapur Catering</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionPillOutline}
+                    onPress={() => openPhoneCall(selectedOrder.storePhone, selectedOrder.storeName || "Dapur Catering")}
+                    activeOpacity={0.8}
+                  >
+                    <Phone size={14} color="#334155" />
+                    <Text style={styles.actionPillOutlineText}>Telepon Dapur Catering</Text>
                   </TouchableOpacity>
                 </>
               ) : (
@@ -1329,6 +1543,10 @@ export const Order: React.FC<OrderProps> = ({
                     ? "LOKASI TUJUAN (BANK SAMPAH)"
                     : selectedOrder.type === "Kanyaah Ride"
                     ? "LOKASI TUJUAN PENUMPANG"
+                    : selectedOrder.type === "Kanyaah Send"
+                    ? "LOKASI PENGANTARAN (PENERIMA)"
+                    : selectedOrder.type === "Catering"
+                    ? "LOKASI PENGANTARAN (PEMESAN)"
                     : "LOKASI PENGANTARAN (CUSTOMER)"}
                 </Text>
                 <Text style={styles.infoCardTitle}>
@@ -1336,6 +1554,8 @@ export const Order: React.FC<OrderProps> = ({
                     ? (selectedOrder.storeName || "Bank Sampah")
                     : selectedOrder.type === "Kanyaah Ride"
                     ? selectedOrder.to
+                    : selectedOrder.type === "Kanyaah Send"
+                    ? (selectedOrder.to || "Penerima Paket")
                     : selectedOrder.customer}
                 </Text>
               </View>
@@ -1381,7 +1601,13 @@ export const Order: React.FC<OrderProps> = ({
                   activeOpacity={0.8}
                 >
                   <MessageSquare size={14} color="#0D7A53" />
-                  <Text style={styles.actionPillText}>Chat Customer</Text>
+                  <Text style={styles.actionPillText}>
+                    {selectedOrder.type === "Kanyaah Send"
+                      ? "Chat Penerima"
+                      : selectedOrder.type === "Catering"
+                      ? "Chat Pemesan"
+                      : "Chat Customer"}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1390,7 +1616,13 @@ export const Order: React.FC<OrderProps> = ({
                   activeOpacity={0.8}
                 >
                   <Phone size={14} color="#334155" />
-                  <Text style={styles.actionPillOutlineText}>Telepon Customer</Text>
+                  <Text style={styles.actionPillOutlineText}>
+                    {selectedOrder.type === "Kanyaah Send"
+                      ? "Telepon Penerima"
+                      : selectedOrder.type === "Catering"
+                      ? "Telepon Pemesan"
+                      : "Telepon Customer"}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1603,8 +1835,12 @@ export const Order: React.FC<OrderProps> = ({
                       ? "Tiba di Rumah Customer"
                       : selectedOrder.type === "Kanyaah Ride"
                       ? "Saya Sudah Sampai di Titik Jemput"
+                      : selectedOrder.type === "Kanyaah Send"
+                      ? "Tiba di Lokasi Pengirim"
+                      : selectedOrder.type === "Catering"
+                      ? "Tiba di Dapur Catering"
                       : selectedOrder.type === "Marketplace"
-                      ? "Saya Sudah Sampai"
+                      ? "Saya Sudah Sampai di Toko"
                       : "Tiba di Toko / Outlet"}
                   </Text>
                 </>
@@ -1628,7 +1864,11 @@ export const Order: React.FC<OrderProps> = ({
                     {selectedOrder.type === "Setor Sampah"
                       ? "Sampah Diambil & OTW ke Bank Sampah"
                       : selectedOrder.type === "Kanyaah Ride"
-                      ? "Mulai Perjalanan"
+                      ? "Penumpang Naik & Mulai Perjalanan"
+                      : selectedOrder.type === "Kanyaah Send"
+                      ? "Paket Diambil & OTW ke Penerima"
+                      : selectedOrder.type === "Catering"
+                      ? "Makanan Diambil & OTW ke Pemesan"
                       : selectedOrder.type === "Marketplace"
                       ? "Pesanan Sudah Diambil"
                       : "Konfirmasi Ambil & OTW ke Customer"}
@@ -1682,6 +1922,10 @@ export const Order: React.FC<OrderProps> = ({
                         ? "Tiba di Bank Sampah & Serahkan Sampah"
                         : selectedOrder.type === "Kanyaah Ride"
                         ? "Selesaikan Perjalanan"
+                        : selectedOrder.type === "Kanyaah Send"
+                        ? "Paket Diserahkan ke Penerima & Selesai"
+                        : selectedOrder.type === "Catering"
+                        ? "Makanan Diserahkan ke Pemesan & Selesai"
                         : selectedOrder.type === "Marketplace"
                         ? "Pesanan Sudah Diterima Customer"
                         : "Selesaikan Pengantaran"}
@@ -1748,7 +1992,27 @@ export const Order: React.FC<OrderProps> = ({
                   Navigasi Rute Driver
                 </Text>
                 <Text style={styles.fsGpsHeaderSub} numberOfLines={1}>
-                  {navMode === "store" ? "Menuju Toko" : navMode === "customer" ? "Menuju Customer" : "Semua Rute"} • #{selectedOrder?.id.slice(-6)}
+                  {navMode === "store"
+                    ? (selectedOrder?.type === "Kanyaah Ride"
+                        ? "Menuju Titik Penjemputan"
+                        : selectedOrder?.type === "Kanyaah Send"
+                        ? "Menuju Pengirim"
+                        : selectedOrder?.type === "Catering"
+                        ? "Menuju Dapur Catering"
+                        : selectedOrder?.type === "Setor Sampah"
+                        ? "Menuju Rumah Customer"
+                        : "Menuju Toko")
+                    : navMode === "customer"
+                    ? (selectedOrder?.type === "Kanyaah Ride"
+                        ? "Menuju Tujuan Penumpang"
+                        : selectedOrder?.type === "Kanyaah Send"
+                        ? "Menuju Penerima Paket"
+                        : selectedOrder?.type === "Catering"
+                        ? "Menuju Pemesan Catering"
+                        : selectedOrder?.type === "Setor Sampah"
+                        ? "Menuju Bank Sampah"
+                        : "Menuju Customer")
+                    : "Semua Rute"} • #{selectedOrder?.id.slice(-6)}
                 </Text>
               </View>
 
@@ -1843,8 +2107,20 @@ export const Order: React.FC<OrderProps> = ({
               <View style={{ flex: 1 }}>
                 <Text style={styles.sheetTitle}>
                   {chatTarget === "owner"
-                    ? (selectedOrder.type === "Setor Sampah" ? `Chat Bank Sampah: ${selectedOrder.storeName || "Bank Sampah"}` : `Chat Toko: ${selectedOrder.storeName || selectedOrder.from}`)
-                    : `Chat Customer: ${selectedOrder.customer}`}
+                    ? (selectedOrder.type === "Setor Sampah"
+                        ? `Chat Bank Sampah: ${selectedOrder.storeName || "Bank Sampah"}`
+                        : selectedOrder.type === "Kanyaah Send"
+                        ? `Chat Pengirim: ${selectedOrder.customer || "Pengirim"}`
+                        : selectedOrder.type === "Catering"
+                        ? `Chat Dapur: ${selectedOrder.storeName || "Dapur Catering"}`
+                        : `Chat Toko: ${selectedOrder.storeName || selectedOrder.from}`)
+                    : (selectedOrder.type === "Kanyaah Send"
+                        ? `Chat Penerima: ${selectedOrder.to || "Penerima"}`
+                        : selectedOrder.type === "Kanyaah Ride"
+                        ? `Chat Penumpang: ${selectedOrder.customer}`
+                        : selectedOrder.type === "Catering"
+                        ? `Chat Pemesan: ${selectedOrder.customer}`
+                        : `Chat Customer: ${selectedOrder.customer}`)}
                 </Text>
                 <Text style={styles.chatHeaderSubtitle}>
                   Order #{selectedOrder.id.slice(-8)} • Saluran Langsung
@@ -1873,7 +2149,13 @@ export const Order: React.FC<OrderProps> = ({
                     chatTarget === "owner" ? styles.channelTabTextActive : styles.channelTabTextInactive,
                   ]}
                 >
-                  {selectedOrder.type === "Setor Sampah" ? "Bank Sampah" : "Toko / Outlet"}
+                  {selectedOrder.type === "Setor Sampah"
+                    ? "Bank Sampah"
+                    : selectedOrder.type === "Kanyaah Send"
+                    ? "Pengirim"
+                    : selectedOrder.type === "Catering"
+                    ? "Dapur Catering"
+                    : "Toko / Outlet"}
                 </Text>
               </TouchableOpacity>
 
@@ -1892,7 +2174,11 @@ export const Order: React.FC<OrderProps> = ({
                     chatTarget === "customer" ? styles.channelTabTextActive : styles.channelTabTextInactive,
                   ]}
                 >
-                  Customer
+                  {selectedOrder.type === "Kanyaah Send"
+                    ? "Penerima"
+                    : selectedOrder.type === "Catering"
+                    ? "Pemesan"
+                    : "Customer"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1901,7 +2187,7 @@ export const Order: React.FC<OrderProps> = ({
             {/* Quick Preset Message Chips */}
             <View style={styles.quickChipsWrap}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickChipsContent}>
-                {(chatTarget === "owner" ? quickMessagesOwner : quickMessagesCustomer).map((msg, idx) => (
+                {(chatTarget === "owner" ? getQuickMessagesOwner(selectedOrder) : getQuickMessagesCustomer(selectedOrder)).map((msg, idx) => (
                   <TouchableOpacity
                     key={idx}
                     style={styles.quickChip}
@@ -1926,7 +2212,21 @@ export const Order: React.FC<OrderProps> = ({
                     {chatTarget === "owner" ? <Store size={24} color="#0D7A53" /> : <MessageSquare size={24} color="#2563EB" />}
                   </View>
                   <Text style={styles.emptyChatTitle}>
-                    {chatTarget === "owner" ? "Percakapan dengan Toko" : "Percakapan dengan Customer"}
+                    {chatTarget === "owner"
+                      ? (selectedOrder.type === "Setor Sampah"
+                          ? "Percakapan dengan Bank Sampah"
+                          : selectedOrder.type === "Kanyaah Send"
+                          ? "Percakapan dengan Pengirim"
+                          : selectedOrder.type === "Catering"
+                          ? "Percakapan dengan Dapur Catering"
+                          : "Percakapan dengan Toko")
+                      : (selectedOrder.type === "Kanyaah Send"
+                          ? "Percakapan dengan Penerima"
+                          : selectedOrder.type === "Kanyaah Ride"
+                          ? "Percakapan dengan Penumpang"
+                          : selectedOrder.type === "Catering"
+                          ? "Percakapan dengan Pemesan"
+                          : "Percakapan dengan Customer")}
                   </Text>
                   <Text style={styles.emptyChatSub}>
                     Kirim pesan teks atau foto langsung dari perangkat Anda.
@@ -2018,7 +2318,19 @@ export const Order: React.FC<OrderProps> = ({
                 onChangeText={setTypedMessage}
                 placeholder={
                   chatTarget === "owner"
-                    ? "Ketik pesan ke toko..."
+                    ? selectedOrder.type === "Setor Sampah"
+                      ? "Ketik pesan ke bank sampah..."
+                      : selectedOrder.type === "Kanyaah Send"
+                      ? "Ketik pesan ke pengirim..."
+                      : selectedOrder.type === "Catering"
+                      ? "Ketik pesan ke dapur catering..."
+                      : "Ketik pesan ke toko..."
+                    : selectedOrder.type === "Kanyaah Ride"
+                    ? "Ketik pesan ke penumpang..."
+                    : selectedOrder.type === "Kanyaah Send"
+                    ? "Ketik pesan ke penerima..."
+                    : selectedOrder.type === "Catering"
+                    ? "Ketik pesan ke pemesan..."
                     : "Ketik pesan ke customer..."
                 }
                 placeholderTextColor="#94A3B8"
@@ -2197,7 +2509,11 @@ export const Order: React.FC<OrderProps> = ({
                       </View>
                       <View style={[styles.stepperLine, step >= 2 && styles.stepperLineActive]} />
                       <View style={[styles.stepperDot, step >= 2 && styles.stepperDotActive]}>
-                        <Store size={10} color={step >= 2 ? "#FFFFFF" : "#94A3B8"} />
+                        {item.type === "Kanyaah Ride" || item.type === "Setor Sampah" || item.type === "Kanyaah Send" ? (
+                          <MapPin size={10} color={step >= 2 ? "#FFFFFF" : "#94A3B8"} />
+                        ) : (
+                          <Store size={10} color={step >= 2 ? "#FFFFFF" : "#94A3B8"} />
+                        )}
                       </View>
                       <View style={[styles.stepperLine, step >= 3 && styles.stepperLineActive]} />
                       <View style={[styles.stepperDot, step >= 3 && styles.stepperDotActive]}>
@@ -2210,16 +2526,16 @@ export const Order: React.FC<OrderProps> = ({
                     </View>
                     <View style={styles.stepperLabelsRow}>
                       <Text style={[styles.stepperLabel, step === 1 && styles.stepperLabelHighlight]}>
-                        {item.type === "Kanyaah Ride" ? "Jemput" : item.type === "Setor Sampah" ? "Ke Customer" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Customer" : "Menuju Toko"}
+                        {item.type === "Kanyaah Ride" ? "Jemput" : item.type === "Setor Sampah" ? "Ke Customer" : item.type === "Kanyaah Send" ? "Ke Pengirim" : item.type === "Catering" ? "Ke Dapur" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Customer" : "Menuju Toko"}
                       </Text>
                       <Text style={[styles.stepperLabel, step === 2 && styles.stepperLabelHighlight]}>
-                        {item.type === "Kanyaah Ride" ? "Tiba Jemput" : item.type === "Setor Sampah" ? "Tiba di Cust" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Cust" : "Tiba di Toko"}
+                        {item.type === "Kanyaah Ride" ? "Tiba Jemput" : item.type === "Setor Sampah" ? "Tiba di Cust" : item.type === "Kanyaah Send" ? "Tiba Pengirim" : item.type === "Catering" ? "Tiba Dapur" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Cust" : "Tiba di Toko"}
                       </Text>
                       <Text style={[styles.stepperLabel, step === 3 && styles.stepperLabelHighlight]}>
-                        {item.type === "Kanyaah Ride" ? "Antar" : item.type === "Setor Sampah" ? "Ke Bank Sampah" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Laundry" : "Ke Customer"}
+                        {item.type === "Kanyaah Ride" ? "Antar" : item.type === "Setor Sampah" ? "Ke Bank Sampah" : item.type === "Kanyaah Send" ? "Ke Penerima" : item.type === "Catering" ? "Ke Pemesan" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Ke Laundry" : "Ke Customer"}
                       </Text>
                       <Text style={[styles.stepperLabel, step === 4 && styles.stepperLabelHighlight]}>
-                        {item.type === "Kanyaah Ride" ? "Selesai" : item.type === "Setor Sampah" ? "Tiba di Bank" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Toko" : "Selesai"}
+                        {item.type === "Kanyaah Ride" ? "Selesai" : item.type === "Setor Sampah" ? "Tiba di Bank" : item.type === "Kanyaah Send" ? "Terkirim" : item.type === "Catering" ? "Diterima" : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput") ? "Tiba di Toko" : "Selesai"}
                       </Text>
                     </View>
                   </View>
@@ -2418,10 +2734,17 @@ export const Order: React.FC<OrderProps> = ({
                         setCardNavMode((prev) => ({ ...prev, [item.id]: "store" }))
                       }
                     >
-                      <Store
-                        size={12}
-                        color={cardNavMode[item.id] === "store" ? "#FFFFFF" : "#15803D"}
-                      />
+                      {item.type === "Kanyaah Ride" || item.type === "Setor Sampah" || item.type === "Kanyaah Send" ? (
+                        <MapPin
+                          size={12}
+                          color={cardNavMode[item.id] === "store" ? "#FFFFFF" : "#15803D"}
+                        />
+                      ) : (
+                        <Store
+                          size={12}
+                          color={cardNavMode[item.id] === "store" ? "#FFFFFF" : "#15803D"}
+                        />
+                      )}
                       <Text
                         style={[
                           styles.mapActionPillText,
@@ -2431,7 +2754,25 @@ export const Order: React.FC<OrderProps> = ({
                           },
                         ]}
                       >
-                        {cardNavMode[item.id] === "store" ? "✓ Rute Toko" : "Navigasi Toko"}
+                        {cardNavMode[item.id] === "store"
+                          ? item.type === "Kanyaah Ride"
+                            ? "✓ Titik Jemput"
+                            : item.type === "Kanyaah Send"
+                            ? "✓ Ke Pengirim"
+                            : item.type === "Catering"
+                            ? "✓ Ke Dapur"
+                            : item.type === "Setor Sampah"
+                            ? "✓ Ke Customer"
+                            : "✓ Rute Toko"
+                          : item.type === "Kanyaah Ride"
+                          ? "Titik Jemput"
+                          : item.type === "Kanyaah Send"
+                          ? "Rute Pengirim"
+                          : item.type === "Catering"
+                          ? "Rute Dapur"
+                          : item.type === "Setor Sampah"
+                          ? "Rute Customer"
+                          : "Navigasi Toko"}
                       </Text>
                     </TouchableOpacity>
 
@@ -2459,7 +2800,25 @@ export const Order: React.FC<OrderProps> = ({
                           },
                         ]}
                       >
-                        {cardNavMode[item.id] === "customer" ? "✓ Rute Customer" : "Navigasi Customer"}
+                        {cardNavMode[item.id] === "customer"
+                          ? item.type === "Kanyaah Ride"
+                            ? "✓ Titik Tujuan"
+                            : item.type === "Kanyaah Send"
+                            ? "✓ Ke Penerima"
+                            : item.type === "Catering"
+                            ? "✓ Ke Pemesan"
+                            : item.type === "Setor Sampah"
+                            ? "✓ Ke Bank"
+                            : "✓ Rute Customer"
+                          : item.type === "Kanyaah Ride"
+                          ? "Titik Tujuan"
+                          : item.type === "Kanyaah Send"
+                          ? "Rute Penerima"
+                          : item.type === "Catering"
+                          ? "Rute Pemesan"
+                          : item.type === "Setor Sampah"
+                          ? "Rute Bank"
+                          : "Navigasi Customer"}
                       </Text>
                     </TouchableOpacity>
 
@@ -2536,7 +2895,13 @@ export const Order: React.FC<OrderProps> = ({
                       >
                         <Store size={14} color="#0D7A53" />
                         <Text style={styles.chatShortcutText}>
-                          {item.type === "Setor Sampah" ? "Chat Bank Sampah" : "Chat Toko"}
+                          {item.type === "Kanyaah Send"
+                            ? "Chat Pengirim"
+                            : item.type === "Catering"
+                            ? "Chat Dapur Catering"
+                            : item.type === "Setor Sampah"
+                            ? "Chat Bank Sampah"
+                            : "Chat Toko"}
                         </Text>
                       </TouchableOpacity>
 
@@ -2546,7 +2911,13 @@ export const Order: React.FC<OrderProps> = ({
                         activeOpacity={0.8}
                       >
                         <MessageSquare size={14} color="#2563EB" />
-                        <Text style={[styles.chatShortcutText, { color: "#2563EB" }]}>Chat Customer</Text>
+                        <Text style={[styles.chatShortcutText, { color: "#2563EB" }]}>
+                          {item.type === "Kanyaah Send"
+                            ? "Chat Penerima"
+                            : item.type === "Catering"
+                            ? "Chat Pemesan"
+                            : "Chat Customer"}
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -2560,7 +2931,11 @@ export const Order: React.FC<OrderProps> = ({
                     >
                       <Navigation size={16} color="#FFFFFF" />
                       <Text style={styles.primaryFlowBtnText}>
-                        {item.type === "Setor Sampah"
+                        {item.type === "Kanyaah Send"
+                          ? "Mulai Jalan ke Pengirim"
+                          : item.type === "Catering"
+                          ? "Mulai Jalan ke Dapur Catering"
+                          : item.type === "Setor Sampah"
                           ? "Mulai Jalan Jemput ke Customer"
                           : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
                           ? "Mulai Jalan Jemput ke Customer"
@@ -2585,6 +2960,10 @@ export const Order: React.FC<OrderProps> = ({
                           <Text style={styles.primaryFlowBtnText}>
                             {item.type === "Kanyaah Ride"
                               ? "Saya Sudah Sampai di Penjemputan"
+                              : item.type === "Kanyaah Send"
+                              ? "Tiba di Lokasi Pengirim"
+                              : item.type === "Catering"
+                              ? "Tiba di Dapur Catering"
                               : item.type === "Setor Sampah"
                               ? "Tiba di Rumah Customer"
                               : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
@@ -2614,6 +2993,10 @@ export const Order: React.FC<OrderProps> = ({
                           <Text style={styles.primaryFlowBtnText}>
                             {item.type === "Kanyaah Ride"
                               ? "Mulai Perjalanan dengan Penumpang"
+                              : item.type === "Kanyaah Send"
+                              ? "Paket Diambil & OTW ke Penerima"
+                              : item.type === "Catering"
+                              ? "Makanan Diambil & OTW ke Pemesan"
                               : item.type === "Setor Sampah"
                               ? "Sampah Diambil & OTW ke Bank Sampah"
                               : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")
@@ -2669,6 +3052,10 @@ export const Order: React.FC<OrderProps> = ({
                             <Text style={styles.primaryFlowBtnText}>
                               {item.type === "Kanyaah Ride"
                                 ? "Selesaikan Perjalanan (Tiba di Tujuan)"
+                                : item.type === "Kanyaah Send"
+                                ? "Paket Diserahkan ke Penerima & Selesai"
+                                : item.type === "Catering"
+                                ? "Makanan Diserahkan ke Pemesan & Selesai"
                                 : item.type === "Setor Sampah"
                                 ? "Tiba di Bank Sampah & Serahkan Sampah"
                                 : item.type === "Laundry" && item.items?.[0]?.name?.includes("Jemput")

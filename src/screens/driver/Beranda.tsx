@@ -80,6 +80,7 @@ import {
   declineSendOrder,
   verifySendPickupCode,
   verifySendDeliveryOtp,
+  updateSendOrderStatus,
 } from "../../services/sendService";
 import {
   getDriverAvailableWastePickups,
@@ -260,7 +261,7 @@ const mapSendDriverOrder = (order: any): DriverOrder => {
     driverShare: driverEarnings > 0 ? driverEarnings : 8000,
     completedAt: order.deliveredAt || order.completedAt || order.updatedAt || order.createdAt,
     status:
-      order.status === "SEARCHING_DRIVER" ? "Menunggu"
+      order.status === "SEARCHING_DRIVER" || order.status === "PAYMENT_PENDING" || order.status === "CREATED" ? "Menunggu"
       : order.status === "DRIVER_ASSIGNED" ? "Siap"
       : order.status === "DRIVER_ON_THE_WAY_TO_PICKUP" ? "Menuju Pickup"
       : order.status === "DRIVER_ARRIVED_AT_PICKUP" || order.status === "PICKUP_VERIFICATION" ? "Sampai Pickup"
@@ -784,6 +785,30 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         }
         Alert.alert("Status Diperbarui", alertMsg);
         return;
+      } else if (targetOrder.type === "Kanyaah Send") {
+        let backendStatus = "DRIVER_ASSIGNED";
+        if (nextStatus === "Menuju Pickup") backendStatus = "DRIVER_ON_THE_WAY_TO_PICKUP";
+        else if (nextStatus === "Sampai Pickup") backendStatus = "DRIVER_ARRIVED_AT_PICKUP";
+        else if (nextStatus === "Mengantar") backendStatus = "IN_TRANSIT";
+        else if (nextStatus === "Selesai") backendStatus = "COMPLETED";
+        else if (nextStatus === "Dibatalkan") backendStatus = "CANCELLED";
+
+        const res = await updateSendOrderStatus(orderId, backendStatus, undefined, authAccount?.id);
+        if (!res.success || !res.data) {
+          Alert.alert("Gagal", res.message || "Status pengiriman belum berhasil diperbarui");
+          return;
+        }
+        const serverOrder = mapSendDriverOrder(res.data);
+        setOrders((current) => current.map((order) => order.id === orderId ? serverOrder : order));
+        if (nextStatus === "Selesai") {
+          alertMsg = `Pengantaran selesai! Pendapatan ${rp(serverOrder.driverShare)} ditambahkan ke saldo.`;
+        } else if (nextStatus === "Mengantar") {
+          alertMsg = "Paket telah diambil dan mulai diantar menuju penerima.";
+        } else if (nextStatus === "Sampai Pickup") {
+          alertMsg = "Anda telah tiba di lokasi pengirim paket.";
+        }
+        Alert.alert("Status Diperbarui", alertMsg);
+        return;
       } else if (targetOrder.type === "Setor Sampah") {
         if (nextStatus === "Menuju Pickup") {
           const res = await assignWasteDepositDriver(orderId, authAccount?.id || "driver");
@@ -1044,7 +1069,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       return (o.rawStatus === "SEARCHING_DRIVER" || o.status === "Menunggu") && (!o.driverId || o.driverId === "");
     }
     if (o.type === "Kanyaah Send") {
-      return (o.rawStatus === "SEARCHING_DRIVER" || o.status === "Menunggu") && (!o.driverId || o.driverId === "");
+      return (o.rawStatus === "SEARCHING_DRIVER" || o.rawStatus === "PAYMENT_PENDING" || o.rawStatus === "CREATED" || o.status === "Menunggu") && (!o.driverId || o.driverId === "");
     }
     if (o.type === "Marketplace") {
       return (o.status === "Siap" || o.status === "Menunggu") && (!o.driverId || o.driverId === "");
@@ -1124,6 +1149,27 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 }
                 if (res.data) {
                   const updated = mapRideDriverOrder(res.data);
+                  setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                  return updated;
+                }
+                return true;
+              }
+
+              if (targetOrder?.type === "Kanyaah Send") {
+                let backendStatus = "DRIVER_ASSIGNED";
+                if (status === "Menuju Pickup") backendStatus = "DRIVER_ON_THE_WAY_TO_PICKUP";
+                else if (status === "Sampai Pickup") backendStatus = "DRIVER_ARRIVED_AT_PICKUP";
+                else if (status === "Mengantar") backendStatus = "IN_TRANSIT";
+                else if (status === "Selesai") backendStatus = "COMPLETED";
+                else if (status === "Dibatalkan") backendStatus = "CANCELLED";
+
+                const res = await updateSendOrderStatus(orderId, backendStatus, undefined, authAccount?.id);
+                if (!res.success) {
+                  Alert.alert("Gagal", res.message || "Status pengiriman gagal diperbarui");
+                  return false;
+                }
+                if (res.data) {
+                  const updated = mapSendDriverOrder(res.data);
                   setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
                   return updated;
                 }

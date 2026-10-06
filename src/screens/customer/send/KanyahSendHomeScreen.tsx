@@ -191,7 +191,7 @@ export const KanyahSendHomeScreen: React.FC<KanyahSendHomeScreenProps> = ({
     if (recipient.latitude != null && recipient.longitude != null) {
       return { latitude: recipient.latitude, longitude: recipient.longitude };
     }
-    return { latitude: -6.9175, longitude: 107.6191 };
+    return { latitude: -6.5962, longitude: 106.8040 };
   }, [sender.latitude, sender.longitude, recipient.latitude, recipient.longitude]);
 
   return (

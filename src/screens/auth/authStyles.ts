@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 
 export const authColors = {
   primary: "#087A4B",
@@ -28,15 +28,37 @@ export const authStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: authColors.line,
     marginTop: 20,
-    shadowColor: "#132238",
-    shadowOpacity: 0.04,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 5 },
     elevation: 2,
+    ...Platform.select({
+      web: { boxShadow: "0px 5px 14px rgba(19, 34, 56, 0.04)" as any },
+      default: {
+        shadowColor: "#132238",
+        shadowOpacity: 0.04,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 5 },
+      },
+    }),
   },
   label: { color: authColors.ink, fontSize: 13, fontWeight: "700", marginBottom: 7 },
   input: { backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 14, minHeight: 52, paddingHorizontal: 14, color: authColors.ink, fontSize: 14 },
-  primaryButton: { backgroundColor: authColors.primary, minHeight: 54, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 16, shadowColor: "#075B3A", shadowOpacity: 0.16, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
+  primaryButton: {
+    backgroundColor: authColors.primary,
+    minHeight: 54,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: "0px 4px 8px rgba(7, 91, 58, 0.16)" as any },
+      default: {
+        shadowColor: "#075B3A",
+        shadowOpacity: 0.16,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+      },
+    }),
+  },
   primaryButtonText: { color: "#FFFFFF", fontWeight: "800", fontSize: 15 },
   secondaryButton: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D6DDE6", minHeight: 54, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
   secondaryButtonText: { color: authColors.ink, fontWeight: "700", fontSize: 14 },

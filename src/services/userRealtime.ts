@@ -28,6 +28,12 @@ export const subscribeToUserRealtime = async (
   socket.on("recycle:status_updated", update);
   socket.on("recycle:completed", update);
   socket.on("recycle:new_deposit", update);
+  socket.on("send:order_available", update);
+  socket.on("send:driver_assigned", update);
+  socket.on("send:status_updated", update);
+  socket.on("send:order_completed", update);
+  socket.on("send:delivery_verified", update);
+  socket.on("send:pickup_verified", update);
   return () => {
     socket.off("notification:new", refresh);
     socket.off("order_status_updated", update);
@@ -41,6 +47,12 @@ export const subscribeToUserRealtime = async (
     socket.off("recycle:status_updated", update);
     socket.off("recycle:completed", update);
     socket.off("recycle:new_deposit", update);
+    socket.off("send:order_available", update);
+    socket.off("send:driver_assigned", update);
+    socket.off("send:status_updated", update);
+    socket.off("send:order_completed", update);
+    socket.off("send:delivery_verified", update);
+    socket.off("send:pickup_verified", update);
     socket.disconnect();
   };
 };

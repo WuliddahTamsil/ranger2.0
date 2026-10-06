@@ -351,3 +351,52 @@ export const updateSendDriverLocation = async (
     return { success: false, message: error.message || "Gagal memperbarui koordinat driver." };
   }
 };
+
+/**
+ * 13. Update Send Order Status (Driver / Customer)
+ */
+export const updateSendOrderStatus = async (
+  orderId: string,
+  status: string,
+  note?: string,
+  accountId?: string
+): Promise<{ success: boolean; data?: SendOrderUI; message?: string }> => {
+  try {
+    const headers = await getAuthHeaders(accountId);
+    const res = await fetch(getApiUrl(`/send/orders/${orderId}/status`), {
+      method: "PUT",
+      headers: {
+        ...headers,
+        ...(accountId ? { "x-driver-id": accountId, "x-user-id": accountId } : {}),
+      },
+      body: JSON.stringify({ status, note }),
+    });
+    return await parseJsonResponse(res, "Gagal memperbarui status order pengiriman");
+  } catch (error: any) {
+    console.error("updateSendOrderStatus error:", error);
+    return { success: false, message: error.message || "Gagal memperbarui status pengiriman." };
+  }
+};
+
+/**
+ * 14. Driver: Fetch Assigned Driver Send Orders
+ */
+export const fetchDriverSendOrders = async (
+  driverId: string,
+  accountId?: string
+): Promise<{ success: boolean; data?: SendOrderUI[]; message?: string }> => {
+  try {
+    const headers = await getAuthHeaders(accountId || driverId);
+    const res = await fetch(getApiUrl(`/send/orders/driver?driverId=${driverId}`), {
+      headers: {
+        ...headers,
+        "x-driver-id": driverId,
+      },
+    });
+    return await parseJsonResponse(res, "Gagal memuat daftar pesanan driver");
+  } catch (error: any) {
+    console.error("fetchDriverSendOrders error:", error);
+    return { success: false, message: error.message || "Gagal memuat riwayat order pengiriman." };
+  }
+};
+

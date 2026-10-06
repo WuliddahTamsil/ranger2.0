@@ -315,7 +315,7 @@ export default function App() {
       case "c_send_confirm":
         return <SendOrderConfirmationScreen navigate={navigate} />;
       case "c_send_searching":
-        return <SendSearchingDriverScreen navigate={navigate} />;
+        return <SendSearchingDriverScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_send_tracking":
         return <SendTrackingScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_send_delivery_detail":

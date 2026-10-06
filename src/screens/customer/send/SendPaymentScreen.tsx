@@ -35,7 +35,7 @@ import { AuthAccount } from "../../auth/authTypes";
 import { useSendContext } from "../../../context/SendContext";
 import { fetchSendOrderById, createSendOrder } from "../../../services/sendService";
 import { rp } from "../../../utils/formatters";
-import { API_BASE_URL } from "../../../services/api";
+import { API_BASE_URL, getApiUrl } from "../../../services/api";
 import { SafeAreaBottomBar } from "../../../components/SafeAreaBottomBar";
 import { io } from "socket.io-client";
 
@@ -252,11 +252,12 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
     if (!activeOrder?._id || simulating || isPaid) return;
     setSimulating(true);
     try {
-      await fetch(`${API_BASE_URL}/api/payments/webhook`, {
+      await fetch(getApiUrl("/payments/simulate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId: activeOrder._id,
+          paymentId: activeOrder._id,
           orderType: "KANYAAH_SEND",
           paymentStatus: "PAID",
           status: "PAID",

@@ -17,6 +17,7 @@ export interface PlaceSuggestion {
   longitude: number;
   category?: string;
   distanceKm?: number;
+  matchScore?: number;
 }
 
 export interface UserLocationResult {
@@ -80,7 +81,7 @@ export const LOCAL_KNOWN_POIS: Array<{
   },
   {
     name: "Jalan Sancang Dalam",
-    subtitle: "Bogor Tengah, Kota Bogor, Jawa Barat",
+    subtitle: "Babakan, Bogor Tengah, Kota Bogor, Jawa Barat",
     formattedAddress: "Jalan Sancang Dalam, Babakan, Bogor Tengah, Kota Bogor, Jawa Barat",
     latitude: -6.5919421,
     longitude: 106.8080644,
@@ -88,13 +89,191 @@ export const LOCAL_KNOWN_POIS: Array<{
   },
   {
     name: "Jalan Sancang",
-    subtitle: "Bogor Tengah, Kota Bogor, Jawa Barat",
+    subtitle: "Babakan, Bogor Tengah, Kota Bogor, Jawa Barat",
     formattedAddress: "Jalan Sancang, Babakan, Bogor Tengah, Kota Bogor, Jawa Barat",
     latitude: -6.5925,
     longitude: 106.8075,
     keywords: ["sancang", "jl sancang", "jalan sancang"],
   },
+  {
+    name: "Botani Square Mall Bogor",
+    subtitle: "Jl. Raya Pajajaran No.40, Tegallega, Kota Bogor",
+    formattedAddress: "Botani Square Mall Bogor, Jl. Raya Pajajaran No.40, Tegallega, Kota Bogor, Jawa Barat",
+    latitude: -6.6006,
+    longitude: 106.8063,
+    keywords: ["botani", "botani square", "mall botani", "pajajaran"],
+  },
+  {
+    name: "RS PMI Bogor",
+    subtitle: "Jl. Rumah Sakit I No.1, Tegallega, Kota Bogor",
+    formattedAddress: "RS PMI Bogor, Jl. Rumah Sakit I No.1, Tegallega, Kota Bogor, Jawa Barat",
+    latitude: -6.5975,
+    longitude: 106.8052,
+    keywords: ["rs pmi", "rumah sakit pmi", "pmi bogor", "pmi"],
+  },
+  {
+    name: "Kebun Raya Bogor",
+    subtitle: "Jl. Ir. H. Juanda No.13, Paledang, Kota Bogor",
+    formattedAddress: "Kebun Raya Bogor, Jl. Ir. H. Juanda No.13, Kota Bogor, Jawa Barat",
+    latitude: -6.5976,
+    longitude: 106.7995,
+    keywords: ["kebun raya", "kebun raya bogor", "botanical gardens"],
+  },
+  {
+    name: "Lawang Suryakancana",
+    subtitle: "Jl. Suryakencana, Gudang, Kota Bogor",
+    formattedAddress: "Lawang Suryakancana, Jl. Suryakencana, Kota Bogor, Jawa Barat",
+    latitude: -6.6025,
+    longitude: 106.8000,
+    keywords: ["lawang suryakancana", "suryakencana", "surken"],
+  },
+  {
+    name: "Tugu Kujang Monument",
+    subtitle: "Jl. Pajajaran No.1A, Baranangsiang, Kota Bogor",
+    formattedAddress: "Tugu Kujang Monument, Baranangsiang, Kota Bogor, Jawa Barat",
+    latitude: -6.6014,
+    longitude: 106.8050,
+    keywords: ["tugu kujang", "kujang", "kujang monument"],
+  },
+  {
+    name: "Terminal Baranangsiang Bogor",
+    subtitle: "Jl. Pajajaran, Baranangsiang, Kota Bogor",
+    formattedAddress: "Terminal Baranangsiang Bogor, Kota Bogor, Jawa Barat",
+    latitude: -6.6050,
+    longitude: 106.8080,
+    keywords: ["baranangsiang", "terminal baranangsiang"],
+  },
+  {
+    name: "Lippo Plaza Keboen Raya",
+    subtitle: "Jl. Malabar 2 No.17, Babakan, Kota Bogor",
+    formattedAddress: "Lippo Plaza Keboen Raya, Jl. Malabar 2 No.17, Babakan, Kota Bogor, Jawa Barat",
+    latitude: -6.5956,
+    longitude: 106.8045,
+    keywords: ["lippo plaza", "lippo keboen raya", "lippo bogor", "malabar"],
+  },
+  {
+    name: "Stasiun Bogor",
+    subtitle: "Jl. Nyi Raja Permas, Cibogor, Kota Bogor",
+    formattedAddress: "Stasiun Bogor, Cibogor, Kota Bogor, Jawa Barat",
+    latitude: -6.5947,
+    longitude: 106.7906,
+    keywords: ["stasiun bogor", "stasiun", "commuter line bogor"],
+  },
+  {
+    name: "Sekolah Vokasi IPB (Kampus Cilibende/Gunung Gede)",
+    subtitle: "Jl. Kumbang No.14, Babakan, Kota Bogor",
+    formattedAddress: "Sekolah Vokasi IPB, Jl. Kumbang No.14, Babakan, Kota Bogor, Jawa Barat",
+    latitude: -6.5878,
+    longitude: 106.8078,
+    keywords: ["vokasi ipb", "sv ipb", "ipb cilibende", "kumbang"],
+  },
 ];
+
+/**
+ * Formats distance in km to user-friendly string (e.g. "250 m" or "1.5 km").
+ */
+export const formatDistance = (distKm?: number): string => {
+  if (distKm == null || Number.isNaN(distKm)) return "";
+  if (distKm < 1) {
+    const meters = Math.max(10, Math.round(distKm * 1000));
+    return `${meters} m`;
+  }
+  return `${distKm.toFixed(1)} km`;
+};
+
+/**
+ * Calculates Levenshtein distance between two strings for fuzzy matching & typo tolerance.
+ */
+export const levenshteinDistance = (a: string, b: string): number => {
+  const s1 = a.toLowerCase().trim();
+  const s2 = b.toLowerCase().trim();
+  if (s1 === s2) return 0;
+  if (!s1.length) return s2.length;
+  if (!s2.length) return s1.length;
+
+  const matrix: number[][] = [];
+  for (let i = 0; i <= s1.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= s2.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= s1.length; i++) {
+    for (let j = 1; j <= s2.length; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  return matrix[s1.length][s2.length];
+};
+
+/**
+ * Calculates match score (0-100) based on Gojek/Grab flexible search rules:
+ * Exact match > Prefix > Substring > Keyword > Token Multi-match > Fuzzy Typo tolerance.
+ */
+export const calculateMatchScore = (
+  query: string,
+  targetName: string,
+  targetSubtitle: string = "",
+  keywords: string[] = []
+): number => {
+  const q = query.toLowerCase().trim();
+  const name = targetName.toLowerCase().trim();
+  const sub = targetSubtitle.toLowerCase().trim();
+  const full = `${name} ${sub}`;
+
+  if (!q) return 0;
+
+  // 1. Exact match
+  if (name === q) return 100;
+  if (name.startsWith(q)) return 95;
+  if (name.includes(q)) return 85;
+
+  // 2. Keyword exact / prefix / substring match
+  for (const kw of keywords) {
+    const k = kw.toLowerCase().trim();
+    if (k === q) return 98;
+    if (k.startsWith(q)) return 90;
+    if (k.includes(q) || q.includes(k)) return 80;
+  }
+
+  // 3. Subtitle / address match
+  if (sub.includes(q)) return 70;
+
+  // 4. Token multi-word matching
+  const qTokens = q.split(/\s+/).filter(Boolean);
+  const nameTokens = full.split(/[\s,.-]+/).filter(Boolean);
+
+  let matchedTokens = 0;
+  for (const qt of qTokens) {
+    if (nameTokens.some((nt) => nt === qt || nt.startsWith(qt) || nt.includes(qt))) {
+      matchedTokens++;
+    }
+  }
+
+  if (matchedTokens > 0) {
+    return 50 + (matchedTokens / qTokens.length) * 25;
+  }
+
+  // 5. Fuzzy / typo tolerance (for queries of 3+ letters)
+  if (q.length >= 3) {
+    for (const nt of nameTokens) {
+      if (Math.abs(nt.length - q.length) <= 2) {
+        const dist = levenshteinDistance(q, nt);
+        if (dist === 1) return 60; // 1 typo
+        if (dist === 2 && q.length >= 5) return 40; // 2 typos on long word
+      }
+    }
+  }
+
+  return 0;
+};
 
 /**
  * Calculates distance between two GPS coordinates in kilometers (Haversine formula).
@@ -160,7 +339,7 @@ export const isInsideIndonesia = (
 };
 
 /**
- * Normalizes colloquial search queries (e.g., "armey" -> "Army" / "Armed", "mcd lodaya" -> "McDonald's Lodaya")
+ * Normalizes colloquial search queries (e.g., "mcd lodaya" -> "McDonald's Lodaya", "spbu" -> "SPBU")
  */
 export const normalizeSearchQuery = (raw: string): string[] => {
   const trimmed = raw.trim();
@@ -172,8 +351,9 @@ export const normalizeSearchQuery = (raw: string): string[] => {
   // Common Indonesian POI Abbreviations, street words, and common phonetic misspellings
   const replacements: [RegExp, string][] = [
     [/\barmey\b/gi, "Kost Armey"],
-    [/\barmey\b/gi, "Army"],
-    [/\barmey\b/gi, "Armed"],
+    [/\bkost\b/gi, "Kost"],
+    [/\bkos\b/gi, "Kost"],
+    [/\bkosan\b/gi, "Kost"],
     [/\bmcd\b/gi, "McDonald's"],
     [/\bmcdonalds\b/gi, "McDonald's"],
     [/\bmcdonald\b/gi, "McDonald's"],
@@ -274,8 +454,11 @@ const searchGooglePlaces = async (
 
 /**
  * Smart place search with fuzzy matching, typo tolerance, and POI recognition.
- * Prioritizes places strictly in the local area around the user's location (radius ~25-35km).
- * Guarantees Google Maps places like "Kost Armey" appear with 1st priority.
+ * Works like Gojek/Grab:
+ * 1. Uses user's current location as the anchor point.
+ * 2. Searches by place name, address, keywords, and flexible fuzzy patterns.
+ * 3. Strictly prioritizes results closest to user.
+ * 4. Calculates precise distance in km/m.
  */
 export const searchPlacesSmart = async (
   query: string,
@@ -285,6 +468,7 @@ export const searchPlacesSmart = async (
   if (!trimmed || trimmed.length < 2) return [];
 
   const limit = options?.limit || 6;
+  // Always anchor to user location; default to Bogor operational center (-6.5962, 106.8040)
   const biasLat = options?.lat ?? -6.5962;
   const biasLon = options?.lon ?? 106.8040;
 
@@ -298,17 +482,13 @@ export const searchPlacesSmart = async (
   }
 
   const queryVariants = normalizeSearchQuery(trimmed);
-  const results: PlaceSuggestion[] = [];
+  const results: Array<PlaceSuggestion & { matchScore?: number }> = [];
   const seenKeys = new Set<string>();
-  const qLower = trimmed.toLowerCase();
 
-  // 2. Immediate Local POI Matching (e.g. Kost Armey, Jalan Sancang Dalam)
+  // 2. Immediate Local POI Matching (e.g. Kost Armey, Jalan Sancang Dalam, Botani Square)
   for (const poi of LOCAL_KNOWN_POIS) {
-    const isMatch =
-      poi.keywords.some((k) => k.includes(qLower) || qLower.includes(k)) ||
-      poi.name.toLowerCase().includes(qLower);
-
-    if (isMatch) {
+    const score = calculateMatchScore(trimmed, poi.name, poi.subtitle, poi.keywords);
+    if (score > 0) {
       const coordKey = `${poi.latitude.toFixed(4)},${poi.longitude.toFixed(4)}`;
       if (!seenKeys.has(coordKey)) {
         seenKeys.add(coordKey);
@@ -321,23 +501,24 @@ export const searchPlacesSmart = async (
           latitude: poi.latitude,
           longitude: poi.longitude,
           distanceKm,
+          matchScore: score,
         });
       }
     }
   }
 
-  // 3. Photon Komoot API: First search inside the user's immediate local vicinity (radius ~35 km)
-  const minLon = biasLon - 0.35;
-  const maxLon = biasLon + 0.35;
-  const minLat = biasLat - 0.35;
-  const maxLat = biasLat + 0.35;
+  // 3. Photon Komoot API: First search inside the user's immediate local vicinity (radius ~25-30 km)
+  const minLon = biasLon - 0.25;
+  const maxLon = biasLon + 0.25;
+  const minLat = biasLat - 0.25;
+  const maxLat = biasLat + 0.25;
   const localBbox = `${minLon},${minLat},${maxLon},${maxLat}`;
 
   for (const q of queryVariants) {
     if (results.length >= limit * 2) break;
 
     try {
-      // First try local bounding box around user
+      // First try local bounding box strictly around user
       let photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(
         q
       )}&bbox=${localBbox}&lat=${biasLat}&lon=${biasLon}&limit=${Math.max(limit * 2, 8)}`;
@@ -346,62 +527,66 @@ export const searchPlacesSmart = async (
         headers: { "Accept-Language": "id,en" },
       });
 
-      if (!resp.ok || (await resp.clone().json())?.features?.length === 0) {
-        // If no results in local radius, expand to Indonesia bbox
+      let data = resp.ok ? await resp.json() : null;
+      let features = data?.features || [];
+
+      // If no results in tight local radius, expand search around user without strict bbox
+      if (features.length === 0) {
         photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(
           q
-        )}&bbox=95.0,-11.0,141.0,6.0&lat=${biasLat}&lon=${biasLon}&limit=${Math.max(limit * 2, 12)}`;
+        )}&lat=${biasLat}&lon=${biasLon}&limit=${Math.max(limit * 2, 10)}`;
         resp = await fetch(photonUrl, {
           headers: { "Accept-Language": "id,en" },
         });
+        if (resp.ok) {
+          data = await resp.json();
+          features = data?.features || [];
+        }
       }
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const features = data?.features || [];
+      for (const feat of features) {
+        const props = feat.properties || {};
+        const coords = feat.geometry?.coordinates;
+        if (!coords || coords.length < 2) continue;
 
-        for (const feat of features) {
-          const props = feat.properties || {};
-          const coords = feat.geometry?.coordinates;
-          if (!coords || coords.length < 2) continue;
+        const lon = Number(coords[0]);
+        const lat = Number(coords[1]);
 
-          const lon = Number(coords[0]);
-          const lat = Number(coords[1]);
-
-          // Filter out any results that are NOT inside Indonesia
-          if (!isInsideIndonesia(lat, lon, props.countrycode, props.country)) {
-            continue;
-          }
-
-          const coordKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
-          if (seenKeys.has(coordKey)) continue;
-          seenKeys.add(coordKey);
-
-          const name = props.name || props.street || q;
-          const parts = [
-            props.street && props.street !== name ? props.street : "",
-            props.district,
-            props.city || props.county,
-            props.state,
-          ].filter(Boolean);
-
-          const subtitle = parts.join(", ") || props.country || "Indonesia";
-          const formattedAddress = [name, subtitle].filter(Boolean).join(", ");
-          const distanceKm = calculateDistanceKm(biasLat, biasLon, lat, lon);
-
-          results.push({
-            id: `photon-${props.osm_id || Math.random()}`,
-            name,
-            subtitle,
-            formattedAddress,
-            latitude: lat,
-            longitude: lon,
-            category: props.osm_value || props.osm_key,
-            distanceKm,
-          });
-
-          if (results.length >= limit * 2) break;
+        // Filter out any results that are NOT inside Indonesia
+        if (!isInsideIndonesia(lat, lon, props.countrycode, props.country)) {
+          continue;
         }
+
+        const coordKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+        if (seenKeys.has(coordKey)) continue;
+        seenKeys.add(coordKey);
+
+        const name = props.name || props.street || q;
+        const parts = [
+          props.street && props.street !== name ? props.street : "",
+          props.district,
+          props.city || props.county,
+          props.state,
+        ].filter(Boolean);
+
+        const subtitle = parts.join(", ") || props.country || "Indonesia";
+        const formattedAddress = [name, subtitle].filter(Boolean).join(", ");
+        const distanceKm = calculateDistanceKm(biasLat, biasLon, lat, lon);
+        const score = calculateMatchScore(trimmed, name, subtitle);
+
+        results.push({
+          id: `photon-${props.osm_id || Math.random()}`,
+          name,
+          subtitle,
+          formattedAddress,
+          latitude: lat,
+          longitude: lon,
+          category: props.osm_value || props.osm_key,
+          distanceKm,
+          matchScore: score || 50,
+        });
+
+        if (results.length >= limit * 2) break;
       }
     } catch {
       // ignore photon error
@@ -413,7 +598,7 @@ export const searchPlacesSmart = async (
     try {
       const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
         trimmed
-      )}&countrycodes=id&limit=${limit}&addressdetails=1&viewbox=${biasLon - 0.4},${biasLat + 0.4},${biasLon + 0.4},${biasLat - 0.4}`;
+      )}&countrycodes=id&limit=${limit}&addressdetails=1&viewbox=${biasLon - 0.3},${biasLat + 0.3},${biasLon + 0.3},${biasLat - 0.3}`;
 
       const resp = await fetch(nomUrl, {
         headers: {
@@ -447,6 +632,7 @@ export const searchPlacesSmart = async (
 
           const subtitle = parts.join(", ") || "Indonesia";
           const distanceKm = calculateDistanceKm(biasLat, biasLon, lat, lon);
+          const score = calculateMatchScore(trimmed, name, subtitle);
 
           results.push({
             id: `nom-${item.place_id || Math.random()}`,
@@ -456,6 +642,7 @@ export const searchPlacesSmart = async (
             latitude: lat,
             longitude: lon,
             distanceKm,
+            matchScore: score || 45,
           });
         }
       }
@@ -464,10 +651,30 @@ export const searchPlacesSmart = async (
     }
   }
 
-  // 5. Strictly Sort results by proximity to user location (closest first)
+  // 5. Gojek/Grab-Style Ranking & Sorting:
+  // Strictly prioritize places closest to the user's location.
   results.sort((a, b) => {
-    const distA = a.distanceKm ?? Number.POSITIVE_INFINITY;
-    const distB = b.distanceKm ?? Number.POSITIVE_INFINITY;
+    const distA = a.distanceKm ?? 999999;
+    const distB = b.distanceKm ?? 999999;
+    const scoreA = a.matchScore ?? 50;
+    const scoreB = b.matchScore ?? 50;
+
+    // Both are within local area (< 30km): sort strictly by distance!
+    if (distA <= 30 && distB <= 30) {
+      if (Math.abs(distA - distB) > 0.05) {
+        return distA - distB;
+      }
+      return scoreB - scoreA;
+    }
+
+    // Local (< 30km) always beats distant locations
+    if (distA <= 30 && distB > 30) return -1;
+    if (distB <= 30 && distA > 30) return 1;
+
+    // Both distant: balance relevance and proximity
+    if (Math.abs(scoreA - scoreB) > 25) {
+      return scoreB - scoreA;
+    }
     return distA - distB;
   });
 

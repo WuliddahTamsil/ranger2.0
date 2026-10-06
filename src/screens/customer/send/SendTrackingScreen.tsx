@@ -70,7 +70,7 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
   const [callVisible, setCallVisible] = useState(false);
   const [complaintVisible, setComplaintVisible] = useState(false);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
-  const [ratingScore, setRatingScore] = useState(5);
+  const [ratingScore, setRatingScore] = useState(0);
   const [ratingReview, setRatingReview] = useState("");
   const [submittingRating, setSubmittingRating] = useState(false);
   const [copiedPin, setCopiedPin] = useState(false);
@@ -94,7 +94,8 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
   useEffect(() => {
     if (!activeOrder?._id) return;
 
-    const socket = io(API_BASE_URL, { transports: ["websocket", "polling"] });
+    const socketUrl = API_BASE_URL.replace(/\/api\/?$/, "");
+    const socket = io(socketUrl, { transports: ["websocket", "polling"] });
     socket.emit("join_send_room", { orderId: activeOrder._id, token: authAccount?.token });
 
     // Live GPS updates from driver
@@ -172,6 +173,10 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
 
   const handleSendRating = async () => {
     if (!activeOrder?._id) return;
+    if (ratingScore <= 0) {
+      showToast("Pilih jumlah bintang (1-5) terlebih dahulu.");
+      return;
+    }
     setSubmittingRating(true);
     try {
       const res = await submitSendRating(activeOrder._id, ratingScore, ratingReview, authAccount?.id);
@@ -231,7 +236,7 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
 
   const centerCoord = driverCoord || (activeOrder?.sender?.latitude != null && activeOrder?.sender?.longitude != null
     ? { latitude: activeOrder.sender.latitude as number, longitude: activeOrder.sender.longitude as number }
-    : { latitude: -6.9175, longitude: 107.6191 });
+    : { latitude: -6.5962, longitude: 106.8040 });
 
   const driverName = activeOrder?.driverId?.name || "Kang Asep Rangers";
   const driverPhone = activeOrder?.driverId?.phone || "081234567890";
