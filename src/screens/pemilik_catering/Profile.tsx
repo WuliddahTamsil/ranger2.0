@@ -12,6 +12,8 @@ import {
   TextInput,
   Switch,
   Alert,
+  ActivityIndicator,
+  Linking,
 } from "react-native";
 import {
   User,
@@ -31,6 +33,11 @@ import {
   Camera,
   X,
   CreditCard,
+  MapPin,
+  Navigation,
+  Compass,
+  ExternalLink,
+  Flag,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Nav } from "../../types";
@@ -39,6 +46,7 @@ import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
 import { updateUserProfile, uploadFileToBackend } from "../../services/api";
 import { AuthAccount } from "../auth/authTypes";
 import { updateCachedAccount } from "../auth/authService";
+import { CustomerLocationPicker, CustomerLocationValue } from "../../components/CustomerLocationPicker";
 
 interface ProfileProps {
   storeInfo: {
@@ -57,6 +65,15 @@ interface ProfileProps {
     qrisImageUrl?: string;
   bankTransferEnabled?: boolean;
   qrisEnabled?: boolean;
+    street?: string;
+    city?: string;
+    district?: string;
+    province?: string;
+    postalCode?: string;
+    notes?: string;
+    latitude?: number;
+    longitude?: number;
+    gmapsUrl?: string;
 };
   setStoreInfo: (info: any) => void;
   userId?: string;
@@ -87,6 +104,18 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
   const [editStoreName, setEditStoreName] = useState(storeInfo.storeName);
   const [editStoreDesc, setEditStoreDesc] = useState(storeInfo.description);
   const [editStoreAddr, setEditStoreAddr] = useState(storeInfo.address);
+  const [editStreet, setEditStreet] = useState(storeInfo.street || "");
+  const [editCity, setEditCity] = useState(storeInfo.city || "");
+  const [editDistrict, setEditDistrict] = useState(storeInfo.district || "");
+  const [editProvince, setEditProvince] = useState(storeInfo.province || "");
+  const [editPostalCode, setEditPostalCode] = useState(storeInfo.postalCode || "");
+  const [editNotes, setEditNotes] = useState(storeInfo.notes || "");
+  const [editLatitude, setEditLatitude] = useState<number | undefined>(storeInfo.latitude);
+  const [editLongitude, setEditLongitude] = useState<number | undefined>(storeInfo.longitude);
+  const [editGmapsUrl, setEditGmapsUrl] = useState(storeInfo.gmapsUrl || "");
+  const [editDetectedAddress, setEditDetectedAddress] = useState("");
+  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+  const [savingStore, setSavingStore] = useState(false);
   const [bankName, setBankName] = useState(storeInfo.bankName || "");
   const [bankAccountNumber, setBankAccountNumber] = useState(storeInfo.bankAccountNumber || "");
   const [bankAccountHolder, setBankAccountHolder] = useState(storeInfo.bankAccountHolder || "");
@@ -143,19 +172,147 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
     Alert.alert("Sukses", "Nomor HP berhasil diperbarui");
   };
 
-  const handleSaveStore = () => {
+  const buildCateringAddress = (data: {
+    street?: string;
+    district?: string;
+    city?: string;
+    province?: string;
+    postalCode?: string;
+    notes?: string;
+  }) => {
+    const parts: string[] = [];
+    if (data.street?.trim()) parts.push(data.street.trim());
+    if (data.district?.trim()) parts.push(`Kec. ${data.district.trim()}`);
+    if (data.city?.trim()) parts.push(data.city.trim());
+    if (data.province?.trim()) parts.push(data.province.trim());
+    if (data.postalCode?.trim()) parts.push(data.postalCode.trim());
+
+    let full = parts.join(", ");
+    if (data.notes?.trim()) {
+      full = full ? `${full} (Patokan: ${data.notes.trim()})` : `Patokan: ${data.notes.trim()}`;
+    }
+    return full;
+  };
+
+  const openStoreModal = () => {
+    setEditStoreName(storeInfo.storeName);
+    setEditStoreDesc(storeInfo.description);
+    setEditStreet(storeInfo.street || authAccount?.roleData?.cateringStreet || storeInfo.address || "");
+    setEditCity(storeInfo.city || authAccount?.roleData?.cateringCity || "");
+    setEditDistrict(storeInfo.district || authAccount?.roleData?.cateringDistrict || "");
+    setEditProvince(storeInfo.province || authAccount?.roleData?.cateringProvince || "");
+    setEditPostalCode(storeInfo.postalCode || authAccount?.roleData?.cateringPostalCode || "");
+    setEditNotes(storeInfo.notes || authAccount?.roleData?.cateringNotes || "");
+    setEditLatitude(
+      storeInfo.latitude ??
+        (authAccount?.roleData?.cateringLatitude ? Number(authAccount.roleData.cateringLatitude) : undefined)
+    );
+    setEditLongitude(
+      storeInfo.longitude ??
+        (authAccount?.roleData?.cateringLongitude ? Number(authAccount.roleData.cateringLongitude) : undefined)
+    );
+    setEditGmapsUrl(storeInfo.gmapsUrl || authAccount?.roleData?.cateringGmapsUrl || "");
+    setStoreModalVisible(true);
+  };
+
+  const handleLocationConfirmed = (location: CustomerLocationValue) => {
+    setEditLatitude(location.latitude);
+    setEditLongitude(location.longitude);
+    const gmaps = `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`;
+    setEditGmapsUrl(gmaps);
+    if (location.detectedAddress) {
+      setEditDetectedAddress(location.detectedAddress);
+      if (!editStreet.trim()) {
+        setEditStreet(location.detectedAddress);
+      }
+    }
+    setLocationPickerVisible(false);
+  };
+
+  const handleSaveStore = async () => {
     if (editStoreName.trim() === "") {
-      Alert.alert("Error", "Nama catering tidak boleh kosong");
+      Alert.alert("Error", "Nama bisnis catering tidak boleh kosong");
       return;
     }
-    setStoreInfo({
-      ...storeInfo,
-      storeName: editStoreName,
-      description: editStoreDesc,
-      address: editStoreAddr,
-    });
-    setStoreModalVisible(false);
-    Alert.alert("Sukses", "Informasi catering berhasil diperbarui");
+    if (!editStreet.trim() && !editCity.trim()) {
+      Alert.alert("Error", "Mohon isi alamat jalan dan kota/kabupaten dapur catering.");
+      return;
+    }
+
+    setSavingStore(true);
+    try {
+      const fullAddress = buildCateringAddress({
+        street: editStreet,
+        district: editDistrict,
+        city: editCity,
+        province: editProvince,
+        postalCode: editPostalCode,
+        notes: editNotes,
+      });
+
+      const roleData: Record<string, string> = {
+        businessName: editStoreName.trim(),
+        menuSpecialty: editStoreDesc.trim(),
+        businessAddress: fullAddress,
+        cateringStreet: editStreet.trim(),
+        cateringCity: editCity.trim(),
+        cateringDistrict: editDistrict.trim(),
+        cateringProvince: editProvince.trim(),
+        cateringPostalCode: editPostalCode.trim(),
+        cateringNotes: editNotes.trim(),
+        cateringLatitude: editLatitude !== undefined ? String(editLatitude) : "",
+        cateringLongitude: editLongitude !== undefined ? String(editLongitude) : "",
+        cateringGmapsUrl:
+          editGmapsUrl.trim() ||
+          (editLatitude !== undefined && editLongitude !== undefined
+            ? `https://www.google.com/maps/search/?api=1&query=${editLatitude},${editLongitude}`
+            : ""),
+      };
+
+      if (userId) {
+        const result = await updateUserProfile(userId, {
+          address: fullAddress,
+          roleData,
+        });
+        if (!result?.success) {
+          throw new Error(result?.message || "Gagal menyimpan informasi catering ke server.");
+        }
+      }
+
+      if (authAccount) {
+        const updatedAccount: AuthAccount = {
+          ...authAccount,
+          address: fullAddress,
+          roleData: { ...authAccount.roleData, ...roleData },
+          updatedAt: new Date().toISOString(),
+        };
+        await updateCachedAccount(updatedAccount);
+        onUpdateAccount?.(updatedAccount);
+      }
+
+      setStoreInfo({
+        ...storeInfo,
+        storeName: editStoreName.trim(),
+        description: editStoreDesc.trim(),
+        address: fullAddress,
+        street: editStreet.trim(),
+        city: editCity.trim(),
+        district: editDistrict.trim(),
+        province: editProvince.trim(),
+        postalCode: editPostalCode.trim(),
+        notes: editNotes.trim(),
+        latitude: editLatitude,
+        longitude: editLongitude,
+        gmapsUrl: roleData.cateringGmapsUrl,
+      });
+
+      setStoreModalVisible(false);
+      Alert.alert("Sukses", "Informasi dan alamat lengkap catering berhasil diperbarui.");
+    } catch (error) {
+      Alert.alert("Gagal Menyimpan", error instanceof Error ? error.message : "Terjadi kesalahan saat menyimpan.");
+    } finally {
+      setSavingStore(false);
+    }
   };
 
   const handleToggleStoreStatus = () => {
@@ -371,18 +528,29 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
         <View style={styles.groupCard}>
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => {
-              setEditStoreName(storeInfo.storeName);
-              setEditStoreDesc(storeInfo.description);
-              setEditStoreAddr(storeInfo.address);
-              setStoreModalVisible(true);
-            }}
+            onPress={openStoreModal}
           >
             {renderMenuIcon(<StoreIcon size={16} color="#1B7A4E" />, "#E8F5EE")}
             <View style={styles.menuItemBody}>
               <Text style={styles.menuItemTitle}>Informasi Catering</Text>
               <Text style={styles.menuItemSubtitle} numberOfLines={1}>
                 {displayVal(storeInfo.storeName, "Nama catering belum diisi")}
+              </Text>
+            </View>
+            <ChevronRight size={16} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={openStoreModal}
+          >
+            {renderMenuIcon(<MapPin size={16} color="#1B7A4E" />, "#E8F5EE")}
+            <View style={styles.menuItemBody}>
+              <Text style={styles.menuItemTitle}>Alamat Dapur & Titik Maps</Text>
+              <Text style={styles.menuItemSubtitle} numberOfLines={1}>
+                {storeInfo.address ? storeInfo.address : "Atur alamat detail & titik maps untuk driver"}
               </Text>
             </View>
             <ChevronRight size={16} color="#9CA3AF" />
@@ -682,7 +850,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
       </Modal>
 
       {/* 6. Modal Edit Store Info */}
-      <Modal visible={storeModalVisible} transparent animationType="slide">
+      <Modal visible={storeModalVisible} transparent animationType="slide" onRequestClose={() => setStoreModalVisible(false)}>
         <View style={styles.modalBgBottom}>
           <View style={styles.sheetContainer}>
             <View style={styles.sheetHeader}>
@@ -692,8 +860,8 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.formScrollContainer}>
-              <Text style={styles.inputLabel}>Nama Bisnis Catering</Text>
+            <ScrollView style={styles.formScrollContainer} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={styles.inputLabel}>Nama Bisnis Catering *</Text>
               <TextInput 
                 style={styles.textInput}
                 value={editStoreName}
@@ -701,44 +869,201 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
                 placeholder="Nama Catering"
               />
 
-              <Text style={styles.inputLabel}>Deskripsi Dapur</Text>
+              <Text style={styles.inputLabel}>Deskripsi / Spesialisasi Dapur</Text>
               <TextInput 
-                style={[styles.textInput, styles.textArea]}
+                style={[styles.textInput, styles.textAreaSmall]}
                 value={editStoreDesc}
                 onChangeText={setEditStoreDesc}
-                placeholder="Tulis deskripsi catering Anda..."
+                placeholder="Tulis spesialisasi catering (cth: Masakan Sunda, Prasmanan, Nasi Box)..."
+                multiline
+                numberOfLines={2}
+              />
+
+              {/* Section Header: Alamat & Titik Dapur */}
+              <View style={styles.sectionHeaderWrap}>
+                <MapPin size={17} color="#1B7A4E" />
+                <Text style={styles.sectionHeaderText}>Alamat Dapur & Titik Maps (Khusus Driver)</Text>
+              </View>
+              <Text style={styles.sectionHeaderSub}>
+                Lengkapi alamat spesifik, titik koordinat Google Maps, dan patokan agar kurir/driver mudah menemukan dapur Anda saat mengambil pesanan.
+              </Text>
+
+              {/* Maps Picker Card */}
+              <View style={styles.mapPickerCard}>
+                <View style={styles.mapPickerIcon}>
+                  <Navigation size={20} color="#1B7A4E" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.mapPickerTitle}>
+                    {editLatitude !== undefined && editLongitude !== undefined
+                      ? "Titik Peta Google Maps Dipilih ✓"
+                      : "Pilih Titik di Peta (Maps)"}
+                  </Text>
+                  <Text style={styles.mapPickerSub} numberOfLines={2}>
+                    {editLatitude !== undefined && editLongitude !== undefined
+                      ? `Koordinat: ${editLatitude.toFixed(5)}, ${editLongitude.toFixed(5)}`
+                      : "Tentukan lokasi dapur di peta agar rute navigasi driver akurat"}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.mapPickerBtn}
+                  onPress={() => setLocationPickerVisible(true)}
+                >
+                  <Text style={styles.mapPickerBtnText}>
+                    {editLatitude !== undefined && editLongitude !== undefined ? "Ubah" : "Pilih"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Optional: GMaps link tester */}
+              {Boolean(editGmapsUrl || (editLatitude && editLongitude)) && (
+                <TouchableOpacity
+                  style={styles.gmapsLinkTester}
+                  onPress={() => {
+                    const target = editGmapsUrl || `https://www.google.com/maps/search/?api=1&query=${editLatitude},${editLongitude}`;
+                    void Linking.openURL(target);
+                  }}
+                >
+                  <ExternalLink size={13} color="#1B7A4E" />
+                  <Text style={styles.gmapsLinkTesterText}>Buka & Tes di Google Maps</Text>
+                </TouchableOpacity>
+              )}
+
+              <Text style={styles.inputLabel}>Alamat Jalan / Nomor Bangunan *</Text>
+              <TextInput 
+                style={[styles.textInput, styles.textAreaSmall]}
+                value={editStreet}
+                onChangeText={setEditStreet}
+                placeholder="Contoh: Jl. Raya Cigugur No. 12, RT 01 / RW 02"
+                multiline
+                numberOfLines={2}
+              />
+
+              {/* Dua Kolom: Kota / Kabupaten & Kecamatan */}
+              <View style={styles.formRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Kota / Kabupaten *</Text>
+                  <TextInput 
+                    style={styles.textInput}
+                    value={editCity}
+                    onChangeText={setEditCity}
+                    placeholder="Contoh: Kab. Kuningan"
+                  />
+                </View>
+                <View style={{ width: 10 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Kecamatan</Text>
+                  <TextInput 
+                    style={styles.textInput}
+                    value={editDistrict}
+                    onChangeText={setEditDistrict}
+                    placeholder="Contoh: Cigugur"
+                  />
+                </View>
+              </View>
+
+              {/* Dua Kolom: Provinsi & Kode Pos */}
+              <View style={styles.formRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Provinsi</Text>
+                  <TextInput 
+                    style={styles.textInput}
+                    value={editProvince}
+                    onChangeText={setEditProvince}
+                    placeholder="Contoh: Jawa Barat"
+                  />
+                </View>
+                <View style={{ width: 10 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Kode Pos</Text>
+                  <TextInput 
+                    style={styles.textInput}
+                    value={editPostalCode}
+                    onChangeText={setEditPostalCode}
+                    placeholder="Contoh: 45552"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              {/* Patokan Maps / Landmark */}
+              <View style={styles.notesLabelRow}>
+                <Flag size={14} color="#B45309" />
+                <Text style={styles.notesLabel}>Patokan Lokasi Dapur (Penting untuk Driver) *</Text>
+              </View>
+              <Text style={styles.notesHint}>
+                Tuliskan warna pagar, masjid terdekat, warung, atau ciri rumah agar driver tidak tersesat.
+              </Text>
+              <TextInput 
+                style={[styles.textInput, styles.textArea, { borderColor: "#FBBF24" }]}
+                value={editNotes}
+                onChangeText={setEditNotes}
+                placeholder="Contoh: Rumah pagar hitam samping Masjid Al-Ikhlas, seberang warung Madura, ada spanduk Barokah Catering di depan teras."
                 multiline
                 numberOfLines={3}
               />
 
-              <Text style={styles.inputLabel}>Alamat Dapur</Text>
-              <TextInput 
-                style={[styles.textInput, styles.textArea]}
-                value={editStoreAddr}
-                onChangeText={setEditStoreAddr}
-                placeholder="Alamat Lengkap Dapur"
-                multiline
-                numberOfLines={3}
-              />
+              {/* Pratinjau Alamat Lengkap */}
+              <View style={styles.previewBox}>
+                <Text style={styles.previewTitle}>Pratinjau Alamat Lengkap yang Dilihat Driver:</Text>
+                <Text style={styles.previewContent}>
+                  {buildCateringAddress({
+                    street: editStreet,
+                    district: editDistrict,
+                    city: editCity,
+                    province: editProvince,
+                    postalCode: editPostalCode,
+                    notes: editNotes,
+                  }) || "Alamat belum diisi"}
+                </Text>
+                {editLatitude !== undefined && editLongitude !== undefined && (
+                  <View style={styles.coordBadge}>
+                    <Navigation size={11} color="#065F46" />
+                    <Text style={styles.coordBadgeText}>
+                      Pin Maps: {editLatitude.toFixed(5)}, {editLongitude.toFixed(5)}
+                    </Text>
+                  </View>
+                )}
+              </View>
 
               <View style={styles.sheetActions}>
                 <TouchableOpacity 
                   style={[styles.sheetBtn, styles.sheetBtnOutline]}
                   onPress={() => setStoreModalVisible(false)}
+                  disabled={savingStore}
                 >
                   <Text style={styles.sheetBtnTextOutline}>Batal</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[styles.sheetBtn, styles.sheetBtnSolid]}
+                  style={[styles.sheetBtn, styles.sheetBtnSolid, savingStore && { opacity: 0.7 }]}
                   onPress={handleSaveStore}
+                  disabled={savingStore}
                 >
-                  <Text style={styles.sheetBtnTextSolid}>Simpan</Text>
+                  {savingStore ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.sheetBtnTextSolid}>Simpan</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </ScrollView>
           </View>
         </View>
       </Modal>
+
+      <CustomerLocationPicker
+        visible={locationPickerVisible}
+        initialLocation={
+          editLatitude !== undefined && editLongitude !== undefined
+            ? { latitude: editLatitude, longitude: editLongitude, detectedAddress: editDetectedAddress }
+            : undefined
+        }
+        title="Pilih Titik Dapur Catering"
+        subtitle="Geser pin tepat di lokasi dapur catering Anda agar driver mudah menjemput"
+        badgeText="Titik Dapur"
+        onClose={() => setLocationPickerVisible(false)}
+        onConfirm={handleLocationConfirmed}
+      />
 
       <Modal visible={paymentModalVisible} transparent animationType="slide" onRequestClose={() => setPaymentModalVisible(false)}>
         <View style={styles.modalBgBottom}>
@@ -1231,7 +1556,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   formScrollContainer: {
-    maxHeight: 380,
+    maxHeight: 520,
   },
   inputLabel: {
     fontSize: 12,
@@ -1254,6 +1579,143 @@ const styles = StyleSheet.create({
   textArea: {
     textAlignVertical: "top",
     minHeight: 80,
+  },
+  textAreaSmall: {
+    textAlignVertical: "top",
+    minHeight: 56,
+  },
+  sectionHeaderWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 18,
+    marginBottom: 4,
+  },
+  sectionHeaderText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#064E3B",
+  },
+  sectionHeaderSub: {
+    fontSize: 11,
+    color: "#6B7280",
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  mapPickerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+  },
+  mapPickerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mapPickerTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#065F46",
+  },
+  mapPickerSub: {
+    fontSize: 11,
+    color: "#166534",
+    marginTop: 2,
+  },
+  mapPickerBtn: {
+    backgroundColor: "#1B7A4E",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  mapPickerBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  gmapsLinkTester: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  gmapsLinkTesterText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1B7A4E",
+  },
+  formRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  notesLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+  },
+  notesLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#B45309",
+  },
+  notesHint: {
+    fontSize: 11,
+    color: "#78350F",
+    lineHeight: 15,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  previewBox: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  previewTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#475569",
+    marginBottom: 4,
+  },
+  previewContent: {
+    fontSize: 12,
+    color: "#1E293B",
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+  coordBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 6,
+    backgroundColor: "#ECFDF5",
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  coordBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#065F46",
   },
   sheetActions: {
     flexDirection: "row",

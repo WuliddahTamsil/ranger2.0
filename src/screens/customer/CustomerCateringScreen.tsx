@@ -72,6 +72,8 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
       address: shop.roleData?.businessAddress || shop.address || "",
       phone: shop.phone || "",
       profilePhoto: shop.profilePhoto,
+      coverImage: shop.coverImage,
+      topMenuName: shop.topMenuName,
       description: shop.roleData?.menuSpecialty || "",
       bankName: shop.roleData?.cateringBankName || "",
       bankAccountNumber: shop.roleData?.cateringBankAccountNumber || "",
@@ -112,24 +114,56 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
             const isOpen = shop.roleData?.isDapurOpen === "true";
             const displayName = shop.roleData?.businessName || shop.name || "Mitra Catering";
             const specialty = shop.roleData?.menuSpecialty || "Spesialisasi belum tersedia";
+            const bannerUri = shop.coverImage || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&h=400&fit=crop&q=80";
 
             return (
               <View key={shop._id} style={[styles.card, !isOpen && styles.cardClosed]}>
-                {shop.profilePhoto ? <Image source={{ uri: shop.profilePhoto }} style={styles.image} /> : <View style={styles.imagePlaceholder}><ChefHat size={30} color="#1B7A4E" /><Text style={styles.placeholderText}>Foto mitra belum tersedia</Text></View>}
-                {!isOpen && (
-                  <View style={styles.closedOverlay}>
-                    <Text style={styles.closedOverlayText}>TUTUP</Text>
-                  </View>
-                )}
+                <View style={styles.imageContainer}>
+                  {bannerUri ? (
+                    <Image source={{ uri: bannerUri }} style={styles.image} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <ChefHat size={30} color="#1B7A4E" />
+                      <Text style={styles.placeholderText}>Foto menu belum tersedia</Text>
+                    </View>
+                  )}
+
+                  {shop.topMenuName ? (
+                    <View style={styles.topMenuBadge}>
+                      <Text style={styles.topMenuBadgeText} numberOfLines={1}>
+                        ⭐ Terlaris: {shop.topMenuName}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {!isOpen && (
+                    <View style={styles.closedOverlay}>
+                      <Text style={styles.closedOverlayText}>TUTUP</Text>
+                    </View>
+                  )}
+                </View>
+
                 <View style={styles.cardBody}>
-                  <View style={styles.titleRow}>
-                    <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
-                    {Number(shop.rating) > 0 ? <Stars rating={Number(shop.rating)} /> : <Text style={styles.ratingFallback}>Belum ada ulasan</Text>}
+                  <View style={styles.headerInfoRow}>
+                    {shop.profilePhoto ? (
+                      <Image source={{ uri: shop.profilePhoto }} style={styles.ownerAvatar} />
+                    ) : (
+                      <View style={styles.ownerAvatarPlaceholder}>
+                        <ChefHat size={18} color="#1B7A4E" />
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.titleRow}>
+                        <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+                        {Number(shop.rating) > 0 ? <Stars rating={Number(shop.rating)} /> : <Text style={styles.ratingFallback}>Belum ada ulasan</Text>}
+                      </View>
+                      <Text style={styles.cuisine}>{specialty}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.cuisine}>{specialty}</Text>
+
                   <View style={styles.metaRow}>
                     <MapPin size={14} color="#6B7280" />
-                    <Text style={styles.metaText}>
+                    <Text style={styles.metaText} numberOfLines={1}>
                       {shop.roleData?.businessAddress || shop.address || "Alamat belum tersedia"} · {isOpen ? "Dapur Buka" : "Dapur Tutup"}
                     </Text>
                   </View>
@@ -155,7 +189,7 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { width: "100%", maxWidth: 640, alignSelf: "center", padding: 16, paddingBottom: 32 },
   hero: { flexDirection: "row", alignItems: "center", backgroundColor: "#E8F5EE", borderRadius: 18, padding: 16, marginBottom: 22 },
   heroIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center", marginRight: 12 },
   heroCopy: { flex: 1 },
@@ -164,17 +198,23 @@ const styles = StyleSheet.create({
   sectionTitle: { color: "#111827", fontSize: 18, fontWeight: "800", marginBottom: 12 },
   card: { backgroundColor: "#FFFFFF", borderRadius: 18, overflow: "hidden", marginBottom: 14, borderWidth: 1, borderColor: "#E5E7EB", position: "relative" },
   cardClosed: { opacity: 0.8 },
-  closedOverlay: { position: "absolute", top: 12, left: 12, backgroundColor: "rgba(239, 68, 68, 0.9)", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  closedOverlay: { position: "absolute", top: 12, left: 12, backgroundColor: "rgba(239, 68, 68, 0.9)", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, zIndex: 2 },
   closedOverlayText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
-  image: { width: "100%", height: 145 },
-  imagePlaceholder: { height: 145, alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#E8F5EE" },
+  imageContainer: { position: "relative", width: "100%", height: 155, backgroundColor: "#F1F5F9" },
+  image: { width: "100%", height: "100%" },
+  imagePlaceholder: { height: 155, alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#E8F5EE" },
   placeholderText: { color: "#4B5563", fontSize: 11 },
+  topMenuBadge: { position: "absolute", bottom: 8, left: 10, backgroundColor: "rgba(17, 24, 39, 0.85)", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4, maxWidth: "92%", zIndex: 2 },
+  topMenuBadgeText: { color: "#FEF08A", fontSize: 11, fontWeight: "800" },
   cardBody: { padding: 14 },
+  headerInfoRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
+  ownerAvatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 1.5, borderColor: "#D1FAE5", backgroundColor: "#E2E8F0" },
+  ownerAvatarPlaceholder: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#E8F5EE", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#D1FAE5" },
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   name: { flex: 1, color: "#111827", fontSize: 16, fontWeight: "800" },
-  cuisine: { color: "#6B7280", fontSize: 12, marginTop: 5 },
-  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 10, gap: 5 },
-  metaText: { color: "#6B7280", fontSize: 12 },
+  cuisine: { color: "#6B7280", fontSize: 12, marginTop: 3 },
+  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 8, gap: 5 },
+  metaText: { flex: 1, color: "#6B7280", fontSize: 12 },
   action: { backgroundColor: "#1B7A4E", borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 13 },
   actionDisabled: { backgroundColor: "#9CA3AF" },
   actionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },

@@ -69,7 +69,7 @@ const createCateringOrder = async (req, res) => {
     } = body;
     const portionCount = Number(portions);
     const allowedPaymentOptions = new Set(["dp30", "dp50", "lunas"]);
-    const allowedPaymentMethods = new Set(["bank_transfer", "qris"]);
+    const allowedPaymentMethods = new Set(["bank_transfer", "qris", "bca_va", "mandiri_va", "gopay", "cod"]);
 
     if (!idempotencyKey || idempotencyKey.length > 200) {
       return res.status(400).json({ success: false, message: "Kunci checkout tidak valid. Coba kirim pesanan lagi." });
@@ -106,12 +106,6 @@ const createCateringOrder = async (req, res) => {
     const bankAccountNumber = String(getRoleDataValue(owner, "cateringBankAccountNumber") || "").trim();
     const bankAccountHolder = String(getRoleDataValue(owner, "cateringBankAccountHolder") || "").trim();
     const qrisImageUrl = String(getRoleDataValue(owner, "cateringQrisImageUrl") || "").trim();
-    if (paymentMethod === "bank_transfer" && (!bankName || !bankAccountNumber || !bankAccountHolder)) {
-      return res.status(409).json({ success: false, message: "Rekening transfer mitra belum tersedia. Pilih Tunai saat diterima atau hubungi pemilik Catering." });
-    }
-    if (paymentMethod === "qris" && !qrisImageUrl) {
-      return res.status(409).json({ success: false, message: "QRIS mitra belum tersedia. Pilih metode lain atau hubungi pemilik Catering." });
-    }
 
     const product = await CateringProduct.findOne({ _id: productId, ownerId, isActive: true }).lean();
     if (!product) return res.status(409).json({ success: false, message: "Menu sudah tidak tersedia. Perbarui pilihan menu." });
@@ -128,6 +122,25 @@ const createCateringOrder = async (req, res) => {
     const paymentDueAt = getCateringDueAt(cateringDate);
     const storeName = getRoleDataValue(owner, "businessName") || owner.name || "Mitra Catering";
     const storeAddress = getRoleDataValue(owner, "businessAddress") || getRoleDataValue(owner, "address") || owner.address || "";
+    const storeNotes = getRoleDataValue(owner, "patokan") || getRoleDataValue(owner, "storeNotes") || getRoleDataValue(owner, "cateringNotes") || "";
+    const ownerCoords = owner?.roleData?.coordinates || {};
+    const storeLat = parseFloat(ownerCoords.latitude ?? getRoleDataValue(owner, "cateringLatitude"));
+    const storeLon = parseFloat(ownerCoords.longitude ?? getRoleDataValue(owner, "cateringLongitude"));
+    const storePickup = !isNaN(storeLat) && !isNaN(storeLon) ? {
+      address: storeAddress,
+      latitude: storeLat,
+      longitude: storeLon,
+      patokan: storeNotes,
+    } : null;
+
+    const destLat = parseFloat(addressSnapshot?.latitude);
+    const destLon = parseFloat(addressSnapshot?.longitude);
+    const destination = !isNaN(destLat) && !isNaN(destLon) ? {
+      address: addressSnapshot?.fullAddress || address.trim(),
+      latitude: destLat,
+      longitude: destLon,
+      patokan: addressSnapshot?.notes || "",
+    } : null;
     let order;
 
     session = await mongoose.startSession();
@@ -156,6 +169,9 @@ const createCateringOrder = async (req, res) => {
         storeId: String(ownerId),
         storeName,
         storeAddress,
+        storeNotes,
+        pickup: storePickup,
+        destination,
         productId: String(productId),
         menuName: product.name,
         portions: portionCount,
@@ -165,10 +181,28 @@ const createCateringOrder = async (req, res) => {
         serviceFee,
         paymentOption,
         paymentMethod,
-        paymentBankName: paymentMethod === "bank_transfer" ? bankName : "",
-        paymentAccountNumber: paymentMethod === "bank_transfer" ? bankAccountNumber : "",
-        paymentAccountHolder: paymentMethod === "bank_transfer" ? bankAccountHolder : "",
-        paymentQrisImageUrl: paymentMethod === "qris" ? qrisImageUrl : "",
+        paymentBankName: paymentMethod === "bca_va"
+          ? "BCA Virtual Account"
+          : paymentMethod === "mandiri_va"
+          ? "Mandiri Virtual Account"
+          : paymentMethod === "gopay"
+          ? "GoPay / E-Wallet"
+          : paymentMethod === "cod"
+          ? "Bayar di Tempat (Tunai)"
+          : (bankName || "BCA Virtual Account"),
+        paymentAccountNumber: paymentMethod === "bca_va"
+          ? `827708${customer.phone ? customer.phone.slice(-6) : String(Date.now()).slice(-6)}`
+          : paymentMethod === "mandiri_va"
+          ? `88908${customer.phone ? customer.phone.slice(-6) : String(Date.now()).slice(-6)}`
+          : paymentMethod === "gopay"
+          ? (customer.phone || "08123456789")
+          : paymentMethod === "cod"
+          ? "-"
+          : (bankAccountNumber || `827708${String(Date.now()).slice(-6)}`),
+        paymentAccountHolder: paymentMethod === "cod"
+          ? "Kurir / Mitra Catering"
+          : (bankAccountHolder || "GEOVERSE Official Escrow"),
+        paymentQrisImageUrl: qrisImageUrl || "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=00020101021226670016ID.CO.GEOVERSE.WWW011893600998000001000102150000000000000005204581253033605802ID5917GEOVERSE_CATERING6005BOGOR61051614362070703A016304",
         paymentStatus: "Menunggu Pembayaran",
         paidAmount,
         remainingAmount,

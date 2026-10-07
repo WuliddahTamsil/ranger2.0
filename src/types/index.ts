@@ -168,7 +168,12 @@ export interface OrderItem {
   paymentQrisImageUrl?: string;
   paymentReference?: string;
   paymentHistory?: any[];
+  paymentProofUrl?: string;
+  paymentRejectionReason?: string;
+  submissionDate?: string;
   deliveryProofUrl?: string;
+  deliveryProofTimestamp?: string;
+  deliveredAt?: string;
   cateringDate?: string;
   cateringPortions?: number;
   cateringTime?: string;

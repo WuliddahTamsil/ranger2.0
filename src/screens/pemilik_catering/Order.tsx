@@ -49,6 +49,7 @@ import { updateCateringOrderStatus, getChatMessages, sendChatMessage, verifyCate
 import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 import { AnimatedOrderPreparation } from "../../components/AnimatedOrderPreparation";
+import { getCustomerOrders, updateCustomerOrder } from "../customer/customerOrderStore";
 
 // Data types matching the approved design
 export interface DriverProfile {
@@ -69,6 +70,7 @@ export interface OrderItem {
 
 export interface OrderData {
   id: string;
+  orderCode?: string;
   customer: string;
   customerPhone: string;
   items: OrderItem[];
@@ -107,6 +109,10 @@ export interface OrderData {
   paymentReminder?: string;
   paymentProofUrl?: string;
   paymentRejectionReason?: string;
+  cateringDate?: string;
+  cateringTime?: string;
+  portions?: number;
+  notes?: string;
 }
 
 interface OrderProps {
@@ -162,26 +168,33 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
   // Route map mode state: "store" (Kurir ke Dapur) | "customer" (Kurir ke Customer) | "overview" (Semua)
   const [mapRouteMode, setMapRouteMode] = useState<"store" | "customer" | "overview">("overview");
 
-  const handlePaymentVerification = async (paymentId: string, action: "verify" | "reject", reason = "") => {
-    if (!selectedOrder) return;
-    const isRealBackendOrder = /^[a-f\d]{24}$/i.test(String(selectedOrder.id));
+  const handlePaymentVerification = async (
+    paymentId: string,
+    action: "verify" | "reject",
+    reason = "",
+    targetOrderParam?: OrderData
+  ) => {
+    const targetOrder = targetOrderParam || selectedOrder;
+    if (!targetOrder) return;
+    const isRealBackendOrder = /^[a-f\d]{24}$/i.test(String(targetOrder.id));
     if (isRealBackendOrder) {
-      const result = await verifyCateringPayment(selectedOrder.id, paymentId, action, reason);
+      const amountToPay = activePaymentForAction?.amount || Number(targetOrder.remainingAmount || targetOrder.total || 0);
+      const result = await verifyCateringPayment(targetOrder.id, paymentId, action, reason, amountToPay);
       if (!result.success || !result.data) {
         if (
           String(result.message || "").toLowerCase().includes("sudah diproses") ||
           String(result.message || "").toLowerCase().includes("terverifikasi")
         ) {
-          const updated = orders.find((order) => order.id === selectedOrder.id);
+          const updated = orders.find((order) => order.id === targetOrder.id);
           const next: OrderData = {
-            ...(updated || selectedOrder),
+            ...(updated || targetOrder),
             paymentStatus: action === "verify" ? "Pembayaran Terverifikasi" : "Pembayaran Ditolak",
-            paymentHistory: (selectedOrder.paymentHistory || []).map((p) =>
+            paymentHistory: (targetOrder.paymentHistory || []).map((p) =>
               p.paymentId === paymentId ? { ...p, status: action === "verify" ? "TERVERIFIKASI" : "DITOLAK" } : p
             ),
           };
-          setOrders(orders.map((order) => order.id === selectedOrder.id ? next : order));
-          setSelectedOrder(next);
+          setOrders(orders.map((order) => order.id === targetOrder.id ? next : order));
+          if (selectedOrder && selectedOrder.id === targetOrder.id) setSelectedOrder(next);
           Alert.alert(
             action === "verify" ? "Pembayaran Terverifikasi" : "Pembayaran Ditolak",
             "Pembayaran ini sudah berhasil diproses di sistem."
@@ -191,58 +204,95 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
         Alert.alert("Belum berhasil", result.message || "Status pembayaran belum dapat diperbarui.");
         return;
       }
-      const updated = orders.find((order) => order.id === selectedOrder.id);
+      const updated = orders.find((order) => order.id === targetOrder.id);
       const next: OrderData = {
-        ...(updated || selectedOrder),
+        ...(updated || targetOrder),
         paymentHistory: result.data.paymentHistory || [],
         paidAmount: result.data.paidAmount,
         remainingAmount: result.data.remainingAmount,
         paymentStatus: result.data.paymentStatus,
         paymentReminder: result.data.paymentReminder,
-        paymentProofUrl: result.data.paymentProofUrl || (selectedOrder as any).paymentProofUrl,
+        paymentProofUrl: result.data.paymentProofUrl || targetOrder.paymentProofUrl,
         paymentRejectionReason: result.data.paymentRejectionReason,
       };
-      setOrders(orders.map((order) => order.id === selectedOrder.id ? next : order));
-      setSelectedOrder(next);
+      setOrders(orders.map((order) => order.id === targetOrder.id ? next : order));
+      if (selectedOrder && selectedOrder.id === targetOrder.id) setSelectedOrder(next);
+
+      // Sync local customer order store
+      try {
+        const custOrders = getCustomerOrders();
+        const matched = custOrders.find((c) => c.id === targetOrder.id || (targetOrder.orderCode && c.orderCode === targetOrder.orderCode));
+        if (matched) {
+          updateCustomerOrder({
+            ...matched,
+            paymentStatus: result.data.paymentStatus,
+            paidAmount: result.data.paidAmount,
+            remainingAmount: result.data.remainingAmount,
+            paymentRejectionReason: result.data.paymentRejectionReason,
+          });
+        }
+      } catch {}
+
       Alert.alert(
         action === "verify" ? "Pembayaran Terverifikasi" : "Pembayaran Ditolak",
-        action === "verify" ? "Pembayaran customer berhasil diverifikasi." : "Pengajuan pembayaran customer telah ditolak."
+        action === "verify"
+          ? (result.data.remainingAmount <= 0 ? "Pesanan lunas 100%! Pembayaran telah diverifikasi." : "Pembayaran customer berhasil diverifikasi.")
+          : "Pengajuan pembayaran customer telah ditolak."
       );
       return;
     }
 
     // Local / fallback for test orders
-    const targetAmount = activePaymentForAction?.amount || 156000;
-    const nextPaid = action === "verify" ? (selectedOrder.paidAmount || 0) + targetAmount : (selectedOrder.paidAmount || 0);
-    const nextRemaining = Math.max(0, (selectedOrder.total || 520000) - nextPaid);
-    const nextStatus = action === "reject" ? "Pembayaran Ditolak" : nextRemaining <= 0 ? "Lunas" : "Pembayaran Terverifikasi";
+    const targetAmount = activePaymentForAction?.amount || Number(targetOrder.remainingAmount || targetOrder.total || 0);
+    const nextPaid = action === "verify" ? (targetOrder.paidAmount || 0) + targetAmount : (targetOrder.paidAmount || 0);
+    const nextRemaining = Math.max(0, (targetOrder.total || 0) - nextPaid);
+    const nextStatus = action === "reject" ? "Pembayaran Ditolak" : nextRemaining <= 0 ? "Lunas" : "DP Terbayar";
     const next: OrderData = {
-      ...selectedOrder,
+      ...targetOrder,
       paidAmount: nextPaid,
       remainingAmount: nextRemaining,
       paymentStatus: nextStatus,
       paymentRejectionReason: action === "reject" ? reason : "",
-      paymentHistory: (selectedOrder.paymentHistory || []).map((p) => p.paymentId === paymentId ? {
+      paymentHistory: (targetOrder.paymentHistory || []).map((p) => p.paymentId === paymentId ? {
         ...p,
         status: action === "verify" ? "TERVERIFIKASI" : "DITOLAK",
         rejectionReason: action === "reject" ? reason : "",
       } : p),
     };
-    setOrders(orders.map((order) => order.id === selectedOrder.id ? next : order));
-    setSelectedOrder(next);
+    setOrders(orders.map((order) => order.id === targetOrder.id ? next : order));
+    if (selectedOrder && selectedOrder.id === targetOrder.id) setSelectedOrder(next);
+
+    try {
+      const custOrders = getCustomerOrders();
+      const matched = custOrders.find((c) => c.id === targetOrder.id || (targetOrder.orderCode && c.orderCode === targetOrder.orderCode));
+      if (matched) {
+        updateCustomerOrder({
+          ...matched,
+          paymentStatus: nextStatus,
+          paidAmount: nextPaid,
+          remainingAmount: nextRemaining,
+          paymentRejectionReason: action === "reject" ? reason : "",
+        });
+      }
+    } catch {}
+
     Alert.alert(
       action === "verify" ? "Pembayaran Terverifikasi" : "Pembayaran Ditolak",
-      action === "verify" ? "Pembayaran customer berhasil diverifikasi." : "Pengajuan pembayaran customer telah ditolak."
+      action === "verify"
+        ? (nextRemaining <= 0 ? "Pesanan lunas 100%! Pembayaran telah diverifikasi." : "Pembayaran customer berhasil diverifikasi.")
+        : "Pengajuan pembayaran customer telah ditolak."
     );
   };
 
-  const openValidatePaymentModal = (payment: any) => {
+  const openValidatePaymentModal = (payment: any, order?: OrderData) => {
     setActivePaymentForAction(payment);
+    if (order) setSelectedOrder(order);
     setVerifyModalVisible(true);
   };
 
-  const openRejectPaymentModal = (payment: any) => {
+  const openRejectPaymentModal = (payment: any, order?: OrderData) => {
     setActivePaymentForAction(payment);
+    if (order) setSelectedOrder(order);
     setRejectionReasonText("");
     setSelectedPresetReason("Bukti pembayaran tidak jelas");
     setRejectModalVisible(true);
@@ -791,7 +841,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
               </Text>
               <View style={styles.paymentModalAmountBox}>
                 <Text style={styles.paymentModalAmountText}>
-                  {rp(activePaymentForAction?.amount || 156000)}
+                  {rp(activePaymentForAction?.amount || Number(selectedOrder?.remainingAmount || selectedOrder?.total || 0))}
                 </Text>
               </View>
               <View style={styles.paymentModalBtnRow}>
@@ -926,7 +976,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
               <Text style={styles.fullPageBackText}>Daftar Order</Text>
             </TouchableOpacity>
             <View style={styles.fullPageHeaderRight}>
-              <Text style={styles.fullPageOrderCode} numberOfLines={1}>#{selectedOrder.id.slice(-8)}</Text>
+              <Text style={styles.fullPageOrderCode} numberOfLines={1}>{selectedOrder.orderCode || `#${selectedOrder.id.slice(-8)}`}</Text>
               <View style={[styles.statusChip, { backgroundColor: getStatusBgColor(selectedOrder.status) }]}>
                 <Text style={[styles.statusChipText, { color: getStatusColor(selectedOrder.status) }]} numberOfLines={1}>
                   {getStatusLabel(selectedOrder.status)}
@@ -1059,6 +1109,86 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
               </View>
             )}
           </View>
+
+          {/* Urgent Payment Verification Card (Top of Order Details) */}
+          {(() => {
+            const pendingList = (selectedOrder.paymentHistory || []).filter((p) => {
+              const s = String(p.status || "").toUpperCase();
+              return s === "MENUNGGU_VERIFIKASI";
+            });
+            const proofImage = selectedOrder.paymentProofUrl || (selectedOrder.paymentHistory && selectedOrder.paymentHistory[selectedOrder.paymentHistory.length - 1]?.proofUrl) || "";
+            const normStatus = String(selectedOrder.paymentStatus || "").toLowerCase();
+            const isVerified = normStatus.includes("terverifikasi") || normStatus.includes("lunas");
+            const isRejected = normStatus.includes("tolak") || normStatus.includes("ditolak");
+            const isWaitingVerify = pendingList.length > 0 || (normStatus.includes("verifikasi") && !isVerified && !isRejected);
+
+            if (!isWaitingVerify) return null;
+
+            const currentPending = pendingList[0] || {
+              paymentId: (selectedOrder.paymentHistory && selectedOrder.paymentHistory[selectedOrder.paymentHistory.length - 1]?.paymentId) || `PAY-${selectedOrder.id}-1`,
+              type: (selectedOrder.paidAmount || 0) > 0 ? "PELUNASAN" : "DP",
+              amount: Number(selectedOrder.remainingAmount || selectedOrder.total || 0),
+              method: selectedOrder.paymentMethod || "qris",
+              status: "MENUNGGU_VERIFIKASI",
+              reference: `QRIS-VERIF-${String(selectedOrder.id).slice(-4)}`,
+              proofUrl: proofImage,
+            };
+            const finalProofUrl = currentPending.proofUrl || proofImage;
+
+            return (
+              <View style={styles.topUrgentPaymentCard}>
+                <View style={styles.topUrgentPaymentHeader}>
+                  <View style={styles.topUrgentPaymentIconWrap}>
+                    <Clock size={18} color="#2563EB" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.topUrgentPaymentTitle}>Bukti Pembayaran Menunggu Verifikasi</Text>
+                    <Text style={styles.topUrgentPaymentSubtitle}>
+                      Customer mengajukan pembayaran {currentPending.type === "DP" ? "DP" : "Pelunasan"} sebesar {rp(currentPending.amount)}. Silakan verifikasi untuk memperbarui status pesanan.
+                    </Text>
+                  </View>
+                </View>
+
+                {finalProofUrl ? (
+                  <TouchableOpacity
+                    style={styles.topUrgentProofWrap}
+                    onPress={() => setPreviewImageUri(finalProofUrl)}
+                    activeOpacity={0.85}
+                  >
+                    <Image source={{ uri: finalProofUrl }} style={styles.topUrgentProofImage} resizeMode="contain" />
+                    <View style={styles.topUrgentProofZoomBtn}>
+                      <Maximize2 size={13} color="#FFFFFF" />
+                      <Text style={styles.topUrgentProofZoomText}>Perbesar Bukti Transfer</Text>
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.noProofFallbackBox}>
+                    <Text style={styles.noProofFallbackText}>Customer belum mengunggah foto bukti transfer.</Text>
+                  </View>
+                )}
+
+                <View style={styles.topUrgentActionRow}>
+                  <TouchableOpacity
+                    style={styles.topUrgentRejectBtn}
+                    onPress={() => openRejectPaymentModal(currentPending)}
+                    activeOpacity={0.8}
+                  >
+                    <X size={15} color="#DC2626" />
+                    <Text style={styles.topUrgentRejectBtnText}>Tolak Bukti</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.topUrgentVerifyBtn}
+                    onPress={() => openValidatePaymentModal(currentPending)}
+                    activeOpacity={0.8}
+                  >
+                    <CheckCircle size={15} color="#FFFFFF" />
+                    <Text style={styles.topUrgentVerifyBtnText}>Validasi Pembayaran</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
 
           {/* Quick Driver Assignment Card when ready & unassigned */}
           {selectedOrder.status === "Siap" && !selectedOrder.driver && (
@@ -1322,6 +1452,41 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
           {/* 4. Detail Items & Pricing */}
           <View style={styles.sectionCard}>
             <Text style={styles.sectionCardTitleSmall}>Rincian Pesanan</Text>
+
+            {/* Jadwal PO & Catatan Khusus */}
+            {selectedOrder.cateringDate ? (
+              <View style={{
+                backgroundColor: "#EFF6FF",
+                borderWidth: 1,
+                borderColor: "#BFDBFE",
+                borderRadius: 12,
+                padding: 12,
+                marginTop: 8,
+                marginBottom: 12,
+                gap: 6,
+              }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#1D4ED8" }}>
+                    📅 Jadwal PO: {selectedOrder.cateringDate}
+                  </Text>
+                  <View style={{ backgroundColor: "#DBEAFE", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: "#1E40AF" }}>
+                      Jam {selectedOrder.cateringTime || "11:00"}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 12, color: "#1E40AF" }}>
+                  Total Porsi: <Text style={{ fontWeight: "800" }}>{selectedOrder.portions || selectedOrder.items[0]?.quantity || 10} pax</Text>
+                </Text>
+                {selectedOrder.notes ? (
+                  <View style={{ backgroundColor: "#FFFFFF", borderRadius: 8, padding: 8, borderWidth: 1, borderColor: "#DBEAFE", marginTop: 2 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#3B82F6", marginBottom: 2 }}>Catatan Khusus Pelanggan:</Text>
+                    <Text style={{ fontSize: 11.5, color: "#1E293B", lineHeight: 16 }}>{selectedOrder.notes}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             <View style={styles.itemsTable}>
               {selectedOrder.items.map((item, index) => (
                 <View key={index} style={styles.itemRow}>
@@ -1353,7 +1518,19 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
               <Text style={styles.sectionCardTitleSmall}>Pembayaran</Text>
               <View style={{ backgroundColor: "#F0FDF4", paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: "#BBF7D0" }}>
                 <Text style={{ fontSize: 11, fontWeight: "800", color: "#15803D" }}>
-                  {selectedOrder.paymentMethod === "bank_transfer" ? "Transfer Bank" : selectedOrder.paymentMethod === "qris" ? "QRIS" : "Tunai"}
+                  {selectedOrder.paymentMethod === "bca_va"
+                    ? "BCA Virtual Account"
+                    : selectedOrder.paymentMethod === "mandiri_va"
+                    ? "Mandiri Virtual Account"
+                    : selectedOrder.paymentMethod === "qris"
+                    ? "QRIS Instan"
+                    : selectedOrder.paymentMethod === "gopay"
+                    ? "GoPay"
+                    : selectedOrder.paymentMethod === "cod"
+                    ? "COD (Bayar di Tempat)"
+                    : selectedOrder.paymentMethod === "bank_transfer"
+                    ? "Transfer Bank"
+                    : (selectedOrder.paymentMethod || "Platform Payment").toUpperCase()}
                 </Text>
               </View>
             </View>
@@ -1381,7 +1558,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                     ? [{
                         paymentId: (selectedOrder.paymentHistory && selectedOrder.paymentHistory[selectedOrder.paymentHistory.length - 1]?.paymentId) || `PAY-${selectedOrder.id}-1`,
                         type: (selectedOrder.paidAmount || 0) > 0 ? "PELUNASAN" : "DP",
-                        amount: Math.min(156000, Number(selectedOrder.remainingAmount || selectedOrder.total || 0)) || Number(selectedOrder.remainingAmount || selectedOrder.total || 156000),
+                        amount: Number(selectedOrder.remainingAmount || selectedOrder.total || 0),
                         method: selectedOrder.paymentMethod || "qris",
                         status: "MENUNGGU_VERIFIKASI",
                         reference: `QRIS-VERIF-${String(selectedOrder.id).slice(-4)}`,
@@ -1400,10 +1577,10 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
 
               const statusBg = isVerified ? "#DCFCE7" : isRejected ? "#FEE2E2" : isWaitingVerify ? "#EFF6FF" : "#FEF3C7";
               const statusFg = isVerified ? "#15803D" : isRejected ? "#DC2626" : isWaitingVerify ? "#2563EB" : "#D97706";
-              const currentTotal = selectedOrder.total || 520000;
-              const currentPaid = selectedOrder.paidAmount || 0;
-              const currentRemaining = selectedOrder.remainingAmount !== undefined ? selectedOrder.remainingAmount : Math.max(0, currentTotal - currentPaid);
-              const proposedAmount = isWaitingVerify && effectivePending.length > 0 ? effectivePending[0].amount : (isVerified ? currentPaid : 156000);
+              const currentTotal = Number(selectedOrder.total || 0);
+              const currentPaid = Number(selectedOrder.paidAmount || 0);
+              const currentRemaining = selectedOrder.remainingAmount !== undefined ? Number(selectedOrder.remainingAmount) : Math.max(0, currentTotal - currentPaid);
+              const proposedAmount = isWaitingVerify && effectivePending.length > 0 ? effectivePending[0].amount : (isVerified ? currentPaid : currentRemaining);
 
               return (
                 <>
@@ -1675,6 +1852,40 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                   <MessageSquare size={16} color="#15803D" />
                   <Text style={{ color: "#166534", fontSize: 12, fontWeight: "900" }}>Kirim Pengingat via WhatsApp</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    marginTop: 8,
+                    borderRadius: 10,
+                    paddingVertical: 11,
+                    backgroundColor: "#16A34A",
+                    shadowColor: "#16A34A",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 3,
+                    elevation: 2,
+                  }}
+                  onPress={() => {
+                    const pendingAmount = Number(selectedOrder.remainingAmount || selectedOrder.total || 0);
+                    openValidatePaymentModal({
+                      paymentId: "manual-pelunasan",
+                      type: "PELUNASAN",
+                      amount: pendingAmount,
+                      method: selectedOrder.paymentMethod || "bca_va",
+                      status: "MENUNGGU_VERIFIKASI",
+                    });
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <CheckCircle size={16} color="#FFFFFF" />
+                  <Text style={{ color: "#FFFFFF", fontSize: 12.5, fontWeight: "900" }}>
+                    Konfirmasi Pelunasan Diterima ({rp(Number(selectedOrder.remainingAmount || selectedOrder.total || 0))})
+                  </Text>
+                </TouchableOpacity>
               </View>
             ) : null}
           </View>
@@ -1711,16 +1922,48 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                   selectedOrder.total,
                 );
                 return (
-                  <View style={{ width: "100%" }}>
+                  <View style={{ width: "100%", gap: 8 }}>
+                    {!isPaid ? (
+                      <TouchableOpacity
+                        style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: "#16A34A" }]}
+                        onPress={() => {
+                          const pendingAmount = Number(selectedOrder.remainingAmount || selectedOrder.total || 0);
+                          openValidatePaymentModal({
+                            paymentId: "manual-pelunasan",
+                            type: "PELUNASAN",
+                            amount: pendingAmount,
+                            method: selectedOrder.paymentMethod || "bca_va",
+                            status: "MENUNGGU_VERIFIKASI",
+                          });
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <CheckCircle size={16} color="#FFFFFF" />
+                        <Text style={styles.sheetBtnTextSolid} numberOfLines={1}>
+                          Konfirmasi Pelunasan ({rp(Number(selectedOrder.remainingAmount || selectedOrder.total || 0))})
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+
                     <TouchableOpacity
                       disabled={!isPaid}
-                      style={[styles.sheetBtn, styles.sheetBtnSolid, { backgroundColor: isPaid ? "#D97706" : "#CBD5E1", opacity: isPaid ? 1 : 0.9 }]}
+                      style={[
+                        styles.sheetBtn,
+                        styles.sheetBtnSolid,
+                        { backgroundColor: isPaid ? "#D97706" : "#E2E8F0", opacity: isPaid ? 1 : 0.85 }
+                      ]}
                       onPress={() => handleUpdateStatus(selectedOrder.id, "Siap")}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.sheetBtnTextSolid} numberOfLines={1}>{isPaid ? "Tandai Siap & Panggil Kurir" : "Menunggu Pelunasan 100%"}</Text>
+                      <Text style={[styles.sheetBtnTextSolid, { color: isPaid ? "#FFFFFF" : "#64748B" }]} numberOfLines={1}>
+                        {isPaid ? "Tandai Siap & Panggil Kurir" : "Menunggu Pelunasan 100%"}
+                      </Text>
                     </TouchableOpacity>
-                    {!isPaid ? <Text style={{ color: "#9A3412", fontSize: 11, textAlign: "center", marginTop: 8 }} numberOfLines={2}>Verifikasi seluruh pembayaran customer sebelum pesanan dapat dibuka untuk driver.</Text> : null}
+                    {!isPaid ? (
+                      <Text style={{ color: "#9A3412", fontSize: 11, textAlign: "center", marginTop: 2 }} numberOfLines={2}>
+                        Konfirmasi pelunasan customer di atas agar pesanan dapat disiapkan dan dibuka untuk kurir.
+                      </Text>
+                    ) : null}
                   </View>
                 );
               })()
@@ -1816,23 +2059,35 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
     );
   }
 
-  // Filters
+  // Filters & Payment verification detection
+  const isOrderWaitingVerification = (o: OrderData) => {
+    const norm = String(o.paymentStatus || "").toLowerCase();
+    const hasPending = (o.paymentHistory || []).some(
+      (p) => String(p.status || "").toUpperCase() === "MENUNGGU_VERIFIKASI"
+    );
+    return hasPending || (norm.includes("verifikasi") && !norm.includes("terverifikasi") && !norm.includes("ditolak"));
+  };
+
+  const countVerificationOrders = orders.filter(isOrderWaitingVerification).length;
+  const countNewOrders = orders.filter((o) => o.status === "Menunggu").length;
+
   const query = searchQuery.trim().toLowerCase();
   const filteredOrders = orders.filter((order) => {
+    const isWaitingVerify = isOrderWaitingVerification(order);
     const matchesStatus =
       selectedStatus === "Semua" ||
+      (selectedStatus === "Verifikasi" && isWaitingVerify) ||
       (selectedStatus === "Siap" && ["Siap", "Menuju Pickup", "Sampai Pickup"].includes(order.status)) ||
       (selectedStatus === "Diantar" && ["Diambil", "Mengantar", "Dikirim"].includes(order.status)) ||
       order.status === selectedStatus;
     const matchesSearch =
       query === "" ||
       order.id.toLowerCase().includes(query) ||
+      (order.orderCode && order.orderCode.toLowerCase().includes(query)) ||
       order.customer.toLowerCase().includes(query) ||
       order.items.some((item) => item.name.toLowerCase().includes(query));
     return matchesStatus && matchesSearch;
   });
-
-  const countNewOrders = orders.filter((o) => o.status === "Menunggu").length;
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -1844,12 +2099,24 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
             Kelola persiapan sampai pesanan catering tiba di customer.
           </Text>
         </View>
-        {countNewOrders > 0 && (
-          <View style={styles.newBadge}>
-            <Clock size={14} color="#D97706" />
-            <Text style={styles.newBadgeText}>{countNewOrders} Baru</Text>
-          </View>
-        )}
+        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+          {countVerificationOrders > 0 && (
+            <TouchableOpacity
+              style={[styles.newBadge, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}
+              onPress={() => setSelectedStatus("Verifikasi")}
+              activeOpacity={0.8}
+            >
+              <CheckCircle size={13} color="#2563EB" />
+              <Text style={[styles.newBadgeText, { color: "#2563EB" }]}>{countVerificationOrders} Butuh Verifikasi</Text>
+            </TouchableOpacity>
+          )}
+          {countNewOrders > 0 && (
+            <View style={styles.newBadge}>
+              <Clock size={13} color="#D97706" />
+              <Text style={styles.newBadgeText}>{countNewOrders} Baru</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Search and Filters */}
@@ -1860,7 +2127,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Cari order, customer, menu..."
+            placeholder="Cari no pesanan, customer, menu..."
             placeholderTextColor="#9CA3AF"
           />
           {searchQuery !== "" && (
@@ -1880,6 +2147,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
         >
           {[
             { key: "Semua", label: "Semua" },
+            { key: "Verifikasi", label: "Verifikasi Bayar" },
             { key: "Menunggu", label: "Pesanan Masuk" },
             { key: "Diproses", label: "Diproses" },
             { key: "Siap", label: "Siap / Jemput" },
@@ -1891,6 +2159,8 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
             const count =
               tab.key === "Semua"
                 ? orders.length
+                : tab.key === "Verifikasi"
+                ? countVerificationOrders
                 : tab.key === "Siap"
                 ? orders.filter((o) => ["Siap", "Menuju Pickup", "Sampai Pickup"].includes(o.status)).length
                 : tab.key === "Diantar"
@@ -1903,6 +2173,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                 style={[
                   styles.tabChip,
                   isSelected ? styles.tabChipSelected : styles.tabChipUnselected,
+                  tab.key === "Verifikasi" && count > 0 && !isSelected && { borderColor: "#93C5FD", backgroundColor: "#EFF6FF" },
                 ]}
                 onPress={() => setSelectedStatus(tab.key)}
                 activeOpacity={0.7}
@@ -1911,6 +2182,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                   style={[
                     styles.tabChipText,
                     isSelected ? styles.tabChipTextSelected : styles.tabChipTextUnselected,
+                    tab.key === "Verifikasi" && count > 0 && !isSelected && { color: "#1D4ED8", fontWeight: "800" },
                   ]}
                 >
                   {tab.label} ({count})
@@ -1934,8 +2206,29 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
           const hasDriver = item.driver !== null;
           const isOngoing = item.status !== "Selesai" && item.status !== "Dibatalkan";
 
+          // Payment Pending State for Card
+          const pendingList = (item.paymentHistory || []).filter((p) => {
+            const s = String(p.status || "").toUpperCase();
+            return s === "MENUNGGU_VERIFIKASI";
+          });
+          const normStatus = String(item.paymentStatus || "").toLowerCase();
+          const isVerified = normStatus.includes("terverifikasi") || normStatus.includes("lunas");
+          const isRejected = normStatus.includes("tolak") || normStatus.includes("ditolak");
+          const hasPendingVerification = pendingList.length > 0 || (normStatus.includes("verifikasi") && !isVerified && !isRejected);
+
+          const cardProofUrl = item.paymentProofUrl || (item.paymentHistory && item.paymentHistory[item.paymentHistory.length - 1]?.proofUrl) || "";
+          const activePendingObj = pendingList[0] || (hasPendingVerification ? {
+            paymentId: (item.paymentHistory && item.paymentHistory[item.paymentHistory.length - 1]?.paymentId) || `PAY-${item.id}-1`,
+            type: (item.paidAmount || 0) > 0 ? "PELUNASAN" : "DP",
+            amount: Number(item.remainingAmount || item.total || 0),
+            method: item.paymentMethod || "qris",
+            status: "MENUNGGU_VERIFIKASI",
+            reference: `QRIS-VERIF-${String(item.id).slice(-4)}`,
+            proofUrl: cardProofUrl,
+          } : null);
+
           return (
-            <View style={styles.orderCard}>
+            <View style={[styles.orderCard, hasPendingVerification && { borderColor: "#93C5FD", borderWidth: 1.5 }]}>
               <TouchableOpacity
                 onPress={() => {
                   setSelectedOrder(item);
@@ -1945,7 +2238,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
               >
                 <View style={styles.cardHeader}>
                   <View style={styles.cardHeaderLeft}>
-                    <Text style={styles.orderId} numberOfLines={1}>#{item.id.slice(-8)}</Text>
+                    <Text style={styles.orderId} numberOfLines={1}>{item.orderCode || `#${item.id.slice(-8)}`}</Text>
                     <Text style={styles.cardDotSeparator}>•</Text>
                     <View style={styles.timeRow}>
                       <Clock size={12} color="#94A3B8" />
@@ -1983,9 +2276,157 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                   </Text>
                 </View>
 
+                {/* Catering PO Info Pill */}
+                {item.cateringDate ? (
+                  <View style={{
+                    backgroundColor: "#EFF6FF",
+                    borderWidth: 1,
+                    borderColor: "#BFDBFE",
+                    borderRadius: 10,
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    marginTop: 8,
+                    gap: 3,
+                  }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                      <Text style={{ fontSize: 11, fontWeight: "800", color: "#1D4ED8" }}>
+                        📅 PO {item.cateringDate} • Jam {item.cateringTime || "11:00"}
+                      </Text>
+                      <View style={{
+                        backgroundColor: "#DBEAFE",
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                      }}>
+                        <Text style={{ fontSize: 10, fontWeight: "800", color: "#1E40AF" }}>
+                          {item.portions || item.items[0]?.quantity || 10} pax
+                        </Text>
+                      </View>
+                    </View>
+                    {item.notes ? (
+                      <Text style={{ fontSize: 10.5, color: "#2563EB", fontStyle: "italic" }} numberOfLines={1}>
+                        Catatan: {item.notes}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {/* PROMINENT BUKTI PEMBAYARAN BOX ON CARD */}
+                {hasPendingVerification && activePendingObj && (
+                  <View style={styles.cardPendingVerificationBox}>
+                    <View style={styles.cardPendingHeaderRow}>
+                      <View style={styles.cardPendingTitleWrap}>
+                        <Clock size={13} color="#1D4ED8" />
+                        <Text style={styles.cardPendingTitle}>Bukti Pembayaran Masuk</Text>
+                      </View>
+                      <View style={styles.cardPendingBadge}>
+                        <Text style={styles.cardPendingBadgeText}>Menunggu Verifikasi</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardPendingContentRow}>
+                      {activePendingObj.proofUrl ? (
+                        <TouchableOpacity
+                          style={styles.cardPendingThumbWrap}
+                          onPress={() => setPreviewImageUri(activePendingObj.proofUrl || null)}
+                          activeOpacity={0.85}
+                        >
+                          <Image source={{ uri: activePendingObj.proofUrl }} style={styles.cardPendingThumb} resizeMode="cover" />
+                          <View style={styles.cardPendingThumbZoom}>
+                            <Maximize2 size={10} color="#FFFFFF" />
+                          </View>
+                        </TouchableOpacity>
+                      ) : null}
+                      <View style={{ flex: 1, justifyContent: "center" }}>
+                        <Text style={styles.cardPendingNominal} numberOfLines={1}>
+                          {rp(activePendingObj.amount)}
+                          <Text style={styles.cardPendingType}> ({activePendingObj.type === "DP" ? "DP" : "Pelunasan"})</Text>
+                        </Text>
+                        <Text style={styles.cardPendingMeta} numberOfLines={1}>
+                          Metode: {(item.paymentMethod || "QRIS").toUpperCase()} • Sisa: {rp(item.remainingAmount || 0)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Direct Quick Action Buttons inside Card */}
+                    <View style={styles.cardPendingActionRow}>
+                      <TouchableOpacity
+                        style={styles.cardRejectBtn}
+                        onPress={() => openRejectPaymentModal(activePendingObj, item)}
+                        activeOpacity={0.8}
+                      >
+                        <X size={13} color="#B91C1C" />
+                        <Text style={styles.cardRejectBtnText} numberOfLines={1}>Tolak</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.cardVerifyBtn}
+                        onPress={() => openValidatePaymentModal(activePendingObj, item)}
+                        activeOpacity={0.8}
+                      >
+                        <CheckCircle size={13} color="#FFFFFF" />
+                        <Text style={styles.cardVerifyBtnText} numberOfLines={1}>Verifikasi Pembayaran</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* Sisa Tagihan Pill & Quick Pelunasan when customer paid outside */}
+                {!hasPendingVerification && Number(item.remainingAmount || 0) > 0 && (
+                  <View style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: "#FFFBEB",
+                    borderWidth: 1,
+                    borderColor: "#FDE68A",
+                    borderRadius: 10,
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    marginTop: 8,
+                  }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>
+                      <Clock size={12} color="#D97706" />
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#B45309" }} numberOfLines={1}>
+                        Sisa: {rp(item.remainingAmount)} ({item.paymentMethod === "bca_va" ? "BCA VA" : (item.paymentMethod || "VA").toUpperCase()})
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: "#16A34A",
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 6,
+                        marginLeft: 8,
+                      }}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        openValidatePaymentModal({
+                          paymentId: "manual-pelunasan",
+                          type: "PELUNASAN",
+                          amount: Number(item.remainingAmount || item.total || 0),
+                          method: item.paymentMethod || "bca_va",
+                          status: "MENUNGGU_VERIFIKASI",
+                        }, item);
+                      }}
+                    >
+                      <Text style={{ fontSize: 10.5, fontWeight: "800", color: "#FFFFFF" }}>
+                        Konfirmasi Lunas
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {/* Total Price */}
                 <View style={styles.cardTotalRow}>
-                  <Text style={styles.totalPriceLabel} numberOfLines={1}>Total Pesanan</Text>
+                  <View>
+                    <Text style={styles.totalPriceLabel} numberOfLines={1}>Total Pesanan</Text>
+                    {item.paymentOption && item.paymentOption !== "lunas" ? (
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: "#D97706", marginTop: 1 }}>
+                        {item.paymentOption === "dp30" ? "Skema DP 30%" : "Skema DP 50%"} • Bayar {rp(item.paidAmount || 0)}
+                      </Text>
+                    ) : null}
+                  </View>
                   <Text style={styles.totalPrice} numberOfLines={1}>{rp(item.total)}</Text>
                 </View>
               </TouchableOpacity>
@@ -2015,11 +2456,13 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                   )}
 
                   <TouchableOpacity
-                    style={styles.cardDetailBtn}
+                    style={[styles.cardDetailBtn, hasPendingVerification && { backgroundColor: "#15803D" }]}
                     onPress={() => setSelectedOrder(item)}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.cardDetailBtnText} numberOfLines={1}>Kelola</Text>
+                    <Text style={styles.cardDetailBtnText} numberOfLines={1}>
+                      {hasPendingVerification ? "Periksa Bukti" : "Kelola"}
+                    </Text>
                     <ChevronRight size={14} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
@@ -3494,6 +3937,261 @@ const styles = StyleSheet.create({
   },
   paymentModalBtnSubmitText: {
     fontSize: 13.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  // Pending payment card list styles
+  cardPendingVerificationBox: {
+    marginTop: 10,
+    marginBottom: 8,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1.5,
+    borderColor: "#93C5FD",
+    borderRadius: 14,
+    padding: 12,
+  },
+  cardPendingHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  cardPendingTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  cardPendingTitle: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#1E40AF",
+  },
+  cardPendingBadge: {
+    backgroundColor: "#DBEAFE",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 20,
+  },
+  cardPendingBadgeText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#1D4ED8",
+  },
+  cardPendingContentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  cardPendingThumbWrap: {
+    position: "relative",
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#E2E8F0",
+  },
+  cardPendingThumb: {
+    width: "100%",
+    height: "100%",
+  },
+  cardPendingThumbZoom: {
+    position: "absolute",
+    right: 3,
+    bottom: 3,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 4,
+    padding: 2,
+  },
+  cardPendingNominal: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  cardPendingType: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  cardPendingMeta: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  cardPendingActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  cardRejectBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#FEE2E2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+  },
+  cardRejectBtnText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#B91C1C",
+  },
+  cardVerifyBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#16A34A",
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    shadowColor: "#16A34A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  cardVerifyBtnText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+
+  // Top Urgent Card in Order Details
+  topUrgentPaymentCard: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#16A34A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  topUrgentPaymentHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 12,
+  },
+  topUrgentPaymentIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  topUrgentPaymentTitle: {
+    fontSize: 14.5,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  topUrgentPaymentSubtitle: {
+    fontSize: 12,
+    color: "#374151",
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  topUrgentProofWrap: {
+    width: "100%",
+    height: 220,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#F1F5F9",
+    position: "relative",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 12,
+  },
+  topUrgentProofImage: {
+    width: "100%",
+    height: "100%",
+  },
+  topUrgentProofZoomBtn: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  topUrgentProofZoomText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  noProofFallbackBox: {
+    padding: 14,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  noProofFallbackText: {
+    fontSize: 12,
+    color: "#64748B",
+    fontStyle: "italic",
+  },
+  topUrgentActionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  topUrgentRejectBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FEE2E2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  topUrgentRejectBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#B91C1C",
+  },
+  topUrgentVerifyBtn: {
+    flex: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#16A34A",
+    borderRadius: 12,
+    paddingVertical: 12,
+    shadowColor: "#16A34A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  topUrgentVerifyBtnText: {
+    fontSize: 13,
     fontWeight: "800",
     color: "#FFFFFF",
   },

@@ -508,7 +508,7 @@ const getDriverAvailableWastePickups = async (req, res) => {
       .populate("bankSampahId", "name phone address photoUrl rating openingHours")
       .populate("customerId", "name phone address profilePhoto")
       .populate("driverId", "name phone profilePhoto")
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1, createdAt: -1 })
       .lean();
 
     return res.status(200).json({

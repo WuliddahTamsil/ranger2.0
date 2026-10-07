@@ -36,6 +36,9 @@ const cateringOrderSchema = new mongoose.Schema(
     storeId: { type: String, default: "" },
     storeName: { type: String, default: "" },
     storeAddress: { type: String, default: "" },
+    storeNotes: { type: String, default: "" },
+    pickup: { type: mongoose.Schema.Types.Mixed, default: null },
+    destination: { type: mongoose.Schema.Types.Mixed, default: null },
     productId: { type: String, default: "" },
     driverId: { type: String, default: "", index: true },
     driverName: { type: String, default: "" },
@@ -137,6 +140,18 @@ const cateringOrderSchema = new mongoose.Schema(
     notes: {
       type: String,
       default: "",
+    },
+    deliveryProofUrl: {
+      type: String,
+      default: "",
+    },
+    deliveryProofTimestamp: {
+      type: String,
+      default: "",
+    },
+    deliveredAt: {
+      type: Date,
+      default: null,
     },
   },
   {

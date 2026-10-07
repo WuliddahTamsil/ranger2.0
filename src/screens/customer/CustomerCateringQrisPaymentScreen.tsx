@@ -37,10 +37,13 @@ import {
   Info,
   Maximize2,
   RefreshCw,
+  Wallet,
+  ReceiptText,
 } from "lucide-react-native";
 import { Nav, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { rp } from "../../utils/formatters";
+import { isCateringPaymentFullyPaid } from "../../utils/cateringPayment";
 import {
   submitCateringPayment,
   uploadFileToBackend,
@@ -51,6 +54,7 @@ import {
   updateCustomerOrder,
   subscribeCustomerOrders,
 } from "./customerOrderStore";
+import { getActiveCateringPaymentOrder } from "./customerCateringStore";
 
 interface CustomerCateringQrisPaymentProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -60,6 +64,7 @@ interface CustomerCateringQrisPaymentProps extends Nav {
 export type PaymentStatusType =
   | "Menunggu Pembayaran"
   | "Menunggu Verifikasi"
+  | "DP Terbayar"
   | "Pembayaran Terverifikasi"
   | "Pembayaran Ditolak";
 
@@ -85,7 +90,16 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
   // 1. Order state & payment amounts
   const [order, setOrder] = useState<any>(() => {
     if (orderData) return orderData;
-    const existing = getCustomerOrders().find(
+    const fromStore = getActiveCateringPaymentOrder();
+    if (fromStore) return fromStore;
+    const customerOrders = getCustomerOrders();
+    const pendingOrder = customerOrders.find(
+      (o) =>
+        o.type.toLowerCase().includes("cater") &&
+        (Number(o.remainingAmount || 0) > 0 || String(o.paymentStatus || "").toLowerCase().includes("menunggu"))
+    );
+    if (pendingOrder) return pendingOrder;
+    const existing = customerOrders.find(
       (o) =>
         o.type.toLowerCase().includes("cater") &&
         (o.paymentMethod === "qris" || String(o.id).startsWith("CAT") || o.remainingAmount)
@@ -101,38 +115,55 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
     Number(order?.remainingAmount ?? (totalOrderAmount - paidAmount))
   );
 
-  const proposedAmount = useMemo(() => {
+  // Selected method for payment/pelunasan
+  const [selectedPelunasanMethod, setSelectedPelunasanMethod] = useState<"qris" | "bca_va" | "mandiri_va" | "bank_transfer">("qris");
+
+  // Determine pending and rejected payments from history
+  const pendingPayment = useMemo(() => {
+    return (order?.paymentHistory || []).find(
+      (p: any) => String(p.status || "").toUpperCase() === "MENUNGGU_VERIFIKASI"
+    );
+  }, [order?.paymentHistory]);
+
+  const rejectedPayment = useMemo(() => {
+    return (order?.paymentHistory || [])
+      .slice()
+      .reverse()
+      .find((p: any) => String(p.status || "").toUpperCase() === "DITOLAK");
+  }, [order?.paymentHistory]);
+
+  const isOrderFullyPaid = isCateringPaymentFullyPaid(remainingAmount, order?.paymentStatus, paidAmount, totalOrderAmount);
+  const isDpPaidStage = paidAmount > 0 && remainingAmount > 0 && !pendingPayment;
+
+  // Amount needed to pay in the current step (DP or Pelunasan)
+  const currentPayAmount = useMemo(() => {
     if (remainingAmount <= 0) return 0;
-    if (order?.paymentOption === "dp30" && paidAmount === 0) {
-      return Math.min(Math.round(totalOrderAmount * 0.3), remainingAmount);
-    }
-    if (order?.paymentOption === "dp50" && paidAmount === 0) {
-      return Math.min(Math.round(totalOrderAmount * 0.5), remainingAmount);
-    }
-    if (totalOrderAmount === 520000 && remainingAmount >= 156000) {
-      return 156000;
-    }
+    if (paidAmount > 0) return remainingAmount; // Pelunasan stage
+    if (order?.paymentOption === "dp30") return Math.min(Math.round(totalOrderAmount * 0.3), remainingAmount);
+    if (order?.paymentOption === "dp50") return Math.min(Math.round(totalOrderAmount * 0.5), remainingAmount);
     return remainingAmount;
   }, [remainingAmount, paidAmount, totalOrderAmount, order?.paymentOption]);
 
-  // Payment status state: "Menunggu Pembayaran" | "Menunggu Verifikasi" | "Pembayaran Terverifikasi" | "Pembayaran Ditolak"
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>(() => {
-    const rawStatus = String(order?.paymentStatus || "").toLowerCase();
-    if (rawStatus.includes("verifikasi") && !rawStatus.includes("terverifikasi")) {
-      return "Menunggu Verifikasi";
-    }
-    if (rawStatus.includes("terverifikasi") || rawStatus.includes("lunas")) {
-      return "Pembayaran Terverifikasi";
-    }
-    if (rawStatus.includes("tolak") || rawStatus.includes("ditolak")) {
-      return "Pembayaran Ditolak";
-    }
+  const proposedAmount = currentPayAmount;
+
+  // Derived effective payment status
+  const effectivePaymentStatus: PaymentStatusType = useMemo(() => {
+    if (pendingPayment) return "Menunggu Verifikasi";
+    const norm = String(order?.paymentStatus || "").toLowerCase();
+    if (norm.includes("tolak") || norm.includes("ditolak")) return "Pembayaran Ditolak";
+    if (isOrderFullyPaid) return "Pembayaran Terverifikasi";
+    if (paidAmount > 0 && remainingAmount > 0) return "DP Terbayar";
     return "Menunggu Pembayaran";
-  });
+  }, [pendingPayment, isOrderFullyPaid, paidAmount, remainingAmount, order?.paymentStatus]);
+
+  // Backward compatibility setter
+  const [paymentStatusOverride, setPaymentStatusOverride] = useState<PaymentStatusType | null>(null);
+  const paymentStatus = paymentStatusOverride || effectivePaymentStatus;
+  const setPaymentStatus = (s: PaymentStatusType) => setPaymentStatusOverride(s);
 
   // Rejection reason if payment was rejected
   const [rejectionReason, setRejectionReason] = useState<string>(
-    order?.paymentRejectionReason || "Nominal bukti transfer tidak sesuai dengan tagihan."
+    order?.paymentRejectionReason || rejectedPayment?.rejectionReason || "Nominal bukti transfer tidak sesuai dengan tagihan."
   );
 
   // Submission metadata
@@ -140,7 +171,7 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
     order?.submissionDate || "17 September 2026, 17:35 WIB"
   );
   const [uploadedProofUri, setUploadedProofUri] = useState<string | null>(
-    order?.paymentProofUrl || null
+    pendingPayment?.proofUrl || order?.paymentProofUrl || null
   );
 
   // 2. Modals state
@@ -163,24 +194,17 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
       const active = orders.find(
         (o) =>
           o.id === order?.id ||
+          (order?.orderCode && o.orderCode === order.orderCode) ||
           (o.type.toLowerCase().includes("cater") && o.paymentMethod === "qris")
       );
       if (active) {
         setOrder(active);
         if (typeof active.paidAmount === "number") setPaidAmount(active.paidAmount);
         if (typeof active.remainingAmount === "number") setRemainingAmount(active.remainingAmount);
-        const norm = String(active.paymentStatus || "").toLowerCase();
-        if (norm.includes("verifikasi") && !norm.includes("terverifikasi")) {
-          setPaymentStatus("Menunggu Verifikasi");
-        } else if (norm.includes("terverifikasi") || norm.includes("lunas")) {
-          setPaymentStatus("Pembayaran Terverifikasi");
-        } else if (norm.includes("tolak") || norm.includes("ditolak")) {
-          setPaymentStatus("Pembayaran Ditolak");
-        }
       }
     });
     return unsubscribe;
-  }, [order?.id]);
+  }, [order?.id, order?.orderCode]);
 
   // Fetch live active order from backend so real amounts & statuses sync automatically
   useEffect(() => {
@@ -190,10 +214,22 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
       try {
         const res = await getCateringOrdersForCustomer(authAccount.id);
         if (!active || !res.success || !Array.isArray(res.data) || res.data.length === 0) return;
-        const live = orderData?.id
-          ? res.data.find((o: any) => String(o._id || o.id) === String(orderData.id))
-          : res.data.find((o: any) => String(o.paymentMethod || "").toLowerCase() === "qris") || res.data[0];
+        const fromActiveStore = getActiveCateringPaymentOrder();
+        const targetLookupCode = orderData?.orderCode || fromActiveStore?.orderCode || order?.orderCode;
+        const targetLookupId = orderData?.id || fromActiveStore?.id || order?.id;
+        const live = res.data.find((o: any) =>
+          (targetLookupId && String(o._id || o.id) === String(targetLookupId)) ||
+          (targetLookupCode && o.orderCode === targetLookupCode)
+        ) || res.data.find((o: any) => Number(o.remainingAmount || 0) > 0 || String(o.paymentStatus || "").toLowerCase().includes("menunggu"))
+          || res.data.find((o: any) => String(o.paymentMethod || "").toLowerCase() === "qris")
+          || res.data[0];
         if (live) {
+          const hasPending = (live.paymentHistory || []).some(
+            (p: any) => String(p.status || "").toUpperCase() === "MENUNGGU_VERIFIKASI"
+          );
+          if (!hasPending) {
+            setPaymentStatusOverride(null);
+          }
           setOrder((prev: any) => ({
             ...prev,
             id: live._id,
@@ -206,23 +242,20 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
             paymentProofUrl: live.paymentProofUrl || (live.paymentHistory && live.paymentHistory[live.paymentHistory.length - 1]?.proofUrl),
             paymentHistory: live.paymentHistory,
             paymentOption: live.paymentOption,
+            paymentBankName: live.paymentBankName,
+            paymentAccountNumber: live.paymentAccountNumber,
+            paymentAccountHolder: live.paymentAccountHolder,
           }));
           if (typeof live.paidAmount === "number") setPaidAmount(live.paidAmount);
           if (typeof live.remainingAmount === "number") setRemainingAmount(live.remainingAmount);
-          const norm = String(live.paymentStatus || "").toLowerCase();
-          if (norm.includes("verifikasi") && !norm.includes("terverifikasi")) {
-            setPaymentStatus("Menunggu Verifikasi");
-          } else if (norm.includes("terverifikasi") || norm.includes("lunas")) {
-            setPaymentStatus("Pembayaran Terverifikasi");
-          } else if (norm.includes("tolak") || norm.includes("ditolak")) {
-            setPaymentStatus("Pembayaran Ditolak");
-            const lastRejected = (live.paymentHistory || []).slice().reverse().find((p: any) => p.status === "DITOLAK");
-            if (lastRejected?.rejectionReason) {
-              setRejectionReason(lastRejected.rejectionReason);
-            }
+          const lastRejected = (live.paymentHistory || []).slice().reverse().find((p: any) => p.status === "DITOLAK");
+          if (lastRejected?.rejectionReason) {
+            setRejectionReason(lastRejected.rejectionReason);
           }
-          if (live.paymentProofUrl) {
+          if (hasPending && live.paymentProofUrl) {
             setUploadedProofUri(live.paymentProofUrl);
+          } else if (!hasPending) {
+            setUploadedProofUri(null);
           }
         }
       } catch (err) {
@@ -235,12 +268,22 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
       active = false;
       clearInterval(interval);
     };
-  }, [authAccount?.id, orderData?.id]);
+  }, [authAccount?.id, orderData?.id, orderData?.orderCode]);
 
-  // Generate SVG QR Matrix from toqr
+  // Virtual account & bank transfer identifiers
+  const vaSuffix = useMemo(() => {
+    const raw = String(order?.orderCode || order?.id || "5200").replace(/\D/g, "");
+    return raw.length >= 4 ? raw.slice(-4) : "6558";
+  }, [order?.orderCode, order?.id]);
+
+  const vaNumberBCA = `8277 0824 8144 ${vaSuffix}`;
+  const vaNumberMandiri = `8890 8123 4567 ${vaSuffix}`;
+  const bankRekeningBCA = "014 9876 5432";
+
+  // Generate SVG QR Matrix from toqr with currentPayAmount
   const qrMatrix = useMemo(() => {
     try {
-      const payload = `00020101021226670016ID.CO.QRIS.WWW01189360099900000052000215ID10200238493010303UME51440014ID.GO.GPN.WWW0215ID10200238493010303UME5204581253033605406${totalOrderAmount}5802ID5925CATERING BERKAH NUSANTARA6007BANDUNG61054011162230519PO5200-PELUNASAN6304A1B2`;
+      const payload = `00020101021226670016ID.CO.QRIS.WWW01189360099900000052000215ID10200238493010303UME51440014ID.GO.GPN.WWW0215ID10200238493010303UME5204581253033605406${currentPayAmount}5802ID5925CATERING BERKAH NUSANTARA6007BANDUNG61054011162230519PO5200-PELUNASAN6304A1B2`;
       const result = toQR(payload);
       if (Array.isArray(result) || typeof result === "object") {
         return Object.values(result) as number[];
@@ -249,16 +292,18 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
     } catch {
       return null;
     }
-  }, [totalOrderAmount]);
+  }, [currentPayAmount]);
+
+  // Copy text helper
+  const handleCopyText = async (text: string, label: string) => {
+    await Clipboard.setStringAsync(text.replace(/\s+/g, ""));
+    Alert.alert("Tersalin", `${label} berhasil disalin ke papan klip.`);
+  };
 
   // Handle action 1: Copy nominal
   const handleCopyNominal = async () => {
-    await Clipboard.setStringAsync(proposedAmount.toString());
-    if (Platform.OS === "web") {
-      alert(`Nominal ${rp(proposedAmount)} berhasil disalin.`);
-    } else {
-      Alert.alert("Tersalin", `Nominal ${rp(proposedAmount)} berhasil disalin ke clipboard.`);
-    }
+    await Clipboard.setStringAsync(currentPayAmount.toString());
+    Alert.alert("Tersalin", `Nominal ${rp(currentPayAmount)} berhasil disalin.`);
   };
 
   // Handle action 2: Save QRIS
@@ -366,9 +411,10 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
 
         const submitRes = await submitCateringPayment(
           targetOrderId,
-          proposedAmount,
-          `QRIS-${Date.now().toString().slice(-6)}`,
-          finalProofUrl
+          currentPayAmount,
+          `${selectedPelunasanMethod.toUpperCase()}-${Date.now().toString().slice(-6)}`,
+          finalProofUrl,
+          selectedPelunasanMethod
         );
 
         if (!submitRes.success) {
@@ -414,22 +460,32 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
   const statusConfig = useMemo(() => {
     switch (paymentStatus) {
       case "Menunggu Verifikasi":
+        const isPelunasanPending = pendingPayment?.type === "PELUNASAN" || (paidAmount > 0 && remainingAmount > 0);
         return {
-          label: "Menunggu Verifikasi",
+          label: isPelunasanPending ? "Verifikasi Pelunasan" : "Menunggu Verifikasi DP",
           color: "#2563EB",
           bg: "#EFF6FF",
           border: "#BFDBFE",
           icon: Clock,
-          desc: "Bukti pembayaran telah dikirim dan sedang menunggu verifikasi Pemilik Catering.",
+          desc: `Bukti pembayaran ${isPelunasanPending ? "pelunasan" : "DP"} sebesar ${rp(pendingPayment?.amount || currentPayAmount)} telah dikirim dan sedang diverifikasi oleh Pemilik Catering.`,
         };
-      case "Pembayaran Terverifikasi":
+      case "DP Terbayar":
         return {
-          label: "Pembayaran Terverifikasi",
+          label: "DP Terverifikasi",
           color: "#15803D",
           bg: "#DCFCE7",
           border: "#86EFAC",
           icon: CheckCircle2,
-          desc: "Pembayaran telah divalidasi oleh Pemilik Catering. Pesanan Anda diproses.",
+          desc: `Pembayaran DP sebesar ${rp(paidAmount)} telah diverifikasi oleh Pemilik Catering. Pesanan sedang disiapkan dapur. Silakan pilih metode pembayaran di bawah untuk melunasi sisa tagihan ${rp(remainingAmount)}.`,
+        };
+      case "Pembayaran Terverifikasi":
+        return {
+          label: "Lunas 100%",
+          color: "#15803D",
+          bg: "#DCFCE7",
+          border: "#86EFAC",
+          icon: CheckCircle2,
+          desc: "Seluruh pembayaran pesanan telah terverifikasi lunas. Pemilik Catering sedang menyiapkan pesanan dan driver siap mengantar.",
         };
       case "Pembayaran Ditolak":
         return {
@@ -438,7 +494,7 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
           bg: "#FEE2E2",
           border: "#FCA5A5",
           icon: AlertCircle,
-          desc: "Bukti pembayaran ditolak oleh Pemilik Catering. Silakan periksa alasan dan unggah bukti baru.",
+          desc: rejectionReason || "Bukti pembayaran ditolak oleh Pemilik Catering. Silakan periksa alasan dan unggah bukti baru.",
         };
       case "Menunggu Pembayaran":
       default:
@@ -448,10 +504,10 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
           bg: "#FEF3C7",
           border: "#FDE68A",
           icon: Clock,
-          desc: "Silakan lakukan pembayaran QRIS sesuai nominal dan unggah bukti transfer.",
+          desc: `Silakan lakukan pembayaran ${order?.paymentOption === "lunas" ? "penuh" : "DP"} sebesar ${rp(currentPayAmount)} sesuai metode pilihan di bawah lalu unggah bukti transfer.`,
         };
     }
-  }, [paymentStatus]);
+  }, [paymentStatus, pendingPayment, currentPayAmount, paidAmount, remainingAmount, order?.paymentOption, rejectionReason]);
 
   const StatusIcon = statusConfig.icon;
 
@@ -467,7 +523,13 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
           <ArrowLeft size={22} color="#0F172A" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Pembayaran QRIS</Text>
+          <Text style={styles.headerTitle}>
+            {isOrderFullyPaid
+              ? "Pembayaran Lunas"
+              : isDpPaidStage
+              ? "Pelunasan Pesanan Catering"
+              : "Pembayaran Catering"}
+          </Text>
           <Text style={styles.headerSubtitle} numberOfLines={1}>
             {order?.orderCode || "PO-5200"} • {order?.storeName || DEFAULT_SPEC_ORDER.storeName}
           </Text>
@@ -512,95 +574,310 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
           </View>
         )}
 
-        {/* 3. QRIS Code Display Card (Visible unless fully verified) */}
-        {paymentStatus !== "Pembayaran Terverifikasi" && (
-          <View style={styles.qrisCard}>
-            {/* National QRIS Header */}
-            <View style={styles.qrisHeader}>
-              <View style={styles.qrisLogoRow}>
-                <View style={styles.qrisLogoBadge}>
-                  <Text style={styles.qrisLogoText}>QRIS</Text>
-                </View>
-                <Text style={styles.qrisSubtitle}>STANDAR PEMBAYARAN NASIONAL</Text>
-              </View>
-              <View style={styles.gpnBadge}>
-                <Text style={styles.gpnText}>GPN</Text>
-              </View>
-            </View>
-
-            <View style={styles.qrisStoreInfo}>
-              <Text style={styles.qrisStoreName}>{order?.storeName || DEFAULT_SPEC_ORDER.storeName}</Text>
-              <Text style={styles.qrisNmid}>NMID: ID1020023849301 • A.N. CATERING BERKAH</Text>
-            </View>
-
-            {/* QR Code Container */}
-            <View style={styles.qrCodeWrapper}>
-              {order?.qrisImageUrl ? (
-                <Image
-                  source={{ uri: order.qrisImageUrl }}
-                  style={styles.qrImage}
-                  resizeMode="contain"
-                />
-              ) : qrMatrix ? (
-                <View style={styles.svgQrContainer}>
-                  <Svg width={180} height={180} viewBox="0 0 21 21">
-                    {qrMatrix.map((val, idx) => {
-                      if (val === 1) {
-                        const row = Math.floor(idx / 21);
-                        const col = idx % 21;
-                        return (
-                          <Rect
-                            key={idx}
-                            x={col}
-                            y={row}
-                            width={1}
-                            height={1}
-                            fill="#0F172A"
-                          />
-                        );
-                      }
-                      return null;
-                    })}
-                  </Svg>
-                </View>
-              ) : (
-                <View style={styles.qrFallback}>
-                  <QrCode size={140} color="#0F172A" />
-                </View>
-              )}
-            </View>
-
-            {/* Practical Action Buttons */}
-            <View style={styles.qrisActionRow}>
-              <TouchableOpacity
-                style={styles.qrisActionBtn}
-                onPress={handleSaveQRIS}
-                activeOpacity={0.7}
-              >
-                <Download size={14} color="#0D7A53" />
-                <Text style={styles.qrisActionBtnText}>Simpan QRIS</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.qrisActionBtn}
-                onPress={handleCopyNominal}
-                activeOpacity={0.7}
-              >
-                <Copy size={14} color="#0D7A53" />
-                <Text style={styles.qrisActionBtnText}>Salin Nominal</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.qrisDueBox}>
-              <Calendar size={14} color="#64748B" />
-              <Text style={styles.qrisDueText}>
-                Batas pembayaran: <Text style={styles.qrisDueBold}>18 September 2026</Text>
+        {/* 3. Method Selector Tabs (Visible when customer needs to pay/pelunasan) */}
+        {!isOrderFullyPaid && !pendingPayment && (
+          <View style={styles.methodSelectorWrap}>
+            <View style={styles.methodSelectorHeader}>
+              <Wallet size={16} color="#0D7A53" />
+              <Text style={styles.methodSelectorTitle}>
+                {isDpPaidStage
+                  ? `Pilih Metode Pelunasan (Sisa ${rp(remainingAmount)})`
+                  : "Pilih Metode Pembayaran"}
               </Text>
+            </View>
+            <View style={styles.methodTabsRow}>
+              {[
+                { id: "qris", label: "QRIS", icon: QrCode },
+                { id: "bca_va", label: "BCA VA", icon: CreditCard },
+                { id: "mandiri_va", label: "Mandiri VA", icon: CreditCard },
+                { id: "bank_transfer", label: "Transfer Bank", icon: Wallet },
+              ].map((tab) => {
+                const TabIcon = tab.icon;
+                const active = selectedPelunasanMethod === tab.id;
+                return (
+                  <TouchableOpacity
+                    key={tab.id}
+                    style={[styles.methodTabBtn, active && styles.methodTabBtnActive]}
+                    onPress={() => setSelectedPelunasanMethod(tab.id as any)}
+                    activeOpacity={0.75}
+                  >
+                    <TabIcon size={14} color={active ? "#FFFFFF" : "#475569"} />
+                    <Text style={[styles.methodTabText, active && styles.methodTabTextActive]}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         )}
 
-        {/* 4. Ringkasan Pembayaran Card */}
+        {/* 4. Payment Instruction Card by Selected Method */}
+        {!isOrderFullyPaid && !pendingPayment && (
+          <>
+            {/* OPTION A: QRIS */}
+            {selectedPelunasanMethod === "qris" && (
+              <View style={styles.qrisCard}>
+                <View style={styles.qrisHeader}>
+                  <View style={styles.qrisLogoRow}>
+                    <View style={styles.qrisLogoBadge}>
+                      <Text style={styles.qrisLogoText}>QRIS</Text>
+                    </View>
+                    <Text style={styles.qrisSubtitle}>STANDAR PEMBAYARAN NASIONAL</Text>
+                  </View>
+                  <View style={styles.gpnBadge}>
+                    <Text style={styles.gpnText}>GPN</Text>
+                  </View>
+                </View>
+
+                <View style={styles.qrisStoreInfo}>
+                  <Text style={styles.qrisStoreName}>{order?.storeName || DEFAULT_SPEC_ORDER.storeName}</Text>
+                  <Text style={styles.qrisNmid}>NMID: ID1020023849301 • A.N. CATERING BERKAH</Text>
+                </View>
+
+                {/* Amount Highlight Box */}
+                <View style={styles.qrisAmountHighlightBox}>
+                  <Text style={styles.qrisAmountLabel}>
+                    {isDpPaidStage ? "Nominal Sisa Pelunasan" : "Nominal yang Harus Dibayar"}
+                  </Text>
+                  <Text style={styles.qrisAmountValue}>{rp(currentPayAmount)}</Text>
+                </View>
+
+                {/* QR Code */}
+                <View style={styles.qrCodeWrapper}>
+                  {order?.qrisImageUrl && !isDpPaidStage ? (
+                    <Image
+                      source={{ uri: order.qrisImageUrl }}
+                      style={styles.qrImage}
+                      resizeMode="contain"
+                    />
+                  ) : qrMatrix ? (
+                    <View style={styles.svgQrContainer}>
+                      <Svg width={180} height={180} viewBox="0 0 21 21">
+                        {qrMatrix.map((val, idx) => {
+                          if (val === 1) {
+                            const row = Math.floor(idx / 21);
+                            const col = idx % 21;
+                            return (
+                              <Rect
+                                key={idx}
+                                x={col}
+                                y={row}
+                                width={1}
+                                height={1}
+                                fill="#0F172A"
+                              />
+                            );
+                          }
+                          return null;
+                        })}
+                      </Svg>
+                    </View>
+                  ) : (
+                    <View style={styles.qrFallback}>
+                      <QrCode size={140} color="#0F172A" />
+                    </View>
+                  )}
+                </View>
+
+                {/* Actions */}
+                <View style={styles.qrisActionRow}>
+                  <TouchableOpacity
+                    style={styles.qrisActionBtn}
+                    onPress={handleSaveQRIS}
+                    activeOpacity={0.7}
+                  >
+                    <Download size={14} color="#0D7A53" />
+                    <Text style={styles.qrisActionBtnText}>Simpan QRIS</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.qrisActionBtn}
+                    onPress={handleCopyNominal}
+                    activeOpacity={0.7}
+                  >
+                    <Copy size={14} color="#0D7A53" />
+                    <Text style={styles.qrisActionBtnText}>Salin Nominal</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.qrisDueBox}>
+                  <Calendar size={14} color="#64748B" />
+                  <Text style={styles.qrisDueText}>
+                    Batas pembayaran: <Text style={styles.qrisDueBold}>H-1 Sebelum Pengiriman</Text>
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* OPTION B: BCA Virtual Account */}
+            {selectedPelunasanMethod === "bca_va" && (
+              <View style={styles.vaCardWrap}>
+                <View style={styles.vaHeaderRow}>
+                  <View style={styles.vaBankBadge}>
+                    <Text style={styles.vaBankBadgeText}>BCA</Text>
+                  </View>
+                  <Text style={styles.vaTitle}>BCA Virtual Account</Text>
+                </View>
+                <Text style={styles.vaSubtitle}>Transfer tepat hingga nominal rupiah terakhir via m-BCA / KlikBCA</Text>
+
+                <View style={styles.vaBox}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.vaBoxLabel}>Nomor Virtual Account</Text>
+                    <Text style={styles.vaNumberText}>{vaNumberBCA}</Text>
+                    <Text style={styles.vaAccountName}>A.N. GEOVERSE - {order?.storeName || "Catering Berkah"}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.vaCopyBtn}
+                    onPress={() => handleCopyText(vaNumberBCA, "Nomor BCA Virtual Account")}
+                    activeOpacity={0.7}
+                  >
+                    <Copy size={14} color="#0D7A53" />
+                    <Text style={styles.vaCopyBtnText}>Salin VA</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.vaAmountRow}>
+                  <View>
+                    <Text style={styles.vaBoxLabel}>{isDpPaidStage ? "Total Pelunasan" : "Total Tagihan"}</Text>
+                    <Text style={styles.vaAmountText}>{rp(currentPayAmount)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.vaCopyBtn}
+                    onPress={handleCopyNominal}
+                    activeOpacity={0.7}
+                  >
+                    <Copy size={14} color="#0D7A53" />
+                    <Text style={styles.vaCopyBtnText}>Salin Nominal</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.vaGuideBox}>
+                  <Text style={styles.vaGuideTitle}>Panduan Pembayaran m-BCA:</Text>
+                  <Text style={styles.vaGuideItem}>1. Buka aplikasi BCA Mobile &gt; Pilih m-Transfer &gt; BCA Virtual Account</Text>
+                  <Text style={styles.vaGuideItem}>2. Masukkan nomor VA {vaNumberBCA} lalu tekan Send</Text>
+                  <Text style={styles.vaGuideItem}>3. Periksa tagihan {rp(currentPayAmount)} lalu masukkan PIN m-BCA</Text>
+                  <Text style={styles.vaGuideItem}>4. Simpan tangkapan layar bukti transfer dan unggah melalui tombol di bawah</Text>
+                </View>
+              </View>
+            )}
+
+            {/* OPTION C: Mandiri Virtual Account */}
+            {selectedPelunasanMethod === "mandiri_va" && (
+              <View style={styles.vaCardWrap}>
+                <View style={[styles.vaHeaderRow, { gap: 10 }]}>
+                  <View style={[styles.vaBankBadge, { backgroundColor: "#0284C7" }]}>
+                    <Text style={styles.vaBankBadgeText}>MANDIRI</Text>
+                  </View>
+                  <Text style={styles.vaTitle}>Mandiri Virtual Account</Text>
+                </View>
+                <Text style={styles.vaSubtitle}>Transfer mudah dan otomatis terverifikasi via Livin' by Mandiri</Text>
+
+                <View style={styles.vaBox}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.vaBoxLabel}>Nomor Virtual Account</Text>
+                    <Text style={styles.vaNumberText}>{vaNumberMandiri}</Text>
+                    <Text style={styles.vaAccountName}>A.N. GEOVERSE - {order?.storeName || "Catering Berkah"}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.vaCopyBtn}
+                    onPress={() => handleCopyText(vaNumberMandiri, "Nomor Mandiri Virtual Account")}
+                    activeOpacity={0.7}
+                  >
+                    <Copy size={14} color="#0D7A53" />
+                    <Text style={styles.vaCopyBtnText}>Salin VA</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.vaAmountRow}>
+                  <View>
+                    <Text style={styles.vaBoxLabel}>{isDpPaidStage ? "Total Pelunasan" : "Total Tagihan"}</Text>
+                    <Text style={styles.vaAmountText}>{rp(currentPayAmount)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.vaCopyBtn}
+                    onPress={handleCopyNominal}
+                    activeOpacity={0.7}
+                  >
+                    <Copy size={14} color="#0D7A53" />
+                    <Text style={styles.vaCopyBtnText}>Salin Nominal</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.vaGuideBox}>
+                  <Text style={styles.vaGuideTitle}>Panduan Pembayaran Livin' by Mandiri:</Text>
+                  <Text style={styles.vaGuideItem}>1. Buka Livin' by Mandiri &gt; Pilih Bayar &gt; Virtual Account</Text>
+                  <Text style={styles.vaGuideItem}>2. Masukkan nomor VA {vaNumberMandiri} lalu Lanjutkan</Text>
+                  <Text style={styles.vaGuideItem}>3. Pastikan nominal {rp(currentPayAmount)} sesuai dan selesaikan transfer</Text>
+                  <Text style={styles.vaGuideItem}>4. Simpan bukti transfer dan unggah melalui tombol di bawah</Text>
+                </View>
+              </View>
+            )}
+
+            {/* OPTION D: Transfer Rekening Bank BCA */}
+            {selectedPelunasanMethod === "bank_transfer" && (
+              <View style={styles.vaCardWrap}>
+                <View style={styles.vaHeaderRow}>
+                  <View style={[styles.vaBankBadge, { backgroundColor: "#1E293B" }]}>
+                    <Text style={styles.vaBankBadgeText}>BANK</Text>
+                  </View>
+                  <Text style={styles.vaTitle}>Transfer Bank Rekening BCA</Text>
+                </View>
+                <Text style={styles.vaSubtitle}>Transfer langsung ke rekening resmi platform GEOVERSE Catering</Text>
+
+                <View style={styles.vaBox}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.vaBoxLabel}>Nomor Rekening BCA</Text>
+                    <Text style={styles.vaNumberText}>{bankRekeningBCA}</Text>
+                    <Text style={styles.vaAccountName}>A.N. PT GEOVERSE NUSANTARA</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.vaCopyBtn}
+                    onPress={() => handleCopyText(bankRekeningBCA, "Nomor Rekening BCA")}
+                    activeOpacity={0.7}
+                  >
+                    <Copy size={14} color="#0D7A53" />
+                    <Text style={styles.vaCopyBtnText}>Salin Rekening</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.vaAmountRow}>
+                  <View>
+                    <Text style={styles.vaBoxLabel}>{isDpPaidStage ? "Nominal Pelunasan" : "Nominal Transfer"}</Text>
+                    <Text style={styles.vaAmountText}>{rp(currentPayAmount)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.vaCopyBtn}
+                    onPress={handleCopyNominal}
+                    activeOpacity={0.7}
+                  >
+                    <Copy size={14} color="#0D7A53" />
+                    <Text style={styles.vaCopyBtnText}>Salin Nominal</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.vaBox}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.vaBoxLabel}>Berita Acara / Catatan Transfer</Text>
+                    <Text style={[styles.vaNumberText, { fontSize: 13, color: "#334155" }]}>
+                      PELUNASAN-{order?.orderCode || "CATERING"}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.vaCopyBtn}
+                    onPress={() => handleCopyText(`PELUNASAN-${order?.orderCode || "CATERING"}`, "Berita Acara")}
+                    activeOpacity={0.7}
+                  >
+                    <Copy size={14} color="#0D7A53" />
+                    <Text style={styles.vaCopyBtnText}>Salin Berita</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </>
+        )}
+
+        {/* 5. Ringkasan Pembayaran Card */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeaderRow}>
             <CreditCard size={18} color="#0D7A53" />
@@ -610,41 +887,146 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
           <View style={styles.summaryDivider} />
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Sudah dibayar</Text>
+            <Text style={styles.summaryLabel}>Total pesanan</Text>
+            <Text style={styles.summaryValueBold}>{rp(totalOrderAmount)}</Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Sudah dibayar (DP)</Text>
             <Text style={[styles.summaryValue, paidAmount > 0 ? styles.paidHighlight : null]}>
               {rp(paidAmount)}
             </Text>
           </View>
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total pesanan</Text>
-            <Text style={styles.summaryValueBold}>{rp(totalOrderAmount)}</Text>
+            <Text style={styles.summaryLabel}>Sisa pelunasan</Text>
+            <Text style={remainingAmount > 0 ? styles.summaryValueRemaining : styles.paidHighlight}>
+              {rp(remainingAmount)}
+            </Text>
           </View>
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Pelunasan diperlukan</Text>
-            <Text style={styles.summaryValuePrimary}>{rp(remainingAmount)}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Sisa pembayaran</Text>
-            <Text style={styles.summaryValueRemaining}>{rp(remainingAmount)}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Batas pembayaran</Text>
-            <Text style={styles.summaryValue}>18 September 2026</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Metode pelunasan</Text>
+            <Text style={styles.summaryLabel}>Metode pembayaran aktif</Text>
             <View style={styles.methodPill}>
-              <Text style={styles.methodPillText}>QRIS</Text>
+              <Text style={styles.methodPillText}>
+                {selectedPelunasanMethod.toUpperCase().replace("_", " ")}
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* 5. Informasi & Keterangan Callouts */}
+        {/* 6. Riwayat Pembayaran Card (Shows DP & any historical transactions) */}
+        {Array.isArray(order?.paymentHistory) && order.paymentHistory.length > 0 && (
+          <View style={styles.historyCardWrap}>
+            <View style={styles.historyCardHeader}>
+              <ReceiptText size={16} color="#0D7A53" />
+              <Text style={styles.historyCardTitle}>Riwayat Pembayaran Pesanan</Text>
+            </View>
+            <View style={styles.historyDivider} />
+
+            {order.paymentHistory.map((item: any, idx: number) => {
+              const isVerif = String(item.status || "").toUpperCase() === "TERVERIFIKASI";
+              const isReject = String(item.status || "").toUpperCase() === "DITOLAK";
+              const badgeBg = isVerif ? "#DCFCE7" : isReject ? "#FEE2E2" : "#EFF6FF";
+              const badgeTextCol = isVerif ? "#15803D" : isReject ? "#DC2626" : "#2563EB";
+              const badgeLabel = isVerif ? "Terverifikasi" : isReject ? "Ditolak" : "Menunggu Verifikasi";
+
+              return (
+                <View key={item.paymentId || idx} style={styles.historyItemRow}>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.historyItemTopRow}>
+                      <Text style={styles.historyItemType}>
+                        {item.type === "DP" ? "Uang Muka (DP)" : "Pelunasan"}
+                      </Text>
+                      <View style={[styles.historyBadge, { backgroundColor: badgeBg }]}>
+                        <Text style={[styles.historyBadgeText, { color: badgeTextCol }]}>
+                          {badgeLabel}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.historyItemAmount}>{rp(item.amount)}</Text>
+                    <Text style={styles.historyItemMeta}>
+                      Metode: {String(item.method || "QRIS").toUpperCase()} • ID: {String(item.paymentId || "").slice(-8)}
+                    </Text>
+                    {item.verifiedAt ? (
+                      <Text style={styles.historyItemDate}>
+                        Diverifikasi: {new Date(item.verifiedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} WIB
+                      </Text>
+                    ) : item.createdAt ? (
+                      <Text style={styles.historyItemDate}>
+                        Diajukan: {new Date(item.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} WIB
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {item.proofUrl ? (
+                    <TouchableOpacity
+                      style={styles.historyProofThumbWrap}
+                      onPress={() => {
+                        setUploadedProofUri(item.proofUrl);
+                        setShowLightbox(true);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Image source={{ uri: item.proofUrl }} style={styles.historyProofThumb} />
+                      <View style={styles.historyProofThumbOverlay}>
+                        <Maximize2 size={12} color="#FFFFFF" />
+                      </View>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* 7. Pending Payment Active Notice (Only if customer currently submitted an unverified payment) */}
+        {pendingPayment && (
+          <View style={styles.submittedProofCard}>
+            <View style={styles.submittedHeader}>
+              <Clock size={16} color="#2563EB" />
+              <Text style={styles.submittedTitle}>Bukti Pembayaran Sedang Diverifikasi</Text>
+            </View>
+
+            <View style={styles.submittedDetailsRow}>
+              <View style={styles.submittedInfoCol}>
+                <Text style={styles.submittedLabel}>Nominal Diajukan</Text>
+                <Text style={[styles.submittedAmount, { color: "#2563EB" }]}>{rp(pendingPayment.amount)}</Text>
+
+                <Text style={[styles.submittedLabel, { marginTop: 8 }]}>Tipe Pembayaran</Text>
+                <Text style={styles.submittedDate}>
+                  {pendingPayment.type === "PELUNASAN" ? "Pelunasan Sisa" : "Uang Muka (DP)"}
+                </Text>
+
+                <Text style={[styles.submittedLabel, { marginTop: 8 }]}>Status Pengajuan</Text>
+                <View style={[styles.badgeInline, { backgroundColor: "#EFF6FF" }]}>
+                  <Text style={[styles.badgeInlineText, { color: "#2563EB" }]}>
+                    Menunggu Verifikasi Pemilik Catering
+                  </Text>
+                </View>
+              </View>
+
+              {pendingPayment.proofUrl ? (
+                <TouchableOpacity
+                  style={styles.proofThumbnailBox}
+                  onPress={() => {
+                    setUploadedProofUri(pendingPayment.proofUrl);
+                    setShowLightbox(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Image source={{ uri: pendingPayment.proofUrl }} style={styles.proofThumbnail} />
+                  <View style={styles.thumbnailOverlay}>
+                    <Maximize2 size={14} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+        )}
+
+        {/* 8. Informasi Callouts */}
         <View style={styles.infoCalloutBox}>
           <View style={styles.infoIconWrapper}>
             <Info size={16} color="#0D7A53" />
@@ -656,61 +1038,21 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
 
         <View style={styles.noteCalloutBox}>
           <Text style={styles.noteCalloutText}>
-            Setiap pembayaran akan masuk ke riwayat transaksi dan berstatus menunggu verifikasi Pemilik Catering.
+            Setiap pembayaran akan langsung masuk ke riwayat transaksi dan diperbarui otomatis begitu Pemilik Catering melakukan verifikasi.
           </Text>
         </View>
-
-        {/* 6. Bukti Pembayaran Yang Sudah Di-upload (Jika status Menunggu Verifikasi, Ditolak, atau Terverifikasi) */}
-        {uploadedProofUri && (
-          <View style={styles.submittedProofCard}>
-            <View style={styles.submittedHeader}>
-              <FileText size={16} color="#0D7A53" />
-              <Text style={styles.submittedTitle}>Bukti Pembayaran Customer</Text>
-            </View>
-
-            <View style={styles.submittedDetailsRow}>
-              <View style={styles.submittedInfoCol}>
-                <Text style={styles.submittedLabel}>Nominal Pengajuan</Text>
-                <Text style={styles.submittedAmount}>{rp(proposedAmount)}</Text>
-
-                <Text style={[styles.submittedLabel, { marginTop: 8 }]}>Tanggal Pengajuan</Text>
-                <Text style={styles.submittedDate}>{submissionDate}</Text>
-
-                <Text style={[styles.submittedLabel, { marginTop: 8 }]}>Status Bukti</Text>
-                <View style={[styles.badgeInline, { backgroundColor: statusConfig.bg }]}>
-                  <Text style={[styles.badgeInlineText, { color: statusConfig.color }]}>
-                    {paymentStatus === "Menunggu Verifikasi"
-                      ? "Menunggu Verifikasi Pemilik Catering"
-                      : statusConfig.label}
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.proofThumbnailBox}
-                onPress={() => setShowLightbox(true)}
-                activeOpacity={0.8}
-              >
-                <Image source={{ uri: uploadedProofUri }} style={styles.proofThumbnail} />
-                <View style={styles.thumbnailOverlay}>
-                  <Maximize2 size={14} color="#FFFFFF" />
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
       </ScrollView>
 
-      {/* 7. Bottom Sticky CTA Bar */}
+      {/* 9. Bottom Sticky CTA Bar */}
       <View style={styles.bottomBar}>
-        {paymentStatus === "Menunggu Verifikasi" ? (
+        {pendingPayment ? (
           <View style={styles.waitingContainer}>
             <Clock size={18} color="#2563EB" />
             <Text style={styles.waitingText}>
-              Pengajuan {rp(proposedAmount)} sedang diverifikasi Pemilik Catering.
+              Pengajuan {pendingPayment.type === "PELUNASAN" ? "Pelunasan" : "DP"} {rp(pendingPayment.amount)} sedang diverifikasi Pemilik Catering.
             </Text>
           </View>
-        ) : paymentStatus === "Pembayaran Terverifikasi" ? (
+        ) : isOrderFullyPaid ? (
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: "#15803D" }]}
             onPress={() => navigate("c_catering_tracking")}
@@ -728,13 +1070,23 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
             <Upload size={18} color="#FFFFFF" />
             <Text style={styles.primaryButtonText}>Upload Bukti Pembayaran Baru</Text>
           </TouchableOpacity>
+        ) : isDpPaidStage ? (
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: "#15803D" }]}
+            onPress={() => setShowUploadSheet(true)}
+            activeOpacity={0.85}
+          >
+            <Upload size={18} color="#FFFFFF" />
+            <Text style={styles.primaryButtonText}>Unggah Bukti Pelunasan ({rp(remainingAmount)})</Text>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => setShowConfirmModal(true)}
+            onPress={() => setShowUploadSheet(true)}
             activeOpacity={0.85}
           >
-            <Text style={styles.primaryButtonText}>Ajukan {rp(proposedAmount)}</Text>
+            <Upload size={18} color="#FFFFFF" />
+            <Text style={styles.primaryButtonText}>Unggah Bukti Pembayaran ({rp(currentPayAmount)})</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -805,7 +1157,11 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
             <View style={styles.sheetHandle} />
 
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Upload Bukti Pembayaran</Text>
+              <Text style={styles.sheetTitle}>
+                {isDpPaidStage
+                  ? `Upload Bukti Pelunasan (${rp(remainingAmount)})`
+                  : `Upload Bukti Pembayaran (${rp(currentPayAmount)})`}
+              </Text>
               <TouchableOpacity
                 style={styles.sheetCloseBtn}
                 onPress={() => setShowUploadSheet(false)}
@@ -815,7 +1171,9 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
             </View>
 
             <Text style={styles.sheetInstruction}>
-              Silakan upload screenshot atau foto bukti pembayaran QRIS dari perangkat kamu.
+              {isDpPaidStage
+                ? `Silakan upload tangkapan layar atau foto bukti transfer pelunasan sisa tagihan ${rp(remainingAmount)} menggunakan metode ${selectedPelunasanMethod.toUpperCase().replace("_", " ")}.`
+                : `Silakan upload screenshot atau foto bukti pembayaran ${selectedPelunasanMethod.toUpperCase().replace("_", " ")} sebesar ${rp(currentPayAmount)}.`}
             </Text>
 
             {/* Option to Pick / Preview */}
@@ -885,7 +1243,9 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
                   ) : (
                     <>
                       <Upload size={18} color="#FFFFFF" />
-                      <Text style={styles.primaryButtonText}>Kirim Bukti Pembayaran</Text>
+                      <Text style={styles.primaryButtonText}>
+                        {isDpPaidStage ? "Kirim Bukti Pelunasan" : "Kirim Bukti Pembayaran"}
+                      </Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -1053,6 +1413,62 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
+  // Method Selector
+  methodSelectorWrap: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 14,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  methodSelectorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  methodSelectorTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  methodTabsRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  methodTabBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  methodTabBtnActive: {
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
+  },
+  methodTabText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  methodTabTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+
   // QRIS Card
   qrisCard: {
     backgroundColor: "#FFFFFF",
@@ -1124,6 +1540,30 @@ const styles = StyleSheet.create({
   qrisNmid: {
     fontSize: 10.5,
     color: "#64748B",
+    marginTop: 2,
+  },
+  qrisAmountHighlightBox: {
+    width: "100%",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  qrisAmountLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#166534",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  qrisAmountValue: {
+    fontSize: 19,
+    fontWeight: "900",
+    color: "#0D7A53",
     marginTop: 2,
   },
   qrCodeWrapper: {
@@ -1258,6 +1698,223 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: "800",
     color: "#0F172A",
+  },
+
+  // VA & Bank Card Styles
+  vaCardWrap: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+    marginBottom: 14,
+  },
+  vaHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 4,
+  },
+  vaBankBadge: {
+    backgroundColor: "#005696",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  vaBankBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  vaTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  vaSubtitle: {
+    fontSize: 11.5,
+    color: "#64748B",
+    marginBottom: 14,
+    marginTop: 2,
+  },
+  vaBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  vaBoxLabel: {
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  vaNumberText: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  vaAccountName: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+    marginTop: 2,
+  },
+  vaCopyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  vaCopyBtnText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  vaAmountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  vaAmountText: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#0D7A53",
+    marginTop: 2,
+  },
+  vaGuideBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  vaGuideTitle: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#334155",
+    marginBottom: 6,
+  },
+  vaGuideItem: {
+    fontSize: 11,
+    color: "#64748B",
+    lineHeight: 17,
+  },
+
+  // Payment History Card
+  historyCardWrap: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 14,
+  },
+  historyCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  historyCardTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  historyDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginBottom: 10,
+  },
+  historyItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F8FAFC",
+  },
+  historyItemTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  historyItemType: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  historyBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  historyBadgeText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  historyItemAmount: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0D7A53",
+    marginTop: 2,
+  },
+  historyItemMeta: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  historyItemDate: {
+    fontSize: 10.5,
+    color: "#94A3B8",
+    marginTop: 2,
+  },
+  historyProofThumbWrap: {
+    width: 54,
+    height: 64,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    position: "relative",
+  },
+  historyProofThumb: {
+    width: "100%",
+    height: "100%",
+  },
+  historyProofThumbOverlay: {
+    position: "absolute",
+    right: 2,
+    bottom: 2,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 6,
+    padding: 2,
   },
 
   // Callouts

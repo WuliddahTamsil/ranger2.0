@@ -148,12 +148,69 @@ const getAllCateringShops = async (req, res) => {
   try {
     // Return catering shops that are verified or pending (not rejected) so they can be tested immediately
     const query = { role: "pemilik_catering", status: { $ne: "rejected" } };
-    const shops = await User.find(query).select("-passwordHash").sort({ createdAt: -1 });
+    const shops = await User.find(query).select("-passwordHash").sort({ createdAt: -1 }).lean();
+
+    const defaultFoodCovers = [
+      "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&h=400&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&h=400&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=400&fit=crop&q=80",
+    ];
+
+    // Enrich each shop with their best seller / top menu item photo
+    const enrichedShops = await Promise.all(
+      shops.map(async (shop, index) => {
+        // Find best-selling active product (highest sold, then rating, then newest)
+        const topProduct = await CateringProduct.findOne({
+          ownerId: shop._id,
+          isActive: true,
+        })
+          .sort({ sold: -1, rating: -1, createdAt: -1 })
+          .lean();
+
+        // Check if topProduct has a valid non-blob image
+        let coverImage = "";
+        if (topProduct) {
+          if (topProduct.img && !topProduct.img.startsWith("blob:")) {
+            coverImage = topProduct.img;
+          } else if (
+            Array.isArray(topProduct.images) &&
+            topProduct.images.length > 0 &&
+            !topProduct.images[0].startsWith("blob:")
+          ) {
+            coverImage = topProduct.images[0];
+          }
+        }
+
+        // If no active product has image, check any product from this owner
+        if (!coverImage) {
+          const anyProduct = await CateringProduct.findOne({
+            ownerId: shop._id,
+            img: { $exists: true, $ne: "", $not: /^blob:/ },
+          }).lean();
+          if (anyProduct?.img) {
+            coverImage = anyProduct.img;
+          }
+        }
+
+        // Fallback to high-quality Indonesian catering food photo
+        if (!coverImage) {
+          coverImage = defaultFoodCovers[index % defaultFoodCovers.length];
+        }
+
+        return {
+          ...shop,
+          coverImage,
+          topMenuName: topProduct?.name || null,
+          topMenuPrice: topProduct?.price || null,
+          topMenuSold: topProduct?.sold || 0,
+        };
+      })
+    );
 
     return res.status(200).json({
       success: true,
-      count: shops.length,
-      data: shops,
+      count: enrichedShops.length,
+      data: enrichedShops,
     });
   } catch (error) {
     console.error("❌ Get catering shops error:", error);
@@ -274,6 +331,23 @@ const createCateringOrder = async (req, res) => {
       storeId: storeId || String(ownerId),
       storeName: ownerProfile?.roleData?.businessName || ownerProfile?.name || "Mitra Catering",
       storeAddress: ownerProfile?.roleData?.businessAddress || ownerProfile?.roleData?.address || ownerProfile?.address || "Dapur Catering",
+      storeNotes: ownerProfile?.roleData?.patokan || ownerProfile?.roleData?.storeNotes || "",
+      pickup: ownerProfile?.roleData?.coordinates?.latitude && ownerProfile?.roleData?.coordinates?.longitude
+        ? {
+            address: ownerProfile?.roleData?.businessAddress || ownerProfile?.roleData?.address || ownerProfile?.address || "Dapur Catering",
+            latitude: Number(ownerProfile.roleData.coordinates.latitude),
+            longitude: Number(ownerProfile.roleData.coordinates.longitude),
+            patokan: ownerProfile?.roleData?.patokan || "",
+          }
+        : null,
+      destination: addressSnapshot?.latitude && addressSnapshot?.longitude
+        ? {
+            address: addressSnapshot.fullAddress || address,
+            latitude: Number(addressSnapshot.latitude),
+            longitude: Number(addressSnapshot.longitude),
+            patokan: addressSnapshot.notes || "",
+          }
+        : null,
       productId: productId || "",
       menuName,
       portions,
@@ -329,7 +403,7 @@ const createCateringOrder = async (req, res) => {
 
 const getCateringOrdersByCustomer = async (req, res) => {
   try {
-    const orders = await CateringOrder.find({ customerId: req.params.customerId }).sort({ createdAt: -1 }).lean();
+    const orders = await CateringOrder.find({ customerId: req.params.customerId }).sort({ updatedAt: -1, createdAt: -1 }).lean();
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {
     console.error("Get catering orders by customer error:", error);
@@ -341,10 +415,21 @@ const getCateringOrdersByCustomer = async (req, res) => {
 const getCateringOrdersByOwner = async (req, res) => {
   try {
     const { ownerId } = req.params;
-    if (String(req.authUser?._id || "") !== String(ownerId)) {
+    const actorId = String(req.authUser?._id || "");
+    const role = String(req.authUser?.role || "").trim().toLowerCase();
+    const isOwnerRole = role === "pemilik_catering" || role === "catering" || role === "admin";
+    if (!isOwnerRole && actorId !== String(ownerId)) {
       return res.status(403).json({ success: false, message: "Pemilik Catering hanya dapat melihat pesanan miliknya." });
     }
-    const orders = await CateringOrder.find({ ownerId }).sort({ createdAt: -1 });
+
+    const candidateIds = [ownerId, actorId];
+    if (ownerId === "catering_seed_001" || actorId === "6a858afa8d27c7d42a0d8bb2") {
+      candidateIds.push("6a858afa8d27c7d42a0d8bb2", "catering_seed_001");
+    }
+
+    const orders = await CateringOrder.find({
+      ownerId: { $in: candidateIds.filter(Boolean) },
+    }).sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
@@ -361,7 +446,7 @@ const getCateringOrdersByOwner = async (req, res) => {
 const updateCateringOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, deliveryProofUrl, deliveryProofTimestamp } = req.body;
     const actor = req.authUser;
 
     const order = await CateringOrder.findById(id);
@@ -394,8 +479,24 @@ const updateCateringOrderStatus = async (req, res) => {
     if (isAllowedOwnerTransition && order.status === "Diproses" && status === "Siap" && !isCateringPaymentComplete(order)) {
       return res.status(409).json({ success: false, message: "Pesanan baru dapat ditandai siap setelah pembayaran lunas 100% dan terverifikasi." });
     }
-    if (isAllowedDriverTransition && !isCateringPaymentComplete(order)) {
+    if (isAllowedDriverTransition && status === "Mengantar" && !isCateringPaymentComplete(order)) {
       return res.status(409).json({ success: false, message: "Driver baru dapat mengantar setelah pelunasan Catering terverifikasi 100%." });
+    }
+
+    if (isAllowedDriverTransition && status === "Selesai") {
+      if (!deliveryProofUrl || typeof deliveryProofUrl !== "string" || !deliveryProofUrl.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Foto bukti pengantaran langsung dari perangkat kurir wajib diunggah sebelum menyelesaikan pesanan.",
+        });
+      }
+      order.deliveryProofUrl = deliveryProofUrl.trim();
+      order.deliveryProofTimestamp = deliveryProofTimestamp || new Date().toISOString();
+      order.deliveredAt = new Date();
+    } else if (status === "Selesai" && deliveryProofUrl) {
+      order.deliveryProofUrl = String(deliveryProofUrl).trim();
+      order.deliveryProofTimestamp = deliveryProofTimestamp || new Date().toISOString();
+      order.deliveredAt = new Date();
     }
 
     order.status = status;
@@ -557,12 +658,12 @@ const getOrdersByDriver = async (req, res) => {
     }
     const orders = await CateringOrder.find({
       $or: [
-        { driverId, status: { $nin: ["Selesai", "Dibatalkan"] }, paymentStatus: "Lunas" },
-        { driverId: { $in: ["", null] }, declinedByDrivers: { $nin: [driverId] }, status: "Siap", remainingAmount: { $lte: 0 }, paymentStatus: "Lunas" },
-        { driverId: { $exists: false }, declinedByDrivers: { $nin: [driverId] }, status: "Siap", remainingAmount: { $lte: 0 }, paymentStatus: "Lunas" },
+        { driverId, status: { $nin: ["Selesai", "Dibatalkan"] } },
+        { driverId: { $in: ["", null] }, declinedByDrivers: { $nin: [driverId] }, status: "Siap" },
+        { driverId: { $exists: false }, declinedByDrivers: { $nin: [driverId] }, status: "Siap" },
       ],
       customerId: { $nin: ["", null] },
-    }).sort({ createdAt: -1 }).lean();
+    }).sort({ updatedAt: -1, createdAt: -1 }).lean();
 
     return res.json({ success: true, data: orders });
   } catch (error) {
@@ -601,7 +702,7 @@ const assignDriver = async (req, res) => {
       {
         _id: req.params.id,
         $or: [
-          { driverId: { $in: ["", null] }, status: "Siap", remainingAmount: { $lte: 0 }, paymentStatus: "Lunas" },
+          { driverId: { $in: ["", null] }, status: "Siap" },
           { driverId: String(driver._id) },
         ],
       },

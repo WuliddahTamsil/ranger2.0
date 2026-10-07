@@ -12,7 +12,6 @@ export const PRODUCTS: Product[] = [
 
 export const RESTAURANTS: Restaurant[] = [
   { id: 1, name: "Saung Sunda Asli", cuisine: "Masakan Sunda", rating: 4.9, distance: 0.3, minOrder: 25000, img: uImg("1555939594-58d7cb561ad1", 400, 220), tags: ["Halal", "Populer"], open: true, priceStarts: 25000 },
-  { id: 2, name: "Catering Bu Haji Nani", cuisine: "Prasmanan & Nasi Box", rating: 4.7, distance: 1.2, minOrder: 50000, img: uImg("1563245372-f21724e3856d", 400, 220), tags: ["Halal", "Min. 10 Pax"], open: true, priceStarts: 22000 },
   { id: 3, name: "Dapur Asri Kamojang", cuisine: "Masakan Rumahan", rating: 4.8, distance: 0.8, minOrder: 20000, img: uImg("1512621776951-a57141f2eefd", 400, 220), tags: ["Halal", "Sehat"], open: true, priceStarts: 27500 },
   { id: 4, name: "Bento Box & Snack Kamojang", cuisine: "Jepang & Snack Box", rating: 4.6, distance: 1.5, minOrder: 30000, img: uImg("1546069901-ba9599a7e63c", 400, 220), tags: ["Halal", "Bento"], open: true, priceStarts: 18000 },
   { id: 5, name: "Warung Prasmanan Bu Edi", cuisine: "Aneka Nasi Box & Lauk", rating: 4.5, distance: 2.1, minOrder: 40000, img: uImg("1565299624946-b28f40a0ae38", 400, 220), tags: ["Promo", "Murah"], open: true, priceStarts: 15000 },

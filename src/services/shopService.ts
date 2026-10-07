@@ -328,3 +328,43 @@ export const submitPrescription = async (payload: {
     return { success: false, message: error.message };
   }
 };
+
+/**
+ * Driver: Fetch Shop Orders (Available & Assigned)
+ */
+export const fetchDriverShopOrders = async (
+  driverId?: string
+): Promise<{ success: boolean; data?: any[]; message?: string }> => {
+  try {
+    const url = getApiUrl(`/shop/driver/orders`);
+    const headers = await getHeaders();
+    const res = await fetch(url, {
+      headers: {
+        ...headers,
+        ...(driverId ? { "x-driver-id": driverId } : {}),
+      },
+    });
+    const json = await res.json();
+    if (json.success && json.data) {
+      const list = Array.isArray(json.data)
+        ? json.data
+        : [
+            ...(Array.isArray(json.data.availableOrders) ? json.data.availableOrders : []),
+            ...(Array.isArray(json.data.driverOrders) ? json.data.driverOrders : []),
+            ...(json.data.activeOrder ? [json.data.activeOrder] : []),
+          ];
+      // Deduplicate by _id
+      const map = new Map<string, any>();
+      for (const item of list) {
+        const id = String(item?._id || item?.id || "");
+        if (id && !map.has(id)) {
+          map.set(id, item);
+        }
+      }
+      return { success: true, data: Array.from(map.values()) };
+    }
+    return { success: false, data: [] };
+  } catch (error: any) {
+    return { success: false, data: [], message: error.message };
+  }
+};

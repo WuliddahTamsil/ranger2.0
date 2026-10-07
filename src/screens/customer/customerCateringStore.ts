@@ -6,6 +6,8 @@ export interface SelectedCateringShop {
   address: string;
   phone: string;
   profilePhoto?: string;
+  coverImage?: string;
+  topMenuName?: string;
   description?: string;
   bankName?: string;
   bankAccountNumber?: string;
@@ -24,3 +26,24 @@ export const setSelectedCateringShop = (shop: SelectedCateringShop | null) => {
 export const getSelectedCateringShop = () => {
   return selectedCateringShop;
 };
+
+let activeCateringPaymentOrder: any = null;
+
+export const setActiveCateringPaymentOrder = (order: any) => {
+  activeCateringPaymentOrder = order;
+};
+
+export const getActiveCateringPaymentOrder = () => {
+  return activeCateringPaymentOrder;
+};
+
+let activeCateringTrackingOrderId: string | null = null;
+
+export const setActiveCateringTrackingOrderId = (orderId: string | null) => {
+  activeCateringTrackingOrderId = orderId;
+};
+
+export const getActiveCateringTrackingOrderId = () => {
+  return activeCateringTrackingOrderId;
+};
+

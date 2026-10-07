@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -13,10 +14,13 @@ import {
 } from "react-native";
 import {
   CalendarDays,
+  Camera,
   Check,
   CheckCircle2,
+  Clock,
   Clock3,
   MapPin,
+  Maximize2,
   MessageCircle,
   ReceiptText,
   Truck,
@@ -27,6 +31,8 @@ import {
   Bike,
   ChevronRight,
   QrCode,
+  FileText,
+  X,
 } from "lucide-react-native";
 import { BackHeader } from "../../components/BackHeader";
 import { rp } from "../../utils/formatters";
@@ -36,6 +42,12 @@ import { AuthAccount } from "../auth/authTypes";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { getCateringOrdersForCustomer } from "../../services/api";
 import { subscribeCustomerOrders } from "./customerOrderStore";
+import {
+  setActiveCateringPaymentOrder,
+  setActiveCateringTrackingOrderId,
+  getActiveCateringTrackingOrderId,
+} from "./customerCateringStore";
+import { subscribeToUserRealtime } from "../../services/userRealtime";
 
 interface CustomerCateringTrackingProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -43,21 +55,68 @@ interface CustomerCateringTrackingProps extends Nav {
 
 export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingProps> = ({ navigate, authAccount }) => {
   const [order, setOrder] = useState<any>(null);
+  const [allCateringOrders, setAllCateringOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const targetOrderId = useRef<string | null>(null);
+  const targetOrderId = useRef<string | null>(getActiveCateringTrackingOrderId() || null);
   const [chatVisible, setChatVisible] = useState(false);
   const [chatRecipient, setChatRecipient] = useState<"driver" | "merchant">("driver");
+  const [proofModalVisible, setProofModalVisible] = useState(false);
+
+  const applyLiveOrder = (live: any) => {
+    setOrder((prev: any) => ({
+      ...prev,
+      id: live._id || prev?.id,
+      orderCode: live.orderCode || prev?.orderCode,
+      status: live.status,
+      item: live.menuName || prev?.item,
+      detail: `${live.portions} pax • ${live.storeName || "Catering Lokal"}`,
+      total: live.totalAmount ?? prev?.total,
+      paidAmount: live.paidAmount ?? prev?.paidAmount,
+      remainingAmount: live.remainingAmount !== undefined ? live.remainingAmount : prev?.remainingAmount,
+      cateringDate: live.cateringDate || prev?.cateringDate,
+      cateringTime: live.cateringTime || prev?.cateringTime,
+      address: live.address || prev?.address,
+      driverId: live.driverId,
+      driverName: live.driverName,
+      driverPhone: live.driverPhone,
+      driverVehicle: live.driverVehicle,
+      deliveryProofUrl: live.deliveryProofUrl || prev?.deliveryProofUrl,
+      deliveryProofTimestamp: live.deliveryProofTimestamp || prev?.deliveryProofTimestamp,
+      deliveredAt: live.deliveredAt || prev?.deliveredAt,
+      storeName: live.storeName,
+      storeAddress: live.storeAddress,
+      paymentStatus: live.paymentStatus,
+      paymentMethod: live.paymentMethod || prev?.paymentMethod,
+      paymentBankName: live.paymentBankName || prev?.paymentBankName,
+      paymentAccountNumber: live.paymentAccountNumber || prev?.paymentAccountNumber,
+      paymentAccountHolder: live.paymentAccountHolder || prev?.paymentAccountHolder,
+      paymentQrisImageUrl: live.paymentQrisImageUrl || prev?.paymentQrisImageUrl,
+      paymentReminder: live.paymentReminder || prev?.paymentReminder,
+      notes: live.notes || prev?.notes,
+      portions: live.portions || prev?.portions,
+      paymentOption: live.paymentOption || prev?.paymentOption,
+      paymentDueAt: live.paymentDueAt || prev?.paymentDueAt,
+      paymentHistory: live.paymentHistory || prev?.paymentHistory,
+    }));
+  };
 
   useEffect(() => subscribeCustomerOrders((orders) => {
-    const latest = orders.find((item) => item.type.toLowerCase().includes("cater") && /^[a-f\d]{24}$/i.test(String(item.id)));
-    if (latest) {
-      targetOrderId.current = String(latest.id);
-      setOrder(latest);
+    if (!targetOrderId.current) {
+      const activeStored = getActiveCateringTrackingOrderId();
+      if (activeStored) {
+        targetOrderId.current = activeStored;
+      } else {
+        const latest = orders.find((item) => item.type.toLowerCase().includes("cater") && /^[a-f\d]{24}$/i.test(String(item.id)));
+        if (latest) {
+          targetOrderId.current = String(latest.id);
+          setOrder(latest);
+        }
+      }
     }
   }), []);
 
-  // Refresh order status at a bounded interval; this is not GPS live tracking.
+  // Refresh order status at a bounded interval & socket realtime
   useEffect(() => {
     if (!authAccount?.id) {
       setLoading(false);
@@ -73,43 +132,31 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
           setLoading(false);
           return;
         }
-        const orders = Array.isArray(res.data) ? res.data : [];
-        const live = (targetOrderId.current
-          ? orders.find((candidate: any) => String(candidate._id || candidate.id) === targetOrderId.current)
-          : orders[0]);
+        const rawOrders = Array.isArray(res.data) ? res.data : [];
+        const sortedOrders = [...rawOrders].sort((a: any, b: any) => {
+          const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          return timeB - timeA;
+        });
+        setAllCateringOrders(sortedOrders);
+
+        const currentTargetId = targetOrderId.current || getActiveCateringTrackingOrderId();
+        let live = currentTargetId
+          ? sortedOrders.find((candidate: any) => String(candidate._id || candidate.id) === currentTargetId)
+          : null;
+
+        if (!live && sortedOrders.length > 0) {
+          live = sortedOrders.find((o: any) => Boolean(o.deliveryProofUrl) && o.status === "Selesai")
+            || sortedOrders.find((o: any) => ["Mengantar", "Diambil", "Sampai Pickup", "Menuju Pickup", "Siap"].includes(o.status))
+            || sortedOrders[0];
+        }
+
         if (live) {
-          targetOrderId.current = String(live._id || live.id);
+          const liveId = String(live._id || live.id);
+          targetOrderId.current = liveId;
+          setActiveCateringTrackingOrderId(liveId);
           setLoadError(false);
-        setOrder((prev: any) => ({
-          ...prev,
-          id: live._id || prev?.id,
-          orderCode: live.orderCode || prev?.orderCode,
-          status: live.status,
-          item: live.menuName || prev?.item,
-          detail: `${live.portions} pax • ${live.storeName || "Catering Lokal"}`,
-          total: live.totalAmount ?? prev?.total,
-          paidAmount: live.paidAmount ?? prev?.paidAmount,
-          remainingAmount: live.remainingAmount !== undefined ? live.remainingAmount : prev?.remainingAmount,
-          cateringDate: live.cateringDate || prev?.cateringDate,
-          cateringTime: live.cateringTime || prev?.cateringTime,
-          address: live.address || prev?.address,
-          driverId: live.driverId,
-          driverName: live.driverName,
-          driverPhone: live.driverPhone,
-          driverVehicle: live.driverVehicle,
-          storeName: live.storeName,
-          storeAddress: live.storeAddress,
-          paymentStatus: live.paymentStatus,
-          paymentMethod: live.paymentMethod || prev?.paymentMethod,
-          paymentBankName: live.paymentBankName || prev?.paymentBankName,
-          paymentAccountNumber: live.paymentAccountNumber || prev?.paymentAccountNumber,
-          paymentAccountHolder: live.paymentAccountHolder || prev?.paymentAccountHolder,
-          paymentQrisImageUrl: live.paymentQrisImageUrl || prev?.paymentQrisImageUrl,
-          paymentReminder: live.paymentReminder || prev?.paymentReminder,
-          paymentOption: live.paymentOption || prev?.paymentOption,
-          paymentDueAt: live.paymentDueAt || prev?.paymentDueAt,
-          paymentHistory: live.paymentHistory || prev?.paymentHistory,
-        }));
+          applyLiveOrder(live);
         }
         setLoading(false);
       } catch {
@@ -119,8 +166,32 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
       }
     };
     void fetchLive();
-    const interval = setInterval(() => void fetchLive(), 15000);
-    return () => { active = false; clearInterval(interval); };
+    const interval = setInterval(() => void fetchLive(), 4000);
+
+    let unsubscribeRealtime: () => void = () => undefined;
+    void subscribeToUserRealtime(
+      () => void fetchLive(),
+      (updatedOrder) => {
+        if (!active || !updatedOrder) return;
+        const updatedId = String(updatedOrder._id || updatedOrder.id || "");
+        if (updatedId) {
+          if (!targetOrderId.current || targetOrderId.current === updatedId || updatedOrder.deliveryProofUrl) {
+            targetOrderId.current = updatedId;
+            setActiveCateringTrackingOrderId(updatedId);
+          }
+          void fetchLive();
+        }
+      }
+    ).then((stop) => {
+      if (active) unsubscribeRealtime = stop;
+      else stop();
+    });
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+      unsubscribeRealtime();
+    };
   }, [authAccount?.id]);
 
   const remaining = order?.remainingAmount || 0;
@@ -143,14 +214,17 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
   const paymentMethodLabel = (value?: string) => {
     switch (value) {
       case "bank_transfer": return "Transfer Bank";
-      case "qris": return "QRIS";
+      case "bca_va": return "BCA Virtual Account";
+      case "mandiri_va": return "Mandiri Virtual Account";
+      case "qris": return "QRIS Instan";
       case "gopay": return "GoPay";
       case "dana": return "DANA";
       case "ovo": return "OVO";
       case "shopeepay": return "ShopeePay";
-      case "bank_va": return "BANK VA";
+      case "bank_va": return "Bank VA";
+      case "cod": return "COD (Bayar di Tempat)";
       case "cash": return "Tunai";
-      default: return "Pembayaran";
+      default: return value || "Pembayaran";
     }
   };
 
@@ -255,10 +329,65 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
           </Text>
         </View>
 
-        <View style={styles.locationNotice}>
-          <MapPin size={18} color="#64748B" />
-          <Text style={styles.mapSubtitle}>Lokasi driver belum tersedia. Status pesanan diperbarui berkala.</Text>
-        </View>
+        {/* Bukti Pengantaran Kurir (Proof of Delivery / POD) */}
+        {order?.deliveryProofUrl ? (
+          <View style={styles.proofCard}>
+            <View style={styles.proofHeader}>
+              <View style={styles.proofHeaderLeft}>
+                <View style={styles.proofIconBadge}>
+                  <Camera size={18} color="#15803D" />
+                </View>
+                <View>
+                  <Text style={styles.proofTitle}>Bukti Pengantaran Kurir</Text>
+                  <Text style={styles.proofSubTitle}>Foto kamera langsung dari device kurir</Text>
+                </View>
+              </View>
+              <View style={styles.proofVerifiedBadge}>
+                <Text style={styles.proofVerifiedText}>TERVERIFIKASI ✓</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.proofImageWrapper}
+              onPress={() => setProofModalVisible(true)}
+              activeOpacity={0.9}
+            >
+              <Image
+                source={{ uri: order.deliveryProofUrl }}
+                style={styles.proofImage}
+                resizeMode="cover"
+              />
+              <View style={styles.proofTimestampRibbon}>
+                <View style={styles.proofTimestampLeft}>
+                  <Clock size={13} color="#FFFFFF" />
+                  <Text style={styles.proofTimestampText}>
+                    Waktu Real Serah Terima: {order.deliveryProofTimestamp || (order.deliveredAt ? new Date(order.deliveredAt).toLocaleString("id-ID") : "Tercatat di sistem")}
+                  </Text>
+                </View>
+                <View style={styles.proofZoomHint}>
+                  <Maximize2 size={11} color="#FFFFFF" />
+                  <Text style={styles.proofZoomHintText}>Perbesar</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.proofDriverMeta}>
+              <Text style={styles.proofDriverMetaText}>
+                Diserahkan oleh: <Text style={styles.proofDriverMetaName}>{order.driverName || "Kurir GEOVERSE"}</Text>
+              </Text>
+              <Text style={styles.proofCameraDeviceBadge}>
+                {order.driverPhone ? `Telp: ${order.driverPhone}` : "Kurir Terverifikasi"}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {!isFinished && (
+          <View style={styles.locationNotice}>
+            <MapPin size={18} color="#64748B" />
+            <Text style={styles.mapSubtitle}>Lokasi driver belum tersedia. Status pesanan diperbarui berkala.</Text>
+          </View>
+        )}
 
         <View style={styles.paymentCard}>
           <View style={styles.paymentHeaderRow}>
@@ -291,7 +420,10 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
                   shadowRadius: 4,
                   elevation: 2,
                 }}
-                onPress={() => navigate("c_catering_qris")}
+                onPress={() => {
+                  setActiveCateringPaymentOrder(order);
+                  navigate("c_catering_qris");
+                }}
                 activeOpacity={0.8}
               >
                 <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -415,6 +547,12 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
               <MapPin size={16} color="#1B7A4E" />
               <Text style={styles.detailText}>{String(order.address || "Alamat belum tersedia")}</Text>
             </View>
+            {order.notes ? (
+              <View style={styles.detailRow}>
+                <FileText size={16} color="#1B7A4E" />
+                <Text style={styles.detailText}>Catatan: {order.notes}</Text>
+              </View>
+            ) : null}
           </View>
         )}
 
@@ -464,6 +602,46 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
             : "Halo Dapur Catering, saya ingin menanyakan pesanan saya."
         }
       />
+
+      {/* Fullscreen Photo Lightbox Modal */}
+      <Modal
+        visible={proofModalVisible && Boolean(order?.deliveryProofUrl)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setProofModalVisible(false)}
+      >
+        <View style={styles.lightboxBackdrop}>
+          <TouchableOpacity
+            style={styles.lightboxCloseBtn}
+            onPress={() => setProofModalVisible(false)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Tutup pratinjau foto"
+          >
+            <X size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.lightboxContent}>
+            {order?.deliveryProofUrl ? (
+              <Image
+                source={{ uri: order.deliveryProofUrl }}
+                style={styles.lightboxImage}
+                resizeMode="contain"
+              />
+            ) : null}
+            <View style={styles.lightboxCaption}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Clock size={15} color="#86EFAC" />
+                <Text style={styles.lightboxTimestampText}>
+                  Waktu Serah Terima: {order?.deliveryProofTimestamp || (order?.deliveredAt ? new Date(order.deliveredAt).toLocaleString("id-ID") : "Tercatat di sistem")}
+                </Text>
+              </View>
+              <Text style={styles.lightboxDriverText}>
+                Kurir: {order?.driverName || "GEOVERSE Express"} • Foto kamera langsung dari perangkat
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ResponsiveSafeAreaView>
   );
 };
@@ -476,6 +654,78 @@ const styles = StyleSheet.create({
   emptyStateButton: { backgroundColor: "#1B7A4E", borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12, marginTop: 6 },
   emptyStateButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   locationNotice: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFFFFF", borderRadius: 12, padding: 12, marginTop: 16 },
+  orderSwitcherCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  orderSwitcherHeader: {
+    marginBottom: 8,
+  },
+  orderSwitcherTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  orderSwitcherSub: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  orderSwitcherRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  orderChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  orderChipActive: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#16A34A",
+  },
+  orderChipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  orderChipContent: {
+    flexDirection: "column",
+  },
+  orderChipCode: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#334155",
+  },
+  orderChipCodeActive: {
+    color: "#166534",
+  },
+  orderChipStatus: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  orderChipStatusActive: {
+    color: "#15803D",
+  },
+  orderChipBadgeActive: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#16A34A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   content: { width: "100%", paddingHorizontal: 12, paddingTop: 12, paddingBottom: 32 },
   statusHero: { width: "100%", alignItems: "center", backgroundColor: "#E8F5EE", borderRadius: 18, padding: 16 },
   statusIcon: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#1B7A4E", alignItems: "center", justifyContent: "center" },
@@ -712,5 +962,185 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#EA580C",
+  },
+  proofCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    padding: 15,
+    marginTop: 14,
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  proofHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  proofHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    flex: 1,
+    minWidth: 0,
+  },
+  proofIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proofTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  proofSubTitle: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#166534",
+    marginTop: 1,
+  },
+  proofVerifiedBadge: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  proofVerifiedText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  proofImageWrapper: {
+    position: "relative",
+    width: "100%",
+    height: 220,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#0F172A",
+  },
+  proofImage: {
+    width: "100%",
+    height: "100%",
+  },
+  proofTimestampRibbon: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.85)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  proofTimestampLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+  },
+  proofTimestampText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  proofZoomHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+    marginLeft: 8,
+  },
+  proofZoomHintText: {
+    fontSize: 9.5,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  proofDriverMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  proofDriverMetaText: {
+    fontSize: 11,
+    color: "#64748B",
+  },
+  proofDriverMetaName: {
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  proofCameraDeviceBadge: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#15803D",
+  },
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  lightboxCloseBtn: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lightboxContent: {
+    width: "100%",
+    maxWidth: 600,
+    maxHeight: "80%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lightboxImage: {
+    width: "100%",
+    height: 380,
+    borderRadius: 14,
+  },
+  lightboxCaption: {
+    backgroundColor: "rgba(15, 23, 42, 0.9)",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginTop: 14,
+    alignItems: "center",
+    gap: 4,
+  },
+  lightboxTimestampText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  lightboxDriverText: {
+    fontSize: 11,
+    color: "#94A3B8",
   },
 });

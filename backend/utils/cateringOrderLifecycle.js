@@ -15,8 +15,28 @@ const DRIVER_TRANSITIONS = Object.freeze({
   Mengantar: "Selesai",
 });
 
-const isCateringPaymentComplete = (order) =>
-  Number(order?.remainingAmount || 0) <= 0 && String(order?.paymentStatus || "").toLowerCase() === "lunas";
+const isCateringPaymentComplete = (order) => {
+  const method = String(order?.paymentMethod || "").toLowerCase();
+  const paymentStatus = String(order?.paymentStatus || "").toLowerCase();
+
+  // COD / Bayar Tunai: pembayaran dilakukan ke kurir saat barang diserahkan
+  if (
+    method === "cod" ||
+    method === "cash_on_delivery" ||
+    method === "tunai" ||
+    method === "cash" ||
+    paymentStatus.includes("tunai") ||
+    paymentStatus.includes("cod")
+  ) {
+    return true;
+  }
+
+  return (
+    Number(order?.remainingAmount || 0) <= 0 ||
+    Number(order?.paidAmount || 0) > 0 ||
+    ["lunas", "pembayaran terverifikasi", "dp terverifikasi", "sudah_lunas"].includes(paymentStatus)
+  );
+};
 
 const getPaymentPlan = (totalAmount, paymentOption) => {
   const total = Math.max(0, Math.round(Number(totalAmount) || 0));

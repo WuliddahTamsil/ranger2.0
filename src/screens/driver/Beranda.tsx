@@ -76,6 +76,7 @@ import {
 } from "../../services/rideService";
 import {
   fetchAvailableSendOrders,
+  fetchDriverSendOrders,
   acceptSendOrder,
   declineSendOrder,
   verifySendPickupCode,
@@ -88,10 +89,12 @@ import {
   driverPickupWasteDeposit,
   driverDeliverWasteDeposit,
 } from "../../services/recycleService";
+import { fetchDriverShopOrders } from "../../services/shopService";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 
 // Import other screens
 import { Order, DriverOrder } from "./Order";
+import { extractOrderAcceptedAt, mapDriverOrderRating, sortDriverOrders } from "./driverOrderUtils";
 import { Pendapatan } from "./Pendapatan";
 import { Keuangan, TransactionRecord } from "./Keuangan";
 import { Profile } from "./Profile";
@@ -132,6 +135,9 @@ const mapMarketplaceDriverOrder = (order: any): DriverOrder => ({
   dist: "Jarak belum tersedia",
   pay: Number(order.totalAmount || 0),
   driverShare: calculateDeliveryDriverShare(order),
+  createdAt: order.createdAt,
+  updatedAt: order.updatedAt,
+  acceptedAt: extractOrderAcceptedAt(order),
   completedAt: order.completedAt || order.updatedAt || order.createdAt,
   status: mapMarketplaceDriverStatus(String(order.status || "Menunggu")),
   deliveryProofUrl: order.deliveryProofUrl || "",
@@ -141,6 +147,7 @@ const mapMarketplaceDriverOrder = (order: any): DriverOrder => ({
   storePhone: order.storePhone || order.merchantPhone || "",
   ownerId: String(order.ownerId?._id || order.ownerId || ""),
   addressSnapshot: order.addressSnapshot || null,
+  rating: mapDriverOrderRating(order.rating),
 });
 
 const mapCateringDriverOrder = (order: any): DriverOrder => ({
@@ -162,6 +169,9 @@ const mapCateringDriverOrder = (order: any): DriverOrder => ({
   distanceKm: Number(order.distanceKm ?? order.distance ?? 0),
   pay: Number(order.totalAmount || 0),
   driverShare: calculateDeliveryDriverShare(order),
+  createdAt: order.createdAt,
+  updatedAt: order.updatedAt,
+  acceptedAt: extractOrderAcceptedAt(order),
   completedAt: order.completedAt || order.updatedAt || order.createdAt,
   status: order.status === "Siap" ? "Siap"
     : order.status === "Menuju Pickup" ? "Menuju Pickup"
@@ -174,8 +184,74 @@ const mapCateringDriverOrder = (order: any): DriverOrder => ({
   storeAddress: order.storeAddress || "Alamat dapur belum tersedia",
   storePhone: order.storePhone || order.merchantPhone || "",
   ownerId: order.ownerId,
+  deliveryProofUrl: order.deliveryProofUrl || "",
+  deliveryProofTimestamp: order.deliveryProofTimestamp || "",
+  deliveredAt: order.deliveredAt || null,
+  pickup: order.pickup || undefined,
   addressSnapshot: order.addressSnapshot || null,
+  rating: mapDriverOrderRating(order.rating),
 });
+
+const mapShopDriverStatus = (orderStatus: string): DriverOrder["status"] => {
+  if (orderStatus === "READY_FOR_PICKUP") return "Menunggu";
+  if (orderStatus === "DRIVER_ASSIGNED") return "Siap";
+  if (orderStatus === "DRIVER_AT_STORE") return "Sampai Pickup";
+  if (["PICKED_UP", "DELIVERING", "ARRIVED"].includes(orderStatus)) return "Mengantar";
+  if (orderStatus === "COMPLETED") return "Selesai";
+  if (orderStatus === "CANCELLED") return "Dibatalkan";
+  return "Menunggu";
+};
+
+const mapShopDriverOrder = (order: any): DriverOrder => {
+  const storeName = order.storeId?.name || order.storeName || "Toko Kanyaah Shop";
+  const storeAddress = order.storeId?.address || order.storeAddress || "Alamat Toko";
+  const fare = Number(order.totalAmount || 0);
+  const driverShare = Number(order.deliveryFee || 8000) + Number(order.driverTip || 0);
+
+  const items = Array.isArray(order.items)
+    ? order.items.map((it: any) => ({
+        name: it.productNameSnapshot || it.name || "Item Belanja",
+        quantity: Number(it.quantity || 1),
+        price: Number(it.priceSnapshot || it.price || 0),
+        notes: it.notes || "",
+      }))
+    : [{ name: "Belanja Kanyaah Shop", quantity: 1, price: fare }];
+
+  return {
+    id: String(order._id || order.id),
+    orderCode: order.orderCode || `#RNG-SHOP-${String(order._id || order.id).slice(-8)}`,
+    orderCategory: "DELIVERY",
+    serviceType: "KANYAAH_SHOP",
+    driverId: order.driverId ? String(order.driverId._id || order.driverId) : null,
+    rawStatus: order.orderStatus || "CREATED",
+    customer: order.customerName || "Pelanggan Shop",
+    phone: order.customerPhone || "",
+    type: "Shop",
+    paymentMethod: order.paymentMethod || "QRIS",
+    paymentStatus: order.paymentStatus || "Lunas",
+    time: order.createdAt
+      ? new Date(order.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+      : "",
+    from: storeAddress,
+    to: order.deliveryAddress || "Alamat Pengantaran",
+    dist: "Jarak belum tersedia",
+    pay: fare,
+    driverShare: driverShare > 0 ? driverShare : 8000,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    acceptedAt: extractOrderAcceptedAt(order),
+    completedAt: order.deliveredAt || order.completedAt || order.updatedAt || order.createdAt,
+    status: mapShopDriverStatus(order.orderStatus || ""),
+    items,
+    storeName,
+    storeAddress,
+    storePhone: order.storePhone || "",
+    ownerId: String(order.storeId?._id || order.storeId || ""),
+    deliveryProofUrl: order.deliveryProofUrl || "",
+    addressSnapshot: null,
+    rating: mapDriverOrderRating(order.rating),
+  };
+};
 
 const mapRideDriverOrder = (order: any): DriverOrder => {
   const fare = Number(order.totalAmount || order.estimatedFare || 0);
@@ -204,6 +280,9 @@ const mapRideDriverOrder = (order: any): DriverOrder => {
     distanceKm: Number(order.estimatedDistance || 0),
     pay: fare,
     driverShare: driverEarnings > 0 ? driverEarnings : 10000,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    acceptedAt: extractOrderAcceptedAt(order),
     completedAt: order.completedAt || order.updatedAt || order.createdAt,
     status: order.status === "SEARCHING_DRIVER" ? "Menunggu"
       : order.status === "DRIVER_ASSIGNED" || order.status === "DRIVER_ON_THE_WAY" ? "Menuju Pickup"
@@ -226,9 +305,7 @@ const mapRideDriverOrder = (order: any): DriverOrder => {
     pickup: order.pickup,
     destination: order.destination,
     addressSnapshot: null,
-    rating: (order.rating && typeof order.rating.score === "number" && order.rating.score > 0)
-      ? { score: order.rating.score, review: order.rating.review || "", createdAt: order.rating.createdAt }
-      : undefined,
+    rating: mapDriverOrderRating(order.rating),
   };
 };
 
@@ -259,6 +336,9 @@ const mapSendDriverOrder = (order: any): DriverOrder => {
     distanceKm: Number(order.distanceKm || 0),
     pay: fare,
     driverShare: driverEarnings > 0 ? driverEarnings : 8000,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    acceptedAt: extractOrderAcceptedAt(order),
     completedAt: order.deliveredAt || order.completedAt || order.updatedAt || order.createdAt,
     status:
       order.status === "SEARCHING_DRIVER" || order.status === "PAYMENT_PENDING" || order.status === "CREATED" ? "Menunggu"
@@ -293,6 +373,7 @@ const mapSendDriverOrder = (order: any): DriverOrder => {
     } : undefined,
     deliveryProofUrl: order.deliveryProofUrls?.[0] || "",
     addressSnapshot: null,
+    rating: mapDriverOrderRating(order.rating),
   };
 };
 
@@ -358,6 +439,9 @@ const mapWastePickupDriverOrder = (deposit: any): DriverOrder => {
     distanceKm: 2.5,
     pay: fare,
     driverShare: driverShare,
+    createdAt: deposit.createdAt,
+    updatedAt: deposit.updatedAt,
+    acceptedAt: extractOrderAcceptedAt(deposit),
     completedAt: deposit.completedAt || deposit.updatedAt || deposit.createdAt,
     status,
     items,
@@ -382,6 +466,7 @@ const mapWastePickupDriverOrder = (deposit: any): DriverOrder => {
       : undefined,
     deliveryProofUrl: deposit.weighingProofPhotos?.[0] || "",
     addressSnapshot: null,
+    rating: mapDriverOrderRating(deposit.rating),
   };
 };
 
@@ -519,13 +604,15 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       if (loading) return;
       loading = true;
       try {
-        const [mktRes, catRes, laundryJobs, rideRes, sendRes, wasteRes] = await Promise.all([
+        const [mktRes, catRes, laundryJobs, rideRes, sendRes, driverSendRes, wasteRes, shopRes] = await Promise.all([
           getMarketplaceOrdersForDriver(authAccount.id),
           getCateringOrdersForDriver(authAccount.id),
           fetchDriverLaundryJobs(authAccount.id),
           fetchDriverRides(authAccount.id),
           fetchAvailableSendOrders(authAccount.id),
+          fetchDriverSendOrders(authAccount.id, authAccount.id),
           getDriverAvailableWastePickups(authAccount.id),
+          fetchDriverShopOrders(authAccount.id),
         ]);
         if (!active) return;
 
@@ -543,6 +630,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           : [];
 
         const catOrders: DriverOrder[] = (catRes.success && Array.isArray(catRes.data)) ? catRes.data.map(mapCateringDriverOrder) : [];
+
+        const shopOrders: DriverOrder[] = (shopRes?.success && Array.isArray(shopRes.data))
+          ? shopRes.data.map(mapShopDriverOrder)
+          : [];
 
         const lndOrders: DriverOrder[] = Array.isArray(laundryJobs) ? laundryJobs.map((lnd: any) => {
           const isPickupJob =
@@ -582,6 +673,9 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             distanceKm: 1.2,
             pay: Number(lnd.totalAmount || 0),
             driverShare: isPickupJob ? Number(lnd.deliveryFeePickup || 4000) : Number(lnd.deliveryFeeDrop || 4000),
+            createdAt: lnd.createdAt,
+            updatedAt: lnd.updatedAt,
+            acceptedAt: extractOrderAcceptedAt(lnd),
             completedAt: lnd.updatedAt || lnd.createdAt,
             status: orderStatus,
             items: [
@@ -596,6 +690,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             storePhone: "0812-3456-7890",
             ownerId: lnd.ownerId,
             addressSnapshot: lnd.addressSnapshot || null,
+            rating: mapDriverOrderRating(lnd.rating),
           };
         }) : [];
 
@@ -603,9 +698,19 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           ? rideRes.data.map(mapRideDriverOrder)
           : [];
 
-        const sendOrders: DriverOrder[] = (sendRes?.success && Array.isArray(sendRes.data))
-          ? sendRes.data.map(mapSendDriverOrder)
-          : [];
+        const combinedSendRaw = [
+          ...(Array.isArray(sendRes?.data) ? sendRes.data : []),
+          ...(Array.isArray(driverSendRes?.data) ? driverSendRes.data : []),
+        ];
+        const uniqueSendMap = new Map<string, any>();
+        for (const item of combinedSendRaw) {
+          const itemAny = item as any;
+          const key = String(itemAny?._id || itemAny?.id || "");
+          if (key && !uniqueSendMap.has(key)) {
+            uniqueSendMap.set(key, item);
+          }
+        }
+        const sendOrders: DriverOrder[] = Array.from(uniqueSendMap.values()).map(mapSendDriverOrder);
 
         const wasteOrders: DriverOrder[] = (wasteRes?.success && Array.isArray(wasteRes.data))
           ? wasteRes.data.map(mapWastePickupDriverOrder)
@@ -624,7 +729,10 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           const existingWasteOrders = wasteRes?.success && Array.isArray(wasteRes.data)
             ? wasteOrders
             : current.filter((order) => order.type === "Setor Sampah");
-          const allList = [...existingRideOrders, ...existingSendOrders, ...marketplaceOrders, ...catOrders, ...lndOrders, ...existingWasteOrders];
+          const existingShopOrders = shopRes?.success && Array.isArray(shopRes.data)
+            ? shopOrders
+            : current.filter((order) => order.type === "Shop");
+          const allList = [...existingRideOrders, ...existingSendOrders, ...existingShopOrders, ...marketplaceOrders, ...catOrders, ...lndOrders, ...existingWasteOrders];
           const seenIds = new Set<string>();
           const uniqueList: DriverOrder[] = [];
           for (const item of allList) {
@@ -633,7 +741,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
               uniqueList.push(item);
             }
           }
-          return uniqueList;
+          return sortDriverOrders(uniqueList);
         });
       } catch (error) {
         console.error("Load driver orders error:", error);
@@ -760,6 +868,11 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           }
         }
       } else if (targetOrder.type === "Catering") {
+        if (nextStatus === "Selesai") {
+          openOrderDetail(targetOrder);
+          Alert.alert("Wajib Bukti Pengantaran", "Kurir wajib mengambil foto bukti serah terima langsung dari perangkat dengan timestamp aktual sebelum menyelesaikan pesanan.");
+          return;
+        }
         await updateCateringOrderStatus(orderId, nextStatus);
       } else if (targetOrder.type === "Kanyaah Ride") {
         let backendStatus: RideStatus = "DRIVER_ASSIGNED";
@@ -775,7 +888,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           return;
         }
         const serverOrder = mapRideDriverOrder(res.data);
-        setOrders((current) => current.map((order) => order.id === orderId ? serverOrder : order));
+        setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? serverOrder : order)));
         if (nextStatus === "Selesai") {
           alertMsg = `Perjalanan selesai! Pendapatan ${rp(serverOrder.driverShare)} ditambahkan ke saldo.`;
         } else if (nextStatus === "Mengantar") {
@@ -799,7 +912,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           return;
         }
         const serverOrder = mapSendDriverOrder(res.data);
-        setOrders((current) => current.map((order) => order.id === orderId ? serverOrder : order));
+        setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? serverOrder : order)));
         if (nextStatus === "Selesai") {
           alertMsg = `Pengantaran selesai! Pendapatan ${rp(serverOrder.driverShare)} ditambahkan ke saldo.`;
         } else if (nextStatus === "Mengantar") {
@@ -863,7 +976,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           return;
         }
         const serverOrder = mapMarketplaceDriverOrder(result.data);
-        setOrders((current) => current.map((order) => order.id === orderId ? serverOrder : order));
+        setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? serverOrder : order)));
         if (nextStatus === "Selesai") {
           alertMsg = `Pengantaran selesai! Pendapatan ${rp(serverOrder.driverShare)} ditambahkan ke saldo.`;
         } else if (nextStatus === "Mengantar") {
@@ -882,7 +995,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       }
       return o;
     });
-    setOrders(updated);
+    setOrders(sortDriverOrders(updated));
   };
 
   // Dedicated Ride State Machine Transition
@@ -897,7 +1010,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         return;
       }
       const updated = mapRideDriverOrder(res.data);
-      setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+      setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updated : order)));
 
       let msg = "Status perjalanan diperbarui.";
       if (targetStatus === "DRIVER_ON_THE_WAY") msg = "Menuju lokasi penumpang. Notifikasi telah dikirim ke customer.";
@@ -961,8 +1074,13 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         }
         return;
       }
-      const updated = mapRideDriverOrder(result.data);
-      setOrders((current) => current.map((order) => order.id === updated.id ? updated : order));
+      const now = new Date().toISOString();
+      const updated: DriverOrder = {
+        ...mapRideDriverOrder(result.data),
+        acceptedAt: now,
+        updatedAt: now,
+      };
+      setOrders((current) => sortDriverOrders([updated, ...current.filter((order) => order.id !== updated.id)]));
       if (Platform.OS !== "web") {
         Alert.alert("Ride Diterima! 🏍", `Perjalanan #${updated.orderCode || updated.id.slice(-8)} berhasil diambil. Silakan bersiap menuju penumpang.`);
       }
@@ -1054,8 +1172,13 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         Alert.alert("Pesanan belum diterima", result.message || "Pesanan mungkin sudah diambil driver lain.");
         return;
       }
-      const updated = mapMarketplaceDriverOrder(result.data);
-      setOrders((current) => current.map((order) => order.id === updated.id ? updated : order));
+      const now = new Date().toISOString();
+      const updated: DriverOrder = {
+        ...mapMarketplaceDriverOrder(result.data),
+        acceptedAt: now,
+        updatedAt: now,
+      };
+      setOrders((current) => sortDriverOrders([updated, ...current.filter((order) => order.id !== updated.id)]));
     } finally {
       homeActionLock.current.delete(orderId);
       setHomeActionOrderId((current) => current === orderId ? null : current);
@@ -1104,7 +1227,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 setCurrentTab(0);
               }
             }}
-            onStatusChange={async (orderId, status, deliveryProofUrl) => {
+            onStatusChange={async (orderId, status, deliveryProofUrl, deliveryProofTimestamp) => {
               const targetOrder = orders.find((o) => o.id === orderId);
               if (targetOrder?.type === "Setor Sampah") {
                 if (status === "Menuju Pickup") {
@@ -1149,7 +1272,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 }
                 if (res.data) {
                   const updated = mapRideDriverOrder(res.data);
-                  setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                  setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updated : order)));
                   return updated;
                 }
                 return true;
@@ -1170,22 +1293,27 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 }
                 if (res.data) {
                   const updated = mapSendDriverOrder(res.data);
-                  setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                  setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updated : order)));
                   return updated;
                 }
                 return true;
               }
 
               const result = targetOrder?.type === "Catering"
-                ? await updateCateringOrderStatus(orderId, status)
+                ? await updateCateringOrderStatus(orderId, status, deliveryProofUrl, deliveryProofTimestamp)
                 : await updateMarketplaceOrderStatus(orderId, status, authAccount, deliveryProofUrl);
               if (!result.success) {
                 Alert.alert("Gagal", result.message || "Status order gagal diperbarui");
                 return false;
               }
+              if (targetOrder?.type === "Catering" && result.data) {
+                const updated = mapCateringDriverOrder(result.data);
+                setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updated : order)));
+                return updated;
+              }
               if (targetOrder?.type === "Marketplace" && result.data) {
                 const updated = mapMarketplaceDriverOrder(result.data);
-                setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updated : order)));
                 return updated;
               }
               return true;
@@ -1229,9 +1357,14 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                   Alert.alert("Gagal", res.message || "Pesanan mungkin sudah diambil driver lain");
                   return false;
                 }
+                const now = new Date().toISOString();
                 if (res.data) {
-                  const updated = mapRideDriverOrder(res.data);
-                  setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                  const updated: DriverOrder = {
+                    ...mapRideDriverOrder(res.data),
+                    acceptedAt: now,
+                    updatedAt: now,
+                  };
+                  setOrders((current) => sortDriverOrders([updated, ...current.filter((order) => order.id !== orderId)]));
                   return updated;
                 }
                 return true;
@@ -1242,9 +1375,14 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                   Alert.alert("Gagal", res.message || "Pesanan mungkin sudah diambil driver lain");
                   return false;
                 }
+                const now = new Date().toISOString();
                 if (res.data) {
-                  const updated = mapSendDriverOrder(res.data);
-                  setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                  const updated: DriverOrder = {
+                    ...mapSendDriverOrder(res.data),
+                    acceptedAt: now,
+                    updatedAt: now,
+                  };
+                  setOrders((current) => sortDriverOrders([updated, ...current.filter((order) => order.id !== orderId)]));
                   return updated;
                 }
                 return true;
@@ -1258,8 +1396,13 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 return false;
               }
                if ((targetOrder?.type === "Marketplace" || targetOrder?.type === "Catering") && result.data) {
-                 const updated = targetOrder.type === "Catering" ? mapCateringDriverOrder(result.data) : mapMarketplaceDriverOrder(result.data);
-                setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+                 const now = new Date().toISOString();
+                 const updated: DriverOrder = {
+                   ...(targetOrder.type === "Catering" ? mapCateringDriverOrder(result.data) : mapMarketplaceDriverOrder(result.data)),
+                   acceptedAt: now,
+                   updatedAt: now,
+                 };
+                setOrders((current) => sortDriverOrders([updated, ...current.filter((order) => order.id !== orderId)]));
                 return updated;
               }
               return true;
@@ -1536,8 +1679,13 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 try {
                   const res = await acceptSendOrder(order.id, authAccount?.id || "");
                   if (res.success && res.data) {
-                    const updated = mapSendDriverOrder(res.data);
-                    setOrders((current) => current.map((o) => o.id === updated.id ? updated : o));
+                    const now = new Date().toISOString();
+                    const updated: DriverOrder = {
+                      ...mapSendDriverOrder(res.data),
+                      acceptedAt: now,
+                      updatedAt: now,
+                    };
+                    setOrders((current) => sortDriverOrders([updated, ...current.filter((o) => o.id !== updated.id)]));
                     Alert.alert("Order Send Diterima!", `Pengiriman #${updated.orderCode} berhasil diambil.`);
                   } else {
                     Alert.alert("Gagal", res.message || "Pesanan gagal diambil.");
@@ -1553,13 +1701,15 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 try {
                   const res = await assignWasteDepositDriver(order.id, authAccount?.id || "driver");
                   if (res.success) {
-                    setOrders((current) =>
-                      current.map((o) =>
-                        o.id === order.id
-                          ? { ...o, status: "Menuju Pickup", driverId: authAccount?.id }
-                          : o
-                      )
-                    );
+                    const now = new Date().toISOString();
+                    const updated: DriverOrder = {
+                      ...order,
+                      status: "Menuju Pickup",
+                      driverId: authAccount?.id,
+                      acceptedAt: now,
+                      updatedAt: now,
+                    };
+                    setOrders((current) => sortDriverOrders([updated, ...current.filter((o) => o.id !== order.id)]));
                     Alert.alert("Penjemputan Diterima!", `Order penjemputan sampah #${order.orderCode || order.id.slice(-8)} berhasil diambil.`);
                   } else {
                     Alert.alert("Gagal", res.message || "Tugas penjemputan sampah gagal diambil.");

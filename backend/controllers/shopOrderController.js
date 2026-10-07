@@ -810,29 +810,52 @@ const customerRespondSubstitution = async (req, res) => {
  */
 const getDriverOrders = async (req, res) => {
   try {
-    const authUser = req.authUser;
+    const driverId = String(
+      req.authUser?._id ||
+      req.params?.driverId ||
+      req.headers?.["x-driver-id"] ||
+      req.headers?.["x-user-id"] ||
+      req.query?.driverId ||
+      ""
+    );
+
     // Available to take: READY_FOR_PICKUP and no driver assigned yet
     const availableOrders = await ShopOrder.find({
       orderStatus: "READY_FOR_PICKUP",
-      driverId: null,
+      $or: [{ driverId: null }, { driverId: { $exists: false } }],
     })
       .populate("storeId", "name logo address latitude longitude")
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
       .lean();
 
+    const isValidDriverId = Boolean(driverId && mongoose.Types.ObjectId.isValid(driverId));
+
     // Active order assigned to this driver
-    const activeOrder = await ShopOrder.findOne({
-      driverId: authUser._id,
-      orderStatus: { $in: ["DRIVER_ASSIGNED", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED"] },
-    })
-      .populate("storeId", "name logo address latitude longitude")
-      .lean();
+    const activeOrder = isValidDriverId
+      ? await ShopOrder.findOne({
+          driverId,
+          orderStatus: { $in: ["DRIVER_ASSIGNED", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED"] },
+        })
+          .populate("storeId", "name logo address latitude longitude")
+          .lean()
+      : null;
+
+    // All orders assigned to this driver (active + completed)
+    const driverOrders = isValidDriverId
+      ? await ShopOrder.find({
+          driverId,
+        })
+          .populate("storeId", "name logo address latitude longitude")
+          .sort({ updatedAt: -1, createdAt: -1 })
+          .lean()
+      : [];
 
     return res.json({
       success: true,
       data: {
         availableOrders,
         activeOrder,
+        driverOrders,
       },
     });
   } catch (error) {

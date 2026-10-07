@@ -467,13 +467,13 @@ const getAvailableOrders = async (req, res) => {
           driverId: null,
           ...(driverId ? { declinedByDrivers: { $nin: [driverId] } } : {}),
         },
-        ...(driverId ? [{ driverId, status: { $nin: ["COMPLETED", "CANCELLED"] } }] : []),
+        ...(driverId ? [{ driverId }] : []),
       ],
     };
 
     const availableOrders = await SendOrder.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(30)
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(50)
       .populate("customerId", "name phone profilePhoto")
       .select("-pickupCodeSalt -deliveryOtpSalt -deliveryOtpHash -pickupCodeRaw -deliveryOtpRaw")
       .lean();
@@ -500,8 +500,8 @@ const getDriverOrders = async (req, res) => {
     if (status) filter.status = status;
 
     const orders = await SendOrder.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(Number(limit))
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(Number(limit) || 50)
       .populate("customerId", "name phone profilePhoto")
       .select("-pickupCodeSalt -deliveryOtpSalt -deliveryOtpHash -pickupCodeRaw -deliveryOtpRaw")
       .lean();
@@ -1091,7 +1091,7 @@ const submitRating = async (req, res) => {
 
     order.rating = {
       score: Number(score),
-      review,
+      review: String(review || "").trim(),
       createdAt: new Date(),
     };
     await order.save();
@@ -1100,15 +1100,40 @@ const submitRating = async (req, res) => {
     if (order.driverId) {
       const ratedOrders = await SendOrder.find({
         driverId: order.driverId,
-        "rating.score": { $exists: true },
+        "rating.score": { $exists: true, $ne: null },
       }).select("rating.score").lean();
 
       if (ratedOrders.length > 0) {
         const avg = ratedOrders.reduce((sum, r) => sum + (r.rating?.score || 5), 0) / ratedOrders.length;
+        const roundedAvg = Math.round(avg * 10) / 10;
         await User.findByIdAndUpdate(order.driverId, {
-          "roleData.rating": Math.round(avg * 10) / 10,
+          driverRating: roundedAvg,
+          driverRatingCount: ratedOrders.length,
+          "roleData.rating": roundedAvg,
         }).catch(() => {});
       }
+
+      // Notify driver about new customer rating
+      await Notification.create({
+        userId: order.driverId,
+        title: "Penilaian Pengiriman Baru ⭐",
+        message: `Pelanggan memberikan rating ${score} bintang${review ? `: "${review}"` : " untuk pengiriman Anda"}.`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => {});
+
+      // Emit real-time updates to driver
+      emitToUser(req.io, order.driverId, "notification:new", { relatedId: String(order._id), type: "order_status" });
+      emitToUser(req.io, order.driverId, "send:status_updated", order);
+      emitToUser(req.io, order.driverId, "order_status_updated", order);
+      emitToDriver(req.io, order.driverId, "send:status_updated", order);
+      emitToDriver(req.io, order.driverId, "order_status_updated", order);
+    }
+
+    emitToSendRoom(req.io, order._id, "send:status_updated", order);
+    if (req.io) {
+      req.io.emit("send:status_updated", order);
+      req.io.emit("order_status_updated", order);
     }
 
     return res.status(200).json({

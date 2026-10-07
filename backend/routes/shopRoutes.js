@@ -36,7 +36,7 @@ const {
   rejectPrescription,
 } = require("../controllers/shopOrderController");
 
-const { requireAuth } = require("../middleware/authMiddleware");
+const { requireAuth, optionalAuth } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -71,13 +71,15 @@ router.post("/orders/:id/substitution", requireAuth, merchantProposeSubstitution
 router.post("/orders/:id/reject", requireAuth, cancelOrder);
 
 // ==================== DRIVER ====================
-router.get("/driver/orders", requireAuth, getDriverOrders);
-router.post("/orders/:id/accept-driver", requireAuth, acceptDriverOrder);
-router.put("/orders/:id/driver-status", requireAuth, updateDriverStatus);
-router.put("/orders/:id/status-driver", requireAuth, updateDriverStatus);
-router.post("/orders/:id/pickup-proof", requireAuth, uploadPickupProof);
-router.post("/orders/:id/delivery-proof", requireAuth, uploadDeliveryProof);
-router.put("/orders/:id/location", requireAuth, updateDriverLocation);
+router.get("/driver/orders", optionalAuth, getDriverOrders);
+router.get("/driver/orders/:driverId", optionalAuth, getDriverOrders);
+router.get("/driver", optionalAuth, getDriverOrders);
+router.post("/orders/:id/accept-driver", optionalAuth, acceptDriverOrder);
+router.put("/orders/:id/driver-status", optionalAuth, updateDriverStatus);
+router.put("/orders/:id/status-driver", optionalAuth, updateDriverStatus);
+router.post("/orders/:id/pickup-proof", optionalAuth, uploadPickupProof);
+router.post("/orders/:id/delivery-proof", optionalAuth, uploadDeliveryProof);
+router.put("/orders/:id/location", optionalAuth, updateDriverLocation);
 
 // ==================== PHARMACY ====================
 router.post("/orders/:id/prescription", requireAuth, submitPrescription);

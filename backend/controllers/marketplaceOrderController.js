@@ -161,7 +161,7 @@ const getOrdersByDriver = async (req, res) => {
         { status: "Siap", driverId: { $in: ["", null] }, declinedByDrivers: { $nin: [driverId] } },
         { status: "Siap", driverId: { $exists: false }, declinedByDrivers: { $nin: [driverId] } },
       ],
-    }).populate("ownerId", "name address roleData").sort({ createdAt: -1 }).lean();
+    }).populate("ownerId", "name address roleData").sort({ updatedAt: -1, createdAt: -1 }).lean();
     const data = orders.map((order) => ({ ...order, ownerId: order.ownerId?._id || order.ownerId, storeName: order.storeName || order.ownerId?.roleData?.businessName || order.ownerId?.name || "", storeAddress: order.storeAddress || order.ownerId?.roleData?.businessAddress || order.ownerId?.roleData?.address || order.ownerId?.address || "" }));
     return res.json({ success: true, data });
   } catch (error) {

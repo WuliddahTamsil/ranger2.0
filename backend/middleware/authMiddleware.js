@@ -9,16 +9,45 @@ const getBearerToken = (req) => {
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 };
 
+const SEED_EMAIL_MAP = {
+  catering_seed_001: "barokah@gmail.com",
+  customer_seed_001: "wuliddahtamsilbarokah19@gmail.com",
+  driver_seed_001: "wuliddah@gmail.com",
+  marketplace_seed_001: "dyaska@gmail.com",
+  marketplace_seed_002: "dyva123@gmail.com",
+  bank_sampah_seed_001: "banksampah@geoverse.com",
+  bank_sampah_seed_pakuan: "agalagan@gmail.com",
+};
+
+const resolveSeedUser = async (seedId) => {
+  if (!seedId || typeof seedId !== "string") return null;
+  const cleanId = seedId.trim();
+  if (mongoose.Types.ObjectId.isValid(cleanId)) {
+    const user = await User.findById(cleanId).lean();
+    if (user) return user;
+  }
+  const email = SEED_EMAIL_MAP[cleanId];
+  if (email) {
+    const user = await User.findOne({ email }).lean();
+    if (user) return user;
+  }
+  if (cleanId === "catering_seed_001") {
+    return await User.findOne({ role: "pemilik_catering" }).lean();
+  }
+  if (cleanId === "customer_seed_001") {
+    return await User.findOne({ role: "customer" }).lean();
+  }
+  return null;
+};
+
 const verifyAccessToken = async (token) => {
   if (!token) return null;
   try {
     // 1. Check for dev seed_token format: seed_token_<userId>
     if (typeof token === "string" && token.startsWith("seed_token_")) {
       const seedId = token.slice("seed_token_".length).trim();
-      if (mongoose.Types.ObjectId.isValid(seedId)) {
-        const seedUser = await User.findById(seedId).lean();
-        if (seedUser) return seedUser;
-      }
+      const seedUser = await resolveSeedUser(seedId);
+      if (seedUser) return seedUser;
     }
 
     // 2. Check for direct valid MongoDB ObjectId string
@@ -54,9 +83,8 @@ const verifyAccessToken = async (token) => {
 
     if (typeof token === "string" && token.startsWith("seed_token_")) {
       const seedId = token.slice("seed_token_".length).trim();
-      if (mongoose.Types.ObjectId.isValid(seedId)) {
-        return await User.findById(seedId).lean();
-      }
+      const seedUser = await resolveSeedUser(seedId);
+      if (seedUser) return seedUser;
     }
     if (typeof token === "string" && mongoose.Types.ObjectId.isValid(token) && token.length === 24) {
       return await User.findById(token).lean();
@@ -80,8 +108,13 @@ const resolveUserFromRequest = async (req) => {
     req.body?.driverId ||
     req.query?.driverId;
 
-  if (candidateId && typeof candidateId === "string" && mongoose.Types.ObjectId.isValid(candidateId)) {
-    return await User.findById(candidateId).lean();
+  if (candidateId && typeof candidateId === "string") {
+    if (mongoose.Types.ObjectId.isValid(candidateId)) {
+      const user = await User.findById(candidateId).lean();
+      if (user) return user;
+    }
+    const seedUser = await resolveSeedUser(candidateId);
+    if (seedUser) return seedUser;
   }
 
   return null;

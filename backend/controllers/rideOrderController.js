@@ -411,7 +411,7 @@ const getDriverRideOrders = async (req, res) => {
       ],
     };
 
-    const orders = await RideOrder.find(query).sort({ createdAt: -1 }).lean();
+    const orders = await RideOrder.find(query).sort({ updatedAt: -1, createdAt: -1 }).lean();
     return res.json({ success: true, data: orders });
   } catch (error) {
     console.error("getDriverRideOrders error:", error);

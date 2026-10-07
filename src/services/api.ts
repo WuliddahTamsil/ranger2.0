@@ -215,10 +215,10 @@ export const updateCateringProduct = async (id: string | number, productData: an
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(productData),
     });
-    return await res.json();
-  } catch (err) {
+    return await readApiJson(res);
+  } catch (err: any) {
     console.error("❌ updateCateringProduct error:", err);
-    return { success: false, message: "Gagal menyambung ke server" };
+    return { success: false, message: err?.message || "Gagal menyambung ke server" };
   }
 };
 
@@ -227,10 +227,10 @@ export const deleteCateringProduct = async (id: string | number) => {
     const res = await fetch(getApiUrl(`/catering/products/${id}`), {
       method: "DELETE",
     });
-    return await res.json();
-  } catch (err) {
+    return await readApiJson(res);
+  } catch (err: any) {
     console.error("❌ deleteCateringProduct error:", err);
-    return { success: false, message: "Gagal menyambung ke server" };
+    return { success: false, message: err?.message || "Gagal menyambung ke server" };
   }
 };
 
@@ -632,13 +632,22 @@ export const getCateringOrdersForOwner = async (ownerId: string) => {
   }
 };
 
-export const updateCateringOrderStatus = async (id: string | number, status: string) => {
+export const updateCateringOrderStatus = async (
+  id: string | number,
+  status: string,
+  deliveryProofUrl?: string,
+  deliveryProofTimestamp?: string
+) => {
   try {
     const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/catering/orders/${id}/status`), {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({
+        status,
+        ...(deliveryProofUrl ? { deliveryProofUrl } : {}),
+        ...(deliveryProofTimestamp ? { deliveryProofTimestamp } : {}),
+      }),
     });
     return await res.json();
   } catch (err) {
@@ -761,13 +770,14 @@ export const submitCateringPayment = async (
   amount: number,
   reference = "",
   proofUrl = "",
+  method = "",
 ) => {
   try {
     const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/catering/orders/${orderId}/payments`), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify({ amount, reference, proofUrl }),
+      body: JSON.stringify({ amount, reference, proofUrl, method }),
     });
     return await readApiJson(res);
   } catch (err) {
@@ -781,13 +791,14 @@ export const verifyCateringPayment = async (
   paymentId: string,
   action: "verify" | "reject",
   reason = "",
+  amount?: number
 ) => {
   try {
     const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/catering/orders/${orderId}/payments/${paymentId}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify({ action, reason }),
+      body: JSON.stringify({ action, reason, amount }),
     });
     return await readApiJson(res);
   } catch (err) {

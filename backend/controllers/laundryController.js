@@ -613,7 +613,7 @@ exports.getDriverOrders = async (req, res) => {
       };
     }
 
-    const orders = await LaundryOrder.find(filter).sort({ createdAt: -1 });
+    const orders = await LaundryOrder.find(filter).sort({ updatedAt: -1, createdAt: -1 });
 
     return res.status(200).json({ success: true, data: orders });
   } catch (error) {

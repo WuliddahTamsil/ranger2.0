@@ -79,6 +79,7 @@ import { hydrateCustomerChatThreads, subscribeCustomerChatThreads } from "./cust
 import { getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer, getNotifications, markNotificationRead, getCustomerReviews } from "../../services/api";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 import { setPendingMarketplaceCart } from "./marketplaceCartStore";
+import { setActiveCateringTrackingOrderId } from "./customerCateringStore";
 
 interface CartItem {
   id: number | string;
@@ -605,6 +606,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         const updatedOrderId = String(updatedOrder?._id || updatedOrder?.id || "");
         const updatedStatus = updatedOrder?.status;
         const deliveryProofUrl = updatedOrder?.deliveryProofUrl;
+        const deliveryProofTimestamp = (updatedOrder as any)?.deliveryProofTimestamp;
         if (updatedOrderId && typeof updatedStatus === "string") {
           const existingOrder = ordersRef.current.find((order) => String(order.id) === updatedOrderId);
           if (existingOrder) {
@@ -615,6 +617,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     status: updatedStatus || order.status,
                     ...(typeof deliveryProofUrl === "string"
                       ? { deliveryProofUrl }
+                      : {}),
+                    ...(typeof deliveryProofTimestamp === "string"
+                      ? { deliveryProofTimestamp }
                       : {}),
                   }
                 : order
@@ -818,7 +823,13 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             ordersLoadError={ordersLoadError}
             onRetryOrders={() => setOrdersReloadKey((key) => key + 1)}
             onOpenRideTracking={() => navigate("c_ride_tracking")}
-            onOpenCateringTracking={() => navigate("c_catering_tracking")}
+            onOpenCateringTracking={(orderOrId?: any) => {
+              if (orderOrId) {
+                const id = typeof orderOrId === "string" ? orderOrId : String(orderOrId.id || orderOrId._id || "");
+                if (id) setActiveCateringTrackingOrderId(id);
+              }
+              navigate("c_catering_tracking");
+            }}
             onOpenCateringQris={() => navigate("c_catering_qris")}
             navigate={navigate}
           />
@@ -1322,6 +1333,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                       }
                       navigate("c_ride_tracking");
                     } else if (activeOrder.type === "Catering") {
+                      if (activeOrder.id) {
+                        setActiveCateringTrackingOrderId(String(activeOrder.id));
+                      }
                       navigate("c_catering_tracking");
                     } else {
                       setCurrentTab(2);

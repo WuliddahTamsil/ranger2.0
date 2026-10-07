@@ -53,6 +53,32 @@ import { getChatMessages, sendChatMessage, uploadFileToBackend } from "../../ser
 import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 import { SafeCallModal } from "../../components/SafeCallModal";
+import { sortDriverOrders, isDriverOrderActive } from "./driverOrderUtils";
+
+export type DriverOrderTab =
+  | "Semua"
+  | "Ride"
+  | "Send"
+  | "Shop"
+  | "Marketplace"
+  | "Catering"
+  | "Setor Sampah"
+  | "Laundry"
+  | "Aktif"
+  | "Selesai";
+
+export const ORDER_TABS: DriverOrderTab[] = [
+  "Semua",
+  "Ride",
+  "Send",
+  "Shop",
+  "Marketplace",
+  "Catering",
+  "Setor Sampah",
+  "Laundry",
+  "Aktif",
+  "Selesai",
+];
 
 export interface DriverOrder {
   id: string;
@@ -67,9 +93,11 @@ export interface DriverOrder {
   paymentStatus?: string;
   customer: string;
   phone: string;
-  type: "Catering" | "Marketplace" | "Laundry" | "Kanyaah Ride" | "Kanyaah Send" | "Setor Sampah";
+  type: "Catering" | "Marketplace" | "Laundry" | "Kanyaah Ride" | "Kanyaah Send" | "Setor Sampah" | "Shop";
   time: string;
   createdAt?: string;
+  acceptedAt?: string;
+  updatedAt?: string;
   completedAt?: string;
   distanceKm?: number;
   from: string;
@@ -84,6 +112,8 @@ export interface DriverOrder {
   storePhone?: string;
   ownerId?: string;
   deliveryProofUrl?: string;
+  deliveryProofTimestamp?: string;
+  deliveredAt?: string;
   notes?: string;
   pickup?: { address: string; latitude: number; longitude: number };
   destination?: { address: string; latitude: number; longitude: number };
@@ -110,7 +140,7 @@ interface OrderProps {
   transactions: any[];
   setTransactions: (txs: any[]) => void;
   isOnline: boolean;
-  onStatusChange?: (orderId: string, status: DriverOrder["status"], deliveryProofUrl?: string) => Promise<boolean | DriverOrder>;
+  onStatusChange?: (orderId: string, status: DriverOrder["status"], deliveryProofUrl?: string, deliveryProofTimestamp?: string) => Promise<boolean | DriverOrder>;
   onAcceptOrder?: (orderId: string) => Promise<boolean | DriverOrder>;
   onDeclineOrder?: (orderId: string) => Promise<boolean>;
   driverId?: string;
@@ -157,7 +187,7 @@ export const Order: React.FC<OrderProps> = ({
   const effectiveDriverName = driverName || "Driver Rangers";
   const effectiveDriverVehicle = [driverVehicle, driverPlate].filter(Boolean).join(" • ") || "Sepeda Motor";
 
-  const [activeTab, setActiveTab] = useState<"Semua" | "Ride" | "Delivery" | "Aktif" | "Selesai">("Semua");
+  const [activeTab, setActiveTab] = useState<DriverOrderTab>("Semua");
   const [selectedOrder, setSelectedOrder] = useState<DriverOrder | null>(null);
 
   useEffect(() => {
@@ -347,24 +377,31 @@ export const Order: React.FC<OrderProps> = ({
   const handleUpdateStatus = async (
     orderId: string,
     nextStatus: DriverOrder["status"],
-    deliveryProofUrl?: string
+    deliveryProofUrl?: string,
+    deliveryProofTimestamp?: string
   ): Promise<boolean> => {
     if (mutationLockRef.current.has(orderId)) return false;
     mutationLockRef.current.add(orderId);
     setMutatingOrderId(orderId);
     try {
-      const result = onStatusChange ? await onStatusChange(orderId, nextStatus, deliveryProofUrl) : true;
+      const result = onStatusChange
+        ? await onStatusChange(orderId, nextStatus, deliveryProofUrl, deliveryProofTimestamp)
+        : true;
       if (result === false) return false;
-      const serverOrder = typeof result === "object" ? result : null;
       const currentOrder = orders.find((order) => order.id === orderId);
+      const serverOrder = typeof result === "object" ? result : null;
       const updatedOrder = serverOrder || (currentOrder ? {
         ...currentOrder,
         status: nextStatus,
         ...(deliveryProofUrl ? { deliveryProofUrl } : {}),
+        ...(deliveryProofTimestamp ? { deliveryProofTimestamp } : {}),
+        acceptedAt: currentOrder.acceptedAt || (nextStatus === "Selesai" ? currentOrder.createdAt : new Date().toISOString()),
+        updatedAt: new Date().toISOString(),
         completedAt: nextStatus === "Selesai" ? new Date().toISOString() : currentOrder.completedAt,
+        deliveredAt: nextStatus === "Selesai" ? new Date().toISOString() : currentOrder.deliveredAt,
       } : null);
       if (!updatedOrder) return false;
-      setOrders((current) => current.map((order) => order.id === orderId ? updatedOrder : order));
+      setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updatedOrder : order)));
       if (selectedOrder?.id === orderId) setSelectedOrder(updatedOrder);
 
       const getArrivalTitle = (order: DriverOrder) => {
@@ -385,7 +422,7 @@ export const Order: React.FC<OrderProps> = ({
       const alertCopy: Record<string, [string, string]> = {
         "Sampai Pickup": [getArrivalTitle(updatedOrder), "Konfirmasi kedatangan tersimpan."],
         Mengantar: [getPickupTitle(updatedOrder), "Dikonfirmasi telah diambil dan status pengantaran diperbarui."],
-        Selesai: ["Pengantaran Selesai", `${deliveryProofUrl ? "Bukti foto tersimpan. " : ""}Pendapatan ${rp(updatedOrder.driverShare)} ditambahkan ke saldo.`],
+        Selesai: ["Pengantaran Selesai", `${deliveryProofUrl ? "Bukti foto & timestamp tersimpan. " : ""}Pendapatan ${rp(updatedOrder.driverShare)} ditambahkan ke saldo.`],
       };
       const [title, message] = alertCopy[nextStatus] || ["Status Diperbarui", `Status pesanan sekarang ${nextStatus}.`];
       Alert.alert(title, message);
@@ -400,7 +437,7 @@ export const Order: React.FC<OrderProps> = ({
     }
   };
 
-  const completeMarketplaceDelivery = async (order: DriverOrder, source: "camera" | "library") => {
+  const completeDeliveryProof = async (order: DriverOrder, source: "camera" | "library") => {
     if (proofUploadLockRef.current.has(order.id) || mutationLockRef.current.has(order.id)) return;
     proofUploadLockRef.current.add(order.id);
     setProofUploadOrderId(order.id);
@@ -411,27 +448,39 @@ export const Order: React.FC<OrderProps> = ({
           ? await ImagePicker.requestCameraPermissionsAsync()
           : await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (permission.status !== "granted") {
-          throw new Error(source === "camera" ? "Izinkan akses kamera untuk mengambil foto bukti." : "Izinkan akses galeri untuk memilih foto bukti.");
+          throw new Error(source === "camera" ? "Izinkan akses kamera untuk mengambil foto bukti serah terima." : "Izinkan akses galeri untuk memilih foto bukti serah terima.");
         }
       }
 
       const selection = source === "camera"
-        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.75, allowsEditing: false })
-        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.75, allowsEditing: false });
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.8, allowsEditing: false })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8, allowsEditing: false });
       if (selection.canceled) return;
 
       const asset = selection.assets?.[0];
-      if (!asset?.uri) throw new Error("Pilih satu foto bukti pengantaran.");
+      if (!asset?.uri) throw new Error("Pilih atau ambil satu foto bukti pengantaran.");
+
+      const now = new Date();
+      const realTimestamp = new Intl.DateTimeFormat("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+        timeZone: "Asia/Jakarta",
+      }).format(now) + " WIB";
 
       const fileName = asset.fileName || `bukti-pengantaran-${order.id}-${Date.now()}.jpg`;
       const mimeType = asset.mimeType || (fileName.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
       const uploadResult = await uploadFileToBackend(asset.uri, fileName, mimeType);
       const proofUrl = uploadResult?.data?.url;
       if (!uploadResult?.success || typeof proofUrl !== "string" || !proofUrl.trim()) {
-        throw new Error(uploadResult?.message || "Foto bukti gagal diunggah. Coba pilih foto lain.");
+        throw new Error(uploadResult?.message || "Foto bukti gagal diunggah. Coba ambil foto kembali.");
       }
 
-      const updated = await handleUpdateStatus(order.id, "Selesai", proofUrl);
+      const updated = await handleUpdateStatus(order.id, "Selesai", proofUrl, realTimestamp);
       if (!updated) throw new Error("Foto sudah diunggah, tetapi status belum tersimpan. Silakan coba lagi.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Foto bukti gagal diunggah. Periksa koneksi lalu coba lagi.";
@@ -443,7 +492,7 @@ export const Order: React.FC<OrderProps> = ({
   };
 
   const handleDriverTransition = (order: DriverOrder, nextStatus: DriverOrder["status"]) => {
-    if (order.type === "Marketplace" && nextStatus === "Selesai") {
+    if ((order.type === "Marketplace" || order.type === "Catering") && nextStatus === "Selesai") {
       setProofUploadError(null);
       setDeliveryProofOrder(order);
       return;
@@ -496,7 +545,7 @@ export const Order: React.FC<OrderProps> = ({
     const order = deliveryProofOrder;
     const startProofCapture = (source: "camera" | "library") => {
       setDeliveryProofOrder(null);
-      void completeMarketplaceDelivery(order, source);
+      void completeDeliveryProof(order, source);
     };
 
     return (
@@ -511,27 +560,27 @@ export const Order: React.FC<OrderProps> = ({
             <View style={styles.proofPickerIcon}>
               <Camera size={22} color="#15803D" />
             </View>
-            <Text style={styles.proofPickerTitle}>Foto bukti pengantaran</Text>
-            <Text style={styles.proofPickerDescription}>
-              Pilih foto setelah pesanan diterima customer. Status akan selesai setelah foto berhasil dikirim.
+            <Text style={styles.proofPickerTitle}>
+              {order.type === "Catering" ? "Bukti Serah Terima Catering" : "Foto Bukti Pengantaran"}
             </Text>
-            {Platform.OS !== "web" && (
-              <Pressable
-                style={styles.proofPickerPrimaryButton}
-                accessibilityRole="button"
-                onPress={() => startProofCapture("camera")}
-              >
-                <Camera size={17} color="#FFFFFF" />
-                <Text style={styles.proofPickerPrimaryText}>Ambil Foto</Text>
-              </Pressable>
-            )}
+            <Text style={styles.proofPickerDescription}>
+              Ambil foto pesanan langsung di hadapan customer sebagai bukti serah terima sah. Sistem akan merekam tanggal & jam aktual (WIB) yang akan ditampilkan di halaman customer.
+            </Text>
+            <Pressable
+              style={styles.proofPickerPrimaryButton}
+              accessibilityRole="button"
+              onPress={() => startProofCapture("camera")}
+            >
+              <Camera size={17} color="#FFFFFF" />
+              <Text style={styles.proofPickerPrimaryText}>Ambil Foto Kamera (Device)</Text>
+            </Pressable>
             <Pressable
               style={styles.proofPickerSecondaryButton}
               accessibilityRole="button"
               onPress={() => startProofCapture("library")}
             >
               <ImageIcon size={17} color="#15803D" />
-              <Text style={styles.proofPickerSecondaryText}>Pilih dari Galeri</Text>
+              <Text style={styles.proofPickerSecondaryText}>Pilih dari Galeri / Dokumen</Text>
             </Pressable>
             <Pressable
               style={styles.proofPickerCancelButton}
@@ -555,13 +604,22 @@ export const Order: React.FC<OrderProps> = ({
       const result = onAcceptOrder ? await onAcceptOrder(orderId) : true;
       if (result === false) return;
 
-      const updatedOrder: DriverOrder = (result && typeof result === "object") ? result : {
+      const now = new Date().toISOString();
+      const updatedOrder: DriverOrder = (result && typeof result === "object") ? {
+        ...result,
+        status: "Menuju Pickup",
+        driverId: driverId || result.driverId || order.driverId,
+        acceptedAt: now,
+        updatedAt: now,
+      } : {
         ...order,
         status: (order.type === "Kanyaah Ride" ? "Menuju Pickup" : "Menuju Pickup") as DriverOrder["status"],
         driverId: driverId || order.driverId,
+        acceptedAt: now,
+        updatedAt: now,
       };
 
-      setOrders((current) => current.map((item) => item.id === orderId ? updatedOrder : item));
+      setOrders((current) => sortDriverOrders([updatedOrder, ...current.filter((item) => item.id !== orderId)]));
       if (selectedOrder?.id === orderId) setSelectedOrder(updatedOrder);
       setActiveTab("Aktif");
       Alert.alert(
@@ -678,19 +736,34 @@ export const Order: React.FC<OrderProps> = ({
     }
   };
 
-  // Filter tab
-  const filteredOrders = orders.filter((order) => {
-    if (activeTab === "Ride") {
-      return order.type === "Kanyaah Ride";
-    } else if (activeTab === "Delivery") {
-      return order.type !== "Kanyaah Ride";
-    } else if (activeTab === "Aktif") {
-      return ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(order.status);
-    } else if (activeTab === "Selesai") {
-      return order.status === "Selesai";
-    }
-    return true; // "Semua"
-  });
+  // Filter tab and sort: newest accepted orders always at the very top
+  const filteredOrders = sortDriverOrders(
+    orders.filter((order) => {
+      switch (activeTab) {
+        case "Ride":
+          return order.type === "Kanyaah Ride";
+        case "Send":
+          return order.type === "Kanyaah Send";
+        case "Shop":
+          return order.type === "Shop";
+        case "Marketplace":
+          return order.type === "Marketplace";
+        case "Catering":
+          return order.type === "Catering";
+        case "Setor Sampah":
+          return order.type === "Setor Sampah";
+        case "Laundry":
+          return order.type === "Laundry";
+        case "Aktif":
+          return isDriverOrderActive(order);
+        case "Selesai":
+          return order.status === "Selesai";
+        case "Semua":
+        default:
+          return true;
+      }
+    })
+  );
 
   const getStatusColor = (status: string, order?: DriverOrder) => {
     if (order?.type === "Setor Sampah") {
@@ -824,6 +897,8 @@ export const Order: React.FC<OrderProps> = ({
         return { bg: "#EFF6FF", text: "#1D4ED8", border: "#BFDBFE" };
       case "Kanyaah Send":
         return { bg: "#FFF7ED", text: "#C2410C", border: "#FFEDD5" };
+      case "Shop":
+        return { bg: "#EFF6FF", text: "#0284C7", border: "#BAE6FD" };
       case "Catering":
         return { bg: "#FEF2F2", text: "#B91C1C", border: "#FECACA" };
       case "Laundry":
@@ -1779,7 +1854,7 @@ export const Order: React.FC<OrderProps> = ({
                     </View>
                   ) : (
                     <Text style={styles.driverRatingNoReviewText}>
-                      Penumpang memberikan {selectedOrder.rating.score} bintang tanpa ulasan tertulis.
+                      {selectedOrder.type === "Kanyaah Ride" ? "Penumpang" : "Pelanggan"} memberikan {selectedOrder.rating.score} bintang tanpa ulasan tertulis.
                     </Text>
                   )}
                   <Text style={styles.driverRatingNoticeText}>
@@ -1789,7 +1864,7 @@ export const Order: React.FC<OrderProps> = ({
               ) : (
                 <View style={styles.driverRatingWaitingWrap}>
                   <Text style={styles.driverRatingWaitingText}>
-                    Penumpang belum mengisi ulasan bintang. Rekapan akan otomatis terisi saat penumpang mengirimkan penilaian di aplikasinya.
+                    {selectedOrder.type === "Kanyaah Ride" ? "Penumpang" : "Pelanggan"} belum mengisi ulasan bintang. Rekapan akan otomatis terisi saat {selectedOrder.type === "Kanyaah Ride" ? "penumpang" : "pelanggan"} mengirimkan penilaian di aplikasinya.
                   </Text>
                 </View>
               )}
@@ -1925,7 +2000,7 @@ export const Order: React.FC<OrderProps> = ({
                         : selectedOrder.type === "Kanyaah Send"
                         ? "Paket Diserahkan ke Penerima & Selesai"
                         : selectedOrder.type === "Catering"
-                        ? "Makanan Diserahkan ke Pemesan & Selesai"
+                        ? "Ambil Foto Bukti & Selesaikan Pengantaran"
                         : selectedOrder.type === "Marketplace"
                         ? "Pesanan Sudah Diterima Customer"
                         : "Selesaikan Pengantaran"}
@@ -1935,6 +2010,43 @@ export const Order: React.FC<OrderProps> = ({
               </Pressable>
             )
           )}
+
+          {selectedOrder.status === "Selesai" && selectedOrder.deliveryProofUrl ? (
+            <View style={{
+              backgroundColor: "#F0FDF4",
+              borderWidth: 1,
+              borderColor: "#BBF7D0",
+              borderRadius: 14,
+              padding: 12,
+              marginBottom: 10,
+              gap: 8,
+            }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Camera size={15} color="#15803D" />
+                  <Text style={{ fontSize: 12, fontWeight: "800", color: "#166534" }}>
+                    Bukti Foto Pengantaran Tersimpan
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: "#166534" }}>TERVERIFIKASI</Text>
+                </View>
+              </View>
+              <Image
+                source={{ uri: selectedOrder.deliveryProofUrl }}
+                style={{ width: "100%", height: 160, borderRadius: 10, backgroundColor: "#E2E8F0" }}
+                resizeMode="cover"
+              />
+              {selectedOrder.deliveryProofTimestamp ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  <Clock size={12} color="#15803D" />
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#166534" }}>
+                    Waktu Real Serah Terima: {selectedOrder.deliveryProofTimestamp}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           {selectedOrder.status === "Selesai" && (
             <TouchableOpacity
@@ -1949,7 +2061,7 @@ export const Order: React.FC<OrderProps> = ({
                     : "Pengantaran Selesai",
                   selectedOrder.type === "Setor Sampah"
                     ? "Sampah telah sampai di Bank Sampah dan siap ditimbang oleh petugas."
-                    : "Pesanan ini telah selesai dijalankan dan pembayaran telah berhasil tercatat."
+                    : "Pesanan ini telah selesai dijalankan dan bukti serah terima telah tersimpan."
                 );
               }}
             >
@@ -2399,16 +2511,21 @@ export const Order: React.FC<OrderProps> = ({
         </View>
       </View>
 
-      {/* Tabs Row (Semua, Ride, Delivery, Aktif, Selesai) */}
+      {/* Tabs Row (Semua, Ride, Send, Shop, Marketplace, Catering, Setor Sampah, Laundry, Aktif, Selesai) */}
       <View style={styles.tabsRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
-          {(["Semua", "Ride", "Delivery", "Aktif", "Selesai"] as const).map((tab) => {
+          {ORDER_TABS.map((tab) => {
             const isSelected = activeTab === tab;
             const count =
               tab === "Semua" ? orders.length :
               tab === "Ride" ? orders.filter((o) => o.type === "Kanyaah Ride").length :
-              tab === "Delivery" ? orders.filter((o) => o.type !== "Kanyaah Ride").length :
-              tab === "Aktif" ? orders.filter((o) => ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(o.status)).length :
+              tab === "Send" ? orders.filter((o) => o.type === "Kanyaah Send").length :
+              tab === "Shop" ? orders.filter((o) => o.type === "Shop").length :
+              tab === "Marketplace" ? orders.filter((o) => o.type === "Marketplace").length :
+              tab === "Catering" ? orders.filter((o) => o.type === "Catering").length :
+              tab === "Setor Sampah" ? orders.filter((o) => o.type === "Setor Sampah").length :
+              tab === "Laundry" ? orders.filter((o) => o.type === "Laundry").length :
+              tab === "Aktif" ? orders.filter(isDriverOrderActive).length :
               orders.filter((o) => o.status === "Selesai").length;
 
             return (

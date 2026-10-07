@@ -40,6 +40,7 @@ import {
   ShieldAlert,
   DollarSign,
   CheckCircle,
+  Camera,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -56,6 +57,7 @@ import {
 } from "../../services/api";
 import { MarketplaceDigitalPaymentModal } from "../../components/MarketplaceDigitalPaymentModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setActiveCateringPaymentOrder, setActiveCateringTrackingOrderId } from "./customerCateringStore";
 
 interface PesananProps {
   orders: OrderItem[];
@@ -67,7 +69,7 @@ interface PesananProps {
   ordersLoadError?: string;
   onRetryOrders?: () => void;
   onOpenRideTracking?: () => void;
-  onOpenCateringTracking?: () => void;
+  onOpenCateringTracking?: (order?: OrderItem) => void;
   onOpenCateringQris?: () => void;
   navigate?: (screen: any) => void;
 }
@@ -559,6 +561,13 @@ export const Pesanan: React.FC<PesananProps> = ({
               onPress={() => {
                 if (item.type.toLowerCase().includes("ride") && !isCompleted && !item.status.toLowerCase().includes("batal") && onOpenRideTracking) {
                   onOpenRideTracking();
+                } else if (item.type.toLowerCase().includes("cater")) {
+                  setActiveCateringTrackingOrderId(String(item.id));
+                  if (onOpenCateringTracking) {
+                    onOpenCateringTracking(item);
+                  } else if (navigate) {
+                    navigate("c_catering_tracking");
+                  }
                 } else {
                   handleOpenInvoice(item);
                 }
@@ -739,23 +748,47 @@ export const Pesanan: React.FC<PesananProps> = ({
                       )}
 
                       {item.type.toLowerCase().includes("cater") && (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionBtnProof]}
-                          onPress={(event) => {
-                            event.stopPropagation();
-                            if (onOpenCateringQris) {
-                              onOpenCateringQris();
-                            } else if (navigate) {
-                              navigate("c_catering_qris");
-                            }
-                          }}
-                          activeOpacity={0.8}
-                          accessibilityRole="button"
-                          accessibilityLabel="Buka halaman pembayaran QRIS"
-                        >
-                          <QrCode size={13} color="#0D7A53" />
-                          <Text style={styles.actionBtnTextInvoice}>Bayar QRIS</Text>
-                        </TouchableOpacity>
+                        <>
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnProof]}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              setActiveCateringTrackingOrderId(String(item.id));
+                              if (onOpenCateringTracking) {
+                                onOpenCateringTracking(item);
+                              } else if (navigate) {
+                                navigate("c_catering_tracking");
+                              }
+                            }}
+                            activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={item.deliveryProofUrl ? "Lihat foto bukti pengantaran kurir" : "Lacak pesanan catering"}
+                          >
+                            <Camera size={13} color="#0D7A53" />
+                            <Text style={styles.actionBtnTextInvoice}>{item.deliveryProofUrl ? "Bukti Foto" : "Lacak & Bukti"}</Text>
+                          </TouchableOpacity>
+
+                          {Number(item.remainingAmount || 0) > 0 && (
+                            <TouchableOpacity
+                              style={[styles.actionBtn, styles.actionBtnProof]}
+                              onPress={(event) => {
+                                event.stopPropagation();
+                                setActiveCateringPaymentOrder(item);
+                                if (onOpenCateringQris) {
+                                  onOpenCateringQris();
+                                } else if (navigate) {
+                                  navigate("c_catering_qris");
+                                }
+                              }}
+                              activeOpacity={0.8}
+                              accessibilityRole="button"
+                              accessibilityLabel="Buka halaman pembayaran QRIS"
+                            >
+                              <QrCode size={13} color="#0D7A53" />
+                              <Text style={styles.actionBtnTextInvoice}>Bayar QRIS</Text>
+                            </TouchableOpacity>
+                          )}
+                        </>
                       )}
 
                       {item.type.toLowerCase().includes("ride") ? (
@@ -919,8 +952,13 @@ export const Pesanan: React.FC<PesananProps> = ({
                           <TouchableOpacity
                             style={[styles.actionBtn, styles.actionBtnSolid]}
                             onPress={() => {
-                              if (item.type.toLowerCase().includes("cater") && onOpenCateringTracking) {
-                                onOpenCateringTracking();
+                              if (item.type.toLowerCase().includes("cater")) {
+                                setActiveCateringTrackingOrderId(String(item.id));
+                                if (onOpenCateringTracking) {
+                                  onOpenCateringTracking(item);
+                                } else if (navigate) {
+                                  navigate("c_catering_tracking");
+                                }
                               } else {
                                 handleOpenTracking(item);
                               }
@@ -1133,15 +1171,20 @@ export const Pesanan: React.FC<PesananProps> = ({
                 </View>
               </View>
 
-              {selectedOrder.type === "Marketplace" && selectedOrder.deliveryProofUrl ? (
+              {(selectedOrder.type === "Marketplace" || selectedOrder.type === "Catering") && selectedOrder.deliveryProofUrl ? (
                 <View style={styles.deliveryProofCard}>
-                  <Text style={styles.deliveryProofTitle}>Bukti Foto Pengantaran</Text>
+                  <Text style={styles.deliveryProofTitle}>Bukti Foto Pengantaran Kurir</Text>
                   <Image
                     source={{ uri: selectedOrder.deliveryProofUrl }}
                     style={styles.deliveryProofImage}
                     resizeMode="cover"
                     accessibilityLabel="Foto bukti pesanan telah diterima customer"
                   />
+                  {selectedOrder.deliveryProofTimestamp ? (
+                    <Text style={{ fontSize: 11, color: "#166534", fontWeight: "700", marginTop: 6 }}>
+                      Waktu Serah Terima: {selectedOrder.deliveryProofTimestamp}
+                    </Text>
+                  ) : null}
                 </View>
               ) : null}
 
