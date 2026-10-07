@@ -89,7 +89,11 @@ import {
   driverPickupWasteDeposit,
   driverDeliverWasteDeposit,
 } from "../../services/recycleService";
-import { fetchDriverShopOrders } from "../../services/shopService";
+import {
+  fetchDriverShopOrders,
+  acceptDriverShopOrder,
+  updateDriverShopStatus,
+} from "../../services/shopService";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 
 // Import other screens
@@ -1299,6 +1303,26 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 return true;
               }
 
+              if (targetOrder?.type === "Shop") {
+                let shopBackendStatus = "DRIVER_ASSIGNED";
+                if (status === "Menuju Pickup") shopBackendStatus = "DRIVER_ASSIGNED";
+                else if (status === "Sampai Pickup") shopBackendStatus = "DRIVER_AT_STORE";
+                else if (status === "Mengantar") shopBackendStatus = "DELIVERING";
+                else if (status === "Selesai") shopBackendStatus = "COMPLETED";
+
+                const res = await updateDriverShopStatus(orderId, shopBackendStatus);
+                if (!res.success) {
+                  Alert.alert("Gagal", res.message || "Status pengantaran belanja gagal diperbarui");
+                  return false;
+                }
+                if (res.data) {
+                  const updated = mapShopDriverOrder(res.data);
+                  setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updated : order)));
+                  return updated;
+                }
+                return true;
+              }
+
               const result = targetOrder?.type === "Catering"
                 ? await updateCateringOrderStatus(orderId, status, deliveryProofUrl, deliveryProofTimestamp)
                 : await updateMarketplaceOrderStatus(orderId, status, authAccount, deliveryProofUrl);
@@ -1379,6 +1403,25 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 if (res.data) {
                   const updated: DriverOrder = {
                     ...mapSendDriverOrder(res.data),
+                    acceptedAt: now,
+                    updatedAt: now,
+                  };
+                  setOrders((current) => sortDriverOrders([updated, ...current.filter((order) => order.id !== orderId)]));
+                  return updated;
+                }
+                return true;
+              }
+
+              if (targetOrder?.type === "Shop") {
+                const res = await acceptDriverShopOrder(orderId);
+                if (!res.success) {
+                  Alert.alert("Gagal", res.message || "Pesanan belanja gagal diambil");
+                  return false;
+                }
+                if (res.data) {
+                  const now = new Date().toISOString();
+                  const updated: DriverOrder = {
+                    ...mapShopDriverOrder(res.data),
                     acceptedAt: now,
                     updatedAt: now,
                   };

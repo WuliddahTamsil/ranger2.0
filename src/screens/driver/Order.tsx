@@ -25,6 +25,9 @@ import {
   MessageSquare,
   Phone,
   CheckCircle,
+  CheckCircle2,
+  Check,
+  Banknote,
   X,
   Truck,
   ArrowRight,
@@ -1840,11 +1843,11 @@ export const Order: React.FC<OrderProps> = ({
                     ))}
                     <Text style={styles.driverRatingScoreLabel}>
                       {selectedOrder.rating.score === 5
-                        ? "Sangat Puas ⭐ 5/5"
+                        ? "Sangat Puas (5/5)"
                         : selectedOrder.rating.score === 4
-                        ? "Puas ⭐ 4/5"
+                        ? "Puas (4/5)"
                         : selectedOrder.rating.score === 3
-                        ? "Cukup ⭐ 3/5"
+                        ? "Cukup (3/5)"
                         : `${selectedOrder.rating.score} / 5`}
                     </Text>
                   </View>
@@ -1859,9 +1862,12 @@ export const Order: React.FC<OrderProps> = ({
                       {selectedOrder.type === "Kanyaah Ride" ? "Penumpang" : "Pelanggan"} memberikan {selectedOrder.rating.score} bintang tanpa ulasan tertulis.
                     </Text>
                   )}
-                  <Text style={styles.driverRatingNoticeText}>
-                    ✓ Rating ini telah diakumulasikan ke profil performa driver Anda.
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 }}>
+                    <CheckCircle2 size={13} color="#059669" />
+                    <Text style={styles.driverRatingNoticeText}>
+                      Rating ini telah diakumulasikan ke profil performa driver Anda.
+                    </Text>
+                  </View>
                 </View>
               ) : (
                 <View style={styles.driverRatingWaitingWrap}>
@@ -2070,10 +2076,10 @@ export const Order: React.FC<OrderProps> = ({
               <CheckCircle size={18} color="#15803D" />
               <Text style={styles.completedBadgeBtnText}>
                 {selectedOrder.type === "Setor Sampah"
-                  ? "Sampah Tiba di Bank Sampah ✓"
+                  ? "Sampah Tiba di Bank Sampah"
                   : selectedOrder.type === "Kanyaah Ride"
-                  ? "Perjalanan Telah Selesai ✓"
-                  : "Pengantaran Telah Selesai ✓"}
+                  ? "Perjalanan Telah Selesai"
+                  : "Pengantaran Telah Selesai"}
               </Text>
             </TouchableOpacity>
           )}
@@ -2797,7 +2803,10 @@ export const Order: React.FC<OrderProps> = ({
                 {(item.paymentMethod === "COD" || (!item.paymentMethod && item.paymentStatus !== "Lunas")) ? (
                   <View style={styles.driverPaymentInstructionBoxCod}>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <Text style={styles.driverPaymentInstructionTitleCod}>💵 TAGIH TUNAI (COD)</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Banknote size={14} color="#B45309" />
+                        <Text style={styles.driverPaymentInstructionTitleCod}>Tagih Tunai (COD)</Text>
+                      </View>
                       <Text style={styles.driverPaymentInstructionAmountCod}>{rp(item.pay)}</Text>
                     </View>
                     <Text style={styles.driverPaymentInstructionSubCod}>
@@ -2809,11 +2818,11 @@ export const Order: React.FC<OrderProps> = ({
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       <CheckCircle size={13} color="#15803D" />
                       <Text style={styles.driverPaymentInstructionTitlePaid}>
-                        SUDAH LUNAS ({item.paymentMethod || "NON-TUNAI"})
+                        Sudah Lunas ({item.paymentMethod || "Non-Tunai"})
                       </Text>
                     </View>
                     <Text style={styles.driverPaymentInstructionSubPaid}>
-                      Pesanan dibayar online. <Text style={{ fontWeight: "800", color: "#15803D" }}>DILARANG</Text> menagih uang tunai!
+                      Pesanan dibayar digital. Tidak perlu menagih uang tunai ke pelanggan.
                     </Text>
                   </View>
                 )}
@@ -2864,6 +2873,9 @@ export const Order: React.FC<OrderProps> = ({
                           color={cardNavMode[item.id] === "store" ? "#FFFFFF" : "#15803D"}
                         />
                       )}
+                      {cardNavMode[item.id] === "store" && (
+                        <Check size={11} color="#FFFFFF" strokeWidth={3} />
+                      )}
                       <Text
                         style={[
                           styles.mapActionPillText,
@@ -2873,17 +2885,7 @@ export const Order: React.FC<OrderProps> = ({
                           },
                         ]}
                       >
-                        {cardNavMode[item.id] === "store"
-                          ? item.type === "Kanyaah Ride"
-                            ? "✓ Titik Jemput"
-                            : item.type === "Kanyaah Send"
-                            ? "✓ Ke Pengirim"
-                            : item.type === "Catering"
-                            ? "✓ Ke Dapur"
-                            : item.type === "Setor Sampah"
-                            ? "✓ Ke Customer"
-                            : "✓ Rute Toko"
-                          : item.type === "Kanyaah Ride"
+                        {item.type === "Kanyaah Ride"
                           ? "Titik Jemput"
                           : item.type === "Kanyaah Send"
                           ? "Rute Pengirim"
@@ -2910,6 +2912,9 @@ export const Order: React.FC<OrderProps> = ({
                         size={12}
                         color={cardNavMode[item.id] === "customer" ? "#FFFFFF" : "#0D7A53"}
                       />
+                      {cardNavMode[item.id] === "customer" && (
+                        <Check size={11} color="#FFFFFF" strokeWidth={3} />
+                      )}
                       <Text
                         style={[
                           styles.mapActionPillText,
@@ -2919,17 +2924,7 @@ export const Order: React.FC<OrderProps> = ({
                           },
                         ]}
                       >
-                        {cardNavMode[item.id] === "customer"
-                          ? item.type === "Kanyaah Ride"
-                            ? "✓ Titik Tujuan"
-                            : item.type === "Kanyaah Send"
-                            ? "✓ Ke Penerima"
-                            : item.type === "Catering"
-                            ? "✓ Ke Pemesan"
-                            : item.type === "Setor Sampah"
-                            ? "✓ Ke Bank"
-                            : "✓ Rute Customer"
-                          : item.type === "Kanyaah Ride"
+                        {item.type === "Kanyaah Ride"
                           ? "Titik Tujuan"
                           : item.type === "Kanyaah Send"
                           ? "Rute Penerima"

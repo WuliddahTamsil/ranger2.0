@@ -368,3 +368,47 @@ export const fetchDriverShopOrders = async (
     return { success: false, data: [], message: error.message };
   }
 };
+
+/**
+ * Driver: Accept a Shop Order
+ */
+export const acceptDriverShopOrder = async (
+  orderId: string
+): Promise<{ success: boolean; data?: any; message?: string }> => {
+  try {
+    const url = getApiUrl(`/shop/orders/${orderId}/accept-driver`);
+    const headers = await getHeaders();
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+    });
+    const json = await res.json();
+    return json;
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal mengambil pesanan belanja" };
+  }
+};
+
+/**
+ * Driver: Update Shop Order Delivery Status
+ */
+export const updateDriverShopStatus = async (
+  orderId: string,
+  status: string,
+  note = ""
+): Promise<{ success: boolean; data?: any; message?: string }> => {
+  try {
+    const url = getApiUrl(`/shop/orders/${orderId}/driver-status`);
+    const headers = await getHeaders();
+    const res = await fetch(url, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ status, note }),
+    });
+    const json = await res.json();
+    return json;
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal memperbarui status pengantaran belanja" };
+  }
+};
+
