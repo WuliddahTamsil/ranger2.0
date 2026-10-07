@@ -624,12 +624,12 @@ export const Order: React.FC<OrderProps> = ({
       setActiveTab("Aktif");
       Alert.alert(
         order.type === "Kanyaah Ride"
-          ? "Ride Diterima! 🏍"
+          ? "Ride Diterima"
           : order.type === "Kanyaah Send"
-          ? "Paket Diterima! 📦"
+          ? "Paket Diterima"
           : order.type === "Catering"
-          ? "Catering Diterima! 🍱"
-          : "Pesanan Diterima! 🛍️",
+          ? "Catering Diterima"
+          : "Pesanan Diterima",
         order.type === "Kanyaah Ride"
           ? "Pesanan berhasil diterima. Silakan bersiap menuju lokasi penjemputan penumpang."
           : order.type === "Kanyaah Send"
@@ -705,7 +705,7 @@ export const Order: React.FC<OrderProps> = ({
     const chatKey = `${selectedOrder.id}-${chatTarget}`;
     const newMsg: DriverChatMessage = {
       sender: "driver",
-      text: textToSend || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : selectedAttachment?.type === "video" ? "🎥 Video terkirim" : "📎 File terlampir"),
+      text: textToSend || (selectedAttachment?.type === "image" ? "Foto terkirim" : selectedAttachment?.type === "video" ? "Video terkirim" : "File terlampir"),
       time: "Baru saja",
       attachment: selectedAttachment ? { ...selectedAttachment } : undefined,
     };
@@ -1766,7 +1766,7 @@ export const Order: React.FC<OrderProps> = ({
               <View style={{ gap: 6 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={{ fontSize: 15, fontWeight: "800", color: "#B45309" }}>
-                    💵 TAGIH TUNAI (COD) KE PELANGGAN
+                    Tagih Tunai (COD) ke Pelanggan
                   </Text>
                 </View>
                 <Text style={{ fontSize: 13, color: "#78350F", lineHeight: 18 }}>
@@ -1792,9 +1792,10 @@ export const Order: React.FC<OrderProps> = ({
                 <Text style={{ fontSize: 13, color: "#166534", lineHeight: 18 }}>
                   Pelanggan sudah membayar lunas melalui metode digital.
                 </Text>
-                <View style={{ backgroundColor: "#DCFCE7", padding: 10, borderRadius: 10, marginVertical: 4 }}>
+                <View style={{ backgroundColor: "#DCFCE7", padding: 10, borderRadius: 10, marginVertical: 4, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <ShieldCheck size={16} color="#15803D" />
                   <Text style={{ fontSize: 13, fontWeight: "800", color: "#15803D", textAlign: "center" }}>
-                    ⛔ DILARANG MENAGIH UANG TUNAI KEPADA PELANGGAN
+                    Pembayaran Lunas — Tidak Perlu Tagih Tunai
                   </Text>
                 </View>
                 <Text style={{ fontSize: 11, color: "#166534" }}>
@@ -1816,7 +1817,8 @@ export const Order: React.FC<OrderProps> = ({
                 </View>
                 {selectedOrder.rating?.score ? (
                   <View style={styles.driverRatingScoreBadge}>
-                    <Text style={styles.driverRatingScoreBadgeText}>{selectedOrder.rating.score}.0 ★</Text>
+                    <Star size={11} color="#B45309" fill="#B45309" />
+                    <Text style={styles.driverRatingScoreBadgeText}>{selectedOrder.rating.score}.0</Text>
                   </View>
                 ) : (
                   <View style={styles.driverRatingPendingBadge}>
@@ -4647,6 +4649,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#FDE68A",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   driverRatingScoreBadgeText: {
     fontSize: 12,

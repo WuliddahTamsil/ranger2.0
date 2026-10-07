@@ -23,6 +23,7 @@ import {
   Maximize2,
   MessageCircle,
   ReceiptText,
+  ShieldCheck,
   Truck,
   User,
   Wallet,
@@ -64,41 +65,40 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
   const [proofModalVisible, setProofModalVisible] = useState(false);
 
   const applyLiveOrder = (live: any) => {
-    setOrder((prev: any) => ({
-      ...prev,
-      id: live._id || prev?.id,
-      orderCode: live.orderCode || prev?.orderCode,
+    setOrder({
+      id: live._id || live.id,
+      orderCode: live.orderCode || (live._id ? `#RNG-CAT-${String(live._id).slice(-8).toUpperCase()}` : ""),
       status: live.status,
-      item: live.menuName || prev?.item,
-      detail: `${live.portions} pax • ${live.storeName || "Catering Lokal"}`,
-      total: live.totalAmount ?? prev?.total,
-      paidAmount: live.paidAmount ?? prev?.paidAmount,
-      remainingAmount: live.remainingAmount !== undefined ? live.remainingAmount : prev?.remainingAmount,
-      cateringDate: live.cateringDate || prev?.cateringDate,
-      cateringTime: live.cateringTime || prev?.cateringTime,
-      address: live.address || prev?.address,
-      driverId: live.driverId,
-      driverName: live.driverName,
-      driverPhone: live.driverPhone,
-      driverVehicle: live.driverVehicle,
-      deliveryProofUrl: live.deliveryProofUrl || prev?.deliveryProofUrl,
-      deliveryProofTimestamp: live.deliveryProofTimestamp || prev?.deliveryProofTimestamp,
-      deliveredAt: live.deliveredAt || prev?.deliveredAt,
-      storeName: live.storeName,
-      storeAddress: live.storeAddress,
-      paymentStatus: live.paymentStatus,
-      paymentMethod: live.paymentMethod || prev?.paymentMethod,
-      paymentBankName: live.paymentBankName || prev?.paymentBankName,
-      paymentAccountNumber: live.paymentAccountNumber || prev?.paymentAccountNumber,
-      paymentAccountHolder: live.paymentAccountHolder || prev?.paymentAccountHolder,
-      paymentQrisImageUrl: live.paymentQrisImageUrl || prev?.paymentQrisImageUrl,
-      paymentReminder: live.paymentReminder || prev?.paymentReminder,
-      notes: live.notes || prev?.notes,
-      portions: live.portions || prev?.portions,
-      paymentOption: live.paymentOption || prev?.paymentOption,
-      paymentDueAt: live.paymentDueAt || prev?.paymentDueAt,
-      paymentHistory: live.paymentHistory || prev?.paymentHistory,
-    }));
+      item: live.menuName || "Menu Catering",
+      detail: `${live.portions || 1} pax • ${live.storeName || "Catering Lokal"}`,
+      total: live.totalAmount ?? 0,
+      paidAmount: live.paidAmount ?? 0,
+      remainingAmount: live.remainingAmount !== undefined ? live.remainingAmount : 0,
+      cateringDate: live.cateringDate || "",
+      cateringTime: live.cateringTime || "",
+      address: live.address || "",
+      driverId: live.driverId || "",
+      driverName: live.driverName || "",
+      driverPhone: live.driverPhone || "",
+      driverVehicle: live.driverVehicle || "",
+      deliveryProofUrl: live.deliveryProofUrl || "",
+      deliveryProofTimestamp: live.deliveryProofTimestamp || "",
+      deliveredAt: live.deliveredAt || null,
+      storeName: live.storeName || "",
+      storeAddress: live.storeAddress || "",
+      paymentStatus: live.paymentStatus || "",
+      paymentMethod: live.paymentMethod || "",
+      paymentBankName: live.paymentBankName || "",
+      paymentAccountNumber: live.paymentAccountNumber || "",
+      paymentAccountHolder: live.paymentAccountHolder || "",
+      paymentQrisImageUrl: live.paymentQrisImageUrl || "",
+      paymentReminder: live.paymentReminder || "",
+      notes: live.notes || "",
+      portions: live.portions || 1,
+      paymentOption: live.paymentOption || "",
+      paymentDueAt: live.paymentDueAt || "",
+      paymentHistory: live.paymentHistory || [],
+    });
   };
 
   useEffect(() => subscribeCustomerOrders((orders) => {
@@ -144,6 +144,15 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
         let live = currentTargetId
           ? sortedOrders.find((candidate: any) => String(candidate._id || candidate.id) === currentTargetId)
           : null;
+
+        // Smart fallback: Jika order target saat ini belum ada bukti dan masih berstatus Siap/Menunggu tanpa kurir,
+        // namun customer punya pesanan catering yang baru selesai dengan bukti foto pengantaran:
+        if ((!live || (!live.deliveryProofUrl && ["Siap", "Menunggu"].includes(live.status) && !live.driverId)) && sortedOrders.length > 0) {
+          const deliveredWithProof = sortedOrders.find((o: any) => Boolean(o.deliveryProofUrl) && o.status === "Selesai");
+          if (deliveredWithProof && (!targetOrderId.current || !live?.driverId)) {
+            live = deliveredWithProof;
+          }
+        }
 
         if (!live && sortedOrders.length > 0) {
           live = sortedOrders.find((o: any) => Boolean(o.deliveryProofUrl) && o.status === "Selesai")
@@ -249,7 +258,9 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
       text: isDelivering
         ? `Kurir ${order?.driverName || "GEOVERSE"} sedang membawa pesanan ke lokasimu`
         : isFinished
-        ? "Pesanan telah sampai di tujuan"
+        ? (order?.deliveryProofUrl
+            ? `Pesanan telah diserahkan oleh ${order?.driverName || "Kurir"}. Bukti foto serah terima terlampir di atas.`
+            : "Pesanan telah sampai di tujuan")
         : "Menunggu kurir mulai perjalanan",
       icon: Truck,
       active: isDelivering || isFinished,
@@ -288,10 +299,151 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
     );
   }
 
+  const otherOrderWithProof = allCateringOrders.find(
+    (o) => String(o._id || o.id) !== String(order?.id || order?._id) && Boolean(o.deliveryProofUrl)
+  );
+
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       <BackHeader title="Lacak Catering" onBack={() => navigate("c_home")} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Order Switcher Card (ketika customer memiliki lebih dari 1 pesanan catering) */}
+        {allCateringOrders.length > 1 && (
+          <View style={styles.orderSwitcherCard}>
+            <View style={styles.orderSwitcherHeader}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text style={styles.orderSwitcherTitle}>Daftar Pesanan Catering</Text>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#166534" }}>
+                  {allCateringOrders.length} Pesanan
+                </Text>
+              </View>
+              <Text style={styles.orderSwitcherSub}>
+                Ketuk kartu untuk beralih pesanan & memantau bukti pengantaran
+              </Text>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.orderSwitcherRow}
+            >
+              {allCateringOrders.map((candidate: any) => {
+                const cId = String(candidate._id || candidate.id);
+                const isSelected = String(order?.id || order?._id) === cId;
+                const hasProof = Boolean(candidate.deliveryProofUrl);
+                return (
+                  <TouchableOpacity
+                    key={cId}
+                    style={[styles.orderChip, isSelected && styles.orderChipActive]}
+                    onPress={() => {
+                      targetOrderId.current = cId;
+                      setActiveCateringTrackingOrderId(cId);
+                      applyLiveOrder(candidate);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View
+                      style={[
+                        styles.orderChipDot,
+                        {
+                          backgroundColor: isSelected
+                            ? "#16A34A"
+                            : candidate.status === "Selesai"
+                            ? "#22C55E"
+                            : "#F59E0B",
+                        },
+                      ]}
+                    />
+                    <View style={styles.orderChipContent}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                        <Text
+                          style={[
+                            styles.orderChipCode,
+                            isSelected && styles.orderChipCodeActive,
+                          ]}
+                        >
+                          {candidate.orderCode || `#${cId.slice(-8).toUpperCase()}`}
+                        </Text>
+                        {hasProof && (
+                          <View
+                            style={{
+                              backgroundColor: "#DCFCE7",
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: 4,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 3,
+                            }}
+                          >
+                            <Camera size={10} color="#15803D" />
+                            <Text style={{ fontSize: 9, fontWeight: "800", color: "#15803D" }}>
+                              Bukti Foto
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.orderChipStatus,
+                          isSelected && styles.orderChipStatusActive,
+                        ]}
+                      >
+                        {candidate.status === "Selesai"
+                          ? "Selesai Diantar"
+                          : candidate.status === "Mengantar"
+                          ? "Sedang Diantar"
+                          : candidate.status === "Siap"
+                          ? "Siap Diambil"
+                          : candidate.status}
+                        {" · "}
+                        {candidate.menuName || candidate.item || "Menu"}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <View style={styles.orderChipBadgeActive}>
+                        <Check size={9} color="#FFFFFF" strokeWidth={3} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Banner pemberitahuan jika bukti foto ada di pesanan catering lainnya */}
+        {otherOrderWithProof && !order?.deliveryProofUrl && (
+          <TouchableOpacity
+            style={styles.otherProofNoticeCard}
+            onPress={() => {
+              const id = String(otherOrderWithProof._id || otherOrderWithProof.id);
+              targetOrderId.current = id;
+              setActiveCateringTrackingOrderId(id);
+              applyLiveOrder(otherOrderWithProof);
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={styles.otherProofNoticeLeft}>
+              <View style={styles.otherProofIconWrap}>
+                <Camera size={18} color="#15803D" />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.otherProofNoticeTitle}>
+                  Foto Bukti Pengantaran Tersedia!
+                </Text>
+                <Text style={styles.otherProofNoticeSub} numberOfLines={2}>
+                  Pesanan #{otherOrderWithProof.orderCode || String(otherOrderWithProof._id || otherOrderWithProof.id).slice(-8).toUpperCase()} telah selesai diantar dengan bukti foto dari kurir. Ketuk untuk membuka bukti.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.otherProofNoticeBtn}>
+              <Text style={styles.otherProofNoticeBtnText}>Buka</Text>
+              <ChevronRight size={13} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Status Hero */}
         <View style={styles.statusHero}>
           <View style={styles.statusIcon}>
@@ -343,7 +495,8 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
                 </View>
               </View>
               <View style={styles.proofVerifiedBadge}>
-                <Text style={styles.proofVerifiedText}>TERVERIFIKASI ✓</Text>
+                <ShieldCheck size={11} color="#15803D" />
+                <Text style={styles.proofVerifiedText}>Terverifikasi</Text>
               </View>
             </View>
 
@@ -726,6 +879,63 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  otherProofNoticeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    gap: 8,
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  otherProofNoticeLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  otherProofIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  otherProofNoticeTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#14532D",
+  },
+  otherProofNoticeSub: {
+    fontSize: 10.5,
+    color: "#166534",
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  otherProofNoticeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#15803D",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  otherProofNoticeBtnText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
   content: { width: "100%", paddingHorizontal: 12, paddingTop: 12, paddingBottom: 32 },
   statusHero: { width: "100%", alignItems: "center", backgroundColor: "#E8F5EE", borderRadius: 18, padding: 16 },
   statusIcon: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#1B7A4E", alignItems: "center", justifyContent: "center" },
@@ -1015,6 +1225,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: "#86EFAC",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   proofVerifiedText: {
     fontSize: 9.5,

@@ -284,12 +284,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
         }
         setOrdersLoadError("");
         const mapped = result.data.map((o: any) => {
-          let frontendStatus = o.status;
-          if (o.status === "Dikirim" || o.status === "Mengantar") {
-            frontendStatus = "Diambil";
-          } else if (o.status === "Menuju Pickup" || o.status === "Sampai Pickup") {
-            frontendStatus = "Siap";
-          }
+          const frontendStatus = o.status || "Menunggu";
 
           const hasDriver = Boolean(o.driverId || o.driverName);
           return {

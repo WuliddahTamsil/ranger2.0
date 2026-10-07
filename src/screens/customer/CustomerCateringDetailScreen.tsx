@@ -718,8 +718,9 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
               <Image source={{ uri: coverUri }} style={styles.cover} resizeMode="cover" />
               {selectedCateringShop?.topMenuName ? (
                 <View style={styles.topMenuDetailBadge}>
+                  <Sparkles size={12} color="#FEF08A" />
                   <Text style={styles.topMenuDetailBadgeText} numberOfLines={1}>
-                    ⭐ Menu Terlaris: {selectedCateringShop.topMenuName}
+                    Menu Unggulan: {selectedCateringShop.topMenuName}
                   </Text>
                 </View>
               ) : null}
@@ -809,7 +810,8 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
                     />
                     {isTopMenu ? (
                       <View style={styles.cardTopBadge}>
-                        <Text style={styles.cardTopBadgeText}>⭐ Terlaris</Text>
+                        <Sparkles size={11} color="#D97706" />
+                        <Text style={styles.cardTopBadgeText}>Favorit</Text>
                       </View>
                     ) : null}
                     <View style={styles.previewDetailChip}>
@@ -879,7 +881,8 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
                     />
                     {isTopMenu ? (
                       <View style={styles.cardTopBadge}>
-                        <Text style={styles.cardTopBadgeText}>⭐ Favorit</Text>
+                        <Sparkles size={11} color="#D97706" />
+                        <Text style={styles.cardTopBadgeText}>Favorit</Text>
                       </View>
                     ) : null}
                     <View style={styles.gridEyePill}>
@@ -910,7 +913,7 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
                       >
                         {isSelected ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}
                         <Text style={[styles.gridSelectBtnText, isSelected && styles.gridSelectBtnTextActive]}>
-                          {isSelected ? "✓" : "Pilih"}
+                          {isSelected ? "Terpilih" : "Pilih"}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -945,7 +948,7 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
                     />
                     {isTopMenu ? (
                       <View style={styles.listTopBadge}>
-                        <Text style={styles.listTopBadgeText}>⭐</Text>
+                        <Sparkles size={10} color="#D97706" />
                       </View>
                     ) : null}
                   </View>
@@ -1119,7 +1122,8 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
             <Text style={styles.inputValue}>{poDate}</Text>
           </View>
           <View style={styles.calendarPickBadge}>
-            <Text style={styles.calendarPickBadgeText}>Pilih Kalender 📅</Text>
+            <Calendar size={13} color="#1B7A4E" />
+            <Text style={styles.calendarPickBadgeText}>Pilih Kalender</Text>
           </View>
         </TouchableOpacity>
 
@@ -1558,7 +1562,8 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
                     selectedCateringShop.topMenuName.toLowerCase().includes(detailModalMenu.name.toLowerCase())
                   ) ? (
                     <View style={styles.popupBadgeSpecial}>
-                      <Text style={styles.popupBadgeSpecialText}>⭐ Menu Terlaris Favorit</Text>
+                      <Sparkles size={12} color="#FEF08A" />
+                      <Text style={styles.popupBadgeSpecialText}>Menu Unggulan</Text>
                     </View>
                   ) : null}
                 </View>
@@ -1686,7 +1691,7 @@ const styles = StyleSheet.create({
   content: { width: "100%", maxWidth: 640, alignSelf: "center", padding: 16, paddingBottom: 40 },
   coverWrapper: { position: "relative", width: "100%", height: 190, borderRadius: 18, overflow: "hidden", marginBottom: 16, backgroundColor: "#E2E8F0" },
   cover: { width: "100%", height: "100%" },
-  topMenuDetailBadge: { position: "absolute", bottom: 10, left: 12, backgroundColor: "rgba(17, 24, 39, 0.85)", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, maxWidth: "90%" },
+  topMenuDetailBadge: { position: "absolute", bottom: 10, left: 12, backgroundColor: "rgba(17, 24, 39, 0.85)", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, maxWidth: "90%", flexDirection: "row", alignItems: "center", gap: 5 },
   topMenuDetailBadgeText: { color: "#FEF08A", fontSize: 11, fontWeight: "800" },
   headerInfoContainer: { marginBottom: 10 },
   headerOwnerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
@@ -1715,7 +1720,7 @@ const styles = StyleSheet.create({
   horizontalCardSelected: { borderColor: "#1B7A4E", backgroundColor: "#F0FDF4" },
   horizontalImageWrap: { position: "relative", width: "100%", height: 135, backgroundColor: "#E2E8F0" },
   horizontalImage: { width: "100%", height: "100%" },
-  cardTopBadge: { position: "absolute", top: 8, left: 8, backgroundColor: "rgba(17, 24, 39, 0.8)", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  cardTopBadge: { position: "absolute", top: 8, left: 8, backgroundColor: "rgba(17, 24, 39, 0.8)", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 4 },
   cardTopBadgeText: { color: "#FEF08A", fontSize: 10, fontWeight: "800" },
   previewDetailChip: { position: "absolute", bottom: 8, right: 8, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(15, 23, 42, 0.75)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   previewDetailChipText: { color: "#FFFFFF", fontSize: 10, fontWeight: "700" },
@@ -1858,7 +1863,7 @@ const styles = StyleSheet.create({
   popupScrollContent: { paddingBottom: 20 },
   popupImageWrap: { position: "relative", width: "100%", height: 210, borderRadius: 16, overflow: "hidden", backgroundColor: "#E2E8F0", marginBottom: 16 },
   popupImage: { width: "100%", height: "100%" },
-  popupBadgeSpecial: { position: "absolute", bottom: 12, left: 12, backgroundColor: "rgba(17, 24, 39, 0.85)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  popupBadgeSpecial: { position: "absolute", bottom: 12, left: 12, backgroundColor: "rgba(17, 24, 39, 0.85)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 5 },
   popupBadgeSpecialText: { color: "#FEF08A", fontSize: 11, fontWeight: "800" },
   popupBody: { gap: 14 },
   popupPriceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },

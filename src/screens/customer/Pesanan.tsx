@@ -41,6 +41,8 @@ import {
   DollarSign,
   CheckCircle,
   Camera,
+  ChevronRight,
+  ShieldCheck,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -716,6 +718,51 @@ export const Pesanan: React.FC<PesananProps> = ({
                   </View>
                 </View>
 
+                {isCompleted && item.deliveryProofUrl ? (
+                  <TouchableOpacity
+                    style={styles.cardProofBanner}
+                    onPress={() => {
+                      if (item.type.toLowerCase().includes("cater")) {
+                        setActiveCateringTrackingOrderId(String(item.id));
+                        if (onOpenCateringTracking) {
+                          onOpenCateringTracking(item);
+                        } else if (navigate) {
+                          navigate("c_catering_tracking");
+                        }
+                      } else {
+                        handleOpenTracking(item);
+                      }
+                    }}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Lihat bukti foto pengantaran kurir"
+                  >
+                    <Image
+                      source={{ uri: item.deliveryProofUrl }}
+                      style={styles.cardProofThumb}
+                      resizeMode="cover"
+                    />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                        <Camera size={12} color="#15803D" />
+                        <Text style={styles.cardProofTitle}>Foto Bukti Pengantaran</Text>
+                        <View style={styles.cardProofBadgeDone}>
+                          <ShieldCheck size={9} color="#15803D" />
+                          <Text style={styles.cardProofBadgeText}>Terverifikasi</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.cardProofSub} numberOfLines={1}>
+                        {item.deliveryProofTimestamp
+                          ? item.deliveryProofTimestamp
+                          : item.deliveredAt
+                          ? `Diserahkan: ${new Date(item.deliveredAt).toLocaleDateString("id-ID")}`
+                          : "Kurir telah mengunggah bukti serah terima"}
+                      </Text>
+                    </View>
+                    <ChevronRight size={14} color="#15803D" />
+                  </TouchableOpacity>
+                ) : null}
+
                 <View style={styles.cardActionDivider} />
 
                 <View style={styles.actionBtnRow}>
@@ -1307,12 +1354,12 @@ export const Pesanan: React.FC<PesananProps> = ({
                 <Text style={styles.reviewSectionTitle}>Pilihan Cepat (Bisa dipilih):</Text>
                 <View style={styles.reviewTagGrid}>
                   {[
-                    "Rasa Enak 😋",
-                    "Porsi Pas 👍",
-                    "Pengemasan Rapi 📦",
-                    "Pengiriman Cepat ⚡",
-                    "Sesuai Pesanan ✨",
-                    "Pelayanan Ramah 😊",
+                    "Rasa Enak",
+                    "Porsi Pas",
+                    "Pengemasan Rapi",
+                    "Pengiriman Cepat",
+                    "Sesuai Pesanan",
+                    "Pelayanan Ramah",
                   ].map((tag, idx) => {
                     const isSelected = commentText.includes(tag);
                     return (
@@ -1907,6 +1954,47 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#86EFAC",
+  },
+  cardProofBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F0FDF4",
+    borderRadius: 10,
+    padding: 8,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  cardProofThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 7,
+    backgroundColor: "#E2E8F0",
+  },
+  cardProofTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  cardProofBadgeDone: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  cardProofBadgeText: {
+    fontSize: 8.5,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  cardProofSub: {
+    fontSize: 10,
+    color: "#64748B",
+    marginTop: 2,
   },
   actionBtnInvoiceOutline: {
     backgroundColor: "#FFFFFF",

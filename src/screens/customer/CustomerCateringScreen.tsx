@@ -1,7 +1,7 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { ArrowRight, CalendarDays, ChefHat, MapPin } from "lucide-react-native";
+import { ArrowRight, CalendarDays, ChefHat, MapPin, Sparkles } from "lucide-react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { BackHeader } from "../../components/BackHeader";
@@ -130,8 +130,9 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
 
                   {shop.topMenuName ? (
                     <View style={styles.topMenuBadge}>
+                      <Sparkles size={12} color="#F59E0B" />
                       <Text style={styles.topMenuBadgeText} numberOfLines={1}>
-                        ⭐ Terlaris: {shop.topMenuName}
+                        Menu Favorit: {shop.topMenuName}
                       </Text>
                     </View>
                   ) : null}
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   image: { width: "100%", height: "100%" },
   imagePlaceholder: { height: 155, alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#E8F5EE" },
   placeholderText: { color: "#4B5563", fontSize: 11 },
-  topMenuBadge: { position: "absolute", bottom: 8, left: 10, backgroundColor: "rgba(17, 24, 39, 0.85)", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4, maxWidth: "92%", zIndex: 2 },
+  topMenuBadge: { position: "absolute", bottom: 8, left: 10, backgroundColor: "rgba(17, 24, 39, 0.85)", borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4, maxWidth: "92%", zIndex: 2, flexDirection: "row", alignItems: "center", gap: 5 },
   topMenuBadgeText: { color: "#FEF08A", fontSize: 11, fontWeight: "800" },
   cardBody: { padding: 14 },
   headerInfoRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },

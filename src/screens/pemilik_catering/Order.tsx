@@ -18,6 +18,7 @@ import {
 import {
   ShoppingBag,
   Clock,
+  Calendar,
   Search,
   SlidersHorizontal,
   X,
@@ -605,7 +606,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
     const chatKey = `${selectedOrder.id}-${chatTarget}`;
     const newMsg: ChatMessage = {
       sender: "owner",
-      text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : "📎 File terlampir"),
+      text: text || (selectedAttachment?.type === "image" ? "Foto terkirim" : "File terlampir"),
       time: "Baru saja",
       attachment: selectedAttachment ? { ...selectedAttachment } : undefined,
     };
@@ -736,7 +737,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                             </View>
                           </TouchableOpacity>
                         )}
-                        {item.text && item.text !== "📷 Foto terkirim" ? (
+                        {item.text && item.text !== "Foto terkirim" && item.text !== "📷 Foto terkirim" ? (
                           <Text style={[styles.chatText, isOwner ? styles.chatTextOwner : styles.chatTextClient]}>
                             {item.text}
                           </Text>
@@ -1466,9 +1467,12 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                 gap: 6,
               }}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#1D4ED8" }}>
-                    📅 Jadwal PO: {selectedOrder.cateringDate}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Calendar size={14} color="#1D4ED8" />
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: "#1D4ED8" }}>
+                      Jadwal PO: {selectedOrder.cateringDate}
+                    </Text>
+                  </View>
                   <View style={{ backgroundColor: "#DBEAFE", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
                     <Text style={{ fontSize: 11, fontWeight: "800", color: "#1E40AF" }}>
                       Jam {selectedOrder.cateringTime || "11:00"}
@@ -2289,9 +2293,12 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                     gap: 3,
                   }}>
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 11, fontWeight: "800", color: "#1D4ED8" }}>
-                        📅 PO {item.cateringDate} • Jam {item.cateringTime || "11:00"}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                        <Calendar size={12} color="#1D4ED8" />
+                        <Text style={{ fontSize: 11, fontWeight: "800", color: "#1D4ED8" }}>
+                          PO {item.cateringDate} • Jam {item.cateringTime || "11:00"}
+                        </Text>
+                      </View>
                       <View style={{
                         backgroundColor: "#DBEAFE",
                         paddingHorizontal: 6,

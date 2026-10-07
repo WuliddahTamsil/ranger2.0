@@ -41,6 +41,7 @@ import {
   Heart,
   PlayCircle,
   Bike,
+  Camera,
   Package,
   Recycle,
   Leaf,
@@ -434,13 +435,14 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       })) : null;
         const cateringOrders: OrderItem[] | null = cateringResult.success && Array.isArray(cateringResult.data) ? cateringResult.data.map((order: any) => ({
         id: order._id,
+        orderCode: order.orderCode || `#RNG-CAT-${String(order._id).slice(-8).toUpperCase()}`,
         type: "Catering",
         iconName: "Coffee",
         color: "#EA580C",
         item: order.menuName,
         detail: `${order.storeName || "Dapur Catering"} • ${order.portions} porsi`,
         status: order.status,
-        statusColor: "orange",
+        statusColor: order.status === "Selesai" ? "green" : order.status === "Dibatalkan" ? "red" : "orange",
         date: new Date(order.createdAt).toLocaleDateString("id-ID"),
         total: order.totalAmount,
         deliveryFee: order.deliveryFee,
@@ -470,6 +472,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         driverName: order.driverName,
         driverPhone: order.driverPhone,
         driverVehicle: order.driverVehicle,
+        deliveryProofUrl: order.deliveryProofUrl || "",
+        deliveryProofTimestamp: order.deliveryProofTimestamp || "",
+        deliveredAt: order.deliveredAt || null,
         storeName: order.storeName,
         storeAddress: order.storeAddress,
       })) : null;
@@ -677,6 +682,30 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   // Global Wishlist/Liked products State
   const [wishlist, setWishlist] = useState<Array<number | string>>([]);
 
+  // Track delivery proof order IDs that the customer has already seen/clicked/dismissed from Beranda
+  const [seenProofOrderIds, setSeenProofOrderIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    void AsyncStorage.getItem("seen_delivered_proof_order_ids").then((val) => {
+      if (val) {
+        try {
+          const parsed = JSON.parse(val);
+          if (Array.isArray(parsed)) setSeenProofOrderIds(parsed);
+        } catch {}
+      }
+    });
+  }, []);
+
+  const handleDismissProofOrder = (orderId: string) => {
+    setSeenProofOrderIds((prev) => {
+      const cleanId = String(orderId);
+      if (prev.includes(cleanId)) return prev;
+      const updated = [...prev, cleanId];
+      void AsyncStorage.setItem("seen_delivered_proof_order_ids", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // Sub-service Modal states
   const [marketModalVisible, setMarketModalVisible] = useState(false);
   const [cateringModalVisible, setCateringModalVisible] = useState(false);
@@ -875,6 +904,14 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
     (o) => !["COMPLETED", "CANCELLED", "Selesai", "Dibatalkan"].includes(o.status)
   );
   const activeOrder = activeOrders[0];
+
+  // Recently delivered order with photo proof (Catering / Marketplace) - only shown until clicked/dismissed
+  const recentlyDeliveredOrder = orders.find(
+    (o) =>
+      (o.status === "Selesai" || o.status === "COMPLETED") &&
+      Boolean(o.deliveryProofUrl) &&
+      !seenProofOrderIds.includes(String(o.id || (o as any)._id))
+  );
   const unreadNotifCount = notifications.filter((n) => !n.read).length;
 
   // Main Beranda layout panel (Clean Gojek-Grade Super-App Design)
@@ -1265,8 +1302,89 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         </TouchableOpacity>
 
         {/* ============================================================ */}
-        {/* 6. ACTIVE ORDER TRACKER (Conditionally rendered) */}
+        {/* 6. RECENTLY DELIVERED WITH PROOF & ACTIVE ORDER TRACKER */}
         {/* ============================================================ */}
+        {recentlyDeliveredOrder && (
+          <View style={styles.deliveredProofAlertContainer}>
+            <View style={styles.deliveredProofAlertCard}>
+              <View style={styles.deliveredProofAlertHeader}>
+                <View style={styles.deliveredProofAlertBadgeRow}>
+                  <View style={styles.deliveredProofCameraBadge}>
+                    <Camera size={16} color="#15803D" />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.deliveredProofAlertTitle}>
+                      {recentlyDeliveredOrder.type === "Catering" ? "Catering Selesai Diantar" : "Pesanan Selesai Diantar"}
+                    </Text>
+                    <Text style={styles.deliveredProofAlertCode}>
+                      {recentlyDeliveredOrder.orderCode || `#${String(recentlyDeliveredOrder.id).slice(-8).toUpperCase()}`}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={styles.deliveredProofVerifiedPill}>
+                    <ShieldCheck size={11} color="#15803D" />
+                    <Text style={styles.deliveredProofVerifiedText}>Terverifikasi</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.deliveredProofCloseBtn}
+                    onPress={() => handleDismissProofOrder(String(recentlyDeliveredOrder.id))}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel="Tutup notifikasi bukti"
+                  >
+                    <X size={15} color="#166534" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.deliveredProofInfoRow}>
+                {recentlyDeliveredOrder.deliveryProofUrl ? (
+                  <Image
+                    source={{ uri: recentlyDeliveredOrder.deliveryProofUrl }}
+                    style={styles.deliveredProofThumb}
+                    resizeMode="cover"
+                  />
+                ) : null}
+                <View style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
+                  <Text style={styles.deliveredProofItemText} numberOfLines={1}>
+                    {recentlyDeliveredOrder.item}
+                  </Text>
+                  <Text style={styles.deliveredProofSubText} numberOfLines={2}>
+                    Kurir {recentlyDeliveredOrder.driverName || "GEOVERSE"} telah mengunggah foto bukti serah terima
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.deliveredProofAlertFooter}>
+                <Text style={styles.deliveredProofTimestamp}>
+                  {recentlyDeliveredOrder.deliveryProofTimestamp
+                    ? recentlyDeliveredOrder.deliveryProofTimestamp
+                    : recentlyDeliveredOrder.deliveredAt
+                    ? new Date(recentlyDeliveredOrder.deliveredAt).toLocaleDateString("id-ID", { hour: "2-digit", minute: "2-digit" })
+                    : "Tercatat di sistem"}
+                </Text>
+                <TouchableOpacity
+                  style={styles.deliveredProofBtn}
+                  onPress={() => {
+                    handleDismissProofOrder(String(recentlyDeliveredOrder.id));
+                    if (recentlyDeliveredOrder.type === "Catering") {
+                      setActiveCateringTrackingOrderId(String(recentlyDeliveredOrder.id));
+                      navigate("c_catering_tracking");
+                    } else {
+                      setCurrentTab(2);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Camera size={13} color="#FFFFFF" />
+                  <Text style={styles.deliveredProofBtnText}>Lihat Bukti Foto</Text>
+                  <ChevronRight size={13} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
         {activeOrder && (
           <View style={styles.activeOrderContainer}>
             <View style={styles.activeOrderCard}>
@@ -2637,7 +2755,132 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 
-  // 6. ACTIVE ORDER CARD
+  // 6. DELIVERED PROOF ALERT & ACTIVE ORDER CARD
+  deliveredProofAlertContainer: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+  },
+  deliveredProofAlertCard: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    padding: 14,
+    gap: 10,
+    elevation: 3,
+    shadowColor: "#15803D",
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  deliveredProofAlertHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  deliveredProofAlertBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  deliveredProofCameraBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deliveredProofAlertTitle: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  deliveredProofAlertCode: {
+    fontSize: 9.5,
+    color: "#15803D",
+    fontWeight: "700",
+  },
+  deliveredProofVerifiedPill: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  deliveredProofVerifiedText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  deliveredProofInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  deliveredProofThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    backgroundColor: "#E2E8F0",
+  },
+  deliveredProofItemText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  deliveredProofSubText: {
+    fontSize: 10.5,
+    color: "#64748B",
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  deliveredProofAlertFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 2,
+  },
+  deliveredProofTimestamp: {
+    fontSize: 10,
+    color: "#166534",
+    fontWeight: "600",
+    flex: 1,
+    minWidth: 0,
+  },
+  deliveredProofBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#15803D",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  deliveredProofBtnText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  deliveredProofCloseBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   activeOrderContainer: {
     marginHorizontal: 16,
     marginBottom: 16,

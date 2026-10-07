@@ -1082,7 +1082,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       };
       setOrders((current) => sortDriverOrders([updated, ...current.filter((order) => order.id !== updated.id)]));
       if (Platform.OS !== "web") {
-        Alert.alert("Ride Diterima! 🏍", `Perjalanan #${updated.orderCode || updated.id.slice(-8)} berhasil diambil. Silakan bersiap menuju penumpang.`);
+        Alert.alert("Ride Diterima", `Perjalanan #${updated.orderCode || updated.id.slice(-8)} berhasil diambil. Silakan bersiap menuju penumpang.`);
       }
     } catch (err: any) {
       if (Platform.OS !== "web") {
@@ -2035,9 +2035,12 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         {/* Online/Offline Status Toggle Card */}
         <View style={[styles.statusCard, isOnline ? styles.statusCardOnline : styles.statusCardOffline]}>
           <View style={styles.statusInfo}>
-            <Text style={styles.statusTitle}>
-              {isOnline ? "Status: Online 🟢" : "Status: Offline 🔴"}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isOnline ? "#10B981" : "#94A3B8" }} />
+              <Text style={styles.statusTitle}>
+                {isOnline ? "Driver Online" : "Driver Offline"}
+              </Text>
+            </View>
             <Text style={styles.statusSub}>
               {isOnline ? "Mulai Menerima Order (Ride & Delivery aktif)" : "Aktifkan Mulai Menerima Order untuk online"}
             </Text>
@@ -2091,7 +2094,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             <View style={[styles.summaryIconBg, { backgroundColor: "#F3E8FF" }]}>
               <Star size={18} color="#D97706" fill="#D97706" />
             </View>
-            <Text style={styles.summaryValue}>{driverInfo.rating > 0 ? `${driverInfo.rating.toFixed(1)} ★` : "4.9 ★"}</Text>
+            <Text style={styles.summaryValue}>{driverInfo.rating > 0 ? `${driverInfo.rating.toFixed(1)} / 5.0` : "4.9 / 5.0"}</Text>
             <Text style={styles.summaryLabel}>Rating Anda</Text>
           </View>
         </View>
