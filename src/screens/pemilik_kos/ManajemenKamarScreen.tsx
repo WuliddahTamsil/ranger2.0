@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   TextInput,
   Image,
@@ -35,10 +34,7 @@ import {
   Wifi,
   ShowerHead,
   Laptop,
-  Wind,
   Home,
-  Package,
-  Clock,
   Wallet,
   User,
   X,
@@ -54,8 +50,6 @@ import {
   ChevronRight,
   CheckCircle,
   Building2,
-  ImagePlus,
-  Camera,
   SlidersHorizontal,
   ShieldCheck,
   Utensils,
@@ -71,6 +65,14 @@ import {
   Table,
   Armchair,
   Bath,
+  Hotel,
+  Ticket,
+  Clock,
+  Sparkles,
+  Users,
+  Compass,
+  MapPin,
+  Camera,
 } from "lucide-react-native";
 
 interface RoomData {
@@ -87,10 +89,19 @@ interface RoomData {
     entryDate?: string;
   };
   price: string;
+  pricePerNight?: number;
   image: string;
   images?: string[];
   description?: string;
   isNonaktif?: boolean;
+  isAvailable?: boolean;
+  categoryType?: "kost" | "hotel" | "wisata";
+  roomName?: string;
+  bedType?: string;
+  capacity?: number;
+  breakfastIncluded?: boolean;
+  ticketName?: string;
+  ticketType?: string;
 }
 
 interface ManajemenKamarProps extends Nav {
@@ -99,6 +110,21 @@ interface ManajemenKamarProps extends Nav {
 
 export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, authAccount }) => {
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("kamar");
+
+  // Category Detection: "kost" | "hotel" | "wisata"
+  const rawRoleCat =
+    authAccount?.roleData?.businessCategory ||
+    (authAccount?.roleData?.propertyType?.toLowerCase().includes("wisata")
+      ? "wisata"
+      : authAccount?.roleData?.propertyType?.toLowerCase().includes("hotel") ||
+        authAccount?.roleData?.propertyType?.toLowerCase().includes("villa")
+      ? "hotel"
+      : "kost");
+
+  const [categoryType, setCategoryType] = useState<"kost" | "hotel" | "wisata">(
+    (rawRoleCat as any) || "kost"
+  );
+  const [propertyName, setPropertyName] = useState<string>("Properti Mitra");
 
   // State for Options Modal (Bottom Sheet when clicking 3-dots)
   const [selectedRoomForOptions, setSelectedRoomForOptions] = useState<RoomData | null>(null);
@@ -113,19 +139,25 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [addStep, setAddStep] = useState<1 | 2 | 3>(1);
 
-  // Form states for Add/Edit Room
+  // Form states for Kost / Hotel / Wisata
+  // Kost
   const [nomorKamar, setNomorKamar] = useState("1A");
   const [tipeKamar, setTipeKamar] = useState("Tipe AC");
+
+  // Hotel & Villa
+  const [namaTipeKamar, setNamaTipeKamar] = useState("Deluxe Villa Room");
+  const [tipeKasur, setTipeKasur] = useState("1 King Bed");
+  const [kapasitasTamu, setKapasitasTamu] = useState("2");
+  const [termasukSarapan, setTermasukSarapan] = useState(true);
+
+  // Wisata & Tiket
+  const [namaTiket, setNamaTiket] = useState("Tiket Masuk Reguler");
+  const [kategoriTiket, setKategoriTiket] = useState<"reguler" | "vip" | "terusan" | "anak" | "rombongan">("reguler");
+
+  // Shared Form Fields
   const [hargaSewa, setHargaSewa] = useState("Rp 1.200.000");
-  const [deskripsi, setDeskripsi] = useState("Kamar nyaman dan bersih, cocok untuk mahasiswa atau pekerja.");
-  const [selectedFacilities, setSelectedFacilities] = useState<string[]>([
-    "AC",
-    "WiFi",
-    "KM Dalam",
-    "Kasur",
-    "Lemari",
-    "Meja",
-  ]);
+  const [deskripsi, setDeskripsi] = useState("");
+  const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
   const [kamarStatus, setKamarStatus] = useState<"tersedia" | "tidak_tersedia">("tersedia");
   const [roomPhotos, setRoomPhotos] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -134,27 +166,57 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   const handleOpenAddModal = () => {
     setModalMode("add");
     setEditingRoomId(null);
-    setNomorKamar("");
-    setTipeKamar("Tipe AC");
-    setHargaSewa("Rp 1.200.000");
-    setDeskripsi("Kamar nyaman dan bersih, cocok untuk mahasiswa atau pekerja.");
-    setSelectedFacilities(["AC", "WiFi", "KM Dalam", "Kasur", "Lemari"]);
-    setKamarStatus("tersedia");
-    setRoomPhotos([]);
     setAddStep(1);
+    setRoomPhotos([]);
+    setKamarStatus("tersedia");
+
+    if (categoryType === "hotel") {
+      setNamaTipeKamar(`Deluxe Room ${rooms.length + 1}`);
+      setTipeKasur("1 King Bed");
+      setKapasitasTamu("2");
+      setTermasukSarapan(true);
+      setHargaSewa("Rp 450.000");
+      setDeskripsi("Kamar hotel/villa berfasilitas premium, nyaman dan berstandar bintang.");
+      setSelectedFacilities(["AC", "WiFi", "Smart TV", "Bathtub", "Sarapan Gratis", "Water Heater"]);
+    } else if (categoryType === "wisata") {
+      setNamaTiket(`Tiket Masuk Kategori ${rooms.length + 1}`);
+      setKategoriTiket("reguler");
+      setHargaSewa("Rp 25.000");
+      setDeskripsi("Akses seluruh wahana air, spot foto selfie, dan area istirahat gazebo.");
+      setSelectedFacilities(["Spot Foto", "Gazebo", "Kolam Renang", "Toilet & Bilas"]);
+    } else {
+      setNomorKamar(`10${rooms.length + 1}`);
+      setTipeKamar("Tipe AC");
+      setHargaSewa("Rp 1.200.000");
+      setDeskripsi("Kamar nyaman dan bersih, cocok untuk mahasiswa atau pekerja.");
+      setSelectedFacilities(["AC", "WiFi", "KM Dalam", "Kasur", "Lemari"]);
+    }
+
     setIsAddModalOpen(true);
   };
 
   const handleOpenEditModal = (room: RoomData) => {
     setModalMode("edit");
     setEditingRoomId(room.id);
-    setNomorKamar(room.name);
-    setTipeKamar(room.type);
     setHargaSewa(room.price);
-    setDeskripsi(room.description || "Kamar nyaman dan bersih, cocok untuk mahasiswa atau pekerja.");
+    setDeskripsi(room.description || "");
     setSelectedFacilities(Array.isArray(room.facilities) ? [...room.facilities] : []);
-    setKamarStatus(room.status === "kosong" ? "tersedia" : "tidak_tersedia");
-    setRoomPhotos(room.images && room.images.length > 0 ? room.images : (room.image ? [room.image] : []));
+    setKamarStatus(room.status === "kosong" || room.isAvailable ? "tersedia" : "tidak_tersedia");
+    setRoomPhotos(room.images && room.images.length > 0 ? room.images : room.image ? [room.image] : []);
+
+    if (categoryType === "hotel") {
+      setNamaTipeKamar(room.roomName || room.name || "Deluxe Room");
+      setTipeKasur(room.bedType || "1 King Bed");
+      setKapasitasTamu(String(room.capacity || 2));
+      setTermasukSarapan(room.breakfastIncluded !== false);
+    } else if (categoryType === "wisata") {
+      setNamaTiket(room.ticketName || room.name || "Tiket Reguler");
+      setKategoriTiket((room.ticketType as any) || "reguler");
+    } else {
+      setNomorKamar((room.name || "101").replace(/^(Kamar\s*)+/gi, "").trim());
+      setTipeKamar(room.type || "Tipe AC");
+    }
+
     setSelectedRoomForOptions(null);
     setAddStep(1);
     setIsAddModalOpen(true);
@@ -163,25 +225,11 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   const [loading, setLoading] = useState(false);
   const [rooms, setRooms] = useState<RoomData[]>([]);
 
-  // Property (Fasilitas Bersama & Peraturan Kos) State
+  // Property (Fasilitas Bersama & Peraturan Kos/Hotel/Wisata) State
   const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
-  const [sharedFacilities, setSharedFacilities] = useState<string[]>([
-    "WiFi",
-    "KM Dalam",
-    "Kasur",
-    "Lemari",
-    "Meja",
-    "Kursi",
-    "Termasuk Listrik & Air",
-  ]);
-  const [propertyRules, setPropertyRules] = useState<string[]>([
-    "Akses 24 Jam",
-    "Dilarang Merokok di Kamar",
-    "Tamu Lawan Jenis Maks Pukul 21.00",
-  ]);
-  const [propertyDescription, setPropertyDescription] = useState<string>(
-    "Kos eksklusif nyaman, bersih, aman, dan berfasilitas lengkap untuk mahasiswa & pekerja."
-  );
+  const [sharedFacilities, setSharedFacilities] = useState<string[]>([]);
+  const [propertyRules, setPropertyRules] = useState<string[]>([]);
+  const [propertyDescription, setPropertyDescription] = useState<string>("");
   const [customFacilityInput, setCustomFacilityInput] = useState<string>("");
   const [customRuleInput, setCustomRuleInput] = useState<string>("");
   const [isSavingProperty, setIsSavingProperty] = useState(false);
@@ -210,14 +258,43 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
     try {
       const data = await fetchKostProperty(ownerEmail);
       if (data) {
+        if (data.name) setPropertyName(data.name);
+        if (data.categoryType) setCategoryType(data.categoryType);
         if (Array.isArray(data.facilities) && data.facilities.length > 0) {
           setSharedFacilities(data.facilities);
+        } else {
+          // Default fallbacks by category
+          if (data.categoryType === "hotel") {
+            setSharedFacilities(["Kolam Renang Utama", "Restoran & Kafe", "Resepsionis 24 Jam", "WiFi Publik", "Parkir Mobil Luas", "CCTV 24 Jam"]);
+          } else if (data.categoryType === "wisata") {
+            setSharedFacilities(["Area Parkir Luas", "Musholla", "Toilet & Kamar Bilas", "Gazebo Istirahat", "Spot Foto Instagramable", "Foodcourt"]);
+          } else {
+            setSharedFacilities(["WiFi", "KM Dalam", "Kasur", "Lemari", "Dapur Bersama", "Termasuk Listrik & Air"]);
+          }
         }
+
         if (Array.isArray(data.rules) && data.rules.length > 0) {
           setPropertyRules(data.rules);
+        } else {
+          if (data.categoryType === "hotel") {
+            setPropertyRules(["Check-in Mulai 14.00 WIB", "Check-out Maksimal 12.00 WIB", "Dilarang Merokok di Dalam Kamar", "Bebas Hewan Peliharaan"]);
+          } else if (data.categoryType === "wisata") {
+            setPropertyRules(["Jam Buka: 08.00 - 17.00 WIB", "Tiket Berlaku untuk 1 Orang", "Anak di Bawah 2 Tahun Gratis", "Dilarang Buang Sampah Sembarangan"]);
+          } else {
+            setPropertyRules(["Akses 24 Jam", "Dilarang Merokok di Kamar", "Tamu Lawan Jenis Maks Pukul 21.00"]);
+          }
         }
+
         if (data.description) {
           setPropertyDescription(data.description);
+        } else {
+          if (data.categoryType === "hotel") {
+            setPropertyDescription("Resort & hotel berfasilitas bintang, nyaman, asri, dengan pemandangan alam memukau.");
+          } else if (data.categoryType === "wisata") {
+            setPropertyDescription("Destinasi wisata favorit keluarga dengan beragam wahana air, rekreasi seru, dan spot foto terbaik.");
+          } else {
+            setPropertyDescription("Kos eksklusif nyaman, bersih, aman, dan berfasilitas lengkap untuk mahasiswa & pekerja.");
+          }
         }
       }
     } catch (err) {
@@ -245,10 +322,6 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
       setSharedFacilities([...sharedFacilities, trimmed]);
     }
     setCustomFacilityInput("");
-  };
-
-  const handleRemoveFacility = (facName: string) => {
-    setSharedFacilities(sharedFacilities.filter((f) => f !== facName));
   };
 
   const handleToggleRule = (ruleText: string) => {
@@ -279,14 +352,17 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
         facilities: sharedFacilities,
         rules: propertyRules,
         description: propertyDescription,
+        categoryType: categoryType,
       });
       Alert.alert(
         "Berhasil Disimpan! 🎉",
-        "Fasilitas bersama & peraturan kos berhasil diperbarui secara real-time untuk seluruh kamar!"
+        `Pengaturan fasilitas & tata tertib ${
+          categoryType === "hotel" ? "hotel" : categoryType === "wisata" ? "wisata" : "kos"
+        } berhasil diperbarui!`
       );
       setIsPropertyModalOpen(false);
     } catch (e: any) {
-      Alert.alert("Gagal Menyimpan", e.message || "Gagal memperbarui properti kos");
+      Alert.alert("Gagal Menyimpan", e.message || "Gagal memperbarui properti");
     } finally {
       setIsSavingProperty(false);
     }
@@ -337,18 +413,20 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   };
 
   // Dynamic Counters
-  const totalKamarCount = rooms.length;
-  const terisiCount = rooms.filter((r) => r.status === "terisi").length;
-  const kosongCount = rooms.filter((r) => r.status === "kosong").length;
-  const terisiPercentage = totalKamarCount > 0 ? Math.round((terisiCount / totalKamarCount) * 100) : 0;
-  const kosongPercentage = totalKamarCount > 0 ? Math.round((kosongCount / totalKamarCount) * 100) : 0;
+  const totalItemCount = rooms.length;
+  const activeCount = rooms.filter((r) => r.status === "kosong" || r.isAvailable).length;
+  const occupiedCount = rooms.filter((r) => r.status === "terisi").length;
 
   // Filtered Rooms
-  const filteredRooms = rooms.filter(
-    (r) =>
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.type.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredRooms = rooms.filter((r) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      (r.name && r.name.toLowerCase().includes(q)) ||
+      (r.type && r.type.toLowerCase().includes(q)) ||
+      (r.roomName && r.roomName.toLowerCase().includes(q)) ||
+      (r.ticketName && r.ticketName.toLowerCase().includes(q))
+    );
+  });
 
   const toggleFacility = (facility: string) => {
     if (selectedFacilities.includes(facility)) {
@@ -360,7 +438,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
 
   const handlePickRoomPhotos = async () => {
     if (roomPhotos.length >= 5) {
-      Alert.alert("Batas Maksimal", "Anda hanya dapat mengunggah maksimal 5 foto per kamar.");
+      Alert.alert("Batas Maksimal", "Anda hanya dapat mengunggah maksimal 5 foto.");
       return;
     }
 
@@ -381,7 +459,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
             try {
               const uploadRes = await uploadFileToBackend(
                 asset.uri,
-                asset.name || `kamar_${Date.now()}.jpg`,
+                asset.name || `item_${Date.now()}.jpg`,
                 asset.mimeType || "image/jpeg"
               );
               if (uploadRes?.success && uploadRes?.data?.url) {
@@ -393,7 +471,6 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                 setRoomPhotos((prev) => (prev.length < 5 ? [...prev, asset.uri] : prev));
               }
             } catch (uploadErr) {
-              console.warn("Upload error:", uploadErr);
               if (asset.uri) {
                 setRoomPhotos((prev) => (prev.length < 5 ? [...prev, asset.uri] : prev));
               }
@@ -405,7 +482,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
 
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Izin Ditolak", "Izin akses galeri diperlukan untuk memilih foto kamar.");
+        Alert.alert("Izin Ditolak", "Izin akses galeri diperlukan untuk memilih foto.");
         return;
       }
 
@@ -424,7 +501,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
           try {
             const uploadRes = await uploadFileToBackend(
               asset.uri,
-              asset.fileName || `kamar_${Date.now()}.jpg`,
+              asset.fileName || `item_${Date.now()}.jpg`,
               asset.mimeType || "image/jpeg"
             );
             if (uploadRes?.success && uploadRes?.data?.url) {
@@ -436,7 +513,6 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
               setRoomPhotos((prev) => (prev.length < 5 ? [...prev, asset.uri] : prev));
             }
           } catch (uploadErr) {
-            console.warn("Upload error:", uploadErr);
             if (asset.uri) {
               setRoomPhotos((prev) => (prev.length < 5 ? [...prev, asset.uri] : prev));
             }
@@ -456,45 +532,81 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
 
   const handleSaveRoom = async () => {
     setIsSavingRoom(true);
-    const numPrice = parseInt(hargaSewa.replace(/[^0-9]/g, "")) || 1200000;
-    const primaryImage = roomPhotos[0] || "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=500&auto=format&fit=crop&q=80";
+    const numPrice =
+      parseInt(hargaSewa.replace(/[^0-9]/g, "")) ||
+      (categoryType === "wisata" ? 25000 : categoryType === "hotel" ? 450000 : 1200000);
+    const primaryImage =
+      roomPhotos[0] ||
+      (categoryType === "wisata"
+        ? "https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?w=500&auto=format&fit=crop&q=80"
+        : categoryType === "hotel"
+        ? "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500&auto=format&fit=crop&q=80"
+        : "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=500&auto=format&fit=crop&q=80");
 
-    const cleanNum = (nomorKamar || `10${rooms.length + 1}`).replace(/^(Kamar\s*)+/gi, "").trim();
+    let payload: any = {};
+
+    if (categoryType === "hotel") {
+      payload = {
+        roomName: namaTipeKamar || `Deluxe Room ${rooms.length + 1}`,
+        bedType: tipeKasur,
+        capacity: parseInt(kapasitasTamu) || 2,
+        pricePerNight: numPrice,
+        priceMonthly: numPrice,
+        isAvailable: kamarStatus === "tersedia",
+        facilities: selectedFacilities,
+        images: roomPhotos,
+        image: primaryImage,
+        breakfastIncluded: termasukSarapan,
+      };
+    } else if (categoryType === "wisata") {
+      payload = {
+        ticketName: namaTiket || `Tiket Masuk ${rooms.length + 1}`,
+        ticketType: kategoriTiket,
+        price: numPrice,
+        priceMonthly: numPrice,
+        pricePerNight: numPrice,
+        isAvailable: kamarStatus === "tersedia",
+        facilities: selectedFacilities,
+        includedFacilities: selectedFacilities,
+        images: roomPhotos,
+        image: primaryImage,
+        description: deskripsi || "Akses wahana wisata dan spot foto.",
+      };
+    } else {
+      const cleanNum = (nomorKamar || `10${rooms.length + 1}`).replace(/^(Kamar\s*)+/gi, "").trim();
+      payload = {
+        roomNumber: cleanNum,
+        roomType: tipeKamar,
+        priceMonthly: numPrice,
+        isAvailable: kamarStatus === "tersedia",
+        facilities: selectedFacilities,
+        images: roomPhotos,
+        image: primaryImage,
+      };
+    }
 
     try {
       if (modalMode === "edit" && editingRoomId) {
-        await updateRoomInKost(ownerEmail, editingRoomId, {
-          roomNumber: cleanNum,
-          roomType: tipeKamar,
-          priceMonthly: numPrice,
-          isAvailable: kamarStatus === "tersedia",
-          facilities: selectedFacilities,
-          images: roomPhotos,
-          image: primaryImage,
-        });
+        await updateRoomInKost(ownerEmail, editingRoomId, payload);
       } else {
-        await addRoomToKost(ownerEmail, {
-          roomNumber: cleanNum,
-          roomType: tipeKamar,
-          priceMonthly: numPrice,
-          isAvailable: kamarStatus === "tersedia",
-          facilities: selectedFacilities,
-          images: roomPhotos,
-          image: primaryImage,
-        });
+        await addRoomToKost(ownerEmail, payload);
       }
       await loadRoomsFromBackend();
       setIsAddModalOpen(false);
       setAddStep(1);
     } catch (e: any) {
-      console.error("Save room error:", e);
-      Alert.alert("Gagal Menyimpan Kamar", e?.message || "Terjadi kesalahan saat menyimpan data kamar.");
+      console.error("Save item error:", e);
+      Alert.alert(
+        `Gagal Menyimpan ${categoryType === "hotel" ? "Kamar" : categoryType === "wisata" ? "Tiket" : "Kamar"}`,
+        e?.message || "Terjadi kesalahan saat menyimpan data."
+      );
     } finally {
       setIsSavingRoom(false);
     }
   };
 
-  const allFacilityOptions = [
+  // Facility Options Presets
+  const kostFacilityOptions = [
     { label: "AC", icon: Snowflake },
     { label: "Kipas", icon: Fan },
     { label: "WiFi", icon: Wifi },
@@ -511,29 +623,110 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
     { label: "Termasuk Air", icon: Droplets },
   ];
 
-  const presetSharedFacilities = [
-    { label: "Dapur Bersama", icon: Utensils },
-    { label: "Parkir Motor & Mobil", icon: Car },
-    { label: "Ruang Jemur", icon: Shirt },
-    { label: "Ruang Tamu Bersama", icon: Building2 },
-    { label: "WiFi Bersama", icon: Wifi },
-    { label: "Kulkas Bersama", icon: Utensils },
-    { label: "Mesin Cuci", icon: Shirt },
-    { label: "Dispenser Air Minum", icon: CupSoda },
-    { label: "CCTV 24 Jam", icon: ShieldCheck },
-    { label: "Penjaga Kos", icon: User },
-    { label: "Termasuk Listrik & Air", icon: CheckCircle },
+  const hotelFacilityOptions = [
+    { label: "AC Dingin", icon: Snowflake },
+    { label: "WiFi Cepat", icon: Wifi },
+    { label: "Smart TV", icon: Tv },
+    { label: "Bathtub Mewah", icon: Bath },
+    { label: "Water Heater", icon: Droplets },
+    { label: "Balkon Privat", icon: Building2 },
+    { label: "Sarapan Gratis", icon: Utensils },
+    { label: "Kulkas Mini", icon: CupSoda },
+    { label: "King Bed", icon: Bed },
+    { label: "Sofa Santai", icon: Armchair },
+    { label: "Room Service", icon: User },
+    { label: "Area Parkir", icon: Car },
   ];
 
-  const presetRules = [
-    "Akses 24 Jam",
-    "Dilarang Merokok di Kamar",
-    "Tamu Lawan Jenis Dilarang Menginap",
-    "Jam Malam / Gerbang Ditutup Pukul 23.00 WIB",
-    "Menjaga Ketenangan & Kebersihan Bersama",
-    "Dilarang Membawa Hewan Peliharaan",
-    "Dilarang Membawa Minuman Keras / Narkoba",
+  const wisataFacilityOptions = [
+    { label: "Spot Foto", icon: Camera },
+    { label: "Gazebo", icon: Home },
+    { label: "Kolam Renang", icon: Droplets },
+    { label: "Wahana Air", icon: Compass },
+    { label: "Perahu Angsa", icon: Compass },
+    { label: "Flying Fox", icon: Sparkles },
+    { label: "Toilet & Bilas", icon: ShowerHead },
+    { label: "Loker Barang", icon: DoorClosed },
+    { label: "Welcome Drink", icon: CupSoda },
+    { label: "Parkir Luas", icon: Car },
+    { label: "Musholla", icon: Building2 },
   ];
+
+  const currentFacilityOptions =
+    categoryType === "hotel"
+      ? hotelFacilityOptions
+      : categoryType === "wisata"
+      ? wisataFacilityOptions
+      : kostFacilityOptions;
+
+  // Preset Shared Facilities & Rules
+  const presetSharedFacilities =
+    categoryType === "hotel"
+      ? [
+          { label: "Kolam Renang Utama", icon: Droplets },
+          { label: "Restoran & Kafe", icon: Utensils },
+          { label: "Resepsionis 24 Jam", icon: User },
+          { label: "Spa & Onsen", icon: Sparkles },
+          { label: "Parkir Mobil & Bus Luas", icon: Car },
+          { label: "CCTV & Keamanan 24 Jam", icon: ShieldCheck },
+          { label: "Ruang Rapat / Aula", icon: Building2 },
+          { label: "Taman Asri & Gazebo", icon: Home },
+        ]
+      : categoryType === "wisata"
+      ? [
+          { label: "Area Parkir Luas", icon: Car },
+          { label: "Musholla Bersih", icon: Building2 },
+          { label: "Toilet & Kamar Bilas", icon: ShowerHead },
+          { label: "Gazebo & Saung Santai", icon: Home },
+          { label: "Foodcourt & Resto", icon: Utensils },
+          { label: "Spot Foto Instagramable", icon: Camera },
+          { label: "Penyewaan Pelampung", icon: Droplets },
+          { label: "Pos Medis & Keamanan", icon: ShieldCheck },
+        ]
+      : [
+          { label: "Dapur Bersama", icon: Utensils },
+          { label: "Parkir Motor & Mobil", icon: Car },
+          { label: "Ruang Jemur", icon: Shirt },
+          { label: "Ruang Tamu Bersama", icon: Building2 },
+          { label: "WiFi Bersama", icon: Wifi },
+          { label: "Kulkas Bersama", icon: Utensils },
+          { label: "Mesin Cuci", icon: Shirt },
+          { label: "CCTV 24 Jam", icon: ShieldCheck },
+          { label: "Termasuk Listrik & Air", icon: CheckCircle },
+        ];
+
+  const presetRules =
+    categoryType === "hotel"
+      ? [
+          "Check-in Mulai Pukul 14.00 WIB",
+          "Check-out Maksimal Pukul 12.00 WIB",
+          "Dilarang Merokok di Dalam Kamar",
+          "Bebas Hewan Peliharaan",
+          "Dilarang Membawa Narkoba / Minuman Keras",
+          "Menjaga Ketenangan Tamu Sekitar",
+        ]
+      : categoryType === "wisata"
+      ? [
+          "Jam Buka: 08.00 - 17.00 WIB",
+          "Tiket Berlaku untuk 1 Orang / Kunjungan",
+          "Anak di Bawah 2 Tahun Gratis",
+          "Dilarang Membuang Sampah Sembarangan",
+          "Harap Mengawasi Anak Saat di Dekat Air / Wahana",
+          "Dilarang Membawa Senjata Tajam / Miras",
+        ]
+      : [
+          "Akses 24 Jam",
+          "Dilarang Merokok di Kamar",
+          "Tamu Lawan Jenis Dilarang Menginap",
+          "Jam Malam Pukul 23.00 WIB",
+          "Menjaga Ketenangan & Kebersihan",
+          "Dilarang Membawa Hewan Peliharaan",
+        ];
+
+  // Theme styling based on category
+  const themeColor = categoryType === "hotel" ? "#0284C7" : categoryType === "wisata" ? "#D97706" : "#0D7A53";
+  const themeBgLight = categoryType === "hotel" ? "#F0F9FF" : categoryType === "wisata" ? "#FEF3C7" : "#E8F5EE";
+  const themeBorderLight = categoryType === "hotel" ? "#BAE6FD" : categoryType === "wisata" ? "#FDE68A" : "#BBF7D0";
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -544,19 +737,45 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTitleCol}>
-            <Text style={styles.headerTitle}>Manajemen Kamar</Text>
-            <Text style={styles.headerSubtitle}>Kelola semua kamar kos Anda</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+              <Text style={styles.headerTitle}>
+                {categoryType === "hotel"
+                  ? "Manajemen Kamar & Villa"
+                  : categoryType === "wisata"
+                  ? "Manajemen Tiket & Kuota"
+                  : "Manajemen Kamar Kos"}
+              </Text>
+              <View style={[styles.categoryPillBadge, { backgroundColor: themeBgLight, borderColor: themeBorderLight }]}>
+                {categoryType === "hotel" ? (
+                  <Hotel size={12} color={themeColor} />
+                ) : categoryType === "wisata" ? (
+                  <Ticket size={12} color={themeColor} />
+                ) : (
+                  <Building2 size={12} color={themeColor} />
+                )}
+                <Text style={[styles.categoryPillText, { color: themeColor }]}>
+                  {categoryType === "hotel" ? "Hotel & Villa" : categoryType === "wisata" ? "Wisata" : "Kost"}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              {categoryType === "hotel"
+                ? `Kelola tipe kamar hotel & villa untuk ${propertyName}`
+                : categoryType === "wisata"
+                ? `Kelola kategori tiket & wahana untuk ${propertyName}`
+                : `Kelola kamar kos dan penyewa untuk ${propertyName}`}
+            </Text>
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity
-              style={[styles.iconCircleBtn, isSearchVisible && { backgroundColor: "#E8F5EE" }]}
+              style={[styles.iconCircleBtn, isSearchVisible && { backgroundColor: themeBgLight }]}
               onPress={() => setIsSearchVisible(!isSearchVisible)}
               activeOpacity={0.7}
             >
-              <Search size={20} color={isSearchVisible ? "#0D7A53" : "#374151"} />
+              <Search size={20} color={isSearchVisible ? themeColor : "#374151"} />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.addCircleBtn}
+              style={[styles.addCircleBtn, { backgroundColor: themeColor }]}
               onPress={handleOpenAddModal}
               activeOpacity={0.8}
             >
@@ -572,7 +791,13 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
               style={styles.searchInput}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Cari nomor kamar atau tipe..."
+              placeholder={
+                categoryType === "hotel"
+                  ? "Cari tipe kamar hotel (Deluxe, Suite, dll)..."
+                  : categoryType === "wisata"
+                  ? "Cari kategori tiket wisata..."
+                  : "Cari nomor kamar atau tipe..."
+              }
               placeholderTextColor="#9CA3AF"
             />
           </View>
@@ -580,120 +805,167 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
 
         {/* 3 Summary Cards */}
         <View style={styles.summaryRow}>
-          {/* Card 1: Total Kamar */}
+          {/* Card 1 */}
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Total Kamar</Text>
-            <Text style={styles.summaryVal}>{totalKamarCount}</Text>
-            <Text style={styles.summarySubtext}>Semua kamar</Text>
+            <Text style={styles.summaryLabel}>
+              {categoryType === "hotel" ? "Tipe Kamar" : categoryType === "wisata" ? "Kategori Tiket" : "Total Kamar"}
+            </Text>
+            <Text style={styles.summaryVal}>{totalItemCount}</Text>
+            <Text style={styles.summarySubtext}>
+              {categoryType === "hotel" ? "Unit tersedia" : categoryType === "wisata" ? "Paket aktif" : "Semua kamar"}
+            </Text>
           </View>
 
-          {/* Card 2: Terisi */}
+          {/* Card 2 */}
           <View style={styles.summaryCard}>
             <View style={styles.labelWithDot}>
-              <Text style={styles.summaryLabel}>Terisi</Text>
-              <View style={styles.greenDot} />
+              <Text style={styles.summaryLabel}>
+                {categoryType === "hotel" ? "Tersedia" : categoryType === "wisata" ? "Tiket Aktif" : "Terisi"}
+              </Text>
+              <View style={[styles.greenDot, { backgroundColor: themeColor }]} />
             </View>
-            <Text style={styles.summaryVal}>{terisiCount}</Text>
-            <Text style={styles.summarySubtext}>{terisiPercentage}%</Text>
+            <Text style={styles.summaryVal}>{categoryType === "kost" ? occupiedCount : activeCount}</Text>
+            <Text style={styles.summarySubtext}>
+              {totalItemCount > 0
+                ? `${Math.round(((categoryType === "kost" ? occupiedCount : activeCount) / totalItemCount) * 100)}%`
+                : "0%"}
+            </Text>
           </View>
 
-          {/* Card 3: Kosong */}
+          {/* Card 3 */}
           <View style={styles.summaryCard}>
-            <Text style={[styles.summaryLabel, { color: "#EA580C" }]}>Kosong</Text>
-            <Text style={[styles.summaryVal, { color: "#EA580C" }]}>{kosongCount}</Text>
-            <Text style={[styles.summarySubtext, { color: "#EA580C" }]}>{kosongPercentage}%</Text>
+            <Text style={[styles.summaryLabel, { color: "#EA580C" }]}>
+              {categoryType === "hotel" ? "Penuh" : categoryType === "wisata" ? "Operasional" : "Kosong"}
+            </Text>
+            <Text style={[styles.summaryVal, { color: "#EA580C" }]}>
+              {categoryType === "wisata" ? "08-17 WIB" : categoryType === "hotel" ? occupiedCount : totalItemCount - occupiedCount}
+            </Text>
+            <Text style={[styles.summarySubtext, { color: "#EA580C" }]}>
+              {categoryType === "wisata" ? "Setiap hari" : "Siap dipesan"}
+            </Text>
           </View>
         </View>
 
-        {/* Fasilitas Bersama & Peraturan Kos Quick Action Card (1 Untuk Semua Kamar) */}
+        {/* Quick Action Card (Fasilitas & Tata Tertib) */}
         <TouchableOpacity
-          style={styles.propertyConfigCard}
+          style={[styles.propertyConfigCard, { backgroundColor: themeBgLight, borderColor: themeBorderLight }]}
           onPress={() => setIsPropertyModalOpen(true)}
           activeOpacity={0.85}
         >
           <View style={styles.propertyConfigLeft}>
-            <View style={styles.propertyConfigIconBg}>
-              <SlidersHorizontal size={20} color="#0D7A53" />
+            <View style={[styles.propertyConfigIconBg, { backgroundColor: "#FFFFFF" }]}>
+              <SlidersHorizontal size={20} color={themeColor} />
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                <Text style={styles.propertyConfigTitle}>Fasilitas Bersama & Peraturan</Text>
-                <View style={styles.propertyBadgeAll}>
-                  <Text style={styles.propertyBadgeAllText}>Semua Kamar</Text>
+                <Text style={[styles.propertyConfigTitle, { color: themeColor }]}>
+                  {categoryType === "hotel"
+                    ? "Fasilitas Hotel & Kebijakan Reservasi"
+                    : categoryType === "wisata"
+                    ? "Fasilitas Kawasan & Jam Operasional"
+                    : "Fasilitas Bersama & Peraturan Kos"}
+                </Text>
+                <View style={[styles.propertyBadgeAll, { backgroundColor: themeColor }]}>
+                  <Text style={styles.propertyBadgeAllText}>Semua Unit</Text>
                 </View>
               </View>
-              <Text style={styles.propertyConfigSub} numberOfLines={1}>
-                {sharedFacilities.length} Fasilitas Bersama • {propertyRules.length} Peraturan Kos
+              <Text style={[styles.propertyConfigSub, { color: "#4B5563" }]} numberOfLines={1}>
+                {sharedFacilities.length} Fasilitas • {propertyRules.length} Tata Tertib
               </Text>
             </View>
           </View>
-          <View style={styles.propertyConfigArrow}>
-            <ChevronRight size={18} color="#0D7A53" />
+          <View style={[styles.propertyConfigArrow, { backgroundColor: "#FFFFFF" }]}>
+            <ChevronRight size={18} color={themeColor} />
           </View>
         </TouchableOpacity>
 
         {/* Active Tab Indicator Bar */}
-        <View style={styles.activeTabIndicator} />
+        <View style={[styles.activeTabIndicator, { backgroundColor: themeColor }]} />
 
         {/* Room List or Empty State */}
         {rooms.length === 0 ? (
-          <View style={{ alignItems: "center", paddingVertical: 44, backgroundColor: "#FFFFFF", borderRadius: 16, marginTop: 12, marginBottom: 24, borderWidth: 1, borderColor: "#E5E7EB", paddingHorizontal: 20 }}>
-            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#E8F5EE", justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
-              <Home size={32} color="#0D7A53" />
+          <View style={styles.emptyStateCard}>
+            <View style={[styles.emptyIconCircle, { backgroundColor: themeBgLight }]}>
+              {categoryType === "hotel" ? (
+                <Hotel size={32} color={themeColor} />
+              ) : categoryType === "wisata" ? (
+                <Ticket size={32} color={themeColor} />
+              ) : (
+                <Home size={32} color={themeColor} />
+              )}
             </View>
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#111827", marginBottom: 6 }}>
-              Belum Ada Kamar Terdaftar
+            <Text style={styles.emptyTitle}>
+              {categoryType === "hotel"
+                ? "Belum Ada Tipe Kamar Hotel"
+                : categoryType === "wisata"
+                ? "Belum Ada Kategori Tiket Wisata"
+                : "Belum Ada Kamar Terdaftar"}
             </Text>
-            <Text style={{ fontSize: 13, color: "#6B7280", textAlign: "center", paddingHorizontal: 16, lineHeight: 20 }}>
-              Mulai tambahkan tipe kamar kos Anda (nomor kamar, harga sewa, fasilitas, dan foto) agar calon penyewa bisa melihat dan memesan.
+            <Text style={styles.emptySub}>
+              {categoryType === "hotel"
+                ? "Tambahkan tipe kamar (Deluxe, Suite, Villa) beserta harga per malam dan fasilitas kamar agar tamu bisa melakukan reservasi online."
+                : categoryType === "wisata"
+                ? "Tambahkan kategori tiket masuk (Reguler, VIP, Terusan) beserta harga dan wahana yang termasuk agar pengunjung bisa beli tiket online."
+                : "Mulai tambahkan kamar kos Anda (nomor kamar, harga bulanan, fasilitas, dan foto) agar calon penyewa bisa memesan."}
             </Text>
             <TouchableOpacity
-              style={{ marginTop: 22, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#0D7A53", paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 }}
+              style={[styles.emptyAddBtn, { backgroundColor: themeColor }]}
               onPress={handleOpenAddModal}
               activeOpacity={0.85}
             >
               <Plus size={18} color="#FFFFFF" />
-              <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 14 }}>Tambah Kamar Pertama</Text>
+              <Text style={styles.emptyAddBtnText}>
+                {categoryType === "hotel"
+                  ? "Tambah Tipe Kamar Pertama"
+                  : categoryType === "wisata"
+                  ? "Tambah Tiket Pertama"
+                  : "Tambah Kamar Pertama"}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.roomList}>
             {filteredRooms.map((room) => {
-              const cleanName = (room.name || "101").replace(/^(Kamar\s*)+/gi, "").trim() || "101";
+              const displayName = room.roomName || room.ticketName || room.name || "Unit";
               const rawFacs = Array.isArray(room.facilities) ? room.facilities : [];
-              const uniqueFacs = Array.from(new Set(rawFacs.filter((f) => !f.toLowerCase().includes("listrik") && !f.toLowerCase().includes("air"))));
-              const mainFacs = uniqueFacs.slice(0, 3);
-              const extraCount = uniqueFacs.length - 3;
+              const mainFacs = rawFacs.slice(0, 3);
+              const extraCount = rawFacs.length - 3;
 
               return (
                 <View
                   key={room.id}
                   style={[styles.roomCard, (room.isNonaktif || room.status === "nonaktif") && styles.roomCardNonaktif]}
                 >
-                  {/* Room Image with Badge */}
+                  {/* Image with Badge */}
                   <View style={styles.roomImgContainer}>
                     <Image source={{ uri: room.image }} style={styles.roomImg} resizeMode="cover" />
                     <View
                       style={[
                         styles.statusBadge,
                         room.status === "terisi"
-                          ? styles.statusBadgeGreen
+                          ? styles.statusBadgeOrange
                           : room.status === "nonaktif" || room.isNonaktif
                           ? styles.statusBadgeGray
-                          : styles.statusBadgeOrange,
+                          : styles.statusBadgeGreen,
                       ]}
                     >
                       <Text
                         style={[
                           styles.statusBadgeText,
                           room.status === "terisi"
-                            ? styles.statusTextGreen
+                            ? styles.statusTextOrange
                             : room.status === "nonaktif" || room.isNonaktif
                             ? styles.statusTextGray
-                            : styles.statusTextOrange,
+                            : styles.statusTextGreen,
                         ]}
                       >
-                        {room.status === "terisi"
+                        {categoryType === "hotel"
+                          ? room.status === "terisi"
+                            ? "Penuh"
+                            : "Tersedia"
+                          : categoryType === "wisata"
+                          ? "Aktif"
+                          : room.status === "terisi"
                           ? "Terisi"
                           : room.status === "nonaktif" || room.isNonaktif
                           ? "Nonaktif"
@@ -707,9 +979,17 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                     {/* Header Row: Title & Type & More Options */}
                     <View style={styles.roomHeaderRow}>
                       <View style={styles.roomTitleWrap}>
-                        <Text style={styles.roomTitle} numberOfLines={1}>Kamar {cleanName}</Text>
-                        <View style={styles.typeBadge}>
-                          <Text style={styles.typeBadgeText}>{room.type}</Text>
+                        <Text style={styles.roomTitle} numberOfLines={1}>
+                          {displayName}
+                        </Text>
+                        <View style={[styles.typeBadge, { backgroundColor: themeBgLight }]}>
+                          <Text style={[styles.typeBadgeText, { color: themeColor }]}>
+                            {categoryType === "hotel"
+                              ? room.bedType || "King Bed"
+                              : categoryType === "wisata"
+                              ? (room.ticketType || "Reguler").toUpperCase()
+                              : room.type}
+                          </Text>
                         </View>
                       </View>
                       <TouchableOpacity
@@ -721,14 +1001,41 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                       </TouchableOpacity>
                     </View>
 
-                    {/* Facilities Chips Row (Clean, max 3 + counter) */}
+                    {/* Breakfast / Capacity Badge (Hotel) */}
+                    {categoryType === "hotel" && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginVertical: 2 }}>
+                        <View style={styles.miniMetaChip}>
+                          <Users size={11} color="#4B5563" />
+                          <Text style={styles.miniMetaText}>{room.capacity || 2} Tamu</Text>
+                        </View>
+                        {room.breakfastIncluded !== false && (
+                          <View style={[styles.miniMetaChip, { backgroundColor: "#FEF3C7" }]}>
+                            <Utensils size={11} color="#D97706" />
+                            <Text style={[styles.miniMetaText, { color: "#B45309", fontWeight: "700" }]}>
+                              Sarapan Gratis
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Facilities Chips Row */}
                     <View style={styles.facilitiesRow}>
                       {mainFacs.map((fac, idx) => (
                         <View key={idx} style={styles.facChip}>
-                          {fac.includes("AC") ? <Laptop size={11} color="#0D7A53" /> :
-                           fac.includes("WiFi") ? <Wifi size={11} color="#0D7A53" /> :
-                           fac.includes("KM") ? <ShowerHead size={11} color="#0D7A53" /> :
-                           <Home size={11} color="#0D7A53" />}
+                          {fac.includes("AC") ? (
+                            <Snowflake size={11} color={themeColor} />
+                          ) : fac.includes("WiFi") ? (
+                            <Wifi size={11} color={themeColor} />
+                          ) : fac.includes("KM") || fac.includes("Bath") ? (
+                            <ShowerHead size={11} color={themeColor} />
+                          ) : fac.includes("Sarapan") ? (
+                            <Utensils size={11} color={themeColor} />
+                          ) : fac.includes("Foto") ? (
+                            <Camera size={11} color={themeColor} />
+                          ) : (
+                            <Check size={11} color={themeColor} />
+                          )}
                           <Text style={styles.facText}>{fac}</Text>
                         </View>
                       ))}
@@ -739,39 +1046,41 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                       )}
                     </View>
 
-                    {/* Inclusions Row (Only if owner selected Termasuk Listrik / Air) */}
-                    {Array.isArray(room.facilities) && room.facilities.some((f: string) => f.toLowerCase().includes("listrik") || f.toLowerCase().includes("air")) && (
-                      <View style={styles.inclusionBadgeRow}>
-                        <Text style={styles.inclusionBadgeText}>
-                          {room.facilities.filter((f: string) => f.toLowerCase().includes("listrik") || f.toLowerCase().includes("air")).join(" • ")}
-                        </Text>
-                      </View>
-                    )}
-
                     {/* Tenant / Available & Price Footer Row */}
                     <View style={styles.roomFooterRow}>
-                      {room.isNonaktif || room.status === "nonaktif" ? (
-                        <View style={styles.availableRow}>
-                          <EyeOff size={14} color="#6B7280" />
-                          <Text style={[styles.availableText, { color: "#6B7280" }]}>Disembunyikan</Text>
-                        </View>
-                      ) : room.status === "terisi" && room.tenant ? (
+                      {categoryType === "kost" && room.status === "terisi" && room.tenant ? (
                         <View style={styles.tenantRow}>
                           <Image source={{ uri: room.tenant.avatar }} style={styles.tenantAvatar} />
                           <View style={{ maxWidth: 75 }}>
-                            <Text style={styles.tenantName} numberOfLines={1}>{room.tenant.name}</Text>
+                            <Text style={styles.tenantName} numberOfLines={1}>
+                              {room.tenant.name}
+                            </Text>
                           </View>
                         </View>
                       ) : (
                         <View style={styles.availableRow}>
-                          <Building2 size={14} color="#EA580C" />
-                          <Text style={styles.availableText}>Siap Huni</Text>
+                          {categoryType === "hotel" ? (
+                            <Hotel size={13} color={themeColor} />
+                          ) : categoryType === "wisata" ? (
+                            <Ticket size={13} color={themeColor} />
+                          ) : (
+                            <Building2 size={13} color={themeColor} />
+                          )}
+                          <Text style={[styles.availableText, { color: themeColor }]}>
+                            {categoryType === "hotel"
+                              ? "Siap Huni"
+                              : categoryType === "wisata"
+                              ? "E-Ticket Ready"
+                              : "Siap Huni"}
+                          </Text>
                         </View>
                       )}
 
                       <View style={styles.priceRow}>
-                        <Text style={styles.priceVal}>{room.price}</Text>
-                        <Text style={styles.priceUnit}>/bln</Text>
+                        <Text style={[styles.priceVal, { color: themeColor }]}>{room.price}</Text>
+                        <Text style={styles.priceUnit}>
+                          {categoryType === "hotel" ? "/mlm" : categoryType === "wisata" ? "/org" : "/bln"}
+                        </Text>
                       </View>
                     </View>
                   </View>
@@ -786,22 +1095,22 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
 
       {/* Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navTab}
-          onPress={() => navigate("pemilik_kos_home")}
-          activeOpacity={0.7}
-        >
+        <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_kos_home")} activeOpacity={0.7}>
           <Home size={22} color="#9CA3AF" />
           <Text style={styles.navText}>Beranda</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navTab}
-          onPress={() => setActiveNavTab("kamar")}
-          activeOpacity={0.7}
-        >
-          <Building2 size={22} color="#0D7A53" />
-          <Text style={[styles.navText, styles.navTextActive]}>Kamar</Text>
+        <TouchableOpacity style={styles.navTab} onPress={() => setActiveNavTab("kamar")} activeOpacity={0.7}>
+          {categoryType === "hotel" ? (
+            <Hotel size={22} color={themeColor} />
+          ) : categoryType === "wisata" ? (
+            <Ticket size={22} color={themeColor} />
+          ) : (
+            <Building2 size={22} color={themeColor} />
+          )}
+          <Text style={[styles.navText, { color: themeColor, fontWeight: "700" }]}>
+            {categoryType === "hotel" ? "Kamar" : categoryType === "wisata" ? "Tiket" : "Kamar"}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -810,7 +1119,9 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
           activeOpacity={0.7}
         >
           <User size={22} color="#9CA3AF" />
-          <Text style={styles.navText}>Penghuni</Text>
+          <Text style={styles.navText}>
+            {categoryType === "hotel" ? "Tamu" : categoryType === "wisata" ? "Pengunjung" : "Penghuni"}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -822,24 +1133,28 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
           <Text style={styles.navText}>Keuangan</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navTab}
-          onPress={() => navigate("pemilik_kos_profil")}
-          activeOpacity={0.7}
-        >
+        <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_kos_profil")} activeOpacity={0.7}>
           <User size={22} color="#9CA3AF" />
           <Text style={styles.navText}>Profil</Text>
         </TouchableOpacity>
       </View>
 
-      {/* MODAL 1: Tambah Kamar Baru (3-Step Flow) */}
+      {/* MODAL 1: Tambah / Edit Room Modal (3-Step Flow) */}
       <Modal visible={isAddModalOpen} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.addModalCard}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {modalMode === "edit" ? `Edit Kamar ${nomorKamar}` : "Tambah Kamar Baru"}
+                {modalMode === "edit"
+                  ? `Edit ${categoryType === "hotel" ? "Tipe Kamar" : categoryType === "wisata" ? "Tiket" : "Kamar"}`
+                  : `Tambah ${
+                      categoryType === "hotel"
+                        ? "Tipe Kamar Hotel"
+                        : categoryType === "wisata"
+                        ? "Kategori Tiket Wisata"
+                        : "Kamar Baru"
+                    }`}
               </Text>
               <TouchableOpacity
                 style={styles.closeBtn}
@@ -852,17 +1167,17 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
 
             {/* Stepper Bar (1 - 2 - 3) */}
             <View style={styles.stepperRow}>
-              <View style={[styles.stepCircle, addStep >= 1 && styles.stepCircleActive]}>
+              <View style={[styles.stepCircle, addStep >= 1 && { backgroundColor: themeColor }]}>
                 <Text style={[styles.stepNum, addStep >= 1 && styles.stepNumActive]}>1</Text>
               </View>
-              <View style={[styles.stepLine, addStep >= 2 && styles.stepLineActive]} />
+              <View style={[styles.stepLine, addStep >= 2 && { backgroundColor: themeColor }]} />
 
-              <View style={[styles.stepCircle, addStep >= 2 && styles.stepCircleActive]}>
+              <View style={[styles.stepCircle, addStep >= 2 && { backgroundColor: themeColor }]}>
                 <Text style={[styles.stepNum, addStep >= 2 && styles.stepNumActive]}>2</Text>
               </View>
-              <View style={[styles.stepLine, addStep >= 3 && styles.stepLineActive]} />
+              <View style={[styles.stepLine, addStep >= 3 && { backgroundColor: themeColor }]} />
 
-              <View style={[styles.stepCircle, addStep >= 3 && styles.stepCircleActive]}>
+              <View style={[styles.stepCircle, addStep >= 3 && { backgroundColor: themeColor }]}>
                 <Text style={[styles.stepNum, addStep >= 3 && styles.stepNumActive]}>3</Text>
               </View>
             </View>
@@ -873,75 +1188,226 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                 <View>
                   <Text style={styles.stepTitle}>Informasi Dasar</Text>
 
-                  <Text style={styles.label}>Nomor Kamar <Text style={styles.redAsterisk}>*</Text></Text>
-                  <TextInput
-                    style={styles.input}
-                    value={nomorKamar}
-                    onChangeText={setNomorKamar}
-                    placeholder="1A"
-                    placeholderTextColor="#9CA3AF"
-                  />
+                  {categoryType === "hotel" ? (
+                    <>
+                      <Text style={styles.label}>
+                        Nama Tipe Kamar / Villa <Text style={styles.redAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        value={namaTipeKamar}
+                        onChangeText={setNamaTipeKamar}
+                        placeholder="Contoh: Deluxe Double Room / Executive Villa"
+                        placeholderTextColor="#9CA3AF"
+                      />
 
-                  <Text style={styles.label}>Tipe Kamar <Text style={styles.redAsterisk}>*</Text></Text>
-                  <TextInput
-                    style={styles.input}
-                    value={tipeKamar}
-                    onChangeText={setTipeKamar}
-                    placeholder="Tipe AC"
-                    placeholderTextColor="#9CA3AF"
-                  />
+                      <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>
+                            Tipe Kasur <Text style={styles.redAsterisk}>*</Text>
+                          </Text>
+                          <TextInput
+                            style={styles.input}
+                            value={tipeKasur}
+                            onChangeText={setTipeKasur}
+                            placeholder="1 King Bed / 2 Twin Bed"
+                            placeholderTextColor="#9CA3AF"
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>
+                            Kapasitas Tamu <Text style={styles.redAsterisk}>*</Text>
+                          </Text>
+                          <TextInput
+                            style={styles.input}
+                            value={kapasitasTamu}
+                            onChangeText={setKapasitasTamu}
+                            keyboardType="numeric"
+                            placeholder="2"
+                            placeholderTextColor="#9CA3AF"
+                          />
+                        </View>
+                      </View>
 
-                  <Text style={styles.label}>Harga Sewa / bulan <Text style={styles.redAsterisk}>*</Text></Text>
-                  <TextInput
-                    style={styles.input}
-                    value={hargaSewa}
-                    onChangeText={setHargaSewa}
-                    placeholder="Rp 1.200.000"
-                    placeholderTextColor="#9CA3AF"
-                  />
+                      {/* Breakfast Toggle */}
+                      <TouchableOpacity
+                        style={[
+                          styles.toggleOptionCard,
+                          termasukSarapan && { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" },
+                        ]}
+                        onPress={() => setTermasukSarapan(!termasukSarapan)}
+                        activeOpacity={0.8}
+                      >
+                        <Utensils size={18} color={termasukSarapan ? "#D97706" : "#6B7280"} />
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={[styles.toggleOptionTitle, termasukSarapan && { color: "#92400E" }]}>
+                            {termasukSarapan ? "Termasuk Sarapan Gratis" : "Tanpa Sarapan (Room Only)"}
+                          </Text>
+                          <Text style={styles.toggleOptionSub}>Klik untuk mengubah paket sarapan</Text>
+                        </View>
+                        <View style={[styles.checkCircleSmall, termasukSarapan && { backgroundColor: "#D97706" }]}>
+                          {termasukSarapan && <Check size={12} color="#FFFFFF" />}
+                        </View>
+                      </TouchableOpacity>
+
+                      <Text style={styles.label}>
+                        Harga Sewa / Malam <Text style={styles.redAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        value={hargaSewa}
+                        onChangeText={setHargaSewa}
+                        placeholder="Rp 450.000"
+                        placeholderTextColor="#9CA3AF"
+                      />
+                    </>
+                  ) : categoryType === "wisata" ? (
+                    <>
+                      <Text style={styles.label}>
+                        Nama Tiket / Paket Wisata <Text style={styles.redAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        value={namaTiket}
+                        onChangeText={setNamaTiket}
+                        placeholder="Contoh: Tiket Masuk Reguler / Paket All-In Waterpark"
+                        placeholderTextColor="#9CA3AF"
+                      />
+
+                      <Text style={styles.label}>
+                        Kategori Tiket <Text style={styles.redAsterisk}>*</Text>
+                      </Text>
+                      <View style={styles.ticketTypeGrid}>
+                        {(["reguler", "vip", "terusan", "anak", "rombongan"] as const).map((tier) => (
+                          <TouchableOpacity
+                            key={tier}
+                            style={[
+                              styles.ticketTypeChip,
+                              kategoriTiket === tier && {
+                                backgroundColor: themeBgLight,
+                                borderColor: themeColor,
+                              },
+                            ]}
+                            onPress={() => setKategoriTiket(tier)}
+                            activeOpacity={0.8}
+                          >
+                            <Text
+                              style={[
+                                styles.ticketTypeChipText,
+                                kategoriTiket === tier && { color: themeColor, fontWeight: "800" },
+                              ]}
+                            >
+                              {tier.toUpperCase()}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      <Text style={styles.label}>
+                        Harga Tiket / Orang <Text style={styles.redAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        value={hargaSewa}
+                        onChangeText={setHargaSewa}
+                        placeholder="Rp 25.000"
+                        placeholderTextColor="#9CA3AF"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.label}>
+                        Nomor Kamar <Text style={styles.redAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        value={nomorKamar}
+                        onChangeText={setNomorKamar}
+                        placeholder="1A / 101"
+                        placeholderTextColor="#9CA3AF"
+                      />
+
+                      <Text style={styles.label}>
+                        Tipe Kamar <Text style={styles.redAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        value={tipeKamar}
+                        onChangeText={setTipeKamar}
+                        placeholder="Tipe AC / Standard"
+                        placeholderTextColor="#9CA3AF"
+                      />
+
+                      <Text style={styles.label}>
+                        Harga Sewa / Bulan <Text style={styles.redAsterisk}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.input}
+                        value={hargaSewa}
+                        onChangeText={setHargaSewa}
+                        placeholder="Rp 1.200.000"
+                        placeholderTextColor="#9CA3AF"
+                      />
+                    </>
+                  )}
 
                   <Text style={styles.label}>Deskripsi (Opsional)</Text>
                   <TextInput
                     style={[styles.input, styles.textArea]}
                     value={deskripsi}
                     onChangeText={setDeskripsi}
-                    placeholder="Kamar nyaman dan bersih, cocok untuk mahasiswa atau pekerja."
+                    placeholder={
+                      categoryType === "hotel"
+                        ? "Deskripsikan keunggulan kamar, pemandangan, dan kenyamanan tempat tidur..."
+                        : categoryType === "wisata"
+                        ? "Deskripsikan wahana dan fasilitas yang termasuk dalam tiket ini..."
+                        : "Kamar nyaman dan bersih, cocok untuk mahasiswa atau pekerja."
+                    }
                     placeholderTextColor="#9CA3AF"
                     multiline
                     numberOfLines={3}
                   />
 
                   <TouchableOpacity
-                    style={styles.btnPrimary}
+                    style={[styles.btnPrimary, { backgroundColor: themeColor }]}
                     onPress={() => setAddStep(2)}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.btnPrimaryText}>Lanjut</Text>
+                    <Text style={styles.btnPrimaryText}>Lanjut ke Fasilitas & Foto</Text>
                     <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
                   </TouchableOpacity>
                 </View>
               )}
 
-              {/* STEP 2: Fasilitas Kamar & Foto */}
+              {/* STEP 2: Fasilitas & Foto */}
               {addStep === 2 && (
                 <View>
-                  <Text style={styles.stepTitle}>Fasilitas Kamar</Text>
-                  <Text style={styles.stepSubtitle}>Pilih fasilitas yang tersedia</Text>
+                  <Text style={styles.stepTitle}>
+                    {categoryType === "wisata" ? "Wahana & Akses Termasuk" : "Fasilitas Kamar"}
+                  </Text>
+                  <Text style={styles.stepSubtitle}>
+                    {categoryType === "wisata"
+                      ? "Pilih wahana dan akses fasilitas yang didapat dari tiket ini"
+                      : "Pilih fasilitas kamar yang tersedia untuk tipe ini"}
+                  </Text>
 
                   {/* Multi-select Chips */}
                   <View style={styles.facilityChipsGrid}>
-                    {allFacilityOptions.map((item, idx) => {
+                    {currentFacilityOptions.map((item, idx) => {
                       const IconComp = item.icon;
                       const isSelected = selectedFacilities.includes(item.label);
                       return (
                         <TouchableOpacity
                           key={idx}
-                          style={[styles.facilityChip, isSelected && styles.facilityChipSelected]}
+                          style={[
+                            styles.facilityChip,
+                            isSelected && { borderColor: themeColor, backgroundColor: themeBgLight },
+                          ]}
                           onPress={() => toggleFacility(item.label)}
                           activeOpacity={0.7}
                         >
-                          <IconComp size={14} color={isSelected ? "#0D7A53" : "#4B5563"} />
-                          <Text style={[styles.facilityChipText, isSelected && styles.facilityChipTextSelected]}>
+                          <IconComp size={14} color={isSelected ? themeColor : "#4B5563"} />
+                          <Text style={[styles.facilityChipText, isSelected && { color: themeColor, fontWeight: "700" }]}>
                             {item.label}
                           </Text>
                         </TouchableOpacity>
@@ -949,15 +1415,25 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                     })}
                   </View>
 
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 24, marginBottom: 4 }}>
-                    <Text style={styles.stepTitle}>Foto Kamar</Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginTop: 24,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Text style={styles.stepTitle}>
+                      {categoryType === "wisata" ? "Foto Wahana / Tiket" : "Foto Kamar"}
+                    </Text>
                     <View style={[styles.countBadge, roomPhotos.length >= 5 && { backgroundColor: "#FEE2E2" }]}>
                       <Text style={[styles.countBadgeText, roomPhotos.length >= 5 && { color: "#DC2626" }]}>
                         {roomPhotos.length}/5 Foto
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.stepSubtitle}>Tambahkan foto kamar kos Anda (Maksimal 5 foto)</Text>
+                  <Text style={styles.stepSubtitle}>Tambahkan foto terbaik (Maksimal 5 foto)</Text>
 
                   {/* Uploaded Photos Grid */}
                   {roomPhotos.length > 0 && (
@@ -966,7 +1442,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                         <View key={index} style={styles.photoThumbWrapper}>
                           <Image source={{ uri: photoUri }} style={styles.photoThumbImg} />
                           {index === 0 && (
-                            <View style={styles.photoMainBadge}>
+                            <View style={[styles.photoMainBadge, { backgroundColor: themeColor }]}>
                               <Text style={styles.photoMainBadgeText}>Utama</Text>
                             </View>
                           )}
@@ -992,30 +1468,34 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                     >
                       {isUploadingPhoto ? (
                         <View style={{ alignItems: "center", gap: 6, paddingVertical: 6 }}>
-                          <ActivityIndicator size="small" color="#0D7A53" />
-                          <Text style={styles.uploadPhotoText}>Mengunggah foto ke Cloudinary...</Text>
+                          <ActivityIndicator size="small" color={themeColor} />
+                          <Text style={[styles.uploadPhotoText, { color: themeColor }]}>Mengunggah foto...</Text>
                         </View>
                       ) : (
                         <View style={{ alignItems: "center", gap: 4, paddingVertical: 4 }}>
-                          <Plus size={24} color="#0D7A53" />
-                          <Text style={styles.uploadPhotoText}>Tambah Foto ({5 - roomPhotos.length} tersisa)</Text>
+                          <Plus size={24} color={themeColor} />
+                          <Text style={[styles.uploadPhotoText, { color: themeColor }]}>
+                            Tambah Foto ({5 - roomPhotos.length} tersisa)
+                          </Text>
                           <Text style={{ fontSize: 11, color: "#9CA3AF" }}>Format JPG, PNG (Maks 10MB)</Text>
                         </View>
                       )}
                     </TouchableOpacity>
                   ) : (
-                    <View style={styles.maxPhotoReachedBanner}>
-                      <CheckCircle size={16} color="#0D7A53" />
-                      <Text style={styles.maxPhotoReachedText}>Maksimal 5 foto telah dipilih</Text>
+                    <View style={[styles.maxPhotoReachedBanner, { backgroundColor: themeBgLight, borderColor: themeBorderLight }]}>
+                      <CheckCircle size={16} color={themeColor} />
+                      <Text style={[styles.maxPhotoReachedText, { color: themeColor }]}>
+                        Maksimal 5 foto telah dipilih
+                      </Text>
                     </View>
                   )}
 
                   <TouchableOpacity
-                    style={[styles.btnPrimary, { marginTop: 28 }]}
+                    style={[styles.btnPrimary, { backgroundColor: themeColor, marginTop: 28 }]}
                     onPress={() => setAddStep(3)}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.btnPrimaryText}>Lanjut</Text>
+                    <Text style={styles.btnPrimaryText}>Lanjut ke Ringkasan</Text>
                     <ArrowRight size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
                   </TouchableOpacity>
                 </View>
@@ -1025,82 +1505,127 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
               {addStep === 3 && (
                 <View>
                   <Text style={styles.stepTitle}>Ringkasan</Text>
-                  <Text style={styles.stepSubtitle}>Periksa kembali informasi kamar Anda</Text>
+                  <Text style={styles.stepSubtitle}>Periksa kembali informasi sebelum disimpan</Text>
 
                   {/* Summary Card Box */}
                   <View style={styles.summaryPreviewBox}>
                     <View style={styles.previewHeaderRow}>
                       <View style={styles.previewImgBox}>
                         {roomPhotos.length > 0 ? (
-                          <Image source={{ uri: roomPhotos[0] }} style={{ width: "100%", height: "100%", borderRadius: 12 }} />
+                          <Image
+                            source={{ uri: roomPhotos[0] }}
+                            style={{ width: "100%", height: "100%", borderRadius: 12 }}
+                          />
+                        ) : categoryType === "hotel" ? (
+                          <Hotel size={24} color="#9CA3AF" />
+                        ) : categoryType === "wisata" ? (
+                          <Ticket size={24} color="#9CA3AF" />
                         ) : (
                           <Building2 size={24} color="#9CA3AF" />
                         )}
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Text style={styles.previewRoomTitle}>{nomorKamar}</Text>
-                          <View style={styles.typeBadge}>
-                            <Text style={styles.typeBadgeText}>{tipeKamar}</Text>
+                          <Text style={styles.previewRoomTitle} numberOfLines={1}>
+                            {categoryType === "hotel"
+                              ? namaTipeKamar
+                              : categoryType === "wisata"
+                              ? namaTiket
+                              : nomorKamar}
+                          </Text>
+                          <View style={[styles.typeBadge, { backgroundColor: themeBgLight }]}>
+                            <Text style={[styles.typeBadgeText, { color: themeColor }]}>
+                              {categoryType === "hotel"
+                                ? tipeKasur
+                                : categoryType === "wisata"
+                                ? kategoriTiket.toUpperCase()
+                                : tipeKamar}
+                            </Text>
                           </View>
                         </View>
-                        <Text style={styles.previewPriceText}>{hargaSewa} <Text style={{ fontSize: 11, color: "#6B7280" }}>/ bulan</Text></Text>
+                        <Text style={[styles.previewPriceText, { color: themeColor }]}>
+                          {hargaSewa}{" "}
+                          <Text style={{ fontSize: 11, color: "#6B7280" }}>
+                            {categoryType === "hotel" ? "/ malam" : categoryType === "wisata" ? "/ org" : "/ bulan"}
+                          </Text>
+                        </Text>
                       </View>
                     </View>
 
                     <View style={styles.previewDivider} />
 
                     <View style={styles.previewDetailRow}>
-                      <Text style={styles.previewDetailLabel}>Fasilitas</Text>
+                      <Text style={styles.previewDetailLabel}>
+                        {categoryType === "wisata" ? "Wahana Termasuk" : "Fasilitas"}
+                      </Text>
                       <Text style={styles.previewDetailVal}>{selectedFacilities.join(", ") || "-"}</Text>
                     </View>
                     <View style={styles.previewDetailRow}>
-                      <Text style={styles.previewDetailLabel}>Foto Kamar</Text>
+                      <Text style={styles.previewDetailLabel}>Foto Galeri</Text>
                       <Text style={styles.previewDetailVal}>{roomPhotos.length} foto terpilih</Text>
                     </View>
-                    <View style={styles.previewDetailRow}>
-                      <Text style={styles.previewDetailLabel}>Deskripsi</Text>
-                      <Text style={styles.previewDetailVal}>{deskripsi}</Text>
-                    </View>
+                    {categoryType === "hotel" && (
+                      <View style={styles.previewDetailRow}>
+                        <Text style={styles.previewDetailLabel}>Kapasitas & Sarapan</Text>
+                        <Text style={styles.previewDetailVal}>
+                          {kapasitasTamu} Tamu • {termasukSarapan ? "Termasuk Sarapan" : "Tanpa Sarapan"}
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
-                  <Text style={[styles.stepTitle, { marginTop: 24 }]}>Status Kamar</Text>
+                  <Text style={[styles.stepTitle, { marginTop: 24 }]}>Status Ketersediaan</Text>
 
-                  {/* Selectable Status 1: Tersedia */}
+                  {/* Status 1: Tersedia */}
                   <TouchableOpacity
-                    style={[styles.statusSelectCard, kamarStatus === "tersedia" && styles.statusSelectCardActive]}
+                    style={[
+                      styles.statusSelectCard,
+                      kamarStatus === "tersedia" && { borderColor: themeColor, backgroundColor: themeBgLight },
+                    ]}
                     onPress={() => setKamarStatus("tersedia")}
                     activeOpacity={0.8}
                   >
-                    <CheckCircle
-                      size={20}
-                      color={kamarStatus === "tersedia" ? "#0D7A53" : "#D1D5DB"}
-                    />
+                    <CheckCircle size={20} color={kamarStatus === "tersedia" ? themeColor : "#D1D5DB"} />
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.statusSelectTitle, kamarStatus === "tersedia" && { color: "#0D7A53" }]}>
-                        Tersedia
+                      <Text style={[styles.statusSelectTitle, kamarStatus === "tersedia" && { color: themeColor }]}>
+                        {categoryType === "wisata" ? "Aktif & Dijual Online" : "Tersedia untuk Dipesan"}
                       </Text>
-                      <Text style={styles.statusSelectSub}>Kamar siap disewakan</Text>
+                      <Text style={styles.statusSelectSub}>
+                        {categoryType === "wisata"
+                          ? "Tiket tampil di katalog dan bisa dibeli langsung"
+                          : "Tampil di katalog dan siap dipesan calon tamu"}
+                      </Text>
                     </View>
                   </TouchableOpacity>
 
-                  {/* Selectable Status 2: Tidak Tersedia */}
+                  {/* Status 2: Tidak Tersedia */}
                   <TouchableOpacity
-                    style={[styles.statusSelectCard, kamarStatus === "tidak_tersedia" && styles.statusSelectCardActive]}
+                    style={[
+                      styles.statusSelectCard,
+                      kamarStatus === "tidak_tersedia" && { borderColor: "#6B7280", backgroundColor: "#F3F4F6" },
+                    ]}
                     onPress={() => setKamarStatus("tidak_tersedia")}
                     activeOpacity={0.8}
                   >
                     <View style={styles.radioOuter}>
-                      {kamarStatus === "tidak_tersedia" && <View style={styles.radioInner} />}
+                      {kamarStatus === "tidak_tersedia" && (
+                        <View style={[styles.radioInner, { backgroundColor: "#6B7280" }]} />
+                      )}
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={styles.statusSelectTitle}>Tidak Tersedia</Text>
-                      <Text style={styles.statusSelectSub}>Sembunyikan kamar sementara</Text>
+                      <Text style={styles.statusSelectTitle}>
+                        {categoryType === "wisata" ? "Nonaktif / Habis" : "Tidak Tersedia / Penuh"}
+                      </Text>
+                      <Text style={styles.statusSelectSub}>Sembunyikan sementara dari pencarian</Text>
                     </View>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.btnPrimary, { marginTop: 28 }, isSavingRoom && { opacity: 0.7 }]}
+                    style={[
+                      styles.btnPrimary,
+                      { backgroundColor: themeColor, marginTop: 28 },
+                      isSavingRoom && { opacity: 0.7 },
+                    ]}
                     onPress={handleSaveRoom}
                     disabled={isSavingRoom}
                     activeOpacity={0.85}
@@ -1109,7 +1634,11 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <Text style={styles.btnPrimaryText}>
-                        {modalMode === "edit" ? "Simpan Perubahan" : "Simpan Kamar"}
+                        {modalMode === "edit"
+                          ? "Simpan Perubahan"
+                          : `Simpan ${
+                              categoryType === "hotel" ? "Kamar" : categoryType === "wisata" ? "Tiket" : "Kamar"
+                            }`}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -1120,7 +1649,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
         </View>
       </Modal>
 
-      {/* MODAL 2: Opsi Kamar 1A (Bottom Sheet Action Menu) */}
+      {/* MODAL 2: Options Menu (Bottom Sheet) */}
       <Modal visible={selectedRoomForOptions !== null} transparent animationType="slide">
         <TouchableOpacity
           style={styles.bottomSheetOverlay}
@@ -1128,67 +1657,60 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
           onPress={() => setSelectedRoomForOptions(null)}
         >
           <View style={styles.bottomSheetCard} onStartShouldSetResponder={() => true}>
-            {/* Drag Handle */}
             <View style={styles.dragHandle} />
 
-            {/* Header */}
             <Text style={styles.optionsTitle}>
-              Opsi Kamar {selectedRoomForOptions?.name}
+              Opsi{" "}
+              {selectedRoomForOptions?.roomName ||
+                selectedRoomForOptions?.ticketName ||
+                selectedRoomForOptions?.name}
             </Text>
             <Text style={styles.optionsSubtitle}>
-              Tipe: {selectedRoomForOptions?.type} • Status:{" "}
-              {selectedRoomForOptions?.status === "terisi" ? "Terisi" : "Kosong"}
+              {selectedRoomForOptions?.type} • {selectedRoomForOptions?.price}
             </Text>
 
-            {/* Options List */}
             <View style={styles.optionsList}>
-              {/* 1. Edit Kamar */}
+              {/* 1. Edit */}
               <TouchableOpacity
                 style={styles.optionRow}
                 onPress={() => {
-                  if (selectedRoomForOptions) {
-                    handleOpenEditModal(selectedRoomForOptions);
-                  }
+                  if (selectedRoomForOptions) handleOpenEditModal(selectedRoomForOptions);
                 }}
                 activeOpacity={0.7}
               >
-                <View style={[styles.optionIconBg, { backgroundColor: "#F0FDF4" }]}>
-                  <Pencil size={18} color="#0D7A53" />
+                <View style={[styles.optionIconBg, { backgroundColor: themeBgLight }]}>
+                  <Pencil size={18} color={themeColor} />
                 </View>
                 <View style={styles.optionTextCol}>
-                  <Text style={styles.optionItemTitle}>Edit Kamar</Text>
-                  <Text style={styles.optionItemSub}>Ubah informasi kamar yang sudah ada</Text>
+                  <Text style={styles.optionItemTitle}>Edit Data</Text>
+                  <Text style={styles.optionItemSub}>Ubah harga, fasilitas, atau status ketersediaan</Text>
                 </View>
                 <ChevronRight size={16} color="#9CA3AF" />
               </TouchableOpacity>
 
-              {/* 2. Duplikat Kamar */}
+              {/* 2. Duplikat */}
               <TouchableOpacity
                 style={styles.optionRow}
                 onPress={() => {
-                  if (selectedRoomForOptions) {
-                    handleDuplicateRoom(selectedRoomForOptions);
-                  }
+                  if (selectedRoomForOptions) handleDuplicateRoom(selectedRoomForOptions);
                 }}
                 activeOpacity={0.7}
               >
-                <View style={[styles.optionIconBg, { backgroundColor: "#F0FDF4" }]}>
-                  <Copy size={18} color="#0D7A53" />
+                <View style={[styles.optionIconBg, { backgroundColor: themeBgLight }]}>
+                  <Copy size={18} color={themeColor} />
                 </View>
                 <View style={styles.optionTextCol}>
-                  <Text style={styles.optionItemTitle}>Duplikat Kamar</Text>
-                  <Text style={styles.optionItemSub}>Salin data kamar untuk kamar baru</Text>
+                  <Text style={styles.optionItemTitle}>Duplikat</Text>
+                  <Text style={styles.optionItemSub}>Salin sebagai unit/tiket baru</Text>
                 </View>
                 <ChevronRight size={16} color="#9CA3AF" />
               </TouchableOpacity>
 
-              {/* 3. Nonaktifkan Kamar */}
+              {/* 3. Nonaktifkan */}
               <TouchableOpacity
                 style={styles.optionRow}
                 onPress={() => {
-                  if (selectedRoomForOptions) {
-                    handleToggleNonaktifRoom(selectedRoomForOptions);
-                  }
+                  if (selectedRoomForOptions) handleToggleNonaktifRoom(selectedRoomForOptions);
                 }}
                 activeOpacity={0.7}
               >
@@ -1206,24 +1728,22 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                 </View>
                 <View style={styles.optionTextCol}>
                   <Text style={styles.optionItemTitle}>
-                    {selectedRoomForOptions?.isNonaktif ? "Aktifkan Kamar" : "Nonaktifkan Kamar"}
+                    {selectedRoomForOptions?.isNonaktif ? "Aktifkan Kembali" : "Sembunyikan / Nonaktifkan"}
                   </Text>
                   <Text style={styles.optionItemSub}>
                     {selectedRoomForOptions?.isNonaktif
-                      ? "Tampilkan kamar kembali dalam pencarian"
-                      : "Sembunyikan atau tampilkan kamar dari pencarian"}
+                      ? "Tampilkan kembali di pencarian customer"
+                      : "Sembunyikan dari katalog sementara"}
                   </Text>
                 </View>
                 <ChevronRight size={16} color="#9CA3AF" />
               </TouchableOpacity>
 
-              {/* 4. Hapus Kamar */}
+              {/* 4. Hapus */}
               <TouchableOpacity
                 style={styles.optionRow}
                 onPress={() => {
-                  if (selectedRoomForOptions) {
-                    handleDeleteRoom(selectedRoomForOptions);
-                  }
+                  if (selectedRoomForOptions) handleDeleteRoom(selectedRoomForOptions);
                 }}
                 activeOpacity={0.7}
               >
@@ -1231,26 +1751,21 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                   <Trash2 size={18} color="#EF4444" />
                 </View>
                 <View style={styles.optionTextCol}>
-                  <Text style={styles.optionItemTitle}>Hapus Kamar</Text>
-                  <Text style={styles.optionItemSub}>Hapus kamar secara permanen</Text>
+                  <Text style={styles.optionItemTitle}>Hapus Permanen</Text>
+                  <Text style={styles.optionItemSub}>Hapus data dari database</Text>
                 </View>
                 <ChevronRight size={16} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
 
-            {/* Cancel Button */}
-            <TouchableOpacity
-              style={styles.btnCancel}
-              onPress={() => setSelectedRoomForOptions(null)}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={styles.btnCancel} onPress={() => setSelectedRoomForOptions(null)} activeOpacity={0.8}>
               <Text style={styles.btnCancelText}>Batal</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Property Configuration Modal (Fasilitas Bersama & Peraturan Kos - 1 Untuk Seluruh Kos) */}
+      {/* MODAL 3: Property Configuration Modal (Fasilitas Properti & Tata Tertib) */}
       <Modal visible={isPropertyModalOpen} transparent animationType="slide">
         <View style={styles.modalOverlayBottom}>
           <View style={styles.propertyModalSheet}>
@@ -1258,13 +1773,23 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                  <Text style={styles.sheetTitle}>Pengaturan Properti Kos</Text>
-                  <View style={styles.propertyBadgeAll}>
-                    <Text style={styles.propertyBadgeAllText}>Semua Kamar</Text>
+                  <Text style={styles.sheetTitle}>
+                    {categoryType === "hotel"
+                      ? "Fasilitas Hotel & Kebijakan"
+                      : categoryType === "wisata"
+                      ? "Fasilitas Area & Jam Buka"
+                      : "Fasilitas Bersama & Peraturan Kos"}
+                  </Text>
+                  <View style={[styles.propertyBadgeAll, { backgroundColor: themeColor }]}>
+                    <Text style={styles.propertyBadgeAllText}>Semua Unit</Text>
                   </View>
                 </View>
                 <Text style={styles.sheetSub}>
-                  Atur fasilitas bersama dan peraturan kos yang berlaku untuk seluruh kamar.
+                  {categoryType === "hotel"
+                    ? "Atur fasilitas umum resort/hotel serta kebijakan check-in/out."
+                    : categoryType === "wisata"
+                    ? "Atur fasilitas kawasan wisata, jam buka operasional, dan tata tertib pengunjung."
+                    : "Atur fasilitas bersama dan peraturan kos yang berlaku untuk seluruh kamar."}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1279,13 +1804,22 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
             {/* Segmented Tab Bar */}
             <View style={styles.propSegmentWrap}>
               <TouchableOpacity
-                style={[styles.propSegmentBtn, propertyActiveTab === "fasilitas" && styles.propSegmentBtnActive]}
+                style={[
+                  styles.propSegmentBtn,
+                  propertyActiveTab === "fasilitas" && { backgroundColor: themeColor },
+                ]}
                 onPress={() => setPropertyActiveTab("fasilitas")}
                 activeOpacity={0.8}
               >
-                <SlidersHorizontal size={13} color={propertyActiveTab === "fasilitas" ? "#FFFFFF" : "#0D7A53"} />
+                <SlidersHorizontal
+                  size={13}
+                  color={propertyActiveTab === "fasilitas" ? "#FFFFFF" : themeColor}
+                />
                 <Text
-                  style={[styles.propSegmentText, propertyActiveTab === "fasilitas" && styles.propSegmentTextActive]}
+                  style={[
+                    styles.propSegmentText,
+                    propertyActiveTab === "fasilitas" && styles.propSegmentTextActive,
+                  ]}
                   numberOfLines={1}
                 >
                   Fasilitas
@@ -1308,16 +1842,25 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.propSegmentBtn, propertyActiveTab === "peraturan" && styles.propSegmentBtnActive]}
+                style={[
+                  styles.propSegmentBtn,
+                  propertyActiveTab === "peraturan" && { backgroundColor: themeColor },
+                ]}
                 onPress={() => setPropertyActiveTab("peraturan")}
                 activeOpacity={0.8}
               >
-                <ShieldCheck size={13} color={propertyActiveTab === "peraturan" ? "#FFFFFF" : "#0D7A53"} />
+                <ShieldCheck
+                  size={13}
+                  color={propertyActiveTab === "peraturan" ? "#FFFFFF" : themeColor}
+                />
                 <Text
-                  style={[styles.propSegmentText, propertyActiveTab === "peraturan" && styles.propSegmentTextActive]}
+                  style={[
+                    styles.propSegmentText,
+                    propertyActiveTab === "peraturan" && styles.propSegmentTextActive,
+                  ]}
                   numberOfLines={1}
                 >
-                  Peraturan
+                  {categoryType === "wisata" ? "Tata Tertib" : "Kebijakan"}
                 </Text>
                 <View
                   style={[
@@ -1337,13 +1880,22 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.propSegmentBtn, propertyActiveTab === "deskripsi" && styles.propSegmentBtnActive]}
+                style={[
+                  styles.propSegmentBtn,
+                  propertyActiveTab === "deskripsi" && { backgroundColor: themeColor },
+                ]}
                 onPress={() => setPropertyActiveTab("deskripsi")}
                 activeOpacity={0.8}
               >
-                <FileText size={13} color={propertyActiveTab === "deskripsi" ? "#FFFFFF" : "#0D7A53"} />
+                <FileText
+                  size={13}
+                  color={propertyActiveTab === "deskripsi" ? "#FFFFFF" : themeColor}
+                />
                 <Text
-                  style={[styles.propSegmentText, propertyActiveTab === "deskripsi" && styles.propSegmentTextActive]}
+                  style={[
+                    styles.propSegmentText,
+                    propertyActiveTab === "deskripsi" && styles.propSegmentTextActive,
+                  ]}
                   numberOfLines={1}
                 >
                   Deskripsi
@@ -1352,11 +1904,18 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
             </View>
 
             {/* Tab Contents */}
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, gap: 16 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, gap: 16 }}
+            >
               {propertyActiveTab === "fasilitas" && (
                 <View style={{ gap: 14 }}>
                   <Text style={styles.propSectionHint}>
-                    Pilih fasilitas umum yang dapat digunakan bersama oleh semua penghuni kos:
+                    {categoryType === "hotel"
+                      ? "Pilih fasilitas umum hotel/resort yang dapat dinikmati seluruh tamu:"
+                      : categoryType === "wisata"
+                      ? "Pilih fasilitas yang tersedia di area kawasan rekreasi:"
+                      : "Pilih fasilitas umum yang dapat digunakan bersama oleh semua penghuni kos:"}
                   </Text>
 
                   {/* Preset Facilities Grid */}
@@ -1367,15 +1926,18 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                       return (
                         <TouchableOpacity
                           key={idx}
-                          style={[styles.propChip, isSelected && styles.propChipActive]}
+                          style={[
+                            styles.propChip,
+                            isSelected && { backgroundColor: themeBgLight, borderColor: themeColor },
+                          ]}
                           onPress={() => handleToggleSharedFacility(fac.label)}
                           activeOpacity={0.8}
                         >
-                          <IconComp size={16} color={isSelected ? "#0D7A53" : "#6B7280"} />
-                          <Text style={[styles.propChipText, isSelected && styles.propChipTextActive]}>
+                          <IconComp size={16} color={isSelected ? themeColor : "#6B7280"} />
+                          <Text style={[styles.propChipText, isSelected && { color: themeColor, fontWeight: "700" }]}>
                             {fac.label}
                           </Text>
-                          {isSelected && <Check size={14} color="#0D7A53" />}
+                          {isSelected && <Check size={14} color={themeColor} />}
                         </TouchableOpacity>
                       );
                     })}
@@ -1387,11 +1949,11 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                       style={styles.customInputBox}
                       value={customFacilityInput}
                       onChangeText={setCustomFacilityInput}
-                      placeholder="Tambah fasilitas bersama lainnya..."
+                      placeholder="Tambah fasilitas lainnya..."
                       placeholderTextColor="#9CA3AF"
                     />
                     <TouchableOpacity
-                      style={styles.customAddBtn}
+                      style={[styles.customAddBtn, { backgroundColor: themeColor }]}
                       onPress={handleAddCustomFacility}
                       activeOpacity={0.8}
                     >
@@ -1399,53 +1961,47 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                       <Text style={styles.customAddBtnText}>Tambah</Text>
                     </TouchableOpacity>
                   </View>
-
-                  {/* Active Facilities Tag Cloud with delete */}
-                  <View style={styles.activeTagCloud}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 6 }}>
-                      Fasilitas Bersama Aktif ({sharedFacilities.length}):
-                    </Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                      {sharedFacilities.map((fac, idx) => (
-                        <View key={idx} style={styles.activeTagItem}>
-                          <Text style={styles.activeTagItemText}>{fac}</Text>
-                          <TouchableOpacity onPress={() => handleRemoveFacility(fac)} activeOpacity={0.7}>
-                            <X size={13} color="#DC2626" />
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
                 </View>
               )}
 
               {propertyActiveTab === "peraturan" && (
                 <View style={{ gap: 14 }}>
                   <Text style={styles.propSectionHint}>
-                    Tetapkan peraturan kos yang wajib ditaati oleh semua penghuni:
+                    {categoryType === "hotel"
+                      ? "Pilih kebijakan reservasi dan kenyamanan tamu hotel:"
+                      : categoryType === "wisata"
+                      ? "Pilih jam buka dan tata tertib pengunjung wisata:"
+                      : "Pilih peraturan kos yang berlaku untuk menjaga ketertiban bersama:"}
                   </Text>
 
-                  {/* Quick Preset Rules */}
+                  {/* Preset Rules Grid */}
                   <View style={{ gap: 8 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151" }}>Pilihan Cepat:</Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                      {presetRules.map((rule, idx) => {
-                        const isSelected = propertyRules.includes(rule);
-                        return (
-                          <TouchableOpacity
-                            key={idx}
-                            style={[styles.rulePresetChip, isSelected && styles.rulePresetChipActive]}
-                            onPress={() => handleToggleRule(rule)}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={[styles.rulePresetChipText, isSelected && styles.rulePresetChipTextActive]}>
-                              {isSelected ? "✓ " : "+ "}
+                    {presetRules.map((rule, idx) => {
+                      const isSelected = propertyRules.includes(rule);
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          style={[
+                            styles.rulePresetChip,
+                            isSelected && { backgroundColor: themeBgLight, borderColor: themeColor },
+                          ]}
+                          onPress={() => handleToggleRule(rule)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                            <CheckCircle size={16} color={isSelected ? themeColor : "#D1D5DB"} />
+                            <Text
+                              style={[
+                                styles.rulePresetChipText,
+                                isSelected && { color: themeColor, fontWeight: "700" },
+                              ]}
+                            >
                               {rule}
                             </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
 
                   {/* Custom Rule Input */}
@@ -1454,11 +2010,11 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                       style={styles.customInputBox}
                       value={customRuleInput}
                       onChangeText={setCustomRuleInput}
-                      placeholder="Tulis peraturan khusus lainnya..."
+                      placeholder="Tambah tata tertib lainnya..."
                       placeholderTextColor="#9CA3AF"
                     />
                     <TouchableOpacity
-                      style={styles.customAddBtn}
+                      style={[styles.customAddBtn, { backgroundColor: themeColor }]}
                       onPress={handleAddCustomRule}
                       activeOpacity={0.8}
                     >
@@ -1466,45 +2022,19 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                       <Text style={styles.customAddBtnText}>Tambah</Text>
                     </TouchableOpacity>
                   </View>
-
-                  {/* Active Rules List */}
-                  <View style={{ gap: 8 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151" }}>
-                      Daftar Peraturan Kos Aktif ({propertyRules.length}):
-                    </Text>
-                    {propertyRules.length === 0 ? (
-                      <Text style={{ fontSize: 12, color: "#9CA3AF", fontStyle: "italic" }}>
-                        Belum ada peraturan yang ditambahkan.
-                      </Text>
-                    ) : (
-                      propertyRules.map((rule, idx) => (
-                        <View key={idx} style={styles.activeRuleCard}>
-                          <Text style={styles.activeRuleIdx}>{idx + 1}.</Text>
-                          <Text style={styles.activeRuleText}>{rule}</Text>
-                          <TouchableOpacity
-                            onPress={() => handleRemoveRule(rule)}
-                            style={styles.activeRuleDeleteBtn}
-                            activeOpacity={0.7}
-                          >
-                            <Trash2 size={15} color="#DC2626" />
-                          </TouchableOpacity>
-                        </View>
-                      ))
-                    )}
-                  </View>
                 </View>
               )}
 
               {propertyActiveTab === "deskripsi" && (
                 <View style={{ gap: 12 }}>
                   <Text style={styles.propSectionHint}>
-                    Deskripsi keseluruhan kos yang akan tampil di halaman detail customer:
+                    Deskripsi keseluruhan properti yang tampil di halaman detail customer:
                   </Text>
                   <TextInput
                     style={styles.descInputBox}
                     value={propertyDescription}
                     onChangeText={setPropertyDescription}
-                    placeholder="Tulis deskripsi keunggulan, kenyamanan, dan lokasi kos Anda..."
+                    placeholder="Tulis deskripsi keunggulan, kenyamanan, dan daya tarik lokasi Anda..."
                     placeholderTextColor="#9CA3AF"
                     multiline
                     numberOfLines={6}
@@ -1517,7 +2047,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
             {/* Bottom Sticky Action Button */}
             <View style={styles.propModalFooter}>
               <TouchableOpacity
-                style={styles.btnSaveProperty}
+                style={[styles.btnSaveProperty, { backgroundColor: themeColor }]}
                 onPress={handleSavePropertyDetails}
                 disabled={isSavingProperty}
                 activeOpacity={0.85}
@@ -1527,7 +2057,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                 ) : (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <CheckCircle size={18} color="#FFFFFF" />
-                    <Text style={styles.btnSavePropertyText}>Simpan ke Seluruh Kos</Text>
+                    <Text style={styles.btnSavePropertyText}>Simpan Pengaturan Properti</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -1558,12 +2088,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
     color: "#111827",
   },
+  categoryPillBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  categoryPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#6B7280",
     marginTop: 2,
   },
@@ -1584,7 +2127,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#0D7A53",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1604,10 +2146,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
     color: "#4B5563",
     marginBottom: 4,
+    textAlign: "center",
   },
   labelWithDot: {
     flexDirection: "row",
@@ -1618,10 +2161,9 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#0D7A53",
   },
   summaryVal: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "800",
     color: "#111827",
   },
@@ -1632,10 +2174,105 @@ const styles = StyleSheet.create({
   },
   activeTabIndicator: {
     height: 3,
-    backgroundColor: "#0D7A53",
     width: 80,
     borderRadius: 2,
     marginBottom: 20,
+  },
+  propertyConfigCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  propertyConfigLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  propertyConfigIconBg: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  propertyConfigTitle: {
+    fontSize: 13.5,
+    fontWeight: "800",
+  },
+  propertyBadgeAll: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  propertyBadgeAllText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  propertyConfigSub: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  propertyConfigArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+  emptyStateCard: {
+    alignItems: "center",
+    paddingVertical: 44,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    marginTop: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 20,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  emptySub: {
+    fontSize: 13,
+    color: "#6B7280",
+    textAlign: "center",
+    paddingHorizontal: 16,
+    lineHeight: 20,
+  },
+  emptyAddBtn: {
+    marginTop: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  emptyAddBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 14,
   },
   roomList: {
     gap: 16,
@@ -1648,6 +2285,10 @@ const styles = StyleSheet.create({
     padding: 14,
     flexDirection: "row",
     gap: 14,
+  },
+  roomCardNonaktif: {
+    opacity: 0.6,
+    backgroundColor: "#F9FAFB",
   },
   roomImgContainer: {
     position: "relative",
@@ -1690,10 +2331,6 @@ const styles = StyleSheet.create({
   statusTextGray: {
     color: "#6B7280",
   },
-  roomCardNonaktif: {
-    opacity: 0.6,
-    backgroundColor: "#F9FAFB",
-  },
   roomDetailsCol: {
     flex: 1,
     justifyContent: "space-between",
@@ -1719,7 +2356,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   typeBadge: {
-    backgroundColor: "#E8F5EE",
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1728,7 +2364,20 @@ const styles = StyleSheet.create({
   typeBadgeText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#0D7A53",
+  },
+  miniMetaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  miniMetaText: {
+    fontSize: 10,
+    color: "#4B5563",
+    fontWeight: "600",
   },
   moreBtn: {
     padding: 3,
@@ -1765,15 +2414,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#6B7280",
   },
-  inclusionBadgeRow: {
-    marginTop: 1,
-    marginBottom: 4,
-  },
-  inclusionBadgeText: {
-    fontSize: 10,
-    color: "#0D7A53",
-    fontWeight: "600",
-  },
   roomFooterRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1793,10 +2433,6 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
   },
-  tenantLabel: {
-    fontSize: 8,
-    color: "#9CA3AF",
-  },
   tenantName: {
     fontSize: 11,
     fontWeight: "700",
@@ -1810,7 +2446,6 @@ const styles = StyleSheet.create({
   availableText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#EA580C",
   },
   priceRow: {
     flexDirection: "row",
@@ -1820,7 +2455,6 @@ const styles = StyleSheet.create({
   priceVal: {
     fontSize: 13,
     fontWeight: "900",
-    color: "#0D7A53",
   },
   priceUnit: {
     fontSize: 9.5,
@@ -1845,10 +2479,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#9CA3AF",
     marginTop: 2,
-  },
-  navTextActive: {
-    color: "#0D7A53",
-    fontWeight: "700",
   },
   modalOverlay: {
     flex: 1,
@@ -1895,9 +2525,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stepCircleActive: {
-    backgroundColor: "#0D7A53",
-  },
   stepNum: {
     fontSize: 12,
     fontWeight: "700",
@@ -1911,9 +2538,6 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: "#E5E7EB",
     marginHorizontal: 4,
-  },
-  stepLineActive: {
-    backgroundColor: "#0D7A53",
   },
   stepTitle: {
     fontSize: 16,
@@ -1951,9 +2575,54 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     textAlignVertical: "top",
   },
+  toggleOptionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  toggleOptionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  toggleOptionSub: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  checkCircleSmall: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#D1D5DB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ticketTypeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  ticketTypeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+  },
+  ticketTypeChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#4B5563",
+  },
   btnPrimary: {
     height: 50,
-    backgroundColor: "#0D7A53",
     borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
@@ -1981,18 +2650,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: "#FFFFFF",
   },
-  facilityChipSelected: {
-    borderColor: "#0D7A53",
-    backgroundColor: "#F0FDF4",
-  },
   facilityChipText: {
     fontSize: 12,
     color: "#4B5563",
     fontWeight: "500",
-  },
-  facilityChipTextSelected: {
-    color: "#0D7A53",
-    fontWeight: "700",
   },
   uploadPhotoBox: {
     height: 100,
@@ -2007,7 +2668,6 @@ const styles = StyleSheet.create({
   uploadPhotoText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0D7A53",
   },
   summaryPreviewBox: {
     backgroundColor: "#F9FAFB",
@@ -2030,14 +2690,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   previewRoomTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
     color: "#111827",
   },
   previewPriceText: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0D7A53",
     marginTop: 2,
   },
   previewDivider: {
@@ -2068,10 +2727,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: "#FFFFFF",
   },
-  statusSelectCardActive: {
-    borderColor: "#0D7A53",
-    backgroundColor: "#F0FDF4",
-  },
   statusSelectTitle: {
     fontSize: 14,
     fontWeight: "700",
@@ -2095,7 +2750,6 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#0D7A53",
   },
   bottomSheetOverlay: {
     flex: 1,
@@ -2217,7 +2871,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 4,
     left: 4,
-    backgroundColor: "#0D7A53",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
@@ -2242,75 +2895,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#DCFCE7",
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#86EFAC",
   },
   maxPhotoReachedText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0D7A53",
   },
-  // Property Configuration Quick Action Card
-  propertyConfigCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1.5,
-    borderColor: "#BBF7D0",
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  propertyConfigLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  // Property Sheet Modal
+  modalOverlayBottom: {
     flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    justifyContent: "flex-end",
   },
-  propertyConfigIconBg: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  propertyConfigTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#065F46",
-  },
-  propertyBadgeAll: {
-    backgroundColor: "#0D7A53",
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  propertyBadgeAllText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  propertyConfigSub: {
-    fontSize: 12,
-    color: "#047857",
-    fontWeight: "500",
-  },
-  propertyConfigArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
-  },
-  // Property Configuration Modal Bottom Sheet
   propertyModalSheet: {
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
@@ -2366,14 +2964,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: 11,
   },
-  propSegmentBtnActive: {
-    backgroundColor: "#0D7A53",
-    shadowColor: "#0D7A53",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
   propSegmentText: {
     fontSize: 12,
     fontWeight: "700",
@@ -2427,18 +3017,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
   },
-  propChipActive: {
-    backgroundColor: "#E8F5EE",
-    borderColor: "#0D7A53",
-  },
   propChipText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#4B5563",
-  },
-  propChipTextActive: {
-    color: "#0D7A53",
-    fontWeight: "700",
   },
   customInputRow: {
     flexDirection: "row",
@@ -2459,7 +3041,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#0D7A53",
     paddingHorizontal: 14,
     height: 44,
     borderRadius: 12,
@@ -2469,75 +3050,19 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  activeTagCloud: {
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#F3F4F6",
-    borderRadius: 14,
-    padding: 12,
-  },
-  activeTagItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  activeTagItemText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#374151",
-  },
   rulePresetChip: {
-    backgroundColor: "#F3F4F6",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  rulePresetChipActive: {
-    backgroundColor: "#E8F5EE",
-    borderColor: "#0D7A53",
-  },
-  rulePresetChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#4B5563",
-  },
-  rulePresetChipTextActive: {
-    color: "#0D7A53",
-    fontWeight: "700",
-  },
-  activeRuleCard: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: "#F9FAFB",
     borderWidth: 1,
     borderColor: "#E5E7EB",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
-    gap: 8,
   },
-  activeRuleIdx: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#0D7A53",
-  },
-  activeRuleText: {
-    flex: 1,
+  rulePresetChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#374151",
+    color: "#4B5563",
     lineHeight: 18,
-  },
-  activeRuleDeleteBtn: {
-    padding: 4,
   },
   descInputBox: {
     backgroundColor: "#F9FAFB",
@@ -2560,7 +3085,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0D7A53",
     height: 50,
     borderRadius: 14,
     gap: 8,
@@ -2569,10 +3093,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: "#FFFFFF",
-  },
-  modalOverlayBottom: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
-    justifyContent: "flex-end",
   },
 });

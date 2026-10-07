@@ -146,14 +146,29 @@ const BaseStep: React.FC<{ form: RegistrationForm; update: (key: keyof Registrat
 
 const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, string>; updateRoleData: (key: string, value: string) => void }> = ({ role, roleData, updateRoleData }) => {
   if (role === "pemilik_kos") {
-    const selectedCategory = roleData.businessCategory || "kost";
+    const rawCategories = roleData.businessCategories || roleData.businessCategory || "kost";
+    const selectedCategories = rawCategories.split(",").map((c: string) => c.trim()).filter(Boolean);
     const selectedType = roleData.propertyType || "Campur";
 
     const categories = [
-      { id: "kost", label: "Kost", sub: "Putri, Putra, atau Campur (Bulanan/Tahunan)", icon: "🏠" },
-      { id: "hotel", label: "Penginapan / Villa / Hotel", sub: "Sewa harian, villa, homestay", icon: "🏨" },
-      { id: "wisata", label: "Destinasi Wisata", sub: "Tiket wahana & tempat wisata", icon: "🎟️" },
+      { id: "kost", label: "Kost & Coliving", sub: "Putri, Putra, atau Campur (Bulanan / Tahunan)", icon: "🏠" },
+      { id: "hotel", label: "Penginapan / Villa / Hotel", sub: "Sewa harian, villa privat, resort & homestay", icon: "🏨" },
+      { id: "wisata", label: "Destinasi Wisata & Rekreasi", sub: "Tiket wahana, tiket masuk & spot wisata", icon: "🎟️" },
     ];
+
+    const toggleCategory = (catId: string) => {
+      let updated = selectedCategories.includes(catId)
+        ? selectedCategories.filter((c: string) => c !== catId)
+        : [...selectedCategories, catId];
+      if (updated.length === 0) updated = [catId]; // Minimal 1 kategori terpilih
+      updateRoleData("businessCategories", updated.join(","));
+      updateRoleData("businessCategory", updated[0]);
+      if (!updated.includes("kost") && updated.includes("hotel")) {
+        updateRoleData("propertyType", "Villa / Hotel");
+      } else if (!updated.includes("kost") && updated.includes("wisata")) {
+        updateRoleData("propertyType", "Wisata");
+      }
+    };
 
     const kostTypes = ["Putri", "Putra", "Campur"];
 
@@ -161,27 +176,22 @@ const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, 
       <View style={authStyles.card}>
         <SectionHeading
           icon={<ShieldCheck size={18} color={authColors.primary} />}
-          title="Data Usaha Homestay"
-          text="Pilih bentuk usaha dan lengkapi detail lokasi serta nama properti Anda."
+          title="Data Usaha Kanyaah Homestay"
+          text="Pilih jenis usaha yang Anda miliki (bisa pilih salah satu atau kombinasi/ketiganya)."
         />
 
-        {/* Pilihan Bentuk Usaha */}
-        <Text style={[authStyles.label, { marginTop: 14 }]}>Bentuk Usaha *</Text>
+        {/* Pilihan Bentuk Usaha (Multi-select / Single-select) */}
+        <Text style={[authStyles.label, { marginTop: 14 }]}>
+          Jenis Usaha yang Dikelola * <Text style={{ fontSize: 11, color: "#6B7280", fontWeight: "normal" }}>(Bisa pilih lebih dari 1)</Text>
+        </Text>
         <View style={styles.categoryGrid}>
           {categories.map((cat) => {
-            const isSelected = selectedCategory === cat.id;
+            const isSelected = selectedCategories.includes(cat.id);
             return (
               <TouchableOpacity
                 key={cat.id}
                 style={[styles.categoryCard, isSelected && styles.categoryCardSelected]}
-                onPress={() => {
-                  updateRoleData("businessCategory", cat.id);
-                  if (cat.id !== "kost") {
-                    updateRoleData("propertyType", cat.id === "hotel" ? "Villa / Hotel" : "Wisata");
-                  } else {
-                    updateRoleData("propertyType", "Campur");
-                  }
-                }}
+                onPress={() => toggleCategory(cat.id)}
                 activeOpacity={0.8}
               >
                 <Text style={styles.categoryEmoji}>{cat.icon}</Text>
@@ -199,8 +209,8 @@ const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, 
           })}
         </View>
 
-        {/* Jika tipe Kost: Sub-opsi Putri / Putra / Campur */}
-        {selectedCategory === "kost" && (
+        {/* Jika tipe Kost aktif: Sub-opsi Putri / Putra / Campur */}
+        {selectedCategories.includes("kost") && (
           <View style={{ marginTop: 12 }}>
             <Text style={authStyles.label}>Tipe Penghuni Kost *</Text>
             <View style={styles.subTypeRow}>
@@ -229,9 +239,9 @@ const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, 
           value={roleData.businessName || ""}
           onChangeText={(value) => updateRoleData("businessName", value)}
           placeholder={
-            selectedCategory === "wisata"
+            selectedCategories.includes("wisata")
               ? "Contoh: Taman Wisata Air Sabda Alam"
-              : selectedCategory === "hotel"
+              : selectedCategories.includes("hotel")
               ? "Contoh: Kamojang Green Resort & Villa"
               : "Contoh: Ais Kost Putri Exclusive"
           }
@@ -241,32 +251,88 @@ const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, 
         <TextField
           label="Alamat Lengkap Properti *"
           value={roleData.businessAddress || ""}
-          onChangeText={(value) => updateRoleData("businessAddress", value)}
+          onChangeText={(value) => {
+            updateRoleData("businessAddress", value);
+            // Smart auto-fill GPS coordinates based on address keywords
+            const lower = value.toLowerCase();
+            if (lower.includes("cipanas") || lower.includes("sabda alam") || lower.includes("tarogong")) {
+              updateRoleData("latitude", "-7.1852");
+              updateRoleData("longitude", "107.8765");
+            } else if (lower.includes("kamojang") || lower.includes("samarang")) {
+              updateRoleData("latitude", "-7.2145");
+              updateRoleData("longitude", "107.7982");
+            } else if (lower.includes("bagendit") || lower.includes("banyuresmi")) {
+              updateRoleData("latitude", "-7.1562");
+              updateRoleData("longitude", "107.9421");
+            } else if (lower.includes("darajat") || lower.includes("pasirwangi")) {
+              updateRoleData("latitude", "-7.2341");
+              updateRoleData("longitude", "107.7654");
+            } else if (lower.includes("garut kota") || lower.includes("pemberhentian")) {
+              updateRoleData("latitude", "-7.2278");
+              updateRoleData("longitude", "107.9087");
+            }
+          }}
           placeholder="Jalan, No, RT/RW, Kelurahan, Kecamatan, Garut"
           multiline
           icon={<MapPin size={17} color="#6B7280" />}
         />
 
-        {/* Koordinat GPS */}
-        <View style={styles.gpsRow}>
-          <View style={{ flex: 1 }}>
-            <TextField
-              label="Latitude (GPS)"
-              value={roleData.latitude || "-7.2278"}
-              onChangeText={(value) => updateRoleData("latitude", value)}
-              placeholder="-7.2278"
-              keyboardType="numeric"
-            />
-          </View>
-          <View style={{ width: 10 }} />
-          <View style={{ flex: 1 }}>
-            <TextField
-              label="Longitude (GPS)"
-              value={roleData.longitude || "107.9087"}
-              onChangeText={(value) => updateRoleData("longitude", value)}
-              placeholder="107.9087"
-              keyboardType="numeric"
-            />
+        {/* Quick Area Mapping Chips */}
+        <Text style={[authStyles.label, { marginTop: 12 }]}>Pilih Lokasi Cepat di Peta / Wilayah Garut</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaChipsScroll}>
+          {[
+            { label: "📍 Tarogong / Cipanas", address: "Jl. Raya Cipanas, Tarogong Kaler, Garut", lat: "-7.1852", lng: "107.8765" },
+            { label: "📍 Samarang / Kamojang", address: "Jl. Raya Kamojang, Samarang, Garut", lat: "-7.2145", lng: "107.7982" },
+            { label: "📍 Garut Kota", address: "Pusat Kota Garut, Jawa Barat", lat: "-7.2278", lng: "107.9087" },
+            { label: "📍 Situ Bagendit", address: "Kec. Banyuresmi, Garut", lat: "-7.1562", lng: "107.9421" },
+            { label: "📍 Kawah Darajat", address: "Jl. Pasirwangi, Darajat, Garut", lat: "-7.2341", lng: "107.7654" },
+          ].map((area, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={[
+                styles.areaQuickChip,
+                roleData.latitude === area.lat && styles.areaQuickChipActive,
+              ]}
+              onPress={() => {
+                if (!roleData.businessAddress) {
+                  updateRoleData("businessAddress", area.address);
+                }
+                updateRoleData("latitude", area.lat);
+                updateRoleData("longitude", area.lng);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.areaQuickChipText, roleData.latitude === area.lat && styles.areaQuickChipTextActive]}>
+                {area.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Koordinat GPS Card (Clean, Non-overflowing) */}
+        <View style={styles.gpsCardWrapper}>
+          <Text style={styles.gpsCardTitle}>Titik Koordinat Terpilih (Otomatis dari Peta / Alamat):</Text>
+          <View style={styles.gpsRowClean}>
+            <View style={styles.gpsInputCol}>
+              <Text style={styles.gpsMiniLabel}>Latitude</Text>
+              <TextInput
+                style={styles.gpsInputBox}
+                value={roleData.latitude || "-7.2278"}
+                onChangeText={(value) => updateRoleData("latitude", value)}
+                placeholder="-7.2278"
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.gpsInputCol}>
+              <Text style={styles.gpsMiniLabel}>Longitude</Text>
+              <TextInput
+                style={styles.gpsInputBox}
+                value={roleData.longitude || "107.9087"}
+                onChangeText={(value) => updateRoleData("longitude", value)}
+                placeholder="107.9087"
+                keyboardType="numeric"
+              />
+            </View>
           </View>
         </View>
         <Text style={styles.gpsHint}>
@@ -371,6 +437,82 @@ const styles = StyleSheet.create({
   subTypeChipActive: { borderColor: "#0D7A53", backgroundColor: "#0D7A53" },
   subTypeText: { fontSize: 12, fontWeight: "700", color: "#4B5563" },
   subTypeTextActive: { color: "#FFFFFF" },
-  gpsRow: { flexDirection: "row", alignItems: "center" },
-  gpsHint: { fontSize: 11, color: "#6B7280", marginTop: 6, lineHeight: 15 },
+  areaChipsScroll: { flexDirection: "row", gap: 8, paddingVertical: 6 },
+  areaQuickChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  areaQuickChipActive: {
+    backgroundColor: "#E8F5EE",
+    borderColor: "#0D7A53",
+  },
+  areaQuickChipText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  areaQuickChipTextActive: {
+    color: "#0D7A53",
+    fontWeight: "700",
+  },
+  btnDetectLocation: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 10,
+  },
+  btnDetectLocationText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  gpsCardWrapper: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 12,
+  },
+  gpsCardTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#4B5563",
+    marginBottom: 8,
+  },
+  gpsRowClean: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  gpsInputCol: {
+    flex: 1,
+  },
+  gpsMiniLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#6B7280",
+    marginBottom: 3,
+  },
+  gpsInputBox: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 40,
+    fontSize: 13,
+    color: "#111827",
+    fontWeight: "600",
+  },
+  gpsHint: { fontSize: 11, color: "#6B7280", marginTop: 8, lineHeight: 15 },
 });

@@ -90,6 +90,6 @@ export const ROLE_LABELS: Record<AuthRegistrationRole, string> = {
   pemilik_marketplace: "Pemilik Marketplace",
   pemilik_catering: "Pemilik Catering",
   pemilik_laundry: "Pemilik Laundry",
-  pemilik_kos: "Pemilik Kos",
+  pemilik_kos: "Kanyaah Homestay",
   bank_sampah: "Pengelola Bank Sampah",
 };

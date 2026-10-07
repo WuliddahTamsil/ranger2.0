@@ -67,33 +67,73 @@ interface PartnerUnit {
   address: string;
 }
 
-const PARTNER_UNITS: PartnerUnit[] = [
+const DEFAULT_FALLBACK_UNITS: PartnerUnit[] = [
   {
     id: "unit-1",
-    name: "Ais Kos Exclusive & Homestay",
-    type: "kost",
-    tag: "Kos Mahasiswa & Karyawan",
-    address: "Tarogong Kaler, Garut",
-  },
-  {
-    id: "unit-2",
-    name: "Kamojang Green Resort & Villa",
-    type: "hotel",
-    tag: "Hotel & Villa Harian",
-    address: "Jl. Raya Kamojang KM.3, Samarang",
-  },
-  {
-    id: "unit-3",
-    name: "Taman Wisata & Air Sabda Alam",
+    name: "Kanyaah Homestay & Wisata",
     type: "wisata",
-    tag: "Tiket Wisata & Waterpark",
-    address: "Jl. Raya Cipanas No.3, Garut",
+    tag: "Tiket & Objek Wisata",
+    address: "Garut, Jawa Barat",
   },
 ];
 
 export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, authAccount }) => {
   const [activeTab, setActiveTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("beranda");
-  const [selectedUnit, setSelectedUnit] = useState<PartnerUnit>(PARTNER_UNITS[0]);
+
+  // Helper to construct partner units dynamically from authAccount / kostProperty
+  const getDerivedUnits = (account?: AuthAccount | null, property?: any): PartnerUnit[] => {
+    const rawCategories: string[] = [];
+    const roleCategories = account?.roleData?.businessCategories;
+    if (Array.isArray(roleCategories) && roleCategories.length > 0) {
+      rawCategories.push(...roleCategories);
+    } else if (typeof roleCategories === "string" && roleCategories.trim()) {
+      rawCategories.push(...roleCategories.split(",").map((s) => s.trim().toLowerCase()));
+    } else if (account?.roleData?.businessCategory) {
+      rawCategories.push(String(account.roleData.businessCategory).toLowerCase());
+    } else if (property?.categoryType) {
+      rawCategories.push(String(property.categoryType).toLowerCase());
+    } else if (account?.roleData?.propertyType) {
+      const pt = String(account.roleData.propertyType).toLowerCase();
+      if (pt.includes("wisata")) rawCategories.push("wisata");
+      else if (pt.includes("hotel") || pt.includes("villa") || pt.includes("penginapan")) rawCategories.push("hotel");
+      else rawCategories.push("kost");
+    }
+
+    const uniqueCats = Array.from(new Set(rawCategories.filter(Boolean))) as LodgingCategoryType[];
+    if (uniqueCats.length === 0) {
+      const defaultType: LodgingCategoryType = (property?.categoryType as LodgingCategoryType) || "wisata";
+      return [
+        {
+          id: property?._id || `unit-${account?.id || "default"}`,
+          name: property?.name || account?.roleData?.businessName || (account?.name ? `${account.name} Wisata & Properti` : "Kanyaah Homestay"),
+          type: defaultType,
+          tag: defaultType === "wisata" ? "Tiket & Objek Wisata" : defaultType === "hotel" ? "Hotel & Villa Harian" : "Kos Mahasiswa & Karyawan",
+          address: property?.address || account?.roleData?.businessAddress || "Garut, Jawa Barat",
+        },
+      ];
+    }
+
+    return uniqueCats.map((cat, idx) => {
+      const isPrimary = idx === 0;
+      const bName = isPrimary && (property?.name || account?.roleData?.businessName)
+        ? (property?.name || account?.roleData?.businessName)
+        : account?.name
+        ? `${account.name} ${cat === "wisata" ? "Wisata & Rekreasi" : cat === "hotel" ? "Hotel & Villa" : "Kost"}`
+        : `Unit ${cat.toUpperCase()}`;
+
+      return {
+        id: (isPrimary && property?._id) ? property._id : `unit-${cat}-${idx + 1}`,
+        name: bName,
+        type: cat,
+        tag: cat === "wisata" ? "Tiket & Objek Wisata" : cat === "hotel" ? "Hotel & Villa Harian" : "Kos Mahasiswa & Karyawan",
+        address: property?.address || account?.roleData?.businessAddress || "Garut, Jawa Barat",
+      };
+    });
+  };
+
+  const initialUnits = getDerivedUnits(authAccount, null);
+  const [partnerUnits, setPartnerUnits] = useState<PartnerUnit[]>(initialUnits);
+  const [selectedUnit, setSelectedUnit] = useState<PartnerUnit>(initialUnits[0] || DEFAULT_FALLBACK_UNITS[0]);
   const [isUnitPickerOpen, setIsUnitPickerOpen] = useState(false);
 
   // E-Ticket Scanner Modal for Wisata
@@ -107,7 +147,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   // Live Chat with Customer
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatTargetOrder, setChatTargetOrder] = useState<string>("kost_chat_inquiry");
-  const [chatCustomerName, setChatCustomerName] = useState<string>("Wuwu Pelanggan (Customer)");
+  const [chatCustomerName, setChatCustomerName] = useState<string>("Pelanggan (Customer)");
 
   const [kostProperty, setKostProperty] = useState<any>(null);
   const [rooms, setRooms] = useState<any[]>([]);
@@ -117,7 +157,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   const scrollViewRef = useRef<ScrollView>(null);
   const [perluTindakanY, setPerluTindakanY] = useState(0);
 
-  // 12 Months for current year (Defaults to current month e.g. September 2026)
+  // 12 Months for current year (Defaults to current month)
   const currentMonthIdx = new Date().getMonth();
   const currentYear = new Date().getFullYear();
   const monthNames = [
@@ -139,17 +179,29 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
 
   const load = async () => {
     try {
-      const ownerEmail = authAccount?.email || authAccount?.id || "aisk@gmail.com";
+      const ownerEmail = authAccount?.email || authAccount?.id || "mitra@kanyaah.com";
       const [roomsData, bookingsData, txData, propData] = await Promise.all([
         fetchRoomsByOwner(ownerEmail),
         fetchOwnerBookings(ownerEmail),
         fetchTransactionsByOwner(ownerEmail),
         fetchKostProperty(ownerEmail).catch(() => null),
       ]);
+
       setRooms(Array.isArray(roomsData) ? roomsData : []);
       if (propData) {
         setKostProperty(propData);
       }
+
+      // Re-derive units based on loaded data
+      const dynamicUnits = getDerivedUnits(authAccount, propData);
+      setPartnerUnits(dynamicUnits);
+      if (dynamicUnits.length > 0) {
+        setSelectedUnit((prev) => {
+          const match = dynamicUnits.find((u) => u.type === prev.type || u.id === prev.id);
+          return match || dynamicUnits[0];
+        });
+      }
+
       if (bookingsData && Array.isArray(bookingsData)) {
         setAllBookings(bookingsData);
         setPendingBookings(bookingsData.filter((b: any) => b.status === "dp_submitted"));
@@ -168,17 +220,35 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   };
 
   useEffect(() => {
+    const dynamicUnits = getDerivedUnits(authAccount, kostProperty);
+    setPartnerUnits(dynamicUnits);
+    if (dynamicUnits.length > 0) {
+      setSelectedUnit(dynamicUnits[0]);
+    }
     load();
   }, [authAccount]);
 
-  // Statistics calculation
-  const totalKamar = rooms.length > 0 ? rooms.length : 10;
-  const kamarTerisi = rooms.filter(r => r.status === "terisi" || r.isAvailable === false).length;
-  const kamarKosong = totalKamar - kamarTerisi;
-  const percentFilled = totalKamar > 0 ? Math.round((kamarTerisi / totalKamar) * 100) : 70;
+  // Statistics calculation tailored to unit type
+  const totalWisataTickets = (kostProperty?.wisataTickets?.length || rooms.filter(r => r.ticketName || r.type === "wisata").length || 0);
+  const totalHotelRooms = (kostProperty?.hotelRooms?.length || rooms.filter(r => r.roomName || r.type === "hotel").length || 0);
+  const totalKostRooms = rooms.length;
 
-  // Real Financial Calculations
-  const validBookings = allBookings.filter(b => b.status === "dp_verified" || b.status === "dp_submitted" || b.status === "active");
+  const validBookings = allBookings.filter(b => b.status === "dp_verified" || b.status === "dp_submitted" || b.status === "active" || b.status === "paid" || b.status === "completed");
+  const totalTicketsSold = validBookings.reduce((sum, b) => sum + (Number(b.ticketCount) || 1), 0);
+  const kamarTerisi = rooms.filter(r => r.status === "terisi" || r.isAvailable === false).length;
+  const kamarKosong = Math.max(0, totalKostRooms - kamarTerisi);
+
+  // Percent filled calculation (0 if new account)
+  let percentFilled = 0;
+  if (selectedUnit.type === "wisata") {
+    percentFilled = totalWisataTickets > 0 && totalTicketsSold > 0 ? Math.min(100, Math.round((totalTicketsSold / (totalWisataTickets * 50)) * 100)) : 0;
+  } else if (selectedUnit.type === "hotel") {
+    percentFilled = totalHotelRooms > 0 ? Math.round((validBookings.length / totalHotelRooms) * 100) : 0;
+  } else {
+    percentFilled = totalKostRooms > 0 ? Math.round((kamarTerisi / totalKostRooms) * 100) : 0;
+  }
+
+  // Real Financial Calculations (Starts at 0 for new partners)
   const totalDpCustomer = validBookings.reduce((sum, b) => sum + Number(b.dpAmount || 0), 0);
   const settledBookings = validBookings.filter(b => b.settlementStatus === "settled" || (b.settledAmount && b.settledAmount > 0));
   const totalPelunasanCustomer = settledBookings.reduce(
@@ -188,10 +258,8 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   const manualIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + Number(t.amount || 0), 0);
   const manualExpense = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
-  // Financial adjusted per unit type
-  const unitMultiplier = selectedUnit.type === "hotel" ? 2.5 : selectedUnit.type === "wisata" ? 1.8 : 1.0;
-  const baseLaba = totalDpCustomer + totalPelunasanCustomer + manualIncome - manualExpense;
-  const labaBersih = baseLaba > 0 ? Math.round(baseLaba * unitMultiplier) : Math.round(4850000 * unitMultiplier);
+  const baseLaba = Math.max(0, totalDpCustomer + totalPelunasanCustomer + manualIncome - manualExpense);
+  const labaBersih = baseLaba;
 
   const vacantRooms = rooms.filter(r => r.status === "kosong" || r.isAvailable === true);
   const overdueRooms = rooms.filter(r => r.isOverdue === true);
@@ -240,8 +308,8 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
         <View style={styles.topHeader}>
           <View style={styles.headerTopRow}>
             <View style={styles.headerLeft}>
-              <Text style={styles.greetingText}>Dashboard Mitra Properti & Wisata 🍃</Text>
-              <Text style={styles.nameText}>{authAccount?.name || "Aisyah Pemilik"}</Text>
+              <Text style={styles.greetingText}>Dashboard Kanyaah Homestay 🍃</Text>
+              <Text style={styles.nameText}>{authAccount?.name || "Mitra Kanyaah"}</Text>
             </View>
             <View style={styles.headerRight}>
               {/* Chat Pelanggan Button */}
@@ -250,7 +318,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                 onPress={() => {
                   const targetId = kostProperty?._id || "kost_chat_inquiry";
                   setChatTargetOrder(String(targetId));
-                  setChatCustomerName("Wuwu Pelanggan (Customer)");
+                  setChatCustomerName("Pelanggan (Customer)");
                   setIsChatOpen(true);
                 }}
                 activeOpacity={0.7}
@@ -265,7 +333,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                 activeOpacity={0.7}
               >
                 <Bell size={20} color="#FFFFFF" />
-                <View style={styles.notifBadge} />
+                {pendingBookings.length > 0 && <View style={styles.notifBadge} />}
               </TouchableOpacity>
               <TouchableOpacity style={styles.logoutBtn} onPress={() => navigate("role")} activeOpacity={0.7}>
                 <LogOut size={16} color="#FFFFFF" />
@@ -289,7 +357,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
               ) : (
                 <Building2 size={16} color="#0D7A53" />
               )}
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.propertyPillLabel}>Sedang Mengelola:</Text>
                 <Text style={styles.propertyPillName} numberOfLines={1}>
                   {selectedUnit.name}
@@ -317,7 +385,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                   {selectedUnit.type.toUpperCase()}
                 </Text>
               </View>
-              <ChevronDown size={16} color="#374151" />
+              {partnerUnits.length > 1 && <ChevronDown size={16} color="#374151" />}
             </View>
           </TouchableOpacity>
         </View>
@@ -326,7 +394,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           {/* Section: Ringkasan Bisnis Bulan Ini */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>
-              Ringkasan {selectedUnit.type === "hotel" ? "Hotel & Villa" : selectedUnit.type === "wisata" ? "Tiket Wisata" : "Kos"}
+              Ringkasan {selectedUnit.type === "hotel" ? "Hotel & Villa" : selectedUnit.type === "wisata" ? "Tiket & Wisata" : "Kos"}
             </Text>
             <TouchableOpacity
               style={styles.filterBtn}
@@ -363,13 +431,15 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
             <View style={styles.incomeBadgeRow}>
               <View style={[styles.trendBadge, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
                 <TrendingUp size={13} color="#FFFFFF" />
-                <Text style={[styles.trendText, { color: "#FFFFFF" }]}>+24% vs Bln Lalu</Text>
+                <Text style={[styles.trendText, { color: "#FFFFFF" }]}>
+                  {validBookings.length > 0 ? `+${validBookings.length} Transaksi` : "Belum Ada Transaksi"}
+                </Text>
               </View>
               <Text style={styles.trendSubtext}>
                 {selectedUnit.type === "hotel"
-                  ? "9 Kamar Terisi • 14 Malam Terbooking"
+                  ? `${validBookings.length} Kamar Terbooking`
                   : selectedUnit.type === "wisata"
-                  ? "142 Tiket Terjual Bulan Ini"
+                  ? `${totalTicketsSold} Tiket Terjual • ${validBookings.length} Booking`
                   : `${kamarTerisi} kamar terisi • ${validBookings.length} booking`}
               </Text>
             </View>
@@ -380,9 +450,78 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
           </TouchableOpacity>
 
           {/* ============================================================ */}
+          {/* EMPTY STATE BANNER / QUICK ADD IF DATA IS 0                 */}
+          {/* ============================================================ */}
+          {selectedUnit.type === "wisata" && totalWisataTickets === 0 && (
+            <View style={styles.emptyPromptCard}>
+              <View style={styles.emptyPromptIconCircle}>
+                <Ticket size={24} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emptyPromptTitle}>Belum Ada Tiket Wisata</Text>
+                <Text style={styles.emptyPromptDesc}>
+                  Akun Anda terdaftar sebagai pengelola tempat wisata. Mulai tambahkan paket tiket masuk, wahana, atau voucher pertama Anda agar customer dapat memesan langsung online.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.btnActionPillPrimary, { backgroundColor: "#D97706" }]}
+                  onPress={() => navigate("pemilik_kos_manajemen_kamar")}
+                  activeOpacity={0.85}
+                >
+                  <PlusCircle size={16} color="#FFFFFF" />
+                  <Text style={styles.btnActionPillPrimaryText}>+ Tambah Tiket Wisata Pertama</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {selectedUnit.type === "hotel" && totalHotelRooms === 0 && (
+            <View style={styles.emptyPromptCard}>
+              <View style={[styles.emptyPromptIconCircle, { backgroundColor: "#E0F2FE" }]}>
+                <Hotel size={24} color="#0284C7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emptyPromptTitle}>Belum Ada Kamar / Villa</Text>
+                <Text style={styles.emptyPromptDesc}>
+                  Tambahkan tipe kamar, kapasitas ranjang, dan fasilitas hotel/villa Anda untuk mulai menerima reservasi tamu.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.btnActionPillPrimary, { backgroundColor: "#0284C7" }]}
+                  onPress={() => navigate("pemilik_kos_manajemen_kamar")}
+                  activeOpacity={0.85}
+                >
+                  <PlusCircle size={16} color="#FFFFFF" />
+                  <Text style={styles.btnActionPillPrimaryText}>+ Tambah Tipe Kamar Hotel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {selectedUnit.type === "kost" && totalKostRooms === 0 && (
+            <View style={styles.emptyPromptCard}>
+              <View style={[styles.emptyPromptIconCircle, { backgroundColor: "#DCFCE7" }]}>
+                <Building2 size={24} color="#0D7A53" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emptyPromptTitle}>Belum Ada Kamar Kos</Text>
+                <Text style={styles.emptyPromptDesc}>
+                  Tambahkan nomor kamar, tipe kamar, fasilitas, dan harga sewa bulanan kos Anda.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.btnActionPillPrimary, { backgroundColor: "#0D7A53" }]}
+                  onPress={() => navigate("pemilik_kos_manajemen_kamar")}
+                  activeOpacity={0.85}
+                >
+                  <PlusCircle size={16} color="#FFFFFF" />
+                  <Text style={styles.btnActionPillPrimaryText}>+ Tambah Kamar Kos</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* ============================================================ */}
           {/* ADAPTIVE STATS & DONUT CHARTS PER TYPE                      */}
           {/* ============================================================ */}
-          <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 14 }]}>
+          <Text style={[styles.sectionTitle, { marginTop: 20, marginBottom: 14 }]}>
             {selectedUnit.type === "hotel"
               ? "Okupansi Kamar Hotel & Villa"
               : selectedUnit.type === "wisata"
@@ -426,7 +565,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                       </View>
                       <Text style={styles.statItemTitle}>Total Kamar</Text>
                     </View>
-                    <Text style={styles.statItemVal}>12 Kamar</Text>
+                    <Text style={styles.statItemVal}>{totalHotelRooms} Kamar</Text>
                   </View>
                   <View style={styles.statItemRow}>
                     <View style={styles.statItemLeft}>
@@ -435,7 +574,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                       </View>
                       <Text style={styles.statItemTitle}>Kamar Terisi</Text>
                     </View>
-                    <Text style={styles.statItemVal}>9 Kamar</Text>
+                    <Text style={styles.statItemVal}>{validBookings.length} Kamar</Text>
                   </View>
                   <View style={[styles.statItemRow, styles.statItemHighlight]}>
                     <View style={styles.statItemLeft}>
@@ -444,7 +583,9 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                       </View>
                       <Text style={styles.statItemTitle}>Check-in Hari Ini</Text>
                     </View>
-                    <Text style={[styles.statItemVal, { color: "#D97706" }]}>4 Tamu</Text>
+                    <Text style={[styles.statItemVal, { color: "#D97706" }]}>
+                      {validBookings.filter((b: any) => b.status === "dp_verified").length} Tamu
+                    </Text>
                   </View>
                 </>
               ) : selectedUnit.type === "wisata" ? (
@@ -454,27 +595,29 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                       <View style={[styles.statIconBg, { backgroundColor: "#FEF3C7" }]}>
                         <Ticket size={16} color="#D97706" />
                       </View>
-                      <Text style={styles.statItemTitle}>Tiket Hari Ini</Text>
+                      <Text style={styles.statItemTitle}>Paket Tiket Aktif</Text>
                     </View>
-                    <Text style={styles.statItemVal}>142 Tiket</Text>
+                    <Text style={styles.statItemVal}>{totalWisataTickets} Paket</Text>
                   </View>
                   <View style={styles.statItemRow}>
                     <View style={styles.statItemLeft}>
                       <View style={[styles.statIconBg, { backgroundColor: "#E0F2FE" }]}>
                         <Users size={16} color="#0284C7" />
                       </View>
-                      <Text style={styles.statItemTitle}>Pengunjung Aktif</Text>
+                      <Text style={styles.statItemTitle}>Tiket Terjual</Text>
                     </View>
-                    <Text style={styles.statItemVal}>350 Orang</Text>
+                    <Text style={styles.statItemVal}>{totalTicketsSold} Tiket</Text>
                   </View>
                   <View style={[styles.statItemRow, styles.statItemHighlight]}>
                     <View style={styles.statItemLeft}>
                       <View style={[styles.statIconBg, { backgroundColor: "#DCFCE7" }]}>
                         <CheckCircle2 size={16} color="#15803D" />
                       </View>
-                      <Text style={styles.statItemTitle}>Kuota Sisa</Text>
+                      <Text style={styles.statItemTitle}>Status Kuota</Text>
                     </View>
-                    <Text style={[styles.statItemVal, { color: "#15803D" }]}>658 Tiket</Text>
+                    <Text style={[styles.statItemVal, { color: "#15803D" }]}>
+                      {totalWisataTickets > 0 ? "Tersedia" : "0 Tiket"}
+                    </Text>
                   </View>
                 </>
               ) : (
@@ -486,7 +629,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                       </View>
                       <Text style={styles.statItemTitle}>Total Kamar</Text>
                     </View>
-                    <Text style={styles.statItemVal}>{totalKamar}</Text>
+                    <Text style={styles.statItemVal}>{totalKostRooms}</Text>
                   </View>
                   <View style={styles.statItemRow}>
                     <View style={styles.statItemLeft}>
@@ -573,11 +716,23 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
               <>
                 <TouchableOpacity
                   style={styles.gridActionCard}
-                  onPress={() => setIsTicketScannerOpen(true)}
+                  onPress={() => navigate("pemilik_kos_manajemen_kamar")}
                   activeOpacity={0.8}
                 >
                   <View style={[styles.gridActionIconBg, { backgroundColor: "#FEF3C7" }]}>
-                    <Scan size={22} color="#D97706" />
+                    <Ticket size={22} color="#D97706" />
+                  </View>
+                  <Text style={styles.gridActionTitle}>Kelola Tiket Wisata</Text>
+                  <Text style={styles.gridActionSub}>Tambah & atur tiket masuk</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.gridActionCard}
+                  onPress={() => setIsTicketScannerOpen(true)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.gridActionIconBg, { backgroundColor: "#DCFCE7" }]}>
+                    <Scan size={22} color="#15803D" />
                   </View>
                   <Text style={styles.gridActionTitle}>Validasi E-Ticket</Text>
                   <Text style={styles.gridActionSub}>Scan tiket pengunjung</Text>
@@ -585,26 +740,14 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
 
                 <TouchableOpacity
                   style={styles.gridActionCard}
-                  onPress={() => Alert.alert("Kelola Paket Tiket", "Paket Tiket Reguler, Terusan Wahana, dan VIP aktif.")}
+                  onPress={() => navigate("pemilik_kos_verifikasi_dp")}
                   activeOpacity={0.8}
                 >
                   <View style={[styles.gridActionIconBg, { backgroundColor: "#E0F2FE" }]}>
-                    <Ticket size={22} color="#0284C7" />
+                    <Wallet size={22} color="#0284C7" />
                   </View>
-                  <Text style={styles.gridActionTitle}>Paket Tiket</Text>
-                  <Text style={styles.gridActionSub}>Harga & kuota harian</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.gridActionCard}
-                  onPress={() => Alert.alert("Jam Operasional", "Jam Buka: 07:00 - 18:00 WIB (Buka Setiap Hari)")}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.gridActionIconBg, { backgroundColor: "#DCFCE7" }]}>
-                    <Clock size={22} color="#15803D" />
-                  </View>
-                  <Text style={styles.gridActionTitle}>Jam Operasional</Text>
-                  <Text style={styles.gridActionSub}>Atur jadwal buka</Text>
+                  <Text style={styles.gridActionTitle}>Verifikasi Bayar</Text>
+                  <Text style={styles.gridActionSub}>Cek transfer tiket</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -616,7 +759,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                     <TrendingUp size={22} color="#7C3AED" />
                   </View>
                   <Text style={styles.gridActionTitle}>Keuangan Wisata</Text>
-                  <Text style={styles.gridActionSub}>Omset & tiket terjual</Text>
+                  <Text style={styles.gridActionSub}>Omset & pendapatan</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -750,13 +893,23 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_kos_manajemen_kamar")} activeOpacity={0.7}>
-          <Building2 size={22} color={activeTab === "kamar" ? "#0D7A53" : "#9CA3AF"} />
-          <Text style={[styles.navText, activeTab === "kamar" && styles.navTextActive]}>Kamar/Unit</Text>
+          {selectedUnit.type === "wisata" ? (
+            <Ticket size={22} color={activeTab === "kamar" ? "#0D7A53" : "#9CA3AF"} />
+          ) : selectedUnit.type === "hotel" ? (
+            <Bed size={22} color={activeTab === "kamar" ? "#0D7A53" : "#9CA3AF"} />
+          ) : (
+            <Building2 size={22} color={activeTab === "kamar" ? "#0D7A53" : "#9CA3AF"} />
+          )}
+          <Text style={[styles.navText, activeTab === "kamar" && styles.navTextActive]}>
+            {selectedUnit.type === "wisata" ? "Tiket/Unit" : selectedUnit.type === "hotel" ? "Kamar/Villa" : "Kamar/Unit"}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_kos_manajemen_penghuni")} activeOpacity={0.7}>
           <Users size={22} color={activeTab === "penghuni" ? "#0D7A53" : "#9CA3AF"} />
-          <Text style={[styles.navText, activeTab === "penghuni" && styles.navTextActive]}>Tamu/User</Text>
+          <Text style={[styles.navText, activeTab === "penghuni" && styles.navTextActive]}>
+            {selectedUnit.type === "wisata" ? "Pengunjung" : selectedUnit.type === "hotel" ? "Tamu" : "Penghuni"}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_kos_laporan_keuangan")} activeOpacity={0.7}>
@@ -787,7 +940,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
             </View>
 
             <ScrollView style={{ padding: 16 }} showsVerticalScrollIndicator={false}>
-              {PARTNER_UNITS.map((unit) => {
+              {partnerUnits.map((unit: PartnerUnit) => {
                 const isSelected = selectedUnit.id === unit.id;
                 return (
                   <TouchableOpacity
@@ -1194,6 +1347,53 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 12,
     bottom: -10,
+  },
+
+  // Empty Prompt Card
+  emptyPromptCard: {
+    flexDirection: "row",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: "#FDE68A",
+    backgroundColor: "#FFFBEB",
+    marginTop: 16,
+    alignItems: "flex-start",
+    gap: 14,
+  },
+  emptyPromptIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyPromptTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#92400E",
+  },
+  emptyPromptDesc: {
+    fontSize: 11.5,
+    color: "#78350F",
+    lineHeight: 16,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  btnActionPillPrimary: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  btnActionPillPrimaryText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 
   // Occupancy / Donut Row

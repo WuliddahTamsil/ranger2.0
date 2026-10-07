@@ -90,18 +90,21 @@ export const validateBaseStep = (form: RegistrationForm, options?: { allowPasswo
 
 export const validateRoleStep = (role: AuthRegistrationRole, roleData: Record<string, string>) => {
   if (role === "customer") return null;
-  const requiredFields = role === "driver"
-    ? ["plateNumber", "vehicleType"]
-    : role === "pemilik_marketplace"
-      ? ["businessName", "businessAddress"]
-      : role === "pemilik_catering"
-        ? ["businessName", "businessAddress"]
-        : role === "pemilik_kos"
-          ? ["businessName", "businessAddress"]
-        : ["businessName", "businessAddress"];
 
-  const missing = requiredFields.find((field) => !roleData[field]?.trim());
-  if (missing) return "Lengkapi semua data usaha/kendaraan yang wajib.";
+  if (role === "driver") {
+    if (!roleData.plateNumber?.trim()) return "Plat nomor kendaraan wajib diisi.";
+    if (!roleData.vehicleType?.trim()) return "Jenis kendaraan wajib diisi.";
+    return null;
+  }
+
+  if (role === "pemilik_kos") {
+    if (!roleData.businessName?.trim()) return "Nama usaha / tempat wisata / properti wajib diisi.";
+    if (!roleData.businessAddress?.trim()) return "Alamat lengkap properti wajib diisi.";
+    return null;
+  }
+
+  if (!roleData.businessName?.trim()) return "Nama usaha wajib diisi.";
+  if (!roleData.businessAddress?.trim()) return "Alamat lengkap usaha wajib diisi.";
   return null;
 };
 

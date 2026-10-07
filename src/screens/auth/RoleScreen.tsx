@@ -58,8 +58,8 @@ export const RoleScreen: React.FC<RoleScreenProps> = ({ navigate, onSelectRole }
     {
       role: "pemilik_kos" as const,
       id: "pemilik_kos_home" as const,
-      title: "Pemilik Kos & Homestay",
-      desc: "Kelola ketersediaan kamar kos, hotel, dan tiket wisata.",
+      title: "Kanyaah Homestay",
+      desc: "Kelola homestay, kamar kos, penginapan & tiket wisata.",
       icon: Building2,
       color: "#0D7A53",
       bg: "#E8F5EE",

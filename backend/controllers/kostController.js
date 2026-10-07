@@ -245,11 +245,13 @@ const findKostByOwnerOrEmail = async (ownerIdentifier) => {
       images: [
         user.profilePhoto || (categoryType === "wisata" ? "https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?auto=format&fit=crop&w=800&q=80" : categoryType === "hotel" ? "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80" : "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80"),
       ],
-      rooms: [],
-      hotelRooms: categoryType === "hotel" ? [
+      rooms: (categoryType === "kost" || String(rawRoleData.businessCategories || "").includes("kost") || !rawRoleData.businessCategories) ? [
+        { roomNumber: "101", roomType: "Tipe AC", floor: 1, priceMonthly: 1200000, isAvailable: true, facilities: ["AC", "WiFi", "KM Dalam", "Kasur", "Lemari"], images: [] }
+      ] : [],
+      hotelRooms: (categoryType === "hotel" || String(rawRoleData.businessCategories || "").includes("hotel")) ? [
         { roomName: "Deluxe Villa Room", bedType: "King Bed", capacity: 2, pricePerNight: 450000, isAvailable: true, facilities: ["WiFi", "AC", "Smart TV", "Bathtub", "Sarapan"], images: [] }
       ] : [],
-      wisataTickets: categoryType === "wisata" ? [
+      wisataTickets: (categoryType === "wisata" || String(rawRoleData.businessCategories || "").includes("wisata")) ? [
         { ticketName: "Tiket Masuk Reguler", ticketType: "reguler", price: 25000, description: "Akses seluruh wahana air dan spot foto", includedFacilities: ["Spot Foto", "Gazebo", "Kolam Renang"] }
       ] : [],
     });
@@ -284,19 +286,92 @@ const getKostsByOwner = async (req, res) => {
   }
 };
 
-// =================== ROOMS CONTROLLERS ===================
-
-// Get all rooms of a Kost
+// Get all rooms / items of a Kost, Hotel, or Wisata
 const getRoomsByOwner = async (req, res) => {
   try {
     const { ownerId } = req.params;
     const kost = await findKostByOwnerOrEmail(ownerId);
 
     if (!kost) {
-      return res.status(404).json({ success: false, message: "Data properti kost belum ada." });
+      return res.status(404).json({ success: false, message: "Data properti belum terdaftar." });
     }
 
-    const rooms = kost.rooms.map((r) => {
+    const categoryType = kost.categoryType || "kost";
+
+    if (categoryType === "hotel" && Array.isArray(kost.hotelRooms) && kost.hotelRooms.length > 0) {
+      const hotelRoomsList = kost.hotelRooms.map((hr) => {
+        const roomImgs = Array.isArray(hr.images) && hr.images.length > 0
+          ? hr.images
+          : [(kost.images && kost.images[0]) || "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80"];
+
+        return {
+          id: hr._id.toString(),
+          name: hr.roomName || "Deluxe Room",
+          type: `${hr.bedType || "King Bed"} • ${hr.capacity || 2} Tamu`,
+          roomName: hr.roomName || "Deluxe Room",
+          bedType: hr.bedType || "King Bed",
+          capacity: hr.capacity || 2,
+          breakfastIncluded: hr.breakfastIncluded !== false,
+          status: hr.isAvailable ? "kosong" : "terisi",
+          facilities: Array.isArray(hr.facilities) ? hr.facilities : ["AC", "Smart TV", "WiFi", "Bathtub"],
+          inclusions: hr.breakfastIncluded !== false ? ["Termasuk Sarapan"] : ["Tanpa Sarapan"],
+          price: `Rp ${Number(hr.pricePerNight || kost.price || 450000).toLocaleString("id-ID")}`,
+          pricePerNight: Number(hr.pricePerNight || kost.price || 450000),
+          image: roomImgs[0],
+          images: roomImgs,
+          description: `Kamar tipe ${hr.roomName} dengan ${hr.bedType || "King Bed"} untuk ${hr.capacity || 2} tamu.`,
+          isAvailable: hr.isAvailable !== false,
+          categoryType: "hotel",
+        };
+      });
+
+      return res.status(200).json({
+        success: true,
+        count: hotelRoomsList.length,
+        kostId: kost._id,
+        kostName: kost.name,
+        categoryType: "hotel",
+        data: hotelRoomsList,
+      });
+    }
+
+    if (categoryType === "wisata" && Array.isArray(kost.wisataTickets) && kost.wisataTickets.length > 0) {
+      const ticketsList = kost.wisataTickets.map((wt) => {
+        const rawImgs = (kost.images && kost.images.length > 0)
+          ? kost.images
+          : ["https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?auto=format&fit=crop&w=800&q=80"];
+
+        return {
+          id: wt._id.toString(),
+          name: wt.ticketName || "Tiket Masuk Reguler",
+          type: wt.ticketType ? `Kategori ${wt.ticketType.toUpperCase()}` : "Tiket Reguler",
+          ticketName: wt.ticketName || "Tiket Masuk Reguler",
+          ticketType: wt.ticketType || "reguler",
+          status: "kosong",
+          facilities: Array.isArray(wt.includedFacilities) ? wt.includedFacilities : ["Spot Foto", "Gazebo"],
+          inclusions: Array.isArray(wt.includedFacilities) ? wt.includedFacilities : ["Spot Foto", "Gazebo"],
+          price: `Rp ${Number(wt.price || kost.price || 25000).toLocaleString("id-ID")}`,
+          pricePerNight: Number(wt.price || kost.price || 25000),
+          image: rawImgs[0],
+          images: rawImgs,
+          description: wt.description || "Akses wahana wisata dan spot foto.",
+          isAvailable: true,
+          categoryType: "wisata",
+        };
+      });
+
+      return res.status(200).json({
+        success: true,
+        count: ticketsList.length,
+        kostId: kost._id,
+        kostName: kost.name,
+        categoryType: "wisata",
+        data: ticketsList,
+      });
+    }
+
+    // Default: Kost rooms
+    const rooms = (kost.rooms || []).map((r) => {
       const roomImgs = Array.isArray(r.images) && r.images.length > 0
         ? r.images
         : [(kost.images && kost.images[0]) || "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=600&q=80"];
@@ -326,6 +401,7 @@ const getRoomsByOwner = async (req, res) => {
         description: "Kamar nyaman dan bersih, siap huni.",
         floor: r.floor || 1,
         isAvailable: r.isAvailable,
+        categoryType: "kost",
       };
     });
 
@@ -334,42 +410,97 @@ const getRoomsByOwner = async (req, res) => {
       count: rooms.length,
       kostId: kost._id,
       kostName: kost.name,
+      categoryType: kost.categoryType || "kost",
       data: rooms,
     });
   } catch (error) {
     console.error("❌ getRoomsByOwner error:", error);
-    return res.status(500).json({ success: false, message: "Gagal mengambil daftar kamar", error: error.message });
+    return res.status(500).json({ success: false, message: "Gagal mengambil daftar item / kamar", error: error.message });
   }
 };
 
-// Add new room
+// Add new room, hotel room type, or wisata ticket
 const addRoom = async (req, res) => {
   try {
     const { ownerId } = req.params;
-    const { roomNumber, roomType, priceMonthly, floor, facilities, isAvailable, image, images } = req.body;
+    const body = req.body;
 
     const kost = await findKostByOwnerOrEmail(ownerId);
     if (!kost) {
-      return res.status(404).json({ success: false, message: "Kost tidak ditemukan" });
+      return res.status(404).json({ success: false, message: "Properti tidak ditemukan" });
     }
 
-    const roomImages = Array.isArray(images) && images.length > 0
-      ? images
-      : (image ? [image] : []);
+    const categoryType = kost.categoryType || "kost";
 
+    const roomImages = Array.isArray(body.images) && body.images.length > 0
+      ? body.images
+      : (body.image ? [body.image] : []);
+
+    if (categoryType === "hotel") {
+      const newHotelRoom = {
+        roomName: body.roomName || body.name || body.roomNumber || `Deluxe Room ${kost.hotelRooms.length + 1}`,
+        bedType: body.bedType || "King Bed",
+        capacity: Number(body.capacity) || 2,
+        pricePerNight: Number(body.pricePerNight || body.priceMonthly || body.price) || 450000,
+        isAvailable: body.isAvailable !== undefined ? body.isAvailable : true,
+        facilities: body.facilities || ["AC", "WiFi", "Smart TV", "Bathtub", "Sarapan"],
+        images: roomImages,
+        breakfastIncluded: body.breakfastIncluded !== undefined ? body.breakfastIncluded : true,
+      };
+
+      kost.hotelRooms.push(newHotelRoom);
+      const allHotelPrices = kost.hotelRooms.map((h) => Number(h.pricePerNight) || 0).filter((p) => p > 0);
+      if (allHotelPrices.length > 0) kost.price = Math.min(...allHotelPrices);
+      if (roomImages.length > 0) kost.images = Array.from(new Set([...roomImages, ...(kost.images || [])]));
+
+      kost.markModified("hotelRooms");
+      await kost.save();
+
+      return res.status(201).json({
+        success: true,
+        message: `Tipe Kamar "${newHotelRoom.roomName}" berhasil ditambahkan!`,
+        data: kost.hotelRooms[kost.hotelRooms.length - 1],
+      });
+    }
+
+    if (categoryType === "wisata") {
+      const newTicket = {
+        ticketName: body.ticketName || body.name || body.roomNumber || `Tiket Kategori ${kost.wisataTickets.length + 1}`,
+        ticketType: body.ticketType || "reguler",
+        price: Number(body.price || body.priceMonthly || body.pricePerNight) || 25000,
+        description: body.description || "Akses wahana wisata dan spot foto",
+        includedFacilities: body.facilities || body.includedFacilities || ["Spot Foto", "Gazebo"],
+      };
+
+      kost.wisataTickets.push(newTicket);
+      const allTicketPrices = kost.wisataTickets.map((t) => Number(t.price) || 0).filter((p) => p > 0);
+      if (allTicketPrices.length > 0) {
+        kost.price = Math.min(...allTicketPrices);
+        kost.dpAmount = Math.min(...allTicketPrices);
+      }
+      kost.markModified("wisataTickets");
+      await kost.save();
+
+      return res.status(201).json({
+        success: true,
+        message: `Kategori Tiket "${newTicket.ticketName}" berhasil ditambahkan!`,
+        data: kost.wisataTickets[kost.wisataTickets.length - 1],
+      });
+    }
+
+    // Default Kost Room
     const newRoom = {
-      roomNumber: roomNumber || `${kost.rooms.length + 1}`,
-      roomType: roomType || "Tipe AC",
-      priceMonthly: Number(priceMonthly) || kost.price,
-      floor: Number(floor) || 1,
-      facilities: facilities || ["AC", "WiFi", "KM Dalam"],
-      isAvailable: isAvailable !== undefined ? isAvailable : true,
+      roomNumber: body.roomNumber || `${kost.rooms.length + 1}`,
+      roomType: body.roomType || "Tipe AC",
+      priceMonthly: Number(body.priceMonthly) || kost.price,
+      floor: Number(body.floor) || 1,
+      facilities: body.facilities || ["AC", "WiFi", "KM Dalam"],
+      isAvailable: body.isAvailable !== undefined ? body.isAvailable : true,
       images: roomImages,
     };
 
     kost.rooms.push(newRoom);
 
-    // Synchronize parent Kost starting price, images, and facilities
     const allRoomPrices = kost.rooms.map((r) => Number(r.priceMonthly) || 0).filter((p) => p > 0);
     if (allRoomPrices.length > 0) {
       kost.price = Math.min(...allRoomPrices);
@@ -377,8 +508,8 @@ const addRoom = async (req, res) => {
     if (roomImages.length > 0) {
       kost.images = Array.from(new Set([...roomImages, ...(kost.images || [])]));
     }
-    if (Array.isArray(facilities) && facilities.length > 0) {
-      kost.facilities = Array.from(new Set([...facilities, ...(kost.facilities || [])]));
+    if (Array.isArray(body.facilities) && body.facilities.length > 0) {
+      kost.facilities = Array.from(new Set([...body.facilities, ...(kost.facilities || [])]));
     }
 
     kost.markModified("rooms");
@@ -391,19 +522,92 @@ const addRoom = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ addRoom error:", error);
-    return res.status(500).json({ success: false, message: "Gagal menambahkan kamar", error: error.message });
+    return res.status(500).json({ success: false, message: "Gagal menambahkan kamar / item", error: error.message });
   }
 };
 
-// Update room
+// Update room, hotel room type, or wisata ticket
 const updateRoom = async (req, res) => {
   try {
     const { ownerId, roomId } = req.params;
     const updateData = req.body;
 
     const kost = await findKostByOwnerOrEmail(ownerId);
-    if (!kost) return res.status(404).json({ success: false, message: "Kost tidak ditemukan" });
+    if (!kost) return res.status(404).json({ success: false, message: "Properti tidak ditemukan" });
 
+    const categoryType = kost.categoryType || "kost";
+
+    if (categoryType === "hotel") {
+      let hotelRoom = null;
+      if (roomId && roomId.match(/^[0-9a-fA-F]{24}$/)) {
+        hotelRoom = kost.hotelRooms.id(roomId);
+      }
+      if (!hotelRoom) {
+        hotelRoom = kost.hotelRooms.find((h) => h._id?.toString() === roomId || h.roomName === updateData.roomName || h.roomName === updateData.name);
+      }
+      if (hotelRoom) {
+        if (updateData.roomName || updateData.name) hotelRoom.roomName = updateData.roomName || updateData.name;
+        if (updateData.bedType) hotelRoom.bedType = updateData.bedType;
+        if (updateData.capacity !== undefined) hotelRoom.capacity = Number(updateData.capacity);
+        if (updateData.pricePerNight || updateData.priceMonthly || updateData.price) {
+          hotelRoom.pricePerNight = Number(updateData.pricePerNight || updateData.priceMonthly || updateData.price);
+        }
+        if (updateData.isAvailable !== undefined) hotelRoom.isAvailable = updateData.isAvailable;
+        if (updateData.facilities) hotelRoom.facilities = updateData.facilities;
+        if (updateData.breakfastIncluded !== undefined) hotelRoom.breakfastIncluded = updateData.breakfastIncluded;
+        if (Array.isArray(updateData.images)) hotelRoom.images = updateData.images;
+
+        const allHotelPrices = kost.hotelRooms.map((h) => Number(h.pricePerNight) || 0).filter((p) => p > 0);
+        if (allHotelPrices.length > 0) kost.price = Math.min(...allHotelPrices);
+
+        kost.markModified("hotelRooms");
+        await kost.save();
+
+        return res.status(200).json({
+          success: true,
+          message: `Tipe Kamar "${hotelRoom.roomName}" berhasil diperbarui!`,
+          data: hotelRoom,
+        });
+      }
+    }
+
+    if (categoryType === "wisata") {
+      let ticket = null;
+      if (roomId && roomId.match(/^[0-9a-fA-F]{24}$/)) {
+        ticket = kost.wisataTickets.id(roomId);
+      }
+      if (!ticket) {
+        ticket = kost.wisataTickets.find((t) => t._id?.toString() === roomId || t.ticketName === updateData.ticketName || t.ticketName === updateData.name);
+      }
+      if (ticket) {
+        if (updateData.ticketName || updateData.name) ticket.ticketName = updateData.ticketName || updateData.name;
+        if (updateData.ticketType) ticket.ticketType = updateData.ticketType;
+        if (updateData.price || updateData.priceMonthly || updateData.pricePerNight) {
+          ticket.price = Number(updateData.price || updateData.priceMonthly || updateData.pricePerNight);
+        }
+        if (updateData.description) ticket.description = updateData.description;
+        if (updateData.facilities || updateData.includedFacilities) {
+          ticket.includedFacilities = updateData.facilities || updateData.includedFacilities;
+        }
+
+        const allTicketPrices = kost.wisataTickets.map((t) => Number(t.price) || 0).filter((p) => p > 0);
+        if (allTicketPrices.length > 0) {
+          kost.price = Math.min(...allTicketPrices);
+          kost.dpAmount = Math.min(...allTicketPrices);
+        }
+
+        kost.markModified("wisataTickets");
+        await kost.save();
+
+        return res.status(200).json({
+          success: true,
+          message: `Kategori Tiket "${ticket.ticketName}" berhasil diperbarui!`,
+          data: ticket,
+        });
+      }
+    }
+
+    // Default Kost Room
     let room = null;
     if (roomId && roomId.match(/^[0-9a-fA-F]{24}$/)) {
       room = kost.rooms.id(roomId);
@@ -452,12 +656,41 @@ const updateRoom = async (req, res) => {
   }
 };
 
-// Delete room
+// Delete room, hotel room type, or wisata ticket
 const deleteRoom = async (req, res) => {
   try {
     const { ownerId, roomId } = req.params;
     const kost = await findKostByOwnerOrEmail(ownerId);
-    if (!kost) return res.status(404).json({ success: false, message: "Kost tidak ditemukan" });
+    if (!kost) return res.status(404).json({ success: false, message: "Properti tidak ditemukan" });
+
+    const categoryType = kost.categoryType || "kost";
+
+    if (categoryType === "hotel") {
+      let hotelIndex = kost.hotelRooms.findIndex((h) => h._id?.toString() === roomId || h.roomName === roomId);
+      if (hotelIndex !== -1) {
+        kost.hotelRooms.splice(hotelIndex, 1);
+        const allHotelPrices = kost.hotelRooms.map((h) => Number(h.pricePerNight) || 0).filter((p) => p > 0);
+        if (allHotelPrices.length > 0) kost.price = Math.min(...allHotelPrices);
+        kost.markModified("hotelRooms");
+        await kost.save();
+        return res.status(200).json({ success: true, message: "Tipe kamar hotel berhasil dihapus" });
+      }
+    }
+
+    if (categoryType === "wisata") {
+      let ticketIndex = kost.wisataTickets.findIndex((t) => t._id?.toString() === roomId || t.ticketName === roomId);
+      if (ticketIndex !== -1) {
+        kost.wisataTickets.splice(ticketIndex, 1);
+        const allTicketPrices = kost.wisataTickets.map((t) => Number(t.price) || 0).filter((p) => p > 0);
+        if (allTicketPrices.length > 0) {
+          kost.price = Math.min(...allTicketPrices);
+          kost.dpAmount = Math.min(...allTicketPrices);
+        }
+        kost.markModified("wisataTickets");
+        await kost.save();
+        return res.status(200).json({ success: true, message: "Kategori tiket wisata berhasil dihapus" });
+      }
+    }
 
     let roomIndex = -1;
     if (roomId && roomId.match(/^[0-9a-fA-F]{24}$/)) {
@@ -469,7 +702,7 @@ const deleteRoom = async (req, res) => {
     }
 
     if (roomIndex === -1) {
-      return res.status(404).json({ success: false, message: "Kamar tidak ditemukan" });
+      return res.status(404).json({ success: false, message: "Item tidak ditemukan" });
     }
 
     kost.rooms.splice(roomIndex, 1);
@@ -771,6 +1004,11 @@ const updateKostProperty = async (req, res) => {
       longitude,
       bankAccount,
       dpAmount,
+      stars,
+      openHours,
+      price,
+      hotelRooms,
+      wisataTickets,
     } = req.body;
 
     if (facilities !== undefined) {
@@ -790,6 +1028,18 @@ const updateKostProperty = async (req, res) => {
     if (district !== undefined) kost.district = district;
     if (latitude !== undefined) kost.latitude = Number(latitude);
     if (longitude !== undefined) kost.longitude = Number(longitude);
+    if (stars !== undefined) kost.stars = Number(stars);
+    if (openHours !== undefined) kost.openHours = openHours;
+    if (price !== undefined) kost.price = Number(price);
+
+    if (Array.isArray(hotelRooms)) {
+      kost.hotelRooms = hotelRooms;
+      kost.markModified("hotelRooms");
+    }
+    if (Array.isArray(wisataTickets)) {
+      kost.wisataTickets = wisataTickets;
+      kost.markModified("wisataTickets");
+    }
 
     if (bankAccount !== undefined) {
       kost.bankAccount = {
