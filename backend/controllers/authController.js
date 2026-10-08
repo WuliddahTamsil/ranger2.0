@@ -198,33 +198,55 @@ const registerUser = async (req, res) => {
 
     if (role === "pemilik_kos") {
       const Kost = require("../models/Kost");
-      const kostName = finalRoleData?.businessName || user.name || "Kost Nyaman Eksklusif";
-      let kostType = "Campur";
-      if (finalRoleData?.propertyType?.toLowerCase().includes("putri")) kostType = "Putri";
-      else if (finalRoleData?.propertyType?.toLowerCase().includes("putra")) kostType = "Putra";
+      const kostName = finalRoleData?.businessName || user.name || "Destinasi & Akomodasi Nyaman";
+      let businessCat = String(finalRoleData?.businessCategories || finalRoleData?.propertyCategory || "").toLowerCase();
+      let categoryType = "kost";
+      if (businessCat.includes("wisata")) categoryType = "wisata";
+      else if (businessCat.includes("hotel") || businessCat.includes("villa") || businessCat.includes("resort")) categoryType = "hotel";
+
+      let kostType = categoryType === "wisata" ? "Wisata Rekreasi" : categoryType === "hotel" ? "Hotel & Villa" : "Campur";
+      if (categoryType === "kost") {
+        if (finalRoleData?.propertyType?.toLowerCase().includes("putri")) kostType = "Putri";
+        else if (finalRoleData?.propertyType?.toLowerCase().includes("putra")) kostType = "Putra";
+      }
+
+      const defaultRules = categoryType === "wisata"
+        ? ["Jam Buka: 08.00 - 17.00 WIB", "Tiket Berlaku untuk 1 Orang / Kunjungan", "Anak di Bawah 2 Tahun Gratis", "Dilarang Membuang Sampah Sembarangan"]
+        : categoryType === "hotel"
+        ? ["Check-in Mulai Pukul 14.00 WIB", "Check-out Maksimal Pukul 12.00 WIB", "Dilarang Merokok di Dalam Kamar", "Bebas Hewan Peliharaan"]
+        : ["Akses 24 Jam", "Dilarang Merokok di Kamar", "Tamu Lawan Jenis Maks Pukul 21.00"];
+
+      const defaultDesc = categoryType === "wisata"
+        ? "Destinasi wisata favorit keluarga dengan beragam wahana air, rekreasi seru, dan spot foto terbaik."
+        : categoryType === "hotel"
+        ? "Resort & hotel berfasilitas bintang, nyaman, asri, dengan pemandangan alam memukau."
+        : "Kos eksklusif nyaman, bersih, aman, dan berfasilitas lengkap untuk mahasiswa & pekerja.";
 
       await Kost.create({
         ownerId: user._id,
         name: kostName.charAt(0).toUpperCase() + kostName.slice(1),
+        categoryType: categoryType,
         type: kostType,
         address: user.address || finalRoleData?.businessAddress || "Jl. Kamojang No. 12, Garut",
         city: "Garut",
         district: "Kamojang",
-        description: "Kos eksklusif nyaman, bersih, aman, dan berfasilitas lengkap untuk mahasiswa & pekerja.",
-        price: 1200000,
-        dpAmount: 300000,
-        facilities: ["WiFi", "AC", "KM Dalam", "Kasur", "Lemari", "Meja Belajar", "Dapur Bersama", "Parkir Motor"],
-        rules: ["Akses 24 Jam", "Dilarang Merokok di Kamar", "Tamu Lawan Jenis Maks Pukul 21.00"],
+        description: defaultDesc,
+        price: categoryType === "wisata" ? 25000 : categoryType === "hotel" ? 450000 : 1200000,
+        dpAmount: categoryType === "wisata" ? 25000 : 200000,
+        facilities: [],
+        rules: defaultRules,
         images: [
-          user.profilePhoto || "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80",
-          "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80",
+          user.profilePhoto || (categoryType === "wisata" ? "https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?auto=format&fit=crop&w=800&q=80" : categoryType === "hotel" ? "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80" : "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80"),
         ],
-        rooms: [
-          { roomNumber: "101", type: "AC", price: 1200000, isAvailable: true, status: "tersedia" },
-          { roomNumber: "102", type: "AC", price: 1200000, isAvailable: true, status: "tersedia" },
-          { roomNumber: "103", type: "Non-AC", price: 800000, isAvailable: true, status: "tersedia" },
-          { roomNumber: "104", type: "Non-AC", price: 800000, isAvailable: true, status: "tersedia" },
-        ],
+        rooms: categoryType === "kost" ? [
+          { roomNumber: "101", type: "AC", price: 1200000, isAvailable: true, status: "tersedia", facilities: ["AC", "WiFi", "KM Dalam"] },
+        ] : [],
+        hotelRooms: categoryType === "hotel" ? [
+          { roomName: "Deluxe Villa Room", bedType: "King Bed", capacity: 2, pricePerNight: 450000, isAvailable: true, facilities: ["WiFi", "AC", "Smart TV"] },
+        ] : [],
+        wisataTickets: categoryType === "wisata" ? [
+          { ticketName: "Tiket Masuk Reguler", ticketType: "reguler", price: 25000, description: "Akses seluruh wahana air dan spot foto", includedFacilities: ["Spot Foto", "Gazebo", "Kolam Renang"] },
+        ] : [],
       }).catch(err => console.warn("Auto Kost creation note:", err.message));
     }
 

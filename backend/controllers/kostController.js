@@ -2,6 +2,40 @@ const Kost = require("../models/Kost");
 const User = require("../models/User");
 const Booking = require("../models/Booking");
 
+const sanitizeRulesByCategory = (rules, categoryType) => {
+  if (!Array.isArray(rules)) return [];
+  if (categoryType === "wisata") {
+    return rules.filter(
+      (r) =>
+        !r.toLowerCase().includes("kamar") &&
+        !r.toLowerCase().includes("lawan jenis") &&
+        !r.toLowerCase().includes("akses 24 jam") &&
+        !r.toLowerCase().includes("jam malam") &&
+        !r.toLowerCase().includes("check-in") &&
+        !r.toLowerCase().includes("check-out")
+    );
+  }
+  if (categoryType === "hotel") {
+    return rules.filter(
+      (r) =>
+        !r.toLowerCase().includes("lawan jenis") &&
+        !r.toLowerCase().includes("jam malam") &&
+        !r.toLowerCase().includes("tiket") &&
+        !r.toLowerCase().includes("wahana")
+    );
+  }
+  if (categoryType === "kost") {
+    return rules.filter(
+      (r) =>
+        !r.toLowerCase().includes("tiket") &&
+        !r.toLowerCase().includes("wahana") &&
+        !r.toLowerCase().includes("kunjungan") &&
+        !r.toLowerCase().includes("jam buka: 08.00")
+    );
+  }
+  return rules;
+};
+
 // Get all Kosts (for customer search & filter)
 const getAllKosts = async (req, res) => {
   try {
@@ -63,6 +97,50 @@ const getAllKosts = async (req, res) => {
         // Real room photos take precedence over default images
         kObj.images = Array.from(new Set([...roomImgs, ...(kObj.images || [])]));
       }
+
+      // Ensure Wisata and Hotel never show Kost gender 'Campur' or room facilities
+      if (kObj.categoryType === "wisata") {
+        if (!kObj.type || ["campur", "putri", "putra"].includes(String(kObj.type).toLowerCase())) {
+          kObj.type = "Wisata Rekreasi";
+        }
+        const ticketFacs = Array.from(
+          new Set(
+            (Array.isArray(kObj.wisataTickets) ? kObj.wisataTickets : [])
+              .flatMap((t) => t.includedFacilities || t.facilities || [])
+          )
+        ).filter(Boolean);
+        if (ticketFacs.length > 0) {
+          kObj.facilities = ticketFacs;
+        } else if (Array.isArray(kObj.facilities)) {
+          kObj.facilities = kObj.facilities.filter(
+            (f) => !["Kasur", "KM Dalam", "Lemari", "Meja"].includes(f)
+          );
+        } else {
+          kObj.facilities = [];
+        }
+      } else if (kObj.categoryType === "hotel") {
+        if (!kObj.type || ["campur", "putri", "putra"].includes(String(kObj.type).toLowerCase())) {
+          kObj.type = "Hotel & Villa";
+        }
+        const hotelFacs = Array.from(
+          new Set(
+            (Array.isArray(kObj.hotelRooms) ? kObj.hotelRooms : [])
+              .flatMap((r) => r.facilities || [])
+          )
+        ).filter(Boolean);
+        if (hotelFacs.length > 0) {
+          kObj.facilities = hotelFacs;
+        } else if (Array.isArray(kObj.facilities)) {
+          kObj.facilities = kObj.facilities.filter(
+            (f) => !["Kasur", "KM Dalam"].includes(f)
+          );
+        } else {
+          kObj.facilities = [];
+        }
+      }
+
+      kObj.rules = sanitizeRulesByCategory(kObj.rules, kObj.categoryType);
+
       return kObj;
     });
 
@@ -99,6 +177,49 @@ const getKostById = async (req, res) => {
     if (roomImgs.length > 0) {
       kObj.images = Array.from(new Set([...roomImgs, ...(kObj.images || [])]));
     }
+
+    // Ensure Wisata and Hotel never show Kost gender 'Campur' or room facilities
+    if (kObj.categoryType === "wisata") {
+      if (!kObj.type || ["campur", "putri", "putra"].includes(String(kObj.type).toLowerCase())) {
+        kObj.type = "Wisata Rekreasi";
+      }
+      const ticketFacs = Array.from(
+        new Set(
+          (Array.isArray(kObj.wisataTickets) ? kObj.wisataTickets : [])
+            .flatMap((t) => t.includedFacilities || t.facilities || [])
+        )
+      ).filter(Boolean);
+      if (ticketFacs.length > 0) {
+        kObj.facilities = ticketFacs;
+      } else if (Array.isArray(kObj.facilities)) {
+        kObj.facilities = kObj.facilities.filter(
+          (f) => !["Kasur", "KM Dalam", "Lemari", "Meja"].includes(f)
+        );
+      } else {
+        kObj.facilities = [];
+      }
+    } else if (kObj.categoryType === "hotel") {
+      if (!kObj.type || ["campur", "putri", "putra"].includes(String(kObj.type).toLowerCase())) {
+        kObj.type = "Hotel & Villa";
+      }
+      const hotelFacs = Array.from(
+        new Set(
+          (Array.isArray(kObj.hotelRooms) ? kObj.hotelRooms : [])
+            .flatMap((r) => r.facilities || [])
+        )
+      ).filter(Boolean);
+      if (hotelFacs.length > 0) {
+        kObj.facilities = hotelFacs;
+      } else if (Array.isArray(kObj.facilities)) {
+        kObj.facilities = kObj.facilities.filter(
+          (f) => !["Kasur", "KM Dalam"].includes(f)
+        );
+      } else {
+        kObj.facilities = [];
+      }
+    }
+
+    kObj.rules = sanitizeRulesByCategory(kObj.rules, kObj.categoryType);
 
     return res.status(200).json({ success: true, data: kObj });
   } catch (error) {
@@ -221,7 +342,9 @@ const findKostByOwnerOrEmail = async (ownerIdentifier) => {
     const kostName = rawRoleData.businessName || user.name || "Kost Mitra";
     const categoryType = rawRoleData.businessCategory || (rawRoleData.propertyType?.toLowerCase().includes("wisata") ? "wisata" : rawRoleData.propertyType?.toLowerCase().includes("hotel") || rawRoleData.propertyType?.toLowerCase().includes("villa") ? "hotel" : "kost");
     let kostType = "Campur";
-    if (rawRoleData.propertyType?.toLowerCase().includes("putri")) kostType = "Putri";
+    if (categoryType === "wisata") kostType = "Wisata Rekreasi";
+    else if (categoryType === "hotel") kostType = "Hotel & Villa";
+    else if (rawRoleData.propertyType?.toLowerCase().includes("putri")) kostType = "Putri";
     else if (rawRoleData.propertyType?.toLowerCase().includes("putra")) kostType = "Putra";
 
     const lat = Number(rawRoleData.latitude) || -7.2278;
@@ -240,8 +363,14 @@ const findKostByOwnerOrEmail = async (ownerIdentifier) => {
       description: "Properti eksklusif nyaman, bersih, aman, dan berfasilitas lengkap di kawasan Garut.",
       price: categoryType === "wisata" ? 25000 : categoryType === "hotel" ? 450000 : 1200000,
       dpAmount: categoryType === "wisata" ? 25000 : 200000,
-      facilities: ["WiFi", "AC", "KM Dalam", "Kasur", "Lemari", "Parkir Luas"],
-      rules: ["Akses 24 Jam", "Dilarang Merokok di Kamar"],
+      facilities: categoryType === "wisata"
+        ? ["Spot Foto", "Gazebo", "Kolam Renang", "Area Parkir", "Toilet & Bilas", "Food Court"]
+        : categoryType === "hotel"
+        ? ["WiFi Gratis", "AC Dingin", "Smart TV", "Bathtub", "Restoran & Kafe", "Resepsionis 24 Jam"]
+        : ["WiFi", "AC", "KM Dalam", "Kasur", "Lemari", "Parkir Luas"],
+      rules: categoryType === "wisata"
+        ? ["Dilarang Membuang Sampah Sembarangan", "Jaga Keselamatan di Area Wahana"]
+        : ["Akses 24 Jam", "Dilarang Merokok di Kamar"],
       images: [
         user.profilePhoto || (categoryType === "wisata" ? "https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?auto=format&fit=crop&w=800&q=80" : categoryType === "hotel" ? "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80" : "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80"),
       ],

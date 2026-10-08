@@ -63,6 +63,11 @@ import {
   TreePine,
   Waves,
   Gift,
+  Camera,
+  Tent,
+  Compass,
+  ShieldAlert,
+  AlertCircle,
 } from "lucide-react-native";
 import { addCustomerOrder } from "./customerOrderStore";
 import { CustomerChatModal } from "./CustomerChatModal";
@@ -208,6 +213,24 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
             const availRoom = freshKost.rooms.find((r: any) => r.isAvailable) || freshKost.rooms[0];
             setSelectedRoom(availRoom);
           }
+          if (Array.isArray(freshKost.wisataTickets) && freshKost.wisataTickets.length > 0) {
+            setSelectedWisataTicket((prev) => {
+              if (prev) {
+                const matched = freshKost.wisataTickets.find((t: any) => t.ticketName === prev.ticketName || t._id === prev._id);
+                return matched || freshKost.wisataTickets[0];
+              }
+              return freshKost.wisataTickets[0];
+            });
+          }
+          if (Array.isArray(freshKost.hotelRooms) && freshKost.hotelRooms.length > 0) {
+            setSelectedHotelRoom((prev) => {
+              if (prev) {
+                const matched = freshKost.hotelRooms.find((r: any) => r.roomName === prev.roomName || r._id === prev._id);
+                return matched || freshKost.hotelRooms[0];
+              }
+              return freshKost.hotelRooms[0];
+            });
+          }
         }
       } catch (err) {
         console.warn("Error fetching fresh kost detail:", err);
@@ -238,31 +261,139 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
     if (name.includes("wifi") || name.includes("internet")) return Wifi;
     if (name.includes("listrik") || name.includes("pln") || name.includes("token")) return Zap;
     if (name.includes("air") || name.includes("pdam")) return Droplets;
-    if (name.includes("ac") || name.includes("panas")) return Snowflake;
+    if (name.includes("ac") || name.includes("panas") || name.includes("dingin")) return Snowflake;
     if (name.includes("kipas") || name.includes("fan") || name.includes("angin")) return Fan;
     if (name.includes("km luar") || name.includes("luar")) return Bath;
-    if (name.includes("km") || name.includes("mandi") || name.includes("shower") || name.includes("toilet") || name.includes("water heater")) return ShowerHead;
+    if (name.includes("km") || name.includes("mandi") || name.includes("shower") || name.includes("toilet") || name.includes("bilas") || name.includes("water heater")) return ShowerHead;
     if (name.includes("kasur") || name.includes("bed") || name.includes("springbed") || name.includes("matras")) return Bed;
     if (name.includes("lemari") || name.includes("wardrobe") || name.includes("pakaian")) return DoorClosed;
     if (name.includes("meja") || name.includes("desk") || name.includes("belajar") || name.includes("kerja")) return Table;
     if (name.includes("kursi") || name.includes("chair") || name.includes("duduk")) return Armchair;
     if (name.includes("tv") || name.includes("televisi")) return Tv;
     if (name.includes("dispenser") || name.includes("minum") || name.includes("kopi")) return CupSoda;
-    if (name.includes("dapur") || name.includes("masak") || name.includes("kulkas") || name.includes("makan")) return Utensils;
+    if (name.includes("dapur") || name.includes("masak") || name.includes("kulkas") || name.includes("makan") || name.includes("resto") || name.includes("food") || name.includes("kantin")) return Utensils;
     if (name.includes("cuci") || name.includes("jemur") || name.includes("laundry") || name.includes("baju")) return Shirt;
     if (name.includes("parkir") || name.includes("motor") || name.includes("mobil") || name.includes("kendaraan")) return Car;
     if (name.includes("cctv") || name.includes("aman") || name.includes("penjaga") || name.includes("satpam") || name.includes("security")) return ShieldCheck;
+    if (name.includes("spot foto") || name.includes("foto") || name.includes("kamera") || name.includes("camera") || name.includes("selfie")) return Camera;
+    if (name.includes("kolam") || name.includes("renang") || name.includes("waterboom") || name.includes("curug") || name.includes("danau")) return Waves;
+    if (name.includes("gazebo") || name.includes("saung") || name.includes("tenda") || name.includes("camping")) return Tent;
+    if (name.includes("wahana") || name.includes("flying fox") || name.includes("atv") || name.includes("adventure") || name.includes("trekking") || name.includes("outbound")) return Compass;
+    if (name.includes("pemandu") || name.includes("guide") || name.includes("petugas")) return Sparkles;
+    if (name.includes("taman") || name.includes("hutan") || name.includes("pinus") || name.includes("kebun")) return TreePine;
     if (name.includes("ruang") || name.includes("tamu") || name.includes("santai") || name.includes("gedung") || name.includes("balkon")) return Building2;
     return CheckCircle2;
   };
 
-  const sharedFacilities = React.useMemo(() => {
-    return Array.isArray(kostData?.facilities) ? kostData.facilities.filter(Boolean) : [];
-  }, [kostData]);
+  // Facilities included specifically in the currently selected ticket / room
+  const selectedTicketFacilities = React.useMemo(() => {
+    if (categoryType === "wisata") {
+      return (
+        selectedWisataTicket?.includedFacilities ||
+        selectedWisataTicket?.facilities ||
+        []
+      ).filter(Boolean);
+    }
+    if (categoryType === "hotel") {
+      return (selectedHotelRoom?.facilities || []).filter(Boolean);
+    }
+    return (selectedRoom?.facilities || []).filter(Boolean);
+  }, [categoryType, selectedWisataTicket, selectedHotelRoom, selectedRoom]);
+
+  // All unique facilities available at this destination across all owner tickets / packages
+  const allDestinationFacilities = React.useMemo(() => {
+    if (categoryType === "wisata") {
+      const allTicketFacs = Array.from(
+        new Set(
+          (Array.isArray(kostData?.wisataTickets) ? kostData.wisataTickets : [])
+            .flatMap((t: any) => t.includedFacilities || t.facilities || [])
+        )
+      ).filter(Boolean);
+
+      if (allTicketFacs.length > 0) {
+        return allTicketFacs;
+      }
+      if (Array.isArray(kostData?.facilities) && kostData.facilities.length > 0) {
+        return kostData.facilities.filter(
+          (f: string) => !["Kasur", "KM Dalam", "Lemari", "Meja"].includes(f)
+        );
+      }
+      return [];
+    }
+
+    if (categoryType === "hotel") {
+      const allHotelFacs = Array.from(
+        new Set(
+          (Array.isArray(kostData?.hotelRooms) ? kostData.hotelRooms : [])
+            .flatMap((r: any) => r.facilities || [])
+        )
+      ).filter(Boolean);
+      if (allHotelFacs.length > 0) return allHotelFacs;
+      if (Array.isArray(kostData?.facilities) && kostData.facilities.length > 0) {
+        return kostData.facilities.filter((f: string) => !["Kasur", "KM Dalam"].includes(f));
+      }
+      return [];
+    }
+
+    // Default for Kost
+    const allRoomFacs = (Array.isArray(kostData?.rooms) ? kostData.rooms : [])
+      .flatMap((r: any) => r.facilities || []);
+    const merged = Array.from(
+      new Set([
+        ...allRoomFacs,
+        ...(Array.isArray(kostData?.facilities) ? kostData.facilities : []),
+      ])
+    ).filter(Boolean);
+    return merged.length > 0 ? merged : (kostData?.facilities || []);
+  }, [kostData, categoryType]);
 
   const kosRules = React.useMemo(() => {
-    return Array.isArray(kostData?.rules) ? kostData.rules.filter(Boolean) : [];
-  }, [kostData]);
+    const raw = Array.isArray(kostData?.rules) ? kostData.rules.filter(Boolean) : [];
+    if (categoryType === "wisata") {
+      return raw.filter(
+        (r: string) =>
+          !r.toLowerCase().includes("kamar") &&
+          !r.toLowerCase().includes("lawan jenis") &&
+          !r.toLowerCase().includes("akses 24 jam") &&
+          !r.toLowerCase().includes("jam malam") &&
+          !r.toLowerCase().includes("check-in") &&
+          !r.toLowerCase().includes("check-out")
+      );
+    }
+    if (categoryType === "hotel") {
+      return raw.filter(
+        (r: string) =>
+          !r.toLowerCase().includes("lawan jenis") &&
+          !r.toLowerCase().includes("jam malam") &&
+          !r.toLowerCase().includes("tiket") &&
+          !r.toLowerCase().includes("wahana")
+      );
+    }
+    if (categoryType === "kost") {
+      return raw.filter(
+        (r: string) =>
+          !r.toLowerCase().includes("tiket") &&
+          !r.toLowerCase().includes("wahana") &&
+          !r.toLowerCase().includes("kunjungan") &&
+          !r.toLowerCase().includes("jam buka: 08.00")
+      );
+    }
+    return raw;
+  }, [kostData, categoryType]);
+
+  const getRuleIconAndColor = (ruleText: string) => {
+    const text = (ruleText || "").toLowerCase();
+    if (text.includes("jam buka") || text.includes("operasional") || text.includes("check-in") || text.includes("check-out") || text.includes("akses 24") || text.includes("wib") || text.includes("pukul")) {
+      return { icon: Clock, color: "#D97706", bgColor: "#FEF3C7" };
+    }
+    if (text.includes("dilarang") || text.includes("tidak boleh") || text.includes("sanksi") || text.includes("senjata") || text.includes("miras") || text.includes("merokok") || text.includes("lawan jenis")) {
+      return { icon: ShieldAlert, color: "#DC2626", bgColor: "#FEE2E2" };
+    }
+    if (text.includes("gratis") || text.includes("anak") || text.includes("bebas") || text.includes("diskon")) {
+      return { icon: Sparkles, color: "#0D7A53", bgColor: "#E6F4EA" };
+    }
+    return { icon: CheckCircle2, color: "#0284C7", bgColor: "#E0F2FE" };
+  };
 
   // Price calculations according to category type
   const pricePerMonth = selectedRoom ? selectedRoom.priceMonthly : (kostData?.price || 950000);
@@ -589,9 +720,9 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                 )}
                 <Text style={styles.badgePutraText}>
                   {categoryType === "hotel"
-                    ? kostData?.type || "Hotel Bintang 4"
+                    ? (kostData?.type && !["campur", "putri", "putra"].includes(String(kostData.type).toLowerCase()) ? kostData.type : "Hotel & Villa")
                     : categoryType === "wisata"
-                    ? kostData?.type || "Wisata & Rekreasi"
+                    ? (kostData?.type && !["campur", "putri", "putra"].includes(String(kostData.type).toLowerCase()) ? kostData.type : "Wisata Rekreasi")
                     : kostData?.type || "Campur"}
                 </Text>
               </View>
@@ -827,27 +958,6 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                   })}
                 </View>
               </View>
-
-              {/* Seamless Kanyaah Ride Integration Banner */}
-              <View style={styles.rideIntegrationCard}>
-                <View style={styles.rideIconCircle}>
-                  <Bike size={24} color="#EA580C" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rideCardTitle}>Butuh Antar-Jemput ke Lokasi?</Text>
-                  <Text style={styles.rideCardSub}>
-                    Pesan driver Kanyaah Ride langsung dari rumah Anda menuju {kostData?.name} dengan tarif hemat!
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.btnOrderRideNow}
-                    onPress={() => navigate("c_ride")}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.btnOrderRideNowText}>Pesan Kanyaah Ride Sekarang</Text>
-                    <ChevronRight size={14} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              </View>
             </>
           )}
 
@@ -952,26 +1062,42 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
             </View>
           )}
 
-          {/* FASILITAS BERSAMA SECTION */}
+          {/* FASILITAS BERSAMA / WAHANA SECTION */}
           <View style={styles.sectionBlock}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <Text style={styles.sectionTitle}>Fasilitas & Layanan Unggulan</Text>
-              <Text style={{ fontSize: 12, color: "#0D7A53", fontWeight: "700" }}>{sharedFacilities.length} Fasilitas</Text>
+              <Text style={styles.sectionTitle}>
+                {categoryType === "wisata"
+                  ? "Fasilitas & Layanan Unggulan"
+                  : categoryType === "hotel"
+                  ? "Fasilitas Hotel & Villa"
+                  : "Fasilitas & Layanan Unggulan"}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#0D7A53", fontWeight: "700" }}>{allDestinationFacilities.length} Fasilitas</Text>
             </View>
 
-            <View style={styles.facilitiesGrid}>
-              {sharedFacilities.map((fac: string, idx: number) => {
-                const IconComp = getFacilityIcon(fac);
-                return (
-                  <View key={idx} style={styles.facilityCard}>
-                    <View style={styles.facilityIconCircle}>
-                      <IconComp size={18} color="#0D7A53" />
+            {allDestinationFacilities.length > 0 ? (
+              <View style={styles.facilitiesGrid}>
+                {allDestinationFacilities.map((fac: string, idx: number) => {
+                  const IconComp = getFacilityIcon(fac);
+                  return (
+                    <View key={idx} style={styles.facilityCard}>
+                      <View style={styles.facilityIconCircle}>
+                        <IconComp size={18} color="#0D7A53" />
+                      </View>
+                      <Text style={styles.facilityCardName} numberOfLines={2}>{fac}</Text>
                     </View>
-                    <Text style={styles.facilityCardName} numberOfLines={2}>{fac}</Text>
-                  </View>
-                );
-              })}
-            </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={{ paddingVertical: 14, paddingHorizontal: 12, backgroundColor: "#F9FAFB", borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center" }}>
+                <Text style={{ fontSize: 13, color: "#6B7280" }}>
+                  {categoryType === "wisata"
+                    ? "Belum ada fasilitas khusus yang dipilih pengelola untuk wisata ini."
+                    : "Belum ada fasilitas yang ditambahkan."}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Deskripsi */}
@@ -980,6 +1106,70 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
             <Text style={styles.descText}>
               {kostData?.description || "Akomodasi dan destinasi terverifikasi resmi oleh tim GEOVERSE untuk kenyamanan dan keamanan Anda."}
             </Text>
+          </View>
+
+          {/* Tata Tertib & Ketentuan Section */}
+          <View style={styles.sectionBlock}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <Text style={styles.sectionTitle}>
+                {categoryType === "wisata"
+                  ? "Tata Tertib & Jam Buka"
+                  : categoryType === "hotel"
+                  ? "Peraturan & Kebijakan Menginap"
+                  : "Peraturan & Tata Tertib Kos"}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#0D7A53", fontWeight: "700" }}>
+                {kosRules.length} Ketentuan
+              </Text>
+            </View>
+
+            {kosRules.length > 0 ? (
+              <View style={{ gap: 8 }}>
+                {kosRules.map((rule: string, idx: number) => {
+                  const { icon: RuleIcon, color: iconColor, bgColor: iconBg } = getRuleIconAndColor(rule);
+                  return (
+                    <View
+                      key={idx}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 10,
+                        backgroundColor: "#F9FAFB",
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: "#F3F4F6",
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 14,
+                          backgroundColor: iconBg,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <RuleIcon size={15} color={iconColor} />
+                      </View>
+                      <Text style={{ flex: 1, fontSize: 13, color: "#374151", fontWeight: "500", lineHeight: 18 }}>
+                        {rule}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={{ paddingVertical: 14, paddingHorizontal: 12, backgroundColor: "#F9FAFB", borderRadius: 12, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center" }}>
+                <Text style={{ fontSize: 13, color: "#6B7280" }}>
+                  {categoryType === "wisata"
+                    ? "Belum ada tata tertib khusus yang diatur oleh pengelola wisata."
+                    : "Belum ada tata tertib yang ditambahkan oleh pemilik."}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Lokasi & Alamat */}

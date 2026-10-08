@@ -333,7 +333,59 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
 
   // Merge items according to currently selected mainCategory
   const currentItemsList = React.useMemo(() => {
-    const matchingFromDb = (dbKosts || []).filter((k) => (k?.categoryType || "kost") === mainCategory);
+    const matchingFromDb = (dbKosts || [])
+      .filter((k) => (k?.categoryType || "kost") === mainCategory)
+      .map((k) => {
+        let sanitizedType = k.type;
+        let sanitizedFacilities = Array.isArray(k.facilities) ? [...k.facilities] : [];
+        if (mainCategory === "wisata") {
+          if (!sanitizedType || ["campur", "putri", "putra"].includes(String(sanitizedType).toLowerCase())) {
+            sanitizedType = "Wisata Rekreasi";
+          }
+          const ticketFacs = Array.from(
+            new Set(
+              (Array.isArray(k.wisataTickets) ? k.wisataTickets : [])
+                .flatMap((t: any) => t.includedFacilities || t.facilities || [])
+            )
+          ).filter(Boolean);
+          if (ticketFacs.length > 0) {
+            sanitizedFacilities = ticketFacs;
+          } else if (sanitizedFacilities.length > 0) {
+            sanitizedFacilities = sanitizedFacilities.filter(
+              (f: string) => !["Kasur", "KM Dalam", "Lemari", "Meja"].includes(f)
+            );
+          }
+        } else if (mainCategory === "hotel") {
+          if (!sanitizedType || ["campur", "putri", "putra"].includes(String(sanitizedType).toLowerCase())) {
+            sanitizedType = "Hotel & Villa";
+          }
+          const hotelFacs = Array.from(
+            new Set(
+              (Array.isArray(k.hotelRooms) ? k.hotelRooms : [])
+                .flatMap((r: any) => r.facilities || [])
+            )
+          ).filter(Boolean);
+          if (hotelFacs.length > 0) {
+            sanitizedFacilities = hotelFacs;
+          } else if (sanitizedFacilities.length > 0) {
+            sanitizedFacilities = sanitizedFacilities.filter(
+              (f: string) => !["Kasur", "KM Dalam"].includes(f)
+            );
+          }
+        }
+
+        return {
+          ...k,
+          type: sanitizedType,
+          facilities: sanitizedFacilities,
+          categoryType: mainCategory,
+          status: mainCategory === "wisata" ? "Buka Hari Ini" : "Tersedia",
+          img: (k.images && k.images[0]) ? k.images[0] : (mainCategory === "wisata" ? "https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?auto=format&fit=crop&w=800&q=80" : mainCategory === "hotel" ? "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80" : "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80"),
+          photoCount: (k.images && k.images.length) ? k.images.length : 1,
+          raw: k,
+        };
+      });
+
     if (matchingFromDb.length > 0) {
       return matchingFromDb;
     }
@@ -945,14 +997,14 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                     <View
                       style={[
                         styles.typeBadge,
-                        item.type === "Putri"
-                          ? styles.typePutri
-                          : item.type === "Putra"
-                          ? styles.typePutra
-                          : item.categoryType === "hotel"
+                        item.categoryType === "hotel"
                           ? styles.typeHotel
                           : item.categoryType === "wisata"
                           ? styles.typeWisata
+                          : item.type === "Putri"
+                          ? styles.typePutri
+                          : item.type === "Putra"
+                          ? styles.typePutra
                           : styles.typeCampur,
                       ]}
                     >
@@ -989,7 +1041,11 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                           },
                         ]}
                       >
-                        {item.type}
+                        {item.categoryType === "wisata"
+                          ? (item.type && !["campur", "putri", "putra"].includes(item.type.toLowerCase()) ? item.type : "Wisata Rekreasi")
+                          : item.categoryType === "hotel"
+                          ? (item.type && !["campur", "putri", "putra"].includes(item.type.toLowerCase()) ? item.type : "Hotel & Villa")
+                          : item.type}
                       </Text>
                     </View>
 
@@ -1051,6 +1107,33 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                     </Text>
                   </View>
 
+                  {/* Highlights of options (Paket Tiket / Tipe Kamar) */}
+                  {item.categoryType === "wisata" && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, marginBottom: 2 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FEF3C7", paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6, gap: 4 }}>
+                        <Ticket size={11} color="#D97706" />
+                        <Text style={{ fontSize: 10.5, fontWeight: "700", color: "#B45309" }}>
+                          {Array.isArray(item.wisataTickets) && item.wisataTickets.length > 0
+                            ? `${item.wisataTickets.length} Pilihan Paket Tiket`
+                            : "Tersedia Tiket Masuk"}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {item.categoryType === "hotel" && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, marginBottom: 2 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#E0F2FE", paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6, gap: 4 }}>
+                        <Hotel size={11} color="#0284C7" />
+                        <Text style={{ fontSize: 10.5, fontWeight: "700", color: "#0369A1" }}>
+                          {Array.isArray(item.hotelRooms) && item.hotelRooms.length > 0
+                            ? `${item.hotelRooms.length} Tipe Kamar & Villa`
+                            : "Tipe Kamar Tersedia"}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
                   {/* Facility Chips Row */}
                   <View style={styles.facilitiesRow}>
                     {item.facilities &&
@@ -1079,7 +1162,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                           ? "Mulai dari sewa bulanan"
                           : mainCategory === "hotel"
                           ? "Mulai dari per malam"
-                          : "Harga tiket masuk"}
+                          : "Mulai dari per tiket"}
                       </Text>
                       <Text style={styles.priceValText}>
                         {rp(item.price)}{" "}
@@ -1140,7 +1223,13 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                 <View style={styles.notaHeaderIconBg}>
                   <FileText size={18} color="#0D7A53" />
                 </View>
-                <Text style={styles.notaModalHeaderTitle}>Nota Resmi Pemesanan</Text>
+                <Text style={styles.notaModalHeaderTitle}>
+                  {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
+                    ? "E-Tiket Resmi Wisata"
+                    : activeBooking?.categoryType === "hotel" || String(activeBooking?.bookingCode || "").startsWith("HTL") || activeBooking?.durationNights
+                    ? "Voucher Reservasi Hotel"
+                    : "Nota Resmi Pemesanan"}
+                </Text>
               </View>
               <TouchableOpacity
                 style={styles.notaCloseBtn}
@@ -1155,7 +1244,13 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               <View style={styles.receiptCard}>
                 <View style={styles.receiptTopBanner}>
                   <Text style={styles.receiptBrand}>GEOVERSE</Text>
-                  <Text style={styles.receiptSubBrand}>E-Receipt & Konfirmasi Pemesanan</Text>
+                  <Text style={styles.receiptSubBrand}>
+                    {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
+                      ? "E-Tiket & Bukti Masuk Wisata"
+                      : activeBooking?.categoryType === "hotel" || String(activeBooking?.bookingCode || "").startsWith("HTL") || activeBooking?.durationNights
+                      ? "Voucher & Konfirmasi Hotel"
+                      : "E-Receipt & Konfirmasi Pemesanan"}
+                  </Text>
                   <View style={styles.receiptVerifiedBadge}>
                     <Check size={13} color="#0D7A53" strokeWidth={3} />
                     <Text style={styles.receiptVerifiedText}>TERVERIFIKASI RESMI</Text>
@@ -1190,28 +1285,62 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                     <Text style={styles.receiptVal}>{activeBooking?.customerEmail || authAccount?.email || "customer@geoverse.id"}</Text>
                   </View>
 
-                  <Text style={styles.receiptSectionHeader}>DETAIL PROPERTI / WISATA</Text>
+                  <Text style={styles.receiptSectionHeader}>
+                    {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
+                      ? "DETAIL TIKET WISATA"
+                      : activeBooking?.categoryType === "hotel" || String(activeBooking?.bookingCode || "").startsWith("HTL") || activeBooking?.durationNights
+                      ? "DETAIL RESERVASI HOTEL"
+                      : "DETAIL PROPERTI / KOS"}
+                  </Text>
                   <View style={styles.receiptRow}>
                     <Text style={styles.receiptLabel}>Nama Tempat</Text>
                     <Text style={styles.receiptValBoldGreen}>{activeBooking?.kostName || "Properti"}</Text>
                   </View>
                   {activeBooking?.roomNumber && (
                     <View style={styles.receiptRow}>
-                      <Text style={styles.receiptLabel}>Kamar</Text>
-                      <Text style={styles.receiptVal}>Kamar {activeBooking.roomNumber} ({activeBooking.roomType || "Standar"})</Text>
+                      <Text style={styles.receiptLabel}>
+                        {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
+                          ? "Paket Tiket"
+                          : activeBooking?.categoryType === "hotel" || String(activeBooking?.bookingCode || "").startsWith("HTL") || activeBooking?.durationNights
+                          ? "Tipe Kamar"
+                          : "Kamar"}
+                      </Text>
+                      <Text style={styles.receiptVal}>
+                        {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
+                          ? String(activeBooking.roomNumber).replace(/^(Kamar\s*)+/gi, "")
+                          : activeBooking?.categoryType === "hotel"
+                          ? `${activeBooking.roomNumber} (${activeBooking.roomType || "Standard"})`
+                          : `Kamar ${activeBooking.roomNumber} (${activeBooking.roomType || "Standar"})`}
+                      </Text>
                     </View>
                   )}
                   <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Tgl Check-in / Kunjungan</Text>
+                    <Text style={styles.receiptLabel}>
+                      {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
+                        ? "Tanggal Kunjungan"
+                        : activeBooking?.categoryType === "hotel"
+                        ? "Tanggal Check-in"
+                        : "Tgl Masuk (Check-in)"}
+                    </Text>
                     <Text style={styles.receiptVal}>{activeBooking?.entryDate || "-"}</Text>
                   </View>
 
                   <View style={styles.receiptTotalBox}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-                      <Text style={styles.receiptTotalLabel}>Uang Muka / Terbayar</Text>
+                      <Text style={styles.receiptTotalLabel}>
+                        {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
+                          ? "Pembayaran Tiket"
+                          : activeBooking?.categoryType === "hotel"
+                          ? "DP Terbayar (50%)"
+                          : "Uang Muka / Terbayar"}
+                      </Text>
                       <Text style={styles.receiptTotalVal}>{rp(activeBooking?.dpAmount || activeBooking?.totalAmount || 0)} (LUNAS ✓)</Text>
                     </View>
-                    <Text style={{ fontSize: 11, color: "#166534" }}>Tunjukkan nota digital ini saat tiba di lokasi.</Text>
+                    <Text style={{ fontSize: 11, color: "#166534" }}>
+                      {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
+                        ? "Tunjukkan e-tiket digital ini kepada petugas saat tiba di lokasi."
+                        : "Tunjukkan nota digital ini saat tiba di lokasi."}
+                    </Text>
                   </View>
                 </View>
               </View>

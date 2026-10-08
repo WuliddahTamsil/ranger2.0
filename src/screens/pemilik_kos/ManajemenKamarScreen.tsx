@@ -274,12 +274,50 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
         }
 
         if (Array.isArray(data.rules) && data.rules.length > 0) {
-          setPropertyRules(data.rules);
+          let cleanedRules = data.rules;
+          if (data.categoryType === "wisata") {
+            cleanedRules = data.rules.filter(
+              (r: string) =>
+                !r.toLowerCase().includes("kamar") &&
+                !r.toLowerCase().includes("lawan jenis") &&
+                !r.toLowerCase().includes("akses 24 jam") &&
+                !r.toLowerCase().includes("jam malam") &&
+                !r.toLowerCase().includes("check-in") &&
+                !r.toLowerCase().includes("check-out")
+            );
+          } else if (data.categoryType === "hotel") {
+            cleanedRules = data.rules.filter(
+              (r: string) =>
+                !r.toLowerCase().includes("lawan jenis") &&
+                !r.toLowerCase().includes("jam malam") &&
+                !r.toLowerCase().includes("tiket") &&
+                !r.toLowerCase().includes("wahana")
+            );
+          } else {
+            cleanedRules = data.rules.filter(
+              (r: string) =>
+                !r.toLowerCase().includes("tiket") &&
+                !r.toLowerCase().includes("wahana") &&
+                !r.toLowerCase().includes("kunjungan")
+            );
+          }
+
+          if (cleanedRules.length > 0) {
+            setPropertyRules(cleanedRules);
+          } else {
+            if (data.categoryType === "hotel") {
+              setPropertyRules(["Check-in Mulai Pukul 14.00 WIB", "Check-out Maksimal Pukul 12.00 WIB", "Dilarang Merokok di Dalam Kamar", "Bebas Hewan Peliharaan"]);
+            } else if (data.categoryType === "wisata") {
+              setPropertyRules(["Jam Buka: 08.00 - 17.00 WIB", "Tiket Berlaku untuk 1 Orang / Kunjungan", "Anak di Bawah 2 Tahun Gratis", "Dilarang Membuang Sampah Sembarangan"]);
+            } else {
+              setPropertyRules(["Akses 24 Jam", "Dilarang Merokok di Kamar", "Tamu Lawan Jenis Maks Pukul 21.00"]);
+            }
+          }
         } else {
           if (data.categoryType === "hotel") {
-            setPropertyRules(["Check-in Mulai 14.00 WIB", "Check-out Maksimal 12.00 WIB", "Dilarang Merokok di Dalam Kamar", "Bebas Hewan Peliharaan"]);
+            setPropertyRules(["Check-in Mulai Pukul 14.00 WIB", "Check-out Maksimal Pukul 12.00 WIB", "Dilarang Merokok di Dalam Kamar", "Bebas Hewan Peliharaan"]);
           } else if (data.categoryType === "wisata") {
-            setPropertyRules(["Jam Buka: 08.00 - 17.00 WIB", "Tiket Berlaku untuk 1 Orang", "Anak di Bawah 2 Tahun Gratis", "Dilarang Buang Sampah Sembarangan"]);
+            setPropertyRules(["Jam Buka: 08.00 - 17.00 WIB", "Tiket Berlaku untuk 1 Orang / Kunjungan", "Anak di Bawah 2 Tahun Gratis", "Dilarang Membuang Sampah Sembarangan"]);
           } else {
             setPropertyRules(["Akses 24 Jam", "Dilarang Merokok di Kamar", "Tamu Lawan Jenis Maks Pukul 21.00"]);
           }
@@ -849,12 +887,21 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
         {/* Quick Action Card (Fasilitas & Tata Tertib) */}
         <TouchableOpacity
           style={[styles.propertyConfigCard, { backgroundColor: themeBgLight, borderColor: themeBorderLight }]}
-          onPress={() => setIsPropertyModalOpen(true)}
+          onPress={() => {
+            if (categoryType === "wisata") {
+              setPropertyActiveTab("peraturan");
+            }
+            setIsPropertyModalOpen(true);
+          }}
           activeOpacity={0.85}
         >
           <View style={styles.propertyConfigLeft}>
             <View style={[styles.propertyConfigIconBg, { backgroundColor: "#FFFFFF" }]}>
-              <SlidersHorizontal size={20} color={themeColor} />
+              {categoryType === "wisata" ? (
+                <Clock size={20} color={themeColor} />
+              ) : (
+                <SlidersHorizontal size={20} color={themeColor} />
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
@@ -862,7 +909,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                   {categoryType === "hotel"
                     ? "Fasilitas Hotel & Kebijakan Reservasi"
                     : categoryType === "wisata"
-                    ? "Fasilitas Kawasan & Jam Operasional"
+                    ? "Jam Operasional & Tata Tertib Wisata"
                     : "Fasilitas Bersama & Peraturan Kos"}
                 </Text>
                 <View style={[styles.propertyBadgeAll, { backgroundColor: themeColor }]}>
@@ -870,7 +917,9 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                 </View>
               </View>
               <Text style={[styles.propertyConfigSub, { color: "#4B5563" }]} numberOfLines={1}>
-                {sharedFacilities.length} Fasilitas • {propertyRules.length} Tata Tertib
+                {categoryType === "wisata"
+                  ? `${propertyRules.length} Tata Tertib & Jam Buka`
+                  : `${sharedFacilities.length} Fasilitas • ${propertyRules.length} Peraturan`}
               </Text>
             </View>
           </View>
@@ -1777,7 +1826,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                     {categoryType === "hotel"
                       ? "Fasilitas Hotel & Kebijakan"
                       : categoryType === "wisata"
-                      ? "Fasilitas Area & Jam Buka"
+                      ? "Jam Buka & Tata Tertib Wisata"
                       : "Fasilitas Bersama & Peraturan Kos"}
                   </Text>
                   <View style={[styles.propertyBadgeAll, { backgroundColor: themeColor }]}>
@@ -1788,7 +1837,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                   {categoryType === "hotel"
                     ? "Atur fasilitas umum resort/hotel serta kebijakan check-in/out."
                     : categoryType === "wisata"
-                    ? "Atur fasilitas kawasan wisata, jam buka operasional, dan tata tertib pengunjung."
+                    ? "Atur jam buka operasional, tata tertib pengunjung, dan deskripsi kawasan wisata."
                     : "Atur fasilitas bersama dan peraturan kos yang berlaku untuk seluruh kamar."}
                 </Text>
               </View>
@@ -1803,43 +1852,45 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
 
             {/* Segmented Tab Bar */}
             <View style={styles.propSegmentWrap}>
-              <TouchableOpacity
-                style={[
-                  styles.propSegmentBtn,
-                  propertyActiveTab === "fasilitas" && { backgroundColor: themeColor },
-                ]}
-                onPress={() => setPropertyActiveTab("fasilitas")}
-                activeOpacity={0.8}
-              >
-                <SlidersHorizontal
-                  size={13}
-                  color={propertyActiveTab === "fasilitas" ? "#FFFFFF" : themeColor}
-                />
-                <Text
+              {categoryType !== "wisata" && (
+                <TouchableOpacity
                   style={[
-                    styles.propSegmentText,
-                    propertyActiveTab === "fasilitas" && styles.propSegmentTextActive,
+                    styles.propSegmentBtn,
+                    propertyActiveTab === "fasilitas" && { backgroundColor: themeColor },
                   ]}
-                  numberOfLines={1}
+                  onPress={() => setPropertyActiveTab("fasilitas")}
+                  activeOpacity={0.8}
                 >
-                  Fasilitas
-                </Text>
-                <View
-                  style={[
-                    styles.tabCountPill,
-                    propertyActiveTab === "fasilitas" ? styles.tabCountPillActive : styles.tabCountPillInactive,
-                  ]}
-                >
+                  <SlidersHorizontal
+                    size={13}
+                    color={propertyActiveTab === "fasilitas" ? "#FFFFFF" : themeColor}
+                  />
                   <Text
                     style={[
-                      styles.tabCountPillText,
-                      propertyActiveTab === "fasilitas" && styles.tabCountPillTextActive,
+                      styles.propSegmentText,
+                      propertyActiveTab === "fasilitas" && styles.propSegmentTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    Fasilitas
+                  </Text>
+                  <View
+                    style={[
+                      styles.tabCountPill,
+                      propertyActiveTab === "fasilitas" ? styles.tabCountPillActive : styles.tabCountPillInactive,
                     ]}
                   >
-                    {sharedFacilities.length}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.tabCountPillText,
+                        propertyActiveTab === "fasilitas" && styles.tabCountPillTextActive,
+                      ]}
+                    >
+                      {sharedFacilities.length}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={[
@@ -1860,7 +1911,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
                   ]}
                   numberOfLines={1}
                 >
-                  {categoryType === "wisata" ? "Tata Tertib" : "Kebijakan"}
+                  {categoryType === "wisata" ? "Tata Tertib & Jam Buka" : "Kebijakan"}
                 </Text>
                 <View
                   style={[

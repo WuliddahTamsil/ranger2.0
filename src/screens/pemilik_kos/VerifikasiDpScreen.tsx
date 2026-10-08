@@ -134,6 +134,18 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
     }
   };
 
+  const isWisata =
+    currentBooking?.categoryType === "wisata" ||
+    String(currentBooking?.bookingCode || "").startsWith("WST") ||
+    !!currentBooking?.ticketCount ||
+    authAccount?.roleData?.businessCategories?.includes("wisata");
+
+  const isHotel =
+    currentBooking?.categoryType === "hotel" ||
+    String(currentBooking?.bookingCode || "").startsWith("HTL") ||
+    !!currentBooking?.durationNights ||
+    authAccount?.roleData?.businessCategories?.includes("hotel");
+
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -147,7 +159,9 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
         >
           <ArrowLeft size={22} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Verifikasi DP Masuk</Text>
+        <Text style={styles.headerTitle}>
+          {isWisata ? "Verifikasi Pembayaran Tiket" : isHotel ? "Verifikasi Booking Hotel" : "Verifikasi DP Masuk"}
+        </Text>
         <TouchableOpacity onPress={loadBookings} style={{ padding: 4 }}>
           <RefreshCw size={18} color="#0D7A53" />
         </TouchableOpacity>
@@ -162,7 +176,11 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
         <View style={styles.noticeBoxTop}>
           <CheckCircle2 size={20} color="#0D7A53" style={styles.noticeIcon} />
           <Text style={styles.noticeTextTop}>
-            Notifikasi booking & DP masuk dari customer. Verifikasi bukti bayar agar kamar otomatis terisi.
+            {isWisata
+              ? "Notifikasi pesanan & pembayaran tiket dari pengunjung. Verifikasi bukti bayar agar tiket resmi diterbitkan."
+              : isHotel
+              ? "Notifikasi pemesanan kamar dari tamu. Verifikasi bukti bayar agar reservasi kamar terkonfirmasi."
+              : "Notifikasi booking & DP masuk dari customer. Verifikasi bukti bayar agar kamar otomatis terisi."}
           </Text>
         </View>
 
@@ -170,20 +188,30 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
         {allBookings.length > 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
             <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 4 }}>
-              {allBookings.map((b, idx) => (
-                <TouchableOpacity
-                  key={b._id || idx}
-                  onPress={() => setSelectedIndex(idx)}
-                  style={[
-                    styles.bookingTabChip,
-                    selectedIndex === idx && styles.bookingTabChipActive,
-                  ]}
-                >
-                  <Text style={[styles.bookingTabChipText, selectedIndex === idx && { color: "#FFFFFF", fontWeight: "800" }]}>
-                    {b.customerName?.split(" ")[0]} • Kamar {b.roomNumber || "101"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {allBookings.map((b, idx) => {
+                const bIsWisata = b.categoryType === "wisata" || String(b.bookingCode || "").startsWith("WST") || !!b.ticketCount;
+                const bIsHotel = b.categoryType === "hotel" || String(b.bookingCode || "").startsWith("HTL") || !!b.durationNights;
+                const itemLabel = bIsWisata
+                  ? String(b.ticketName || b.roomNumber || "Tiket").replace(/^(Kamar\s*)+/gi, "")
+                  : bIsHotel
+                  ? (b.roomName || b.roomNumber || "Kamar")
+                  : `Kamar ${String(b.roomNumber || "101").replace(/^(Kamar\s*)+/gi, "")}`;
+
+                return (
+                  <TouchableOpacity
+                    key={b._id || idx}
+                    onPress={() => setSelectedIndex(idx)}
+                    style={[
+                      styles.bookingTabChip,
+                      selectedIndex === idx && styles.bookingTabChipActive,
+                    ]}
+                  >
+                    <Text style={[styles.bookingTabChipText, selectedIndex === idx && { color: "#FFFFFF", fontWeight: "800" }]}>
+                      {b.customerName?.split(" ")[0]} • {itemLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </ScrollView>
         )}
@@ -194,10 +222,14 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
               <FileText size={32} color="#0D7A53" />
             </View>
             <Text style={{ fontSize: 18, fontWeight: "700", color: "#111827", marginBottom: 8 }}>
-              Belum Ada Booking Masuk
+              Belum Ada Pesanan Masuk
             </Text>
             <Text style={{ fontSize: 13, color: "#6B7280", textAlign: "center", paddingHorizontal: 24, lineHeight: 20 }}>
-              Saat ada customer yang memesan kamar kos dan mengunggah bukti pembayaran DP, data pesanan dan foto bukti transfer akan otomatis muncul di sini untuk Anda verifikasi.
+              {isWisata
+                ? "Saat ada pengunjung yang memesan tiket wisata dan mengunggah bukti transfer, data pesanan dan bukti bayar akan otomatis muncul di sini untuk Anda verifikasi."
+                : isHotel
+                ? "Saat ada tamu yang memesan kamar hotel dan mengunggah bukti pembayaran, data pesanan akan otomatis muncul di sini untuk diverifikasi."
+                : "Saat ada customer yang memesan kamar kos dan mengunggah bukti pembayaran DP, data pesanan dan foto bukti transfer akan otomatis muncul di sini untuk Anda verifikasi."}
             </Text>
             <TouchableOpacity
               style={[styles.btnLihatBukti, { marginTop: 24, paddingHorizontal: 20 }]}
@@ -217,9 +249,15 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
                   <FileText size={18} color="#0D7A53" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>Detail Pemesanan Kost</Text>
+                  <Text style={styles.cardTitle}>
+                    {isWisata
+                      ? "Detail Pemesanan Tiket Wisata"
+                      : isHotel
+                      ? "Detail Reservasi Hotel & Villa"
+                      : "Detail Pemesanan Kost"}
+                  </Text>
                   <Text style={{ fontSize: 11, color: "#6B7280" }}>
-                    Kode: {currentBooking.bookingCode || "KST-ONLINE"}
+                    Kode: {currentBooking.bookingCode || (isWisata ? "WST-ONLINE" : isHotel ? "HTL-ONLINE" : "KST-ONLINE")}
                   </Text>
                 </View>
                 <View style={[styles.statusTag, currentBooking.status === "dp_verified" ? styles.tagGreen : styles.tagOrange]}>
@@ -231,7 +269,9 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
 
               <View style={styles.infoList}>
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Nama Calon Penghuni</Text>
+                  <Text style={styles.infoLabel}>
+                    {isWisata ? "Nama Pengunjung" : isHotel ? "Nama Tamu" : "Nama Calon Penghuni"}
+                  </Text>
                   <Text style={styles.infoValueBold}>{currentBooking.customerName || "Customer"}</Text>
                 </View>
 
@@ -241,19 +281,35 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
                 </View>
 
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Kamar Pilihan</Text>
+                  <Text style={styles.infoLabel}>
+                    {isWisata ? "Paket Tiket" : isHotel ? "Tipe Kamar" : "Kamar Pilihan"}
+                  </Text>
                   <Text style={[styles.infoValueBold, { color: "#0D7A53" }]}>
-                    Kamar {currentBooking.roomNumber || "101"}
+                    {isWisata
+                      ? String(currentBooking.ticketName || currentBooking.roomNumber || "Tiket Masuk").replace(/^(Kamar\s*)+/gi, "")
+                      : isHotel
+                      ? (currentBooking.roomName || currentBooking.roomNumber || "Deluxe Room")
+                      : `Kamar ${String(currentBooking.roomNumber || "101").replace(/^(Kamar\s*)+/gi, "")}`}
                   </Text>
                 </View>
 
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Durasi Sewa</Text>
-                  <Text style={styles.infoValueBold}>{currentBooking.durationMonths || 1} Bulan</Text>
+                  <Text style={styles.infoLabel}>
+                    {isWisata ? "Jumlah Tiket" : isHotel ? "Durasi Menginap" : "Durasi Sewa"}
+                  </Text>
+                  <Text style={styles.infoValueBold}>
+                    {isWisata
+                      ? `${currentBooking.ticketCount || currentBooking.ticketsNum || 1} Tiket`
+                      : isHotel
+                      ? `${currentBooking.durationNights || currentBooking.nightCount || currentBooking.durationMonths || 1} Malam`
+                      : `${currentBooking.durationMonths || 1} Bulan`}
+                  </Text>
                 </View>
 
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Total Biaya Sewa</Text>
+                  <Text style={styles.infoLabel}>
+                    {isWisata ? "Total Biaya Tiket" : isHotel ? "Total Biaya Menginap" : "Total Biaya Sewa"}
+                  </Text>
                   <Text style={styles.infoValueBold}>
                     Rp {Number(currentBooking.totalAmount || 0).toLocaleString("id-ID")}
                   </Text>
@@ -262,9 +318,15 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
                 <View style={styles.divider} />
 
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Nominal DP (20%)</Text>
+                  <Text style={styles.infoLabel}>
+                    {isWisata
+                      ? "Pembayaran Tiket (100% Lunas)"
+                      : isHotel
+                      ? "Uang Muka / DP (50%)"
+                      : "Nominal DP (20%)"}
+                  </Text>
                   <Text style={[styles.infoValueBold, { color: "#0D7A53", fontSize: 16 }]}>
-                    Rp {Number(currentBooking.dpAmount || 0).toLocaleString("id-ID")}
+                    Rp {Number(isWisata ? (currentBooking.totalAmount || currentBooking.dpAmount || 0) : (currentBooking.dpAmount || currentBooking.totalAmount || 0)).toLocaleString("id-ID")}
                   </Text>
                 </View>
               </View>
@@ -276,7 +338,9 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
                 <View style={styles.cardHeaderIconBg}>
                   <FileText size={18} color="#0D7A53" />
                 </View>
-                <Text style={styles.cardTitle}>Bukti Pembayaran DP Masuk</Text>
+                <Text style={styles.cardTitle}>
+                  {isWisata ? "Bukti Pembayaran Tiket" : isHotel ? "Bukti Pembayaran Booking" : "Bukti Pembayaran DP Masuk"}
+                </Text>
               </View>
 
               <View style={styles.infoList}>
@@ -326,7 +390,11 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
             <View style={styles.noticeBoxBottom}>
               <CheckCircle2 size={18} color="#0D7A53" style={{ marginTop: 2 }} />
               <Text style={styles.noticeTextBottom}>
-                Setelah verifikasi, status kamar {currentBooking.roomNumber || "101"} akan otomatis ditandai sebagai terisi dan akun customer menerima notifikasi real-time.
+                {isWisata
+                  ? "Setelah verifikasi, tiket wisata customer akan otomatis diterbitkan dan siap digunakan saat berkunjung."
+                  : isHotel
+                  ? `Setelah verifikasi, reservasi kamar ${currentBooking.roomName || currentBooking.roomNumber || "Hotel"} akan resmi terkonfirmasi untuk tamu.`
+                  : `Setelah verifikasi, status kamar ${currentBooking.roomNumber || "101"} akan otomatis ditandai sebagai terisi dan akun customer menerima notifikasi real-time.`}
               </Text>
             </View>
           </>
@@ -344,7 +412,9 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
             activeOpacity={0.8}
             disabled={isSubmitting}
           >
-            <Text style={styles.btnTolakDpText}>Tolak DP</Text>
+            <Text style={styles.btnTolakDpText}>
+              {isWisata ? "Tolak Pembayaran" : isHotel ? "Tolak Booking" : "Tolak DP"}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -357,7 +427,13 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <Text style={styles.btnVerifikasiDpText}>
-                {currentBooking?.status === "dp_verified" ? "Sudah Terverifikasi ✓" : "Verifikasi & Terima DP"}
+                {currentBooking?.status === "dp_verified"
+                  ? "Sudah Terverifikasi ✓"
+                  : isWisata
+                  ? "Verifikasi & Terbitkan Tiket"
+                  : isHotel
+                  ? "Verifikasi & Terima Booking"
+                  : "Verifikasi & Terima DP"}
               </Text>
             )}
           </TouchableOpacity>
@@ -375,7 +451,39 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
             <Text style={styles.dialogTitle}>Verifikasi Berhasil!</Text>
 
             <Text style={styles.dialogDesc}>
-              Pembayaran DP atas nama <Text style={{ fontWeight: "800", color: "#111827" }}>{currentBooking?.customerName || "Customer"}</Text> untuk Kamar {currentBooking?.roomNumber || "101"} telah berhasil dikonfirmasi. Kamar sekarang resmi terbooking!
+              {isWisata ? (
+                <>
+                  Pembayaran tiket atas nama{" "}
+                  <Text style={{ fontWeight: "800", color: "#111827" }}>
+                    {currentBooking?.customerName || "Pengunjung"}
+                  </Text>{" "}
+                  untuk paket{" "}
+                  <Text style={{ fontWeight: "700", color: "#0D7A53" }}>
+                    {String(currentBooking?.ticketName || currentBooking?.roomNumber || "Tiket").replace(/^(Kamar\s*)+/gi, "")}
+                  </Text>{" "}
+                  telah berhasil dikonfirmasi. Tiket resmi telah diterbitkan!
+                </>
+              ) : isHotel ? (
+                <>
+                  Pembayaran reservasi atas nama{" "}
+                  <Text style={{ fontWeight: "800", color: "#111827" }}>
+                    {currentBooking?.customerName || "Tamu"}
+                  </Text>{" "}
+                  untuk{" "}
+                  <Text style={{ fontWeight: "700", color: "#0D7A53" }}>
+                    {currentBooking?.roomName || currentBooking?.roomNumber || "Kamar Hotel"}
+                  </Text>{" "}
+                  telah berhasil dikonfirmasi.
+                </>
+              ) : (
+                <>
+                  Pembayaran DP atas nama{" "}
+                  <Text style={{ fontWeight: "800", color: "#111827" }}>
+                    {currentBooking?.customerName || "Customer"}
+                  </Text>{" "}
+                  untuk Kamar {currentBooking?.roomNumber || "101"} telah berhasil dikonfirmasi. Kamar sekarang resmi terbooking!
+                </>
+              )}
             </Text>
 
             <TouchableOpacity
@@ -401,7 +509,9 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
               <AlertTriangle size={32} color="#EF4444" />
             </View>
 
-            <Text style={styles.dialogTitle}>Tolak Pembayaran DP</Text>
+            <Text style={styles.dialogTitle}>
+              {isWisata ? "Tolak Pembayaran Tiket" : isHotel ? "Tolak Booking Hotel" : "Tolak Pembayaran DP"}
+            </Text>
 
             <Text style={styles.dialogDesc}>
               Masukkan alasan penolakan untuk <Text style={{ fontWeight: "800", color: "#111827" }}>{currentBooking?.customerName || "Customer"}</Text>. Alasan ini akan langsung dikirimkan ke customer:
@@ -434,12 +544,27 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
             <View style={styles.quickReasonsContainer}>
               <Text style={styles.quickReasonTitle}>Pilihan cepat:</Text>
               <View style={styles.quickReasonsRow}>
-                {[
-                  "Bukti transfer tidak jelas / buram",
-                  "Nominal DP tidak sesuai",
-                  "Dana belum masuk mutasi",
-                  "Kamar sudah penuh",
-                ].map((reason, idx) => (
+                {(isWisata
+                  ? [
+                      "Bukti transfer tidak jelas / buram",
+                      "Nominal transfer tidak sesuai",
+                      "Dana belum masuk mutasi",
+                      "Tiket / Kuota penuh untuk tanggal ini",
+                    ]
+                  : isHotel
+                  ? [
+                      "Bukti transfer tidak jelas / buram",
+                      "Nominal transfer tidak sesuai",
+                      "Dana belum masuk mutasi",
+                      "Kamar sudah penuh pada tanggal tersebut",
+                    ]
+                  : [
+                      "Bukti transfer tidak jelas / buram",
+                      "Nominal DP tidak sesuai",
+                      "Dana belum masuk mutasi",
+                      "Kamar sudah penuh",
+                    ]
+                ).map((reason, idx) => (
                   <TouchableOpacity
                     key={idx}
                     style={styles.quickReasonChip}
@@ -455,6 +580,7 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
               </View>
             </View>
 
+            {/* Tombol Aksi Modal */}
             <TouchableOpacity
               style={[styles.btnDialogRed, isSubmitting && { opacity: 0.6 }]}
               onPress={handleRejectDp}
@@ -464,7 +590,9 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
               {isSubmitting ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.btnDialogRedText}>Kirim Alasan & Tolak DP</Text>
+                <Text style={styles.btnDialogRedText}>
+                  {isWisata ? "Tolak Pesanan Tiket" : isHotel ? "Tolak Reservasi" : "Kirim Alasan & Tolak DP"}
+                </Text>
               )}
             </TouchableOpacity>
 

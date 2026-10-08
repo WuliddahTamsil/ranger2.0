@@ -23,6 +23,7 @@ export interface WisataTicketOption {
   price: number;
   description: string;
   includedFacilities: string[];
+  facilities?: string[];
 }
 
 export interface SelectedKost {
