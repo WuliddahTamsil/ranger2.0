@@ -13,6 +13,7 @@ export const roleToScreen = (role: Role, status?: AuthAccount["status"]): Screen
   if (role === "driver") return "d_home";
   if (role === "pemilik_catering") return "pemilik_catering_home";
   if (role === "pemilik_marketplace") return "pemilik_marketplace_home";
+  if (role === "pemilik_shop") return "pemilik_shop_home";
   if (role === "pemilik_laundry") return "pemilik_laundry_home";
   if (role === "pemilik_kos") return "pemilik_kos_home";
   if (role === "bank_sampah" || role === "admin_sampah") return "bank_sampah_dashboard";

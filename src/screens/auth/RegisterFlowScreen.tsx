@@ -41,6 +41,10 @@ const inputConfig: Record<AuthRegistrationRole, Array<{ key: string; label: stri
     { key: "businessAddress", label: "Alamat toko / operasional", placeholder: "Alamat lengkap usaha", multiline: true },
     { key: "businessCategory", label: "Kategori usaha", placeholder: "Makanan, kerajinan, fashion...", required: false },
   ],
+  pemilik_shop: [
+    { key: "businessName", label: "Nama toko / jaringan", placeholder: "Contoh: Kanyaah Mart / Apotek Sehat" },
+    { key: "businessAddress", label: "Alamat outlet", placeholder: "Alamat lengkap outlet", multiline: true },
+  ],
   pemilik_catering: [
     { key: "businessName", label: "Nama catering", placeholder: "Contoh: Dapur Nani" },
     { key: "businessAddress", label: "Alamat dapur", placeholder: "Alamat lengkap dapur", multiline: true },
@@ -342,6 +346,45 @@ const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, 
     );
   }
 
+  if (role === "pemilik_shop") {
+    const shopTypes = [
+      { id: "MINIMARKET", label: "Minimarket", sub: "Indomaret, Alfamart, Circle K, toko harian", icon: "🛒" },
+      { id: "SUPERMARKET", label: "Supermarket", sub: "Belanja mingguan dan kebutuhan rumah", icon: "🏬" },
+      { id: "PHARMACY", label: "Apotek", sub: "Obat, vitamin, dan layanan resep", icon: "💊" },
+      { id: "BABY", label: "Ibu & Bayi", sub: "Popok, susu, botol, dan perlengkapan bayi", icon: "🍼" },
+      { id: "HEALTH", label: "Kesehatan", sub: "Alat kesehatan dan P3K", icon: "🩺" },
+      { id: "BEAUTY", label: "Kecantikan", sub: "Kosmetik dan skincare", icon: "✨" },
+      { id: "HOUSEHOLD", label: "Rumah Tangga", sub: "Deterjen, tisu, dan perlengkapan rumah", icon: "🏠" },
+      { id: "OTHER", label: "Retail lainnya", sub: "Kategori toko lain yang relevan", icon: "🏪" },
+    ];
+    const selectedType = roleData.storeType || "MINIMARKET";
+    return (
+      <View style={authStyles.card}>
+        <SectionHeading icon={<ShieldCheck size={18} color={authColors.primary} />} title="Data Kanyaah Shop" text="Pilih tipe bisnis agar katalog, dokumen, dan tampilan toko sesuai dengan operasionalmu." />
+        <Text style={[authStyles.label, { marginTop: 14 }]}>Jenis toko *</Text>
+        <View style={styles.categoryGrid}>
+          {shopTypes.map((type) => {
+            const isSelected = selectedType === type.id;
+            return (
+              <TouchableOpacity key={type.id} style={[styles.categoryCard, isSelected && styles.categoryCardSelected]} onPress={() => updateRoleData("storeType", type.id)} activeOpacity={0.8}>
+                <Text style={styles.categoryEmoji}>{type.icon}</Text>
+                <View style={{ flex: 1 }}><Text style={[styles.categoryLabel, isSelected && styles.categoryLabelSelected]}>{type.label}</Text><Text style={styles.categorySub}>{type.sub}</Text></View>
+                <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>{isSelected && <View style={styles.radioInner} />}</View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <TextField label="Nama toko / jaringan *" value={roleData.businessName || ""} onChangeText={(value) => updateRoleData("businessName", value)} placeholder="Contoh: Apotek Sehat Bersama" />
+        <TextField label="Alamat outlet *" value={roleData.businessAddress || ""} onChangeText={(value) => updateRoleData("businessAddress", value)} placeholder="Jalan, nomor, kelurahan, kecamatan, kota" multiline icon={<MapPin size={17} color="#6B7280" />} />
+        {selectedType === "PHARMACY" && <>
+          <TextField label="Nama apoteker penanggung jawab *" value={roleData.pharmacistName || ""} onChangeText={(value) => updateRoleData("pharmacistName", value)} placeholder="Nama sesuai SIPA" />
+          <TextField label="Nomor SIPA / SIPTTK *" value={roleData.pharmacistSipa || ""} onChangeText={(value) => updateRoleData("pharmacistSipa", value)} placeholder="Nomor izin praktik" />
+        </>}
+        <View style={styles.shopHint}><Text style={styles.shopHintText}>Siapkan KTP pemilik, NIB/SIUP atau izin usaha, dan foto outlet. Apotek juga perlu data apoteker penanggung jawab.</Text></View>
+      </View>
+    );
+  }
+
   return (
     <View style={authStyles.card}>
       <SectionHeading
@@ -419,6 +462,8 @@ const styles = StyleSheet.create({
   noDocumentText: { color: authColors.primaryDark, fontSize: 13, fontWeight: "700", textAlign: "center" },
   readyNote: { flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 16, paddingHorizontal: 2 },
   readyNoteText: { flex: 1, color: authColors.muted, fontSize: 11, lineHeight: 16 },
+  shopHint: { backgroundColor: "#EFF6FF", borderRadius: 12, borderWidth: 1, borderColor: "#BFDBFE", padding: 11, marginTop: 15 },
+  shopHintText: { color: "#1E3A8A", fontSize: 11.5, lineHeight: 17 },
   error: { color: authColors.danger, backgroundColor: authColors.dangerBg, borderRadius: 10, padding: 11, marginTop: 14, fontSize: 13, lineHeight: 18 },
   next: { flexDirection: "row", gap: 8, marginTop: 18 },
   submitHint: { color: "#9CA3AF", fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 10 },

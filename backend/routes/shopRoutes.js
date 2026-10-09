@@ -6,6 +6,8 @@ const {
   getCategories,
   searchGlobal,
   getProductById,
+  getMerchantStore,
+  getMerchantProducts,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -47,6 +49,10 @@ router.get("/stores/:id/products", getStoreProducts);
 router.get("/categories", getCategories);
 router.get("/search", searchGlobal);
 router.get("/products/:id", getProductById);
+
+// Authenticated Kanyaah Shop owner catalog
+router.get("/merchant/store", requireAuth, getMerchantStore);
+router.get("/merchant/products", requireAuth, getMerchantProducts);
 
 // Store owner product management
 router.post("/products", requireAuth, createProduct);

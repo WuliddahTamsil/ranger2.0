@@ -36,6 +36,14 @@ export const getDocumentRequirements = (role: AuthRegistrationRole): AuthDocumen
     ];
   }
 
+  if (role === "pemilik_shop") {
+    return [
+      { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik atau penanggung jawab usaha.", required: true },
+      { key: "business_license", label: "NIB / SIUP / izin usaha", description: "Dokumen legalitas usaha atau surat izin operasional.", required: true },
+      { key: "store_photo", label: "Foto outlet", description: "Foto bagian depan outlet atau papan nama toko.", required: true },
+    ];
+  }
+
   if (role === "pemilik_catering") {
     return [
       { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik catering.", required: true },
@@ -100,6 +108,17 @@ export const validateRoleStep = (role: AuthRegistrationRole, roleData: Record<st
   if (role === "pemilik_kos") {
     if (!roleData.businessName?.trim()) return "Nama usaha / tempat wisata / properti wajib diisi.";
     if (!roleData.businessAddress?.trim()) return "Alamat lengkap properti wajib diisi.";
+    return null;
+  }
+
+  if (role === "pemilik_shop") {
+    if (!roleData.storeType?.trim()) return "Jenis toko wajib dipilih.";
+    if (!roleData.businessName?.trim()) return "Nama toko wajib diisi.";
+    if (!roleData.businessAddress?.trim()) return "Alamat lengkap outlet wajib diisi.";
+    if (roleData.storeType === "PHARMACY") {
+      if (!roleData.pharmacistName?.trim()) return "Nama apoteker penanggung jawab wajib diisi.";
+      if (!roleData.pharmacistSipa?.trim()) return "Nomor SIPA / SIPTTK wajib diisi.";
+    }
     return null;
   }
 

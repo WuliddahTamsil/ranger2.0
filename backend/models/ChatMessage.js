@@ -17,6 +17,12 @@ const chatMessageSchema = new mongoose.Schema(
     storeId: { type: String, default: "" },
     senderId: { type: String, required: true },
     receiverId: { type: String, required: true },
+    channel: {
+      type: String,
+      enum: ["customer_driver", "driver_owner", "customer_owner", "general"],
+      default: "general",
+      index: true,
+    },
     sender: {
       type: String,
       enum: ["customer", "owner", "driver", "other"],
@@ -24,7 +30,7 @@ const chatMessageSchema = new mongoose.Schema(
     },
     target: {
       type: String,
-      enum: ["customer", "driver", "owner", "all"],
+      enum: ["customer", "driver", "owner", "store", "all"],
       default: "all",
       index: true,
     },

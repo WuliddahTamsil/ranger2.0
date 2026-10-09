@@ -114,7 +114,23 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     orderLower.includes("unit-")
   ));
 
-  const threadId = `chat_${orderId}`;
+  const currentUserEffectiveRole: "customer" | "driver" | "owner" =
+    currentUserRole === "driver"
+      ? "driver"
+      : currentUserRole === "owner" || isOwnerView
+      ? "owner"
+      : "customer";
+
+  const chatTargetRole: "customer" | "driver" | "owner" =
+    currentUserEffectiveRole === "driver"
+      ? "customer"
+      : currentUserEffectiveRole === "owner"
+      ? "customer"
+      : isDriver
+      ? "driver"
+      : "owner";
+
+  const threadId = `chat_${orderId}_${chatTargetRole}`;
   const [thread, setThread] = useState<CustomerChatThread | undefined>();
   const [typedMessage, setTypedMessage] = useState("");
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
@@ -159,12 +175,11 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           setConversationId(String(conversation.data._id || conversation.data.id));
           setCanSend(conversation.data.canSend !== false);
         }
-        const senderRoleForFetch = isDriverUser ? "driver" : (isOwnerView ? "owner" : (isDriver ? "driver" : "owner"));
-        const res = await getChatMessages(orderId, senderRoleForFetch);
+        const res = await getChatMessages(orderId, chatTargetRole, currentUserEffectiveRole);
         if (res.success && Array.isArray(res.data)) {
           const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
             id: m._id,
-            sender: m.sender === "customer" ? "customer" : "other",
+            sender: m.sender === currentUserEffectiveRole ? "customer" : "other",
             text: m.text,
             time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
             attachment: m.attachment,
@@ -356,16 +371,13 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     }
 
     // 3. Send to backend & Socket.io asynchronously
-    const senderRole = isDriverUser ? "driver" : (isOwnerView ? "owner" : "customer");
-    const recipientRole = isDriverUser ? "customer" : (isOwnerView ? "customer" : (isDriver ? "driver" : "owner"));
-
     sendChatMessage(
       orderId,
-      senderRole,
+      currentUserEffectiveRole,
       text,
       attachmentToSend,
       customerId,
-      recipientRole,
+      chatTargetRole,
       undefined,
       conversationId || undefined
     ).catch((err) => {
@@ -573,15 +585,19 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
               </View>
             }
             renderItem={({ item }) => {
-              const isMe = (isOwnerView || isDriverUser) ? (item.sender === "other") : (item.sender === "customer");
+              const isMe = item.sender === "customer";
               const hasAttachment = !!item.attachment;
               const isImg = item.attachment?.type === "image";
 
               return (
                 <View style={[styles.messageWrap, isMe ? styles.messageRight : styles.messageLeft]}>
-                  {!isMe && !isDriverChat && (
+                  {!isMe && (
                     <Text style={styles.senderNameLabel}>
-                      {isOwnerView ? "👤 Pelanggan" : isKost ? "🏠 Pemilik Kos" : "📦 Toko"}
+                      {chatTargetRole === "driver"
+                        ? (isRide ? "🛵 Driver Rangers" : "🛵 Kurir Pengantar")
+                        : chatTargetRole === "owner"
+                        ? (isKost ? "🏠 Pemilik Kos" : "📦 Toko / Penjual")
+                        : "👤 Pelanggan"}
                     </Text>
                   )}
                   <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>

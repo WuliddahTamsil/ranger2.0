@@ -96,7 +96,8 @@ export const Inbox: React.FC<InboxProps> = ({
     const fetchThreadMessages = async () => {
       const res = await getChatMessages(
         selectedThread.orderId,
-        selectedThread.participantType === "driver" ? "driver" : "owner"
+        selectedThread.participantType === "driver" ? "driver" : "owner",
+        "customer"
       );
       if (res.success && Array.isArray(res.data)) {
         const mapped: Message[] = res.data.map((m: any) => ({
@@ -141,7 +142,11 @@ export const Inbox: React.FC<InboxProps> = ({
     markCustomerChatThreadRead(thread.id);
 
     // Pre-fetch messages
-    const res = await getChatMessages(thread.orderId);
+    const res = await getChatMessages(
+      thread.orderId,
+      thread.participantType === "driver" ? "driver" : "owner",
+      "customer"
+    );
     if (res.success && Array.isArray(res.data)) {
       const mapped: Message[] = res.data.map((m: any) => ({
         id: m._id,

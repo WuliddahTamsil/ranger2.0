@@ -24,6 +24,8 @@ import {
   ChevronDown,
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
+import { createMarketplaceWithdrawal } from "../../services/api";
+import { ToastBanner, ToastType } from "../../components/CustomDialog";
 
 interface WithdrawalRecord {
   id: string;
@@ -39,6 +41,7 @@ interface PendapatanProps {
   storeName: string;
   withdrawals: WithdrawalRecord[];
   setWithdrawals: (w: WithdrawalRecord[]) => void;
+  ownerId?: string;
 }
 
 export const Pendapatan: React.FC<PendapatanProps> = ({
@@ -46,11 +49,28 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
   storeName,
   withdrawals,
   setWithdrawals,
+  ownerId,
 }) => {
   const [period, setPeriod] = useState<"7 hari" | "30 hari" | "Bulan ini">("7 hari");
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [periodDropdownVisible, setPeriodDropdownVisible] = useState(false);
+
+  // In-App Toast Banner
+  const [toastConfig, setToastConfig] = useState<{
+    visible: boolean;
+    type: ToastType;
+    title: string;
+    message?: string;
+  }>({
+    visible: false,
+    type: "info",
+    title: "",
+  });
+
+  const showToast = (type: ToastType, title: string, message?: string) => {
+    setToastConfig({ visible: true, type, title, message });
+  };
 
   // Form states for withdrawal
   const [drawAmount, setDrawAmount] = useState("");
@@ -73,8 +93,9 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
   };
   const getCompletionDate = (order: any) => getValidDate(order.completedAt || order.updatedAt || order.createdAt);
   const getOrderDate = (order: any) => getValidDate(order.createdAt);
+  const getMerchantEarnings = (order: any) => Number(order.subtotal !== undefined && order.subtotal > 0 ? order.subtotal : order.total || 0);
   const completedOrders = orders.filter((order) => order.status === "Selesai");
-  const totalRevenue = completedOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const totalRevenue = completedOrders.reduce((sum, order) => sum + getMerchantEarnings(order), 0);
   const completedOrderCount = completedOrders.length;
   const todayOrders = orders.filter((order) => {
     const date = getOrderDate(order);
@@ -82,15 +103,15 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
   });
   const todayRevenue = completedOrders.reduce((sum, order) => {
     const date = getCompletionDate(order);
-    return date && date >= todayStart && date < tomorrowStart ? sum + Number(order.total || 0) : sum;
+    return date && date >= todayStart && date < tomorrowStart ? sum + getMerchantEarnings(order) : sum;
   }, 0);
   const weekRevenue = completedOrders.reduce((sum, order) => {
     const date = getCompletionDate(order);
-    return date && date >= weekStart && date < tomorrowStart ? sum + Number(order.total || 0) : sum;
+    return date && date >= weekStart && date < tomorrowStart ? sum + getMerchantEarnings(order) : sum;
   }, 0);
   const monthRevenue = completedOrders.reduce((sum, order) => {
     const date = getCompletionDate(order);
-    return date && date >= monthStart && date < tomorrowStart ? sum + Number(order.total || 0) : sum;
+    return date && date >= monthStart && date < tomorrowStart ? sum + getMerchantEarnings(order) : sum;
   }, 0);
   const todayOrderCount = todayOrders.length;
 
@@ -109,7 +130,7 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
 
   const sumCompletedBetween = (start: Date, end: Date) => completedOrders.reduce((sum, order) => {
     const date = getCompletionDate(order);
-    return date && date >= start && date < end ? sum + Number(order.total || 0) : sum;
+    return date && date >= start && date < end ? sum + getMerchantEarnings(order) : sum;
   }, 0);
 
   const chartData = {
@@ -143,23 +164,23 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
   const handleWithdrawSubmit = () => {
     const amountNum = parseInt(drawAmount);
     if (isNaN(amountNum) || amountNum <= 0) {
-      Alert.alert("Error", "Jumlah penarikan harus lebih dari 0.");
+      showToast("error", "Error", "Jumlah penarikan harus lebih dari 0.");
       return;
     }
     if (amountNum > availableBalance) {
-      Alert.alert("Error", "Saldo tidak mencukupi.");
+      showToast("error", "Error", "Saldo tidak mencukupi.");
       return;
     }
     if (drawMethod === "bank" && bankName.trim() === "") {
-      Alert.alert("Error", "Nama bank wajib diisi.");
+      showToast("error", "Error", "Nama bank wajib diisi.");
       return;
     }
     if (accNumber.trim() === "") {
-      Alert.alert("Error", "Nomor rekening/HP wajib diisi.");
+      showToast("error", "Error", "Nomor rekening/HP wajib diisi.");
       return;
     }
     if (accName.trim() === "") {
-      Alert.alert("Error", "Nama pemilik wajib diisi.");
+      showToast("error", "Error", "Nama pemilik wajib diisi.");
       return;
     }
 
@@ -167,33 +188,42 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
     setConfirmModalVisible(true);
   };
 
-  const handleConfirmWithdraw = () => {
+  const handleConfirmWithdraw = async () => {
     const amountNum = parseInt(drawAmount);
     const methodLabel =
       drawMethod === "bank"
         ? `Bank Transfer (${bankName})`
         : drawMethod.toUpperCase();
 
-    const newRecord: WithdrawalRecord = {
-      id: `WDR-${Date.now().toString().slice(-4)}`,
-      amount: amountNum,
-      method: methodLabel,
-      destination: accNumber,
-      createdAt: "Hari ini, Baru saja",
-      status: "Diproses",
-    };
+    try {
+      const res = await createMarketplaceWithdrawal({
+        amount: amountNum,
+        method: methodLabel,
+        destination: accNumber,
+        accountName: accName,
+      }, ownerId);
 
-    setWithdrawals([newRecord, ...withdrawals]);
-    setConfirmModalVisible(false);
-    setDrawAmount("");
-    setBankName("");
-    setAccNumber("");
-    setAccName("");
+      const saved = res?.data;
+      const newRecord: WithdrawalRecord = {
+        id: String(saved?._id || saved?.id || `WDR-${Date.now().toString().slice(-4)}`),
+        amount: amountNum,
+        method: methodLabel,
+        destination: accNumber,
+        createdAt: "Hari ini, Baru saja",
+        status: (saved?.status as any) || "Diproses",
+      };
 
-    Alert.alert(
-      "Sukses",
-      "Pengajuan penarikan dicatat sebagai Diproses. Saldo dikurangi secara lokal untuk peninjauan admin."
-    );
+      setWithdrawals([newRecord, ...withdrawals]);
+      setConfirmModalVisible(false);
+      setDrawAmount("");
+      setBankName("");
+      setAccNumber("");
+      setAccName("");
+
+      showToast("success", "Sukses", "Pengajuan penarikan dana berhasil dikirim ke sistem untuk ditinjau admin.");
+    } catch {
+      showToast("error", "Gagal", "Pengajuan penarikan dana belum berhasil. Periksa koneksi internet.");
+    }
   };
 
   return (

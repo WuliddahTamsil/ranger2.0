@@ -175,11 +175,12 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
     return () => { active = false; };
   }, [catalogReloadKey]);
 
-  const categories = useMemo(
-    () => ["Semua", ...new Set(products.map((product) => product.cat?.trim()).filter(Boolean))],
-    [products]
-  );
-  const filteredProducts = category === "Semua" ? products : products.filter((p) => p.cat === category);
+  const categories = useMemo(() => ["Semua", "Makanan", "UMKM Lokal"], []);
+  const filteredProducts = useMemo(() => {
+    const valid = products.filter((p) => p.cat === "Makanan" || p.cat === "UMKM Lokal");
+    if (category === "Semua") return valid;
+    return valid.filter((p) => p.cat === category);
+  }, [products, category]);
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
   const subtotal = cart.reduce((sum, line) => sum + line.product.price * line.qty, 0);
   const merchantGroups = useMemo<MerchantCartGroup[]>(() => {
@@ -393,11 +394,10 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
       checkoutKeys.current.clear();
       setPaymentModalVisible(false);
 
+      setView("success");
       if (selectedPayment !== "cod" && successfulOrders.length > 0) {
         setDigitalPaymentOrder(successfulOrders[0].data);
         setDigitalPaymentModalVisible(true);
-      } else {
-        setView("success");
       }
     } catch {
       alert("Koneksi terputus. Status pesanan belum diketahui. Coba lagi untuk memeriksa hasil tanpa membuat pesanan ganda.");
@@ -445,7 +445,15 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
         ) : catalogError ? (
           <View style={styles.catalogMessage}><Text style={styles.detailMuted}>{catalogError}</Text><TouchableOpacity onPress={() => setCatalogReloadKey((key) => key + 1)}><Text style={styles.catalogRetry}>Coba lagi</Text></TouchableOpacity></View>
         ) : filteredProducts.length === 0 ? (
-          <View style={styles.catalogMessage}><Text style={styles.detailMuted}>Belum ada produk pada kategori ini.</Text></View>
+          <View style={[styles.catalogMessage, { minHeight: 180, paddingVertical: 28 }]}>
+            <Store size={36} color="#9CA3AF" />
+            <Text style={[styles.detailMuted, { fontSize: 13, fontWeight: "600", color: "#374151" }]}>
+              {category === "Semua" ? "Belum ada produk atau toko yang terdaftar" : `Belum ada produk pada kategori ${category}`}
+            </Text>
+            <Text style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", paddingHorizontal: 20 }}>
+              Mitra UMKM lokal akan segera menambahkan toko dan produk terbaru mereka.
+            </Text>
+          </View>
         ) : filteredProducts.map((product) => {
           const line = cart.find((item) => item.product.id === product.id);
           return (
@@ -847,7 +855,10 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
 
       <MarketplaceDigitalPaymentModal
         visible={digitalPaymentModalVisible}
-        onClose={() => setDigitalPaymentModalVisible(false)}
+        onClose={() => {
+          setDigitalPaymentModalVisible(false);
+          setView("success");
+        }}
         order={digitalPaymentOrder}
         onPaymentSuccess={() => {
           setDigitalPaymentModalVisible(false);

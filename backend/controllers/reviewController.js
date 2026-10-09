@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Review = require("../models/Review");
+const MarketplaceProduct = require("../models/MarketplaceProduct");
 const MarketplaceOrder = require("../models/MarketplaceOrder");
 const CateringOrder = require("../models/CateringOrder");
 const LaundryOrder = require("../models/LaundryOrder");
@@ -59,9 +60,16 @@ const getOrderProductIds = (order, type) => {
 
 const createReview = async (req, res) => {
   try {
-    const { orderId, orderType, customerId, customerName, rating, comment, media } = req.body;
+    const { orderId, orderType, rating, comment, media } = req.body;
+    const customerId = req.authUser?._id ? String(req.authUser._id) : String(req.body?.customerId || "");
+    const customerName = req.authUser?.name || String(req.body?.customerName || "").trim();
+
     if (!orderId || !customerId || !customerName || !rating) {
       return res.status(400).json({ success: false, message: "Data ulasan belum lengkap" });
+    }
+
+    if (req.body?.customerId && req.authUser?._id && String(req.authUser._id) !== String(req.body.customerId)) {
+      return res.status(403).json({ success: false, message: "Hanya pembeli pesanan ini yang dapat memberikan ulasan." });
     }
 
     const resolved = await resolveCompletedOrder(orderId, customerId, orderType);
@@ -94,6 +102,25 @@ const createReview = async (req, res) => {
       comment: String(comment || "").trim().slice(0, 1000),
       media: safeMedia,
     });
+
+    // Update product rating and reviews count for Marketplace products
+    if (resolved.type === "Marketplace" && productIds.length > 0) {
+      await Promise.allSettled(
+        productIds.map(async (prodId) => {
+          if (!mongoose.Types.ObjectId.isValid(prodId)) return;
+          const reviews = await Review.find({ productIds: prodId }).lean();
+          if (reviews.length > 0) {
+            const sumRating = reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0);
+            const avgRating = Math.round((sumRating / reviews.length) * 10) / 10;
+            await MarketplaceProduct.findByIdAndUpdate(prodId, {
+              rating: avgRating,
+              totalReviews: reviews.length,
+            });
+          }
+        })
+      );
+    }
+
     return res.status(201).json({ success: true, data: review });
   } catch (error) {
     console.error("Create review error:", error);

@@ -36,11 +36,13 @@ const marketplaceProductSchema = new mongoose.Schema(
     imageUrls: { type: [String], default: [] },
     rating: { type: Number, default: 4.8, min: 0, max: 5 },
     sold: { type: Number, default: 0, min: 0 },
+    productType: { type: String, enum: ["UMKM", "SHOP"], default: "UMKM", index: true },
   },
   { timestamps: true }
 );
 
 marketplaceProductSchema.index({ ownerId: 1, createdAt: -1 });
 marketplaceProductSchema.index({ storeId: 1, isActive: 1, category: 1 });
+marketplaceProductSchema.index({ productType: 1, isActive: 1, stock: 1, createdAt: -1 });
 
 module.exports = mongoose.model("MarketplaceProduct", marketplaceProductSchema);

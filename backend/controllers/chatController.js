@@ -7,6 +7,8 @@ const {
   getOrderParticipants,
   resolveParticipant,
   resolveReceiverId,
+  resolveChatChannel,
+  normalizeRole,
   isArchivedStatus,
 } = require("../utils/chatAccess");
 
@@ -74,19 +76,23 @@ const sendChatMessage = async (req, res) => {
       return res.status(403).json({ success: false, message: "Conversation tidak sesuai dengan order." });
     }
 
-    const receiverId = resolveReceiverId(participant, target);
+    const normalizedTarget = normalizeRole(target) || (participant.role === "driver" ? "customer" : "owner");
+    const receiverId = resolveReceiverId(participant, normalizedTarget);
     if (!receiverId) return res.status(409).json({ success: false, message: "Penerima chat belum tersedia untuk order ini." });
+
+    const channel = resolveChatChannel(participant.role, normalizedTarget);
 
     const message = await ChatMessage.create({
       conversationId: conversation._id,
       orderId: String(record.order._id),
+      channel,
       sender: participant.role,
       senderId: String(req.authUser._id),
       receiverId,
       customerId: participant.customerId,
       ownerId: participant.ownerId,
       storeId: participant.storeId,
-      target: target || (participant.role === "driver" ? "customer" : "owner"),
+      target: normalizedTarget,
       text: String(text || "").trim(),
       attachment: attachment || undefined,
     });
@@ -102,7 +108,10 @@ const sendChatMessage = async (req, res) => {
         relatedId: mongoose.Types.ObjectId.isValid(String(record.order._id)) ? record.order._id : undefined,
       });
     }
-    if (req.io) req.io.to(roomForOrder(record.order._id)).emit("chat:message", message);
+    if (req.io) {
+      req.io.to(roomForOrder(record.order._id)).emit("chat:message", message);
+      req.io.to(`${roomForOrder(record.order._id)}:${channel}`).emit("chat:message", message);
+    }
     return res.status(201).json({ success: true, data: message, conversationId: conversation._id });
   } catch (error) {
     console.error("Send chat message error:", error);
@@ -114,15 +123,67 @@ const getChatMessages = async (req, res) => {
   try {
     const result = await getAuthorizedConversation(req, req.params.orderId);
     if (result.error) return res.status(result.status).json({ success: false, message: result.error });
-    const messages = await ChatMessage.find({
+
+    const callerRole = normalizeRole(req.query.role || result.participant.role);
+    const targetRole = req.query.target ? normalizeRole(req.query.target) : undefined;
+    let requestedChannel = req.query.channel;
+
+    if (!requestedChannel && targetRole) {
+      requestedChannel = resolveChatChannel(callerRole, targetRole);
+    }
+
+    const baseOrderCondition = {
       $or: [
         { conversationId: result.conversation._id },
-        { orderId: String(result.record.order._id), conversationId: { $exists: false } },
+        { orderId: String(result.record.order._id) },
       ],
-    }).sort({ createdAt: 1 });
+    };
+
+    let query = { ...baseOrderCondition };
+
+    if (requestedChannel && requestedChannel !== "all" && !result.participant.isAdmin) {
+      query = {
+        $and: [
+          baseOrderCondition,
+          {
+            $or: [
+              { channel: requestedChannel },
+              // Backward compatibility for legacy or unmigrated messages
+              ...(requestedChannel === "customer_driver"
+                ? [
+                    { channel: { $in: [null, "general"] }, sender: "customer", target: "driver" },
+                    { channel: { $in: [null, "general"] }, sender: "driver", target: "customer" },
+                    { channel: { $exists: false }, sender: "customer", target: "driver" },
+                    { channel: { $exists: false }, sender: "driver", target: "customer" },
+                  ]
+                : []),
+              ...(requestedChannel === "driver_owner"
+                ? [
+                    { channel: { $in: [null, "general"] }, sender: "driver", target: { $in: ["owner", "store"] } },
+                    { channel: { $in: [null, "general"] }, sender: "owner", target: "driver" },
+                    { channel: { $exists: false }, sender: "driver", target: { $in: ["owner", "store"] } },
+                    { channel: { $exists: false }, sender: "owner", target: "driver" },
+                  ]
+                : []),
+              ...(requestedChannel === "customer_owner"
+                ? [
+                    { channel: { $in: [null, "general"] }, sender: "customer", target: { $in: ["owner", "store"] } },
+                    { channel: { $in: [null, "general"] }, sender: "owner", target: "customer" },
+                    { channel: { $exists: false }, sender: "customer", target: { $in: ["owner", "store"] } },
+                    { channel: { $exists: false }, sender: "owner", target: "customer" },
+                  ]
+                : []),
+            ],
+          },
+        ],
+      };
+    }
+
+    const messages = await ChatMessage.find(query).sort({ createdAt: 1 });
     return res.json({
       success: true,
       count: messages.length,
+      channel: requestedChannel || "all",
       conversationId: result.conversation._id,
       data: messages,
     });

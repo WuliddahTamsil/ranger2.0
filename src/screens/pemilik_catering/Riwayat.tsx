@@ -7,6 +7,7 @@ import { FormalInvoiceModal, InvoiceData, InvoiceItemDetail } from "../../compon
 
 export interface HistoryItem {
   id: string;
+  orderCode?: string;
   customerName: string;
   itemSummary: string;
   total: number;
@@ -33,6 +34,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders, loadError, onRetry }) 
         : "Menu Catering";
       return {
         id: o.id,
+        orderCode: o.orderCode || (String(o.id).length >= 8 ? `RNG-CAT-${String(o.id).slice(-8).toUpperCase()}` : `RNG-CAT-${String(o.id).toUpperCase()}`),
         customerName: o.customer,
         itemSummary: itemSummary || "Menu Catering",
         total: o.total,
@@ -53,6 +55,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders, loadError, onRetry }) 
     const raw = item.rawOrder || item;
     const cleanId = (item.id || "").replace(/^#/, "");
     const formattedId = cleanId.length >= 8 ? cleanId.slice(-8).toUpperCase() : cleanId.toUpperCase();
+    const displayCode = item.orderCode || raw.orderCode || `GEO-${formattedId}`;
 
     // Map items
     let parsedItems: InvoiceItemDetail[] = [];
@@ -74,11 +77,15 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders, loadError, onRetry }) 
       ];
     }
 
+    const createdDateObj = raw.createdAt ? new Date(raw.createdAt) : new Date();
+    const formattedDate = createdDateObj.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+    const formattedTime = createdDateObj.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB";
+
     const invoiceData: InvoiceData = {
       id: item.id,
-      invoiceNumber: `INV/20260909/GEO-${formattedId}`,
-      date: item.time?.includes(",") ? item.time.split(",")[0].trim() : "09 Sep 2026",
-      time: item.time?.includes(",") ? item.time.split(",")[1].trim() : "14:45 WIB",
+      invoiceNumber: `INV/${displayCode.replace(/^#/, "")}`,
+      date: item.time?.includes(",") ? item.time.split(",")[0].trim() : formattedDate,
+      time: item.time?.includes(",") ? item.time.split(",")[1].trim() : formattedTime,
       status: item.status,
       orderType: "Catering",
       storeName: raw.storeName || "Dapur Catering",
@@ -164,7 +171,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders, loadError, onRetry }) 
                   activeOpacity={0.8}
                 >
                   <View style={styles.cardHeader}>
-                    <Text style={styles.cardId}>#{item.id}</Text>
+                    <Text style={styles.cardId}>{item.orderCode || `#${item.id.slice(-8).toUpperCase()}`}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
                       <Text style={[styles.statusText, { color: statusColor }]}>
                         {item.status}

@@ -43,6 +43,7 @@ import {
   EyeOff,
   Package,
   SlidersHorizontal,
+  Star,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { rp } from "../../utils/formatters";
@@ -343,16 +344,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
   }, [authAccount?.id, ordersReloadKey]);
 
   // 4. Global Withdrawals State
-  const [withdrawals, setWithdrawals] = useState<any[]>([
-    {
-      id: "WDR-9812",
-      amount: 850000,
-      method: "GoPay",
-      destination: "0812-9876-5432",
-      createdAt: "09 Agu, 12:40",
-      status: "Sukses",
-    },
-  ]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
 
   // UI States inside Beranda View
   const [notifModalVisible, setNotifModalVisible] = useState(false);
@@ -726,7 +718,10 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           <View style={styles.outletMetricsRow}>
             <View style={styles.metricItem}>
               <Text style={styles.metricLabel}>Rating</Text>
-              <Text style={styles.metricVal}>4,9 ★</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 4 }}>
+                <Star size={12} color="#F59E0B" fill="#F59E0B" />
+                <Text style={styles.metricVal}>4.9</Text>
+              </View>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
@@ -735,8 +730,8 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>Estimasi</Text>
-              <Text style={styles.metricVal}>11 mnt</Text>
+              <Text style={styles.metricLabel}>Menu aktif</Text>
+              <Text style={styles.metricVal}>{products.filter((p) => p.isActive).length}</Text>
             </View>
           </View>
         </View>
@@ -971,8 +966,8 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             <View style={styles.statusFilterRow}>
               {[
                 { key: "Semua", label: "Semua Status" },
-                { key: "Tersedia", label: "🟢 Tersedia" },
-                { key: "Habis", label: "🔴 Habis / Nonaktif" },
+                { key: "Tersedia", label: "Tersedia" },
+                { key: "Habis", label: "Habis / Nonaktif" },
               ].map((filter) => {
                 const isSelected = selectedStatusFilter === filter.key;
                 return (

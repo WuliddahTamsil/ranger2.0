@@ -25,6 +25,7 @@ const userSchema = new mongoose.Schema(
         "pemilik_kos",
         "pemilik_laundry",
         "pemilik_marketplace",
+        "pemilik_shop",
         "pemilik_catering",
         "bank_sampah",
         "admin_sampah",

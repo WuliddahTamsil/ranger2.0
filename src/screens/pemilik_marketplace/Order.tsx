@@ -51,6 +51,7 @@ import { getChatMessages, sendChatMessage, cancelMarketplaceOrder, respondMarket
 import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { AnimatedOrderPreparation } from "../../components/AnimatedOrderPreparation";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
+import { ToastBanner, ToastType } from "../../components/CustomDialog";
 
 interface OrderItemDetail {
   name: string;
@@ -157,6 +158,22 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
   const [resolutionNotes, setResolutionNotes] = useState("");
   const [submittingResolution, setSubmittingResolution] = useState(false);
 
+  // In-app Toast Banner state
+  const [toastConfig, setToastConfig] = useState<{
+    visible: boolean;
+    type: ToastType;
+    title: string;
+    message?: string;
+  }>({
+    visible: false,
+    type: "info",
+    title: "",
+  });
+
+  const showToast = (type: ToastType, title: string, message?: string) => {
+    setToastConfig({ visible: true, type, title, message });
+  };
+
   const handleOwnerCancelOrder = async () => {
     if (!orderToCancel) return;
     const finalReason = ownerCancelDetail.trim() ? `${ownerCancelReason} - ${ownerCancelDetail.trim()}` : ownerCancelReason;
@@ -179,9 +196,9 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
       }
       setOwnerCancelModalVisible(false);
       setOrderToCancel(null);
-      Alert.alert("Pesanan Dibatalkan", "Pesanan telah dibatalkan dan stok produk telah dikembalikan otomatis ke etalase.");
+      showToast("info", "Pesanan Dibatalkan", "Pesanan telah dibatalkan dan stok produk telah dikembalikan otomatis ke etalase.");
     } catch (e: any) {
-      Alert.alert("Gagal Membatalkan", e?.message || "Terjadi kesalahan.");
+      showToast("error", "Gagal Membatalkan", e?.message || "Terjadi kesalahan.");
     } finally {
       setSubmittingOwnerCancel(false);
     }
@@ -190,7 +207,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
   const handleRespondComplaint = async () => {
     if (!orderToResolve) return;
     if (!resolutionNotes.trim()) {
-      Alert.alert("Catatan Diperlukan", "Mohon tuliskan keterangan penyelesaian komplain.");
+      showToast("warning", "Catatan Diperlukan", "Mohon tuliskan keterangan penyelesaian komplain.");
       return;
     }
     setSubmittingResolution(true);
@@ -215,14 +232,15 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
       setResolutionModalVisible(false);
       setOrderToResolve(null);
       setResolutionNotes("");
-      Alert.alert(
+      showToast(
+        resolutionAction === "approve" ? "success" : "info",
         resolutionAction === "approve" ? "Komplain Disetujui" : "Komplain Ditolak",
         resolutionAction === "approve"
           ? `Komplain disetujui. Refund sebesar ${rp(orderToResolve.total)} telah diproses.`
           : "Komplain telah ditolak dan catatan telah dikirimkan ke pelanggan."
       );
     } catch (e: any) {
-      Alert.alert("Gagal Memproses", e?.message || "Terjadi kesalahan.");
+      showToast("error", "Gagal Memproses", e?.message || "Terjadi kesalahan.");
     } finally {
       setSubmittingResolution(false);
     }
@@ -317,7 +335,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
       if (Platform.OS !== "web") {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== "granted") {
-          Alert.alert("Izin Galeri", "Mohon izinkan akses galeri untuk mengirim foto.");
+          showToast("warning", "Izin Galeri", "Mohon izinkan akses galeri untuk mengirim foto.");
           return;
         }
       }
@@ -346,7 +364,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
       if (Platform.OS !== "web") {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== "granted") {
-          Alert.alert("Izin Kamera", "Mohon izinkan akses kamera untuk mengambil foto.");
+          showToast("warning", "Izin Kamera", "Mohon izinkan akses kamera untuk mengambil foto.");
           return;
         }
       }
@@ -455,7 +473,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
     });
 
     setOrders(updated);
-    Alert.alert("Status Diperbarui", `Pesanan kini: ${getStatusLabel(nextStatus)}`);
+    showToast("success", "Status Diperbarui", `Pesanan kini: ${getStatusLabel(nextStatus)}`);
   };
 
   // Open Chat
@@ -524,7 +542,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
       chatTarget === "driver" ? "driver" : "customer"
     );
     if (!result.success) {
-      Alert.alert("Gagal mengirim", result.message || "Pesan belum tersimpan.");
+      showToast("error", "Gagal Mengirim", result.message || "Pesan belum tersimpan.");
       return;
     }
   };
@@ -1446,6 +1464,13 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
 
         {/* Chat Modal */}
         {renderChatModal()}
+        <ToastBanner
+          visible={toastConfig.visible}
+          type={toastConfig.type}
+          title={toastConfig.title}
+          message={toastConfig.message}
+          onClose={() => setToastConfig((prev) => ({ ...prev, visible: false }))}
+        />
       </ResponsiveSafeAreaView>
     );
   }
@@ -1639,6 +1664,13 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
 
       {/* Modal Chat (when opened from list) */}
       {renderChatModal()}
+        <ToastBanner
+          visible={toastConfig.visible}
+          type={toastConfig.type}
+          title={toastConfig.title}
+          message={toastConfig.message}
+          onClose={() => setToastConfig((prev) => ({ ...prev, visible: false }))}
+        />
     </ResponsiveSafeAreaView>
   );
 };

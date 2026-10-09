@@ -71,12 +71,13 @@ import { StoreDetailScreen } from "./src/screens/customer/shop/StoreDetailScreen
 import { ShopCartScreen } from "./src/screens/customer/shop/ShopCartScreen";
 import { ShopCheckoutScreen } from "./src/screens/customer/shop/ShopCheckoutScreen";
 import { ShopOrderDetailScreen } from "./src/screens/customer/shop/ShopOrderDetailScreen";
-import { ShopMerchantOrderScreen } from "./src/screens/pemilik_marketplace/ShopMerchantOrderScreen";
+import { ShopMerchantOrderScreen } from "./src/screens/pemilik_shop/ShopMerchantOrderScreen";
 import { WasteBankDashboardScreen } from "./src/screens/bank_sampah/WasteBankDashboardScreen";
 import { WasteWeighingScreen } from "./src/screens/bank_sampah/WasteWeighingScreen";
 import { Beranda as DriverHomeScreen } from "./src/screens/driver/Beranda";
 import { Beranda as PemilikCateringHomeScreen } from "./src/screens/pemilik_catering/Beranda";
 import { Beranda as PemilikMarketplaceHomeScreen } from "./src/screens/pemilik_marketplace/Beranda";
+import { Beranda as PemilikShopHomeScreen } from "./src/screens/pemilik_shop/Beranda";
 import { PemilikLaundryHomeScreen } from "./src/screens/pemilik_laundry/PemilikLaundryHomeScreen";
 import { LaundryOrderScreen } from "./src/screens/pemilik_laundry/LaundryOrderScreen";
 import { LaundryUserScreen } from "./src/screens/pemilik_laundry/LaundryUserScreen";
@@ -390,6 +391,8 @@ export default function App() {
       // 4. Pemilik Marketplace (UMKM)
       case "pemilik_marketplace_home":
         return <PemilikMarketplaceHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "pemilik_shop_home":
+        return <PemilikShopHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
 
       // 5. Pemilik Laundry
       case "pemilik_laundry_home":

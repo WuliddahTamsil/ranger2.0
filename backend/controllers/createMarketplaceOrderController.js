@@ -60,7 +60,7 @@ const respondWithExistingOrder = async (res, key, requestHash) => {
 
 const createMarketplaceOrder = async (req, res) => {
   let session;
-  const idempotencyKey = String(req.get("Idempotency-Key") || "").trim();
+  const idempotencyKey = String(req.get("Idempotency-Key") || req.get("x-idempotency-key") || "").trim();
   const requestHash = makeRequestHash(req.body || {});
 
   try {
@@ -108,8 +108,8 @@ const createMarketplaceOrder = async (req, res) => {
       User.findById(ownerId).select("name role status roleData"),
       User.findById(customerId).select("name phone role"),
     ]);
-    if (!owner || owner.role !== "pemilik_marketplace" || owner.status === "rejected") {
-      return res.status(409).json({ success: false, message: "Toko Marketplace tidak tersedia" });
+    if (!owner || owner.role !== "pemilik_marketplace" || owner.status !== "verified") {
+      return res.status(409).json({ success: false, message: "Toko Marketplace belum diverifikasi oleh admin atau tidak aktif" });
     }
     if (!customer || customer.role !== "customer") {
       return res.status(400).json({ success: false, message: "Akun pelanggan tidak valid" });
@@ -144,7 +144,9 @@ const createMarketplaceOrder = async (req, res) => {
     const discount = voucherId === "LOKAL20" ? splitAmount(5000, groupCount, groupIndex) : 0;
     const totalAmount = Math.max(0, subtotal + deliveryFee + serviceFee + safeDriverTip - discount);
     const storeName = owner.roleData?.businessName || owner.name || "";
-    const storeAddress = owner.roleData?.businessAddress || owner.roleData?.address || "";
+    const baseStoreAddr = owner.roleData?.businessAddress || owner.roleData?.address || "";
+    const storePatokan = owner.roleData?.addressNote ? ` (Patokan: ${owner.roleData.addressNote})` : "";
+    const storeAddress = `${baseStoreAddr}${storePatokan}`.trim();
 
     const isCod = normalizedPaymentMethod === "cod";
     const initialPaymentStatus = isCod ? "Menunggu pembayaran di tempat" : "Menunggu Pembayaran";

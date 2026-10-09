@@ -4,6 +4,7 @@ export type AuthRegistrationRole =
   | "customer"
   | "driver"
   | "pemilik_marketplace"
+  | "pemilik_shop"
   | "pemilik_catering"
   | "pemilik_laundry"
   | "pemilik_kos"
@@ -88,6 +89,7 @@ export const ROLE_LABELS: Record<AuthRegistrationRole, string> = {
   customer: "Customer",
   driver: "Driver GEOVERSE",
   pemilik_marketplace: "Pemilik Marketplace",
+  pemilik_shop: "Pemilik Kanyaah Shop",
   pemilik_catering: "Pemilik Catering",
   pemilik_laundry: "Pemilik Laundry",
   pemilik_kos: "Kanyaah Homestay",

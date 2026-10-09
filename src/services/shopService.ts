@@ -233,6 +233,51 @@ export const fetchShopProductDetail = async (productId: string) => {
   }
 };
 
+export const fetchMerchantShopStore = async (): Promise<{ success: boolean; data?: ShopStore; message?: string }> => {
+  try {
+    const res = await fetch(getApiUrl("/shop/merchant/store"), { headers: await getHeaders() });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+};
+
+export const fetchMerchantShopProducts = async (): Promise<{ success: boolean; data: ShopProduct[]; storeId?: string; message?: string }> => {
+  try {
+    const res = await fetch(getApiUrl("/shop/merchant/products"), { headers: await getHeaders() });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, data: [], message: error.message };
+  }
+};
+
+export const createShopProduct = async (payload: Record<string, unknown>) => {
+  try {
+    const res = await fetch(getApiUrl("/shop/products"), { method: "POST", headers: await getHeaders(), body: JSON.stringify(payload) });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+};
+
+export const updateShopProduct = async (productId: string, payload: Record<string, unknown>) => {
+  try {
+    const res = await fetch(getApiUrl(`/shop/products/${productId}`), { method: "PUT", headers: await getHeaders(), body: JSON.stringify(payload) });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+};
+
+export const deleteShopProduct = async (productId: string) => {
+  try {
+    const res = await fetch(getApiUrl(`/shop/products/${productId}`), { method: "DELETE", headers: await getHeaders() });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+};
+
 export const createShopOrder = async (payload: any) => {
   try {
     const url = getApiUrl(`/shop/orders`);

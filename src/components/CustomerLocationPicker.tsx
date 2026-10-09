@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { Check, Crosshair, MapPin, Search, X, Navigation } from "lucide-react-native";
 import { NativeMapComponent, Region, MapPressEvent } from "./NativeMapComponent";
+import { ToastBanner, ToastType } from "./CustomDialog";
 import {
   PlaceSuggestion,
   safeForwardGeocode,
@@ -87,6 +88,22 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
   const [locating, setLocating] = useState(false);
   const searchDebounceRef = useRef<Parameters<typeof clearTimeout>[0] | undefined>(undefined);
   const searchRequestRef = useRef(0);
+
+  // In-App Toast State
+  const [toastConfig, setToastConfig] = useState<{
+    visible: boolean;
+    type: ToastType;
+    title: string;
+    message?: string;
+  }>({
+    visible: false,
+    type: "info",
+    title: "",
+  });
+
+  const showToast = (type: ToastType, title: string, message?: string) => {
+    setToastConfig({ visible: true, type, title, message });
+  };
 
   useEffect(() => {
     clearTimeout(searchDebounceRef.current);
@@ -240,10 +257,7 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
       });
 
       if (!match) {
-        Alert.alert(
-          "Lokasi tidak ditemukan",
-          "Coba gunakan nama tempat, jalan, kelurahan, atau kota yang lebih lengkap di Indonesia.",
-        );
+        showToast("warning", "Lokasi Tidak Ditemukan", "Coba gunakan nama tempat, jalan, atau area yang lebih lengkap.");
         return;
       }
 
@@ -257,10 +271,7 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
       }));
       setDetectedAddress(match.formattedAddress || query);
     } catch {
-      Alert.alert(
-        "Pencarian tidak tersedia",
-        "Periksa koneksi internet lalu coba lagi.",
-      );
+      showToast("error", "Pencarian Tidak Tersedia", "Periksa koneksi internet lalu coba lagi.");
     } finally {
       setSearching(false);
     }
@@ -421,6 +432,14 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+
+        <ToastBanner
+          visible={toastConfig.visible}
+          type={toastConfig.type}
+          title={toastConfig.title}
+          message={toastConfig.message}
+          onClose={() => setToastConfig((prev) => ({ ...prev, visible: false }))}
+        />
       </ResponsiveSafeAreaView>
     </Modal>
   );

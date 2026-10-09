@@ -35,6 +35,7 @@ import { toQR } from "toqr";
 import * as Clipboard from "expo-clipboard";
 import { rp } from "../utils/formatters";
 import { simulateMarketplacePayment } from "../services/api";
+import { ToastBanner, ToastType } from "./CustomDialog";
 import { AuthAccount } from "../screens/auth/authTypes";
 
 interface MarketplaceDigitalPaymentModalProps {
@@ -57,6 +58,16 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
   const [isSimulating, setIsSimulating] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [activeInstructionTab, setActiveInstructionTab] = useState<"mbanking" | "atm" | "qris">("mbanking");
+  const [toastConfig, setToastConfig] = useState<{ visible: boolean; type: ToastType; title: string; message: string }>({
+    visible: false,
+    type: "info",
+    title: "",
+    message: "",
+  });
+
+  const showToast = (type: ToastType, title: string, message: string) => {
+    setToastConfig({ visible: true, type, title, message });
+  };
   const timerRef = useRef<any>(null);
 
   const orderCode = order?.orderCode || order?.id || "RNG-MKT";
@@ -103,7 +114,7 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
       setCopied(label);
       setTimeout(() => setCopied(null), 2500);
     } catch {
-      Alert.alert("Info", `Disalin: ${text}`);
+      showToast("info", "Disalin", text);
     }
   };
 
@@ -120,10 +131,10 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
           onPaymentSuccess(result.data || { ...order, paymentStatus: "Lunas" });
         }
       } else {
-        Alert.alert("Simulasi Gagal", result.message || "Gagal memproses simulasi.");
+        showToast("error", "Simulasi Gagal", result.message || "Gagal memproses simulasi.");
       }
     } catch (err: any) {
-      Alert.alert("Gagal", err?.message || "Terjadi kendala saat simulasi.");
+      showToast("error", "Gagal", err?.message || "Terjadi kendala saat simulasi.");
     } finally {
       setIsSimulating(false);
     }
@@ -142,10 +153,7 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
         // Continue to fallback
       }
     }
-    Alert.alert(
-      "Aplikasi E-Wallet",
-      `Buka aplikasi ${paymentMethod.toUpperCase()} di perangkat Anda untuk menyelesaikan pembayaran sebesar ${rp(amount)}.`
-    );
+    showToast("info", "Aplikasi E-Wallet", `Buka aplikasi ${paymentMethod.toUpperCase()} di perangkat Anda untuk menyelesaikan pembayaran sebesar ${rp(amount)}.`);
   };
 
   // Render SVG QR representation
@@ -433,6 +441,14 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
           </View>
         </View>
       </View>
+
+      <ToastBanner
+        visible={toastConfig.visible}
+        type={toastConfig.type}
+        title={toastConfig.title}
+        message={toastConfig.message}
+        onClose={() => setToastConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </Modal>
   );
 };

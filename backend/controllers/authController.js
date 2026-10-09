@@ -5,6 +5,8 @@ const jwt = require("jsonwebtoken");
 const { google } = require("googleapis");
 const { sendMitraApprovalEmail, sendMitraRejectionEmail } = require("../services/emailService");
 
+const MITRA_ROLES = ["driver", "pemilik_marketplace", "pemilik_shop", "pemilik_catering", "pemilik_laundry", "pemilik_kos", "bank_sampah"];
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || "rangers_app_secret", {
     expiresIn: "30d",
@@ -85,6 +87,10 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Nama, email, dan role wajib diisi" });
     }
 
+    if (!MITRA_ROLES.includes(role) && !["customer", "admin"].includes(role)) {
+      return res.status(400).json({ success: false, message: "Jenis akun tidak dikenali." });
+    }
+
     const normalizedEmail = email.toLowerCase().trim();
     let user = await User.findOne({ email: normalizedEmail });
 
@@ -115,6 +121,24 @@ const registerUser = async (req, res) => {
         user.documents = documents || {};
 
         await user.save();
+
+        if (role === "pemilik_shop") {
+          const MarketplaceStore = require("../models/MarketplaceStore");
+          await MarketplaceStore.updateOne(
+            { ownerId: user._id },
+            {
+              $set: {
+                name: finalRoleData?.businessName || user.name,
+                storeType: finalRoleData?.storeType || "OTHER",
+                address: finalRoleData?.businessAddress || user.address || "",
+                pharmacistName: finalRoleData?.pharmacistName || "",
+                pharmacistSipa: finalRoleData?.pharmacistSipa || "",
+                status: "INACTIVE",
+                isVerified: false,
+              },
+            },
+          );
+        }
 
         return res.status(200).json({
           success: true,
@@ -194,6 +218,26 @@ const registerUser = async (req, res) => {
           { name: "Cuci Bedcover Besar", price: 25000, unit: "pcs", desc: "Pembersihan menyeluruh bedcover/selimut besar", category: "satuan", durationHours: 48, isActive: true },
         ],
       }).catch(err => console.warn("Auto LaundryStore creation note:", err.message));
+    }
+
+    if (role === "pemilik_shop") {
+      const MarketplaceStore = require("../models/MarketplaceStore");
+      const storeType = String(finalRoleData?.storeType || "OTHER").toUpperCase();
+      const allowedStoreTypes = ["SUPERMARKET", "MINIMARKET", "PHARMACY", "HEALTH", "BABY", "BEAUTY", "HOUSEHOLD", "OTHER"];
+      await MarketplaceStore.create({
+        ownerId: user._id,
+        name: finalRoleData?.businessName || user.name || "Toko Kanyaah Shop",
+        storeType: allowedStoreTypes.includes(storeType) ? storeType : "OTHER",
+        address: finalRoleData?.businessAddress || user.address || "",
+        description: finalRoleData?.businessDescription || "Toko retail mitra Kanyaah Shop.",
+        latitude: Number(finalRoleData?.latitude) || -7.1475,
+        longitude: Number(finalRoleData?.longitude) || 107.8015,
+        status: "INACTIVE",
+        isVerified: false,
+        isOfficialPharmacy: storeType === "PHARMACY",
+        pharmacistName: finalRoleData?.pharmacistName || "",
+        pharmacistSipa: finalRoleData?.pharmacistSipa || "",
+      }).catch(err => console.warn("Auto MarketplaceStore creation note:", err.message));
     }
 
     if (role === "pemilik_kos") {
@@ -444,6 +488,14 @@ const updateMitraStatus = async (req, res) => {
 
     await user.save();
 
+    if (user.role === "pemilik_shop") {
+      const MarketplaceStore = require("../models/MarketplaceStore");
+      await MarketplaceStore.updateMany(
+        { ownerId: user._id },
+        { $set: { isVerified: status === "verified", status: status === "verified" ? "ACTIVE" : "INACTIVE" } },
+      );
+    }
+
     // Trigger email notification automatically in the background
     if (status === "verified") {
       sendMitraApprovalEmail({
@@ -558,11 +610,11 @@ const getSystemStats = async (req, res) => {
       laundryOrders,
       bookings
     ] = await Promise.all([
-      User.countDocuments({ role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_laundry", "pemilik_kos"] } }),
+      User.countDocuments({ role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos"] } }),
       User.countDocuments({ role: "driver" }),
       User.countDocuments({ role: "customer" }),
       User.countDocuments({ status: "pending", role: { $ne: "customer", $ne: "admin" } }),
-      User.countDocuments({ status: "verified", role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_laundry", "pemilik_kos", "driver"] } }),
+      User.countDocuments({ status: "verified", role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos", "driver"] } }),
       User.countDocuments({ status: "rejected", role: { $ne: "customer", $ne: "admin" } }),
       Kost.find().select("rooms"),
       LaundryStore.find().select("services"),
@@ -591,7 +643,7 @@ const getSystemStats = async (req, res) => {
     });
 
     const recentMitraList = await User.find({
-      role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_laundry", "pemilik_kos", "driver"] },
+      role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos", "driver"] },
       createdAt: { $gte: last7Days[0].start }
     }).select("createdAt role status");
 

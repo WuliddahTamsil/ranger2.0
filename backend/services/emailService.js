@@ -29,6 +29,7 @@ const sendMitraApprovalEmail = async ({ email, name, role }) => {
     pemilik_laundry: "Pemilik Laundry",
     pemilik_catering: "Pemilik Catering",
     pemilik_marketplace: "Pemilik Toko Marketplace",
+    pemilik_shop: "Pemilik Kanyaah Shop",
     driver: "GEOVERSE Driver",
   };
   const roleLabel = roleLabelMap[role] || "Mitra GEOVERSE";
@@ -132,6 +133,7 @@ const sendMitraRejectionEmail = async ({ email, name, role, reason }) => {
     pemilik_laundry: "Pemilik Laundry",
     pemilik_catering: "Pemilik Catering",
     pemilik_marketplace: "Pemilik Toko Marketplace",
+    pemilik_shop: "Pemilik Kanyaah Shop",
     driver: "GEOVERSE Driver",
   };
   const roleLabel = roleLabelMap[role] || "Mitra GEOVERSE";

@@ -10,6 +10,7 @@ const Kost = require("../models/Kost");
 
 const ownerRoles = new Set([
   "pemilik_marketplace",
+  "pemilik_shop",
   "pemilik_catering",
   "pemilik_laundry",
   "pemilik_kos",
@@ -43,6 +44,17 @@ const findOrderByIdentifier = async (identifier) => {
     if (!order && cleanValue.length >= 6) {
       const escaped = cleanValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       order = await Model.findOne({ [codeField]: new RegExp(escaped + "$", "i") }).lean().catch(() => null);
+      if (!order && /^[0-9a-fA-F]+$/.test(cleanValue)) {
+        order = await Model.findOne({
+          $expr: {
+            $regexMatch: {
+              input: { $toString: "$_id" },
+              regex: `${cleanValue}$`,
+              options: "i",
+            },
+          },
+        }).lean().catch(() => null);
+      }
     }
     if (order) return { order, orderType, codeField };
   }
@@ -63,12 +75,52 @@ const findOrderByIdentifier = async (identifier) => {
   return null;
 };
 
+const idToString = (val) => {
+  if (!val) return "";
+  if (typeof val === "object" && val._id) return String(val._id);
+  return String(val);
+};
+
+const normalizeRole = (role) => {
+  const r = String(role || "").toLowerCase().trim();
+  if (
+    [
+      "pemilik_marketplace",
+      "pemilik_shop",
+      "pemilik_catering",
+      "pemilik_laundry",
+      "pemilik_kos",
+      "bank_sampah",
+      "store",
+      "merchant",
+    ].includes(r)
+  ) {
+    return "owner";
+  }
+  return r;
+};
+
+const resolveChatChannel = (sender, target) => {
+  const s = normalizeRole(sender);
+  const t = normalizeRole(target);
+  if ((s === "customer" && t === "driver") || (s === "driver" && t === "customer")) {
+    return "customer_driver";
+  }
+  if ((s === "driver" && t === "owner") || (s === "owner" && t === "driver")) {
+    return "driver_owner";
+  }
+  if ((s === "customer" && t === "owner") || (s === "owner" && t === "customer")) {
+    return "customer_owner";
+  }
+  return "general";
+};
+
 const getOrderParticipants = (record) => {
   const order = record.order;
   if (record.isPropertyInquiry) {
     return {
       customerId: "",
-      ownerId: String(order.ownerId || ""),
+      ownerId: idToString(order.ownerId),
       driverId: "",
       driverIds: [],
       storeId: "",
@@ -77,17 +129,20 @@ const getOrderParticipants = (record) => {
     };
   }
 
-  const driverIds = [order.driverId, order.driverPickupId, order.driverDeliveryId]
+  const driverIds = [
+    idToString(order.driverId),
+    idToString(order.driverPickupId),
+    idToString(order.driverDeliveryId),
+  ]
     .filter(Boolean)
-    .map(String)
     .filter((value, index, list) => list.indexOf(value) === index);
 
   return {
-    customerId: String(order.customerId || ""),
-    ownerId: String(order.ownerId || ""),
+    customerId: idToString(order.customerId),
+    ownerId: idToString(order.ownerId),
     driverId: driverIds[0] || "",
     driverIds,
-    storeId: String(order.storeId || ""),
+    storeId: idToString(order.storeId),
     orderCode: String(order.orderCode || order.bookingCode || ""),
     status: String(order.status || order.paymentStatus || ""),
   };
@@ -144,7 +199,7 @@ const resolveParticipant = async (userId, record) => {
 };
 
 const resolveReceiverId = (participant, target) => {
-  let normalizedTarget = target;
+  let normalizedTarget = normalizeRole(target);
   if (!normalizedTarget) {
     if (participant.role === "driver") {
       normalizedTarget = participant.customerId ? "customer" : "owner";
@@ -182,5 +237,7 @@ module.exports = {
   getOrderParticipants,
   resolveParticipant,
   resolveReceiverId,
+  resolveChatChannel,
+  normalizeRole,
   isArchivedStatus,
 };

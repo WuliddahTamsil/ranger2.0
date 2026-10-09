@@ -48,7 +48,7 @@ const createOrder = async (req, res) => {
       orderCode: `RNG-MKT-${Date.now().toString().slice(-8)}`, ownerId, storeId: String(ownerId), customerId,
       customerName, customerPhone: customerPhone || "", address, addressSnapshot: addressSnapshot || null, notes: notes || "",
       items: orderItems, storeName: ownerProfile?.roleData?.businessName || ownerProfile?.name || "",
-      storeAddress: ownerProfile?.roleData?.businessAddress || ownerProfile?.roleData?.address || ownerProfile?.address || "",
+      storeAddress: `${ownerProfile?.roleData?.businessAddress || ownerProfile?.roleData?.address || ownerProfile?.address || ""}${ownerProfile?.roleData?.addressNote ? ` (Patokan: ${ownerProfile.roleData.addressNote})` : ""}`.trim(),
       subtotal, deliveryFee: Number(deliveryFee || 0), serviceFee: Number(serviceFee || 0), driverTip: Number(driverTip || 0),
       voucherId: voucherId || "", discount: Number(discount || 0),
       totalAmount: subtotal + Number(deliveryFee || 0) + Number(serviceFee || 0) + Number(driverTip || 0) - Number(discount || 0),
@@ -71,7 +71,6 @@ const getOrdersByOwner = async (req, res) => {
   try {
     const orders = await MarketplaceOrder.find({
       ownerId: req.authUser._id,
-      customerId: { $regex: /^[a-fA-F0-9]{24}$/ },
     }).sort({ createdAt: -1 }).lean();
     return res.json({ success: true, data: orders });
   } catch (error) {
@@ -120,6 +119,24 @@ const updateOrderStatus = async (req, res) => {
       else filter.ownerId = authUser._id;
       const update = { status: nextStatus };
       if (actorRole === "driver" && nextStatus === "Selesai") update.deliveryProofUrl = deliveryProofUrl;
+      if (nextStatus === "Dibatalkan") {
+        update.cancellation = {
+          reason: String(req.body?.reason || "Dibatalkan oleh toko").trim(),
+          cancelledBy: "pemilik_marketplace",
+          cancelledAt: new Date(),
+        };
+        if (Array.isArray(current.items)) {
+          for (const item of current.items) {
+            if (item.productId) {
+              await MarketplaceProduct.updateOne(
+                { _id: item.productId },
+                { $inc: { stock: Number(item.quantity || 1), sold: -Number(item.quantity || 1) } },
+                { session }
+              );
+            }
+          }
+        }
+      }
       order = await MarketplaceOrder.findOneAndUpdate(filter, update, { new: true, runValidators: true, session });
       if (!order) {
         const error = new Error("Status pesanan sudah berubah. Muat ulang lalu coba lagi."); error.statusCode = 409; throw error;
@@ -155,7 +172,6 @@ const getOrdersByDriver = async (req, res) => {
     const driverId = String(req.authUser._id);
     if (req.params.driverId && String(req.params.driverId) !== driverId) return res.status(403).json({ success: false, message: "Anda hanya dapat melihat order untuk akun driver sendiri." });
     const orders = await MarketplaceOrder.find({
-      customerId: { $regex: /^[a-fA-F0-9]{24}$/ },
       $or: [
         { driverId },
         { status: "Siap", driverId: { $in: ["", null] }, declinedByDrivers: { $nin: [driverId] } },
@@ -611,10 +627,35 @@ const respondOrderComplaint = async (req, res) => {
  */
 const simulateMarketplacePayment = async (req, res) => {
   try {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return res.status(401).json({ success: false, message: "Autentikasi diperlukan." });
+    }
+
+    const isProduction = process.env.NODE_ENV === "production" && process.env.ENABLE_PAYMENT_SIMULATION !== "true";
+    if (isProduction && authUser.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Simulasi pembayaran dinonaktifkan di environment production.",
+      });
+    }
+
     const { id } = req.params;
     const order = await MarketplaceOrder.findById(id);
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
+    }
+
+    const isAuthorized =
+      authUser.role === "admin" ||
+      String(order.customerId) === String(authUser._id) ||
+      String(order.ownerId) === String(authUser._id);
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: "Anda tidak berhak mensimulasikan pembayaran pesanan ini.",
+      });
     }
 
     order.paymentStatus = "Lunas";

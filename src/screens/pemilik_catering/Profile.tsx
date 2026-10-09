@@ -894,11 +894,16 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
                   <Navigation size={20} color="#1B7A4E" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.mapPickerTitle}>
-                    {editLatitude !== undefined && editLongitude !== undefined
-                      ? "Titik Peta Google Maps Dipilih ✓"
-                      : "Pilih Titik di Peta (Maps)"}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <Text style={styles.mapPickerTitle}>
+                      {editLatitude !== undefined && editLongitude !== undefined
+                        ? "Titik Peta Dapur Ditentukan"
+                        : "Pilih Titik di Peta (Maps)"}
+                    </Text>
+                    {editLatitude !== undefined && editLongitude !== undefined && (
+                      <CheckCircle2 size={13} color="#15803D" />
+                    )}
+                  </View>
                   <Text style={styles.mapPickerSub} numberOfLines={2}>
                     {editLatitude !== undefined && editLongitude !== undefined
                       ? `Koordinat: ${editLatitude.toFixed(5)}, ${editLongitude.toFixed(5)}`

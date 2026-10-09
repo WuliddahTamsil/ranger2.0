@@ -361,14 +361,14 @@ async function seedKanyaahShop() {
     console.log("🌱 SEEDING KANYAAH SHOP STORES & PRODUCTS...");
 
     // Find or pick a verified merchant user as owner
-    let merchantUser = await User.findOne({ role: { $in: ["pemilik_marketplace", "pemilik_toko", "admin"] } });
+    let merchantUser = await User.findOne({ role: { $in: ["pemilik_shop", "admin"] } });
     if (!merchantUser) {
       merchantUser = await User.create({
         name: "Mitra Resmi Kanyaah Shop",
         email: "kanyaahshop@geoverse.id",
         phone: "081223344556",
         address: "Jl. Kamojang Raya No. 1",
-        role: "pemilik_marketplace",
+        role: "pemilik_shop",
         status: "verified",
       });
     }
@@ -417,6 +417,7 @@ async function seedKanyaahShop() {
           images: [pData.img],
           imageUrls: [pData.img],
           isActive: true,
+          productType: "SHOP",
           rating: 4.9,
           sold: 12,
         });

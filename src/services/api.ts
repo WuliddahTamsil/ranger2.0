@@ -264,11 +264,12 @@ export const getCustomerReviews = async (customerId: string) => {
   }
 };
 
-export const createCustomerReview = async (reviewData: Record<string, unknown>) => {
+export const createCustomerReview = async (reviewData: Record<string, unknown>, actorId?: string) => {
   try {
+    const authHeaders = await getAuthHeaders(actorId || String(reviewData.customerId || ""));
     const res = await fetch(getApiUrl("/reviews"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify(reviewData),
     });
     return await readApiJson(res);
@@ -322,6 +323,35 @@ export const deleteMarketplaceProduct = async (id: string | number, actorId?: st
   }
 };
 
+export const getMarketplaceWithdrawals = async (ownerId?: string) => {
+  try {
+    const authHeaders = await getAuthHeaders(ownerId);
+    const query = ownerId ? `?ownerId=${ownerId}` : "";
+    const res = await fetch(getApiUrl(`/marketplace/withdrawals${query}`), {
+      headers: authHeaders,
+      cache: "no-store",
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("getMarketplaceWithdrawals error:", err);
+    return { success: false, data: [], message: "Gagal menyambung ke server" };
+  }
+};
+
+export const createMarketplaceWithdrawal = async (withdrawalData: Record<string, unknown>, ownerId?: string) => {
+  try {
+    const authHeaders = await getAuthHeaders(ownerId);
+    const res = await fetch(getApiUrl("/marketplace/withdrawals"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify(withdrawalData),
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("createMarketplaceWithdrawal error:", err);
+    return { success: false, message: "Gagal menyambung ke server" };
+  }
+};
 
 export const getMarketplaceOrdersForOwner = async (ownerId: string) => {
   try {

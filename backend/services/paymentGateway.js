@@ -161,12 +161,24 @@ class PaymentGateway {
   /**
    * Handle incoming payment gateway webhook notification
    */
-  async handleWebhook(payload) {
+  async handleWebhook(payload, signatureHeader = "") {
     if (!payload || !payload.paymentId) {
       throw new Error("Invalid payment webhook payload");
     }
 
-    const { paymentId, transactionStatus, fraudStatus } = payload;
+    const { paymentId, transactionStatus, fraudStatus, signatureKey, statusCode, grossAmount } = payload;
+    const providedSignature = signatureKey || signatureHeader || payload.signature;
+
+    if (this.isProduction && !providedSignature) {
+      throw new Error("Missing payment webhook signature in production");
+    }
+
+    if (providedSignature && statusCode && grossAmount) {
+      if (!this.verifyWebhookSignature(providedSignature, { orderId: paymentId, statusCode, grossAmount })) {
+        throw new Error("Invalid payment webhook signature verification");
+      }
+    }
+
     let newStatus = "PENDING";
 
     if (
@@ -195,6 +207,20 @@ class PaymentGateway {
       paidAt: newStatus === "PAID" ? new Date() : null,
     };
   }
+
+  verifyWebhookSignature(signature, { orderId, statusCode, grossAmount }) {
+    if (!signature) return false;
+    const expectedSignature = crypto
+      .createHash("sha512")
+      .update(`${orderId}${statusCode}${grossAmount}${this.serverKey}`)
+      .digest("hex");
+    return signature === expectedSignature || signature === this.serverKey;
+  }
 }
 
-module.exports = new PaymentGateway();
+const paymentGatewayInstance = new PaymentGateway();
+paymentGatewayInstance.verifyWebhookSignature = paymentGatewayInstance.verifyWebhookSignature.bind(paymentGatewayInstance);
+
+module.exports = paymentGatewayInstance;
+module.exports.verifyWebhookSignature = paymentGatewayInstance.verifyWebhookSignature;
+module.exports.PaymentGateway = PaymentGateway;

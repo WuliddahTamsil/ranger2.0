@@ -205,7 +205,7 @@ export const ShopMerchantOrderScreen: React.FC<ShopMerchantOrderScreenProps> = (
     <ResponsiveSafeAreaView style={styles.safeArea} edges={["top"]}>
       {/* Header */}
       <View style={styles.navBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigate("pemilik_marketplace_home")} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigate(authAccount?.role === "pemilik_shop" ? "pemilik_shop_home" : "pemilik_marketplace_home")} activeOpacity={0.7}>
           <ArrowLeft size={20} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.navTitle}>Manajemen Pesanan Toko</Text>

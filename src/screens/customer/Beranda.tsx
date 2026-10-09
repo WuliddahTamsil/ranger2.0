@@ -1800,7 +1800,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
 
             {/* Sub Categories scroll */}
             <View style={styles.catScrollBox}>
-              {["Semua", "Makanan", "Fashion", "Minuman", "Kesehatan", "Kerajinan"].map((c) => (
+              {["Semua", "Makanan", "UMKM Lokal"].map((c) => (
                 <TouchableOpacity
                   key={c}
                   style={[styles.catPillBtn, marketCat === c && styles.catPillBtnActive]}
@@ -1815,8 +1815,17 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
 
             {/* Products listings scroll */}
             <ScrollView contentContainerStyle={styles.sheetProductList} showsVerticalScrollIndicator={false}>
-              <View style={styles.productsGrid}>
-                {filteredMarketProducts.map((p: any) => {
+              {filteredMarketProducts.length === 0 ? (
+                <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 48, gap: 10 }}>
+                  <Store size={36} color="#9CA3AF" />
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Belum ada produk yang tersedia</Text>
+                  <Text style={{ fontSize: 11, color: "#9CA3AF", textAlign: "center", paddingHorizontal: 20 }}>
+                    Mitra UMKM lokal akan segera menambahkan produk terbaru mereka.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.productsGrid}>
+                  {filteredMarketProducts.map((p: any) => {
                   return (
                     <View key={p.id} style={styles.productCard}>
                       <Image source={{ uri: p.img }} style={styles.productImg as any} />
@@ -1840,6 +1849,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   );
                 })}
               </View>
+            )}
             </ScrollView>
           </View>
         </View>

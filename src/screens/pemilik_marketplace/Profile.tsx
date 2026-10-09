@@ -12,6 +12,8 @@ import {
   TextInput,
   Switch,
   Alert,
+  Platform,
+  ActivityIndicator,
 } from "react-native";
 import {
   User,
@@ -30,28 +32,93 @@ import {
   ChevronRight,
   Camera,
   X,
+  MapPin,
+  Map as MapIcon,
+  Navigation as NavigationIcon,
+  Compass,
+  Crosshair,
+  Truck,
+  Info,
 } from "lucide-react-native";
 import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
+import { ToastBanner, ToastType, ConfirmDialog } from "../../components/CustomDialog";
+import { CustomerLocationValue, CustomerLocationPicker } from "../../components/CustomerLocationPicker";
+import { safeReverseGeocode, getCurrentUserCoordinates } from "../../utils/geocoding";
+import { updateUserProfile } from "../../services/api";
+
+export interface StoreInfoData {
+  ownerName: string;
+  storeName: string;
+  phone: string;
+  email: string;
+  address: string;
+  addressDetails?: string;
+  districtCity?: string;
+  addressNote?: string;
+  latitude?: number;
+  longitude?: number;
+  description: string;
+  isOpen: boolean;
+  isVerified: boolean;
+  profileImage: string | null;
+}
 
 interface ProfileProps {
-  storeInfo: {
-    ownerName: string;
-    storeName: string;
-    phone: string;
-    email: string;
-    address: string;
-    description: string;
-    isOpen: boolean;
-    isVerified: boolean;
-    profileImage: string | null;
-  };
+  storeInfo: StoreInfoData;
   setStoreInfo: (info: any) => void;
   userId?: string;
   navigate: (screen: any) => void;
 }
 
 export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userId, navigate }) => {
+  // Toast & Confirm states (No browser native popups)
+  const [toastConfig, setToastConfig] = useState<{
+    visible: boolean;
+    type: ToastType;
+    title: string;
+    message: string;
+  }>({
+    visible: false,
+    type: "info",
+    title: "",
+    message: "",
+  });
+
+  const showToast = (type: ToastType, title: string, message: string) => {
+    setToastConfig({ visible: true, type, title, message });
+  };
+
+  const [confirmDialogConfig, setConfirmDialogConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: "danger" | "warning" | "success" | "info";
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    type: "warning",
+    onConfirm: () => {},
+  });
+
+  const showConfirm = (params: {
+    title: string;
+    message: string;
+    type?: "danger" | "warning" | "success" | "info";
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  }) => {
+    setConfirmDialogConfig({
+      visible: true,
+      ...params,
+    });
+  };
+
   // Modal states
   const [avatarPreviewVisible, setAvatarPreviewVisible] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
@@ -72,6 +139,88 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
   const [editStoreName, setEditStoreName] = useState(storeInfo.storeName);
   const [editStoreDesc, setEditStoreDesc] = useState(storeInfo.description);
   const [editStoreAddr, setEditStoreAddr] = useState(storeInfo.address);
+  const [editStoreAddressDetails, setEditStoreAddressDetails] = useState(storeInfo.addressDetails || storeInfo.address || "");
+  const [editStoreDistrictCity, setEditStoreDistrictCity] = useState(storeInfo.districtCity || "");
+  const [editStoreAddressNote, setEditStoreAddressNote] = useState(storeInfo.addressNote || "");
+  const [editStoreLat, setEditStoreLat] = useState<number>(storeInfo.latitude ?? -6.5962);
+  const [editStoreLng, setEditStoreLng] = useState<number>(storeInfo.longitude ?? 106.8040);
+  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+  const [isGettingGps, setIsGettingGps] = useState(false);
+  const [isSavingStore, setIsSavingStore] = useState(false);
+
+  const openStoreModal = () => {
+    setEditStoreName(storeInfo.storeName);
+    setEditStoreDesc(storeInfo.description);
+    setEditStoreAddr(storeInfo.address);
+    setEditStoreAddressDetails(storeInfo.addressDetails || storeInfo.address || "");
+    setEditStoreDistrictCity(storeInfo.districtCity || "");
+    setEditStoreAddressNote(storeInfo.addressNote || "");
+    setEditStoreLat(storeInfo.latitude ?? -6.5962);
+    setEditStoreLng(storeInfo.longitude ?? 106.8040);
+    setStoreModalVisible(true);
+  };
+
+  const handleLocationPicked = async (loc: CustomerLocationValue) => {
+    setEditStoreLat(loc.latitude);
+    setEditStoreLng(loc.longitude);
+    setLocationPickerVisible(false);
+
+    let detected = loc.detectedAddress || "";
+    if (!detected) {
+      const rev = await safeReverseGeocode(loc.latitude, loc.longitude);
+      if (rev?.formattedAddress) {
+        detected = rev.formattedAddress;
+      }
+    }
+
+    if (detected) {
+      setEditStoreAddr(detected);
+      if (!editStoreAddressDetails || editStoreAddressDetails.length < 5) {
+        setEditStoreAddressDetails(detected);
+      }
+    }
+    showToast(
+      "success",
+      "Titik Maps Terpasang",
+      `Koordinat: ${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}`
+    );
+  };
+
+  const handleUseCurrentGps = async () => {
+    setIsGettingGps(true);
+    try {
+      const loc = await getCurrentUserCoordinates();
+      if (loc && loc.latitude && loc.longitude) {
+        setEditStoreLat(loc.latitude);
+        setEditStoreLng(loc.longitude);
+        if (loc.address) {
+          setEditStoreAddr(loc.address);
+          if (!editStoreAddressDetails || editStoreAddressDetails.length < 5) {
+            setEditStoreAddressDetails(loc.address);
+          }
+        }
+        showToast(
+          "success",
+          "Lokasi GPS Terpasang",
+          `Akurasi tinggi (${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)})`
+        );
+      } else {
+        showToast(
+          "warning",
+          "GPS Belum Terdeteksi",
+          "Mohon izinkan akses lokasi pada browser/perangkat Anda."
+        );
+      }
+    } catch {
+      showToast(
+        "error",
+        "Gagal GPS",
+        "Gagal mengambil koordinat saat ini. Silakan pilih di Maps."
+      );
+    } finally {
+      setIsGettingGps(false);
+    }
+  };
 
   // Notification toggles
   const [orderNotif, setOrderNotif] = useState(true);
@@ -95,68 +244,105 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
   // Actions
   const handleSaveAccount = () => {
     if (editName.trim() === "") {
-      Alert.alert("Error", "Nama pemilik tidak boleh kosong");
+      showToast("error", "Error", "Nama pemilik tidak boleh kosong");
       return;
     }
     setStoreInfo({ ...storeInfo, ownerName: editName, phone: editPhone });
     setAccountModalVisible(false);
-    Alert.alert("Sukses", "Informasi akun berhasil diperbarui");
+    showToast("success", "Sukses", "Informasi akun berhasil diperbarui");
   };
 
   const handleSavePassword = () => {
     if (currPassword.trim() === "" || newPassword.trim() === "") {
-      Alert.alert("Error", "Password tidak boleh kosong");
+      showToast("error", "Error", "Password tidak boleh kosong");
       return;
     }
     setCurrPassword("");
     setNewPassword("");
     setPasswordModalVisible(false);
-    Alert.alert("Sukses", "Password berhasil diperbarui");
+    showToast("success", "Sukses", "Password berhasil diperbarui");
   };
 
   const handleSavePhone = () => {
     setStoreInfo({ ...storeInfo, phone: editPhone });
     setPhoneModalVisible(false);
-    Alert.alert("Sukses", "Nomor HP berhasil diperbarui");
+    showToast("success", "Sukses", "Nomor HP berhasil diperbarui");
   };
 
-  const handleSaveStore = () => {
+  const handleSaveStore = async () => {
     if (editStoreName.trim() === "") {
-      Alert.alert("Error", "Nama toko tidak boleh kosong");
+      showToast("error", "Error", "Nama toko tidak boleh kosong");
       return;
     }
-    setStoreInfo({
+    const street = editStoreAddressDetails.trim() || editStoreAddr.trim();
+    if (street === "") {
+      showToast("error", "Error", "Alamat spesifik toko wajib diisi untuk penjemputan driver.");
+      return;
+    }
+
+    setIsSavingStore(true);
+    const combinedAddress = [street, editStoreDistrictCity.trim()].filter(Boolean).join(", ");
+
+    const updated: StoreInfoData = {
       ...storeInfo,
-      storeName: editStoreName,
-      description: editStoreDesc,
-      address: editStoreAddr,
-    });
+      storeName: editStoreName.trim(),
+      description: editStoreDesc.trim(),
+      address: combinedAddress,
+      addressDetails: street,
+      districtCity: editStoreDistrictCity.trim(),
+      addressNote: editStoreAddressNote.trim(),
+      latitude: editStoreLat,
+      longitude: editStoreLng,
+    };
+
+    setStoreInfo(updated);
     setStoreModalVisible(false);
-    Alert.alert("Sukses", "Informasi toko berhasil diperbarui");
+
+    if (userId) {
+      try {
+        await updateUserProfile(userId, {
+          address: combinedAddress,
+          roleData: {
+            businessName: editStoreName.trim(),
+            businessDescription: editStoreDesc.trim(),
+            businessAddress: combinedAddress,
+            addressDetails: street,
+            districtCity: editStoreDistrictCity.trim(),
+            addressNote: editStoreAddressNote.trim(),
+            latitude: editStoreLat,
+            longitude: editStoreLng,
+          },
+        });
+        showToast("success", "Sukses", "Informasi & titik Maps toko berhasil disimpan ke sistem.");
+      } catch {
+        showToast("success", "Tersimpan", "Informasi toko berhasil diperbarui.");
+      }
+    } else {
+      showToast("success", "Sukses", "Informasi toko berhasil diperbarui.");
+    }
+    setIsSavingStore(false);
   };
 
   const handleToggleStoreStatus = () => {
     const nextStatus = !storeInfo.isOpen;
-    Alert.alert(
-      nextStatus ? "Buka Toko?" : "Tutup Toko?",
-      nextStatus 
+    showConfirm({
+      title: nextStatus ? "Buka Toko?" : "Tutup Toko?",
+      message: nextStatus 
         ? "Toko akan kembali menerima pesanan customer." 
         : "Toko tidak akan menerima pesanan baru selama ditutup.",
-      [
-        { text: "Batal", style: "cancel" },
-        { 
-          text: nextStatus ? "Buka Toko" : "Tutup Toko",
-          onPress: () => {
-            setStoreInfo({ ...storeInfo, isOpen: nextStatus });
-            Alert.alert("Sukses", nextStatus ? "Toko sekarang buka." : "Toko sekarang tutup.");
-          }
-        }
-      ]
-    );
+      type: nextStatus ? "success" : "warning",
+      confirmText: nextStatus ? "Buka Toko" : "Tutup Toko",
+      cancelText: "Batal",
+      onConfirm: () => {
+        setConfirmDialogConfig((prev) => ({ ...prev, visible: false }));
+        setStoreInfo({ ...storeInfo, isOpen: nextStatus });
+        showToast("success", "Sukses", nextStatus ? "Toko sekarang buka." : "Toko sekarang tutup.");
+      },
+    });
   };
 
   const handleShareStore = () => {
-    Alert.alert("Informasi Toko", `${storeInfo.storeName}\n${storeInfo.address}\n\n(Informasi toko siap dibagikan)`);
+    showToast("info", "Informasi Toko", `${storeInfo.storeName} - ${storeInfo.address} (Informasi toko siap dibagikan)`);
   };
 
   const handleLogout = () => {
@@ -266,19 +452,26 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
         <View style={styles.groupCard}>
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => {
-              setEditStoreName(storeInfo.storeName);
-              setEditStoreDesc(storeInfo.description);
-              setEditStoreAddr(storeInfo.address);
-              setStoreModalVisible(true);
-            }}
+            onPress={openStoreModal}
+            activeOpacity={0.7}
           >
             {renderMenuIcon(<StoreIcon size={16} color="#1B7A4E" />, "#E8F5EE")}
             <View style={styles.menuItemBody}>
-              <Text style={styles.menuItemTitle}>Informasi Toko</Text>
-              <Text style={styles.menuItemSubtitle} numberOfLines={1}>
-                {displayVal(storeInfo.storeName, "Nama toko belum diisi")}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={styles.menuItemTitle}>Informasi & Alamat Toko</Text>
+                <View style={styles.verifiedLocationPill}>
+                  <MapPin size={10} color="#15803D" />
+                  <Text style={styles.verifiedLocationPillText}>Maps & GPS</Text>
+                </View>
+              </View>
+              <Text style={styles.menuItemSubtitle} numberOfLines={2}>
+                {displayVal(storeInfo.storeName, "Nama toko belum diisi")} • {displayVal(storeInfo.address, "Alamat belum diatur")}
               </Text>
+              {Boolean(storeInfo.addressNote) && (
+                <Text style={styles.driverPatokanNoteText} numberOfLines={1}>
+                  Patokan: {storeInfo.addressNote}
+                </Text>
+              )}
             </View>
             <ChevronRight size={16} color="#9CA3AF" />
           </TouchableOpacity>
@@ -341,7 +534,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => Alert.alert("Keamanan", "Sesi login Anda sedang aktif dan aman.")}
+            onPress={() => showToast("info", "Keamanan", "Sesi login Anda sedang aktif dan aman.")}
           >
             {renderMenuIcon(<Shield size={16} color="#607D8B" />, "#E9EEF0")}
             <View style={styles.menuItemBody}>
@@ -355,7 +548,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => Alert.alert("Bantuan", "Gunakan tab Beranda untuk mengelola menu, tab Order untuk memproses pesanan masuk, dan tab Pendapatan untuk penarikan saldo.")}
+            onPress={() => showToast("info", "Bantuan", "Gunakan tab Beranda untuk mengelola menu, tab Order untuk memproses pesanan masuk, dan tab Pendapatan untuk penarikan saldo.")}
           >
             {renderMenuIcon(<HelpCircle size={16} color="#FF9F00" />, "#FFF5D8")}
             <View style={styles.menuItemBody}>
@@ -369,7 +562,7 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => Alert.alert("Kebijakan & Ketentuan", "Halaman kebijakan dan syarat penggunaan saat ini menggunakan standar platform GEOVERSE 2.0.")}
+            onPress={() => showToast("info", "Kebijakan & Ketentuan", "Halaman kebijakan dan syarat penggunaan saat ini menggunakan standar platform GEOVERSE 2.0.")}
           >
             {renderMenuIcon(<FileText size={16} color="#1B7A4E" />, "#E8F5EE")}
             <View style={styles.menuItemBody}>
@@ -555,64 +748,242 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
         </View>
       </Modal>
 
-      {/* 6. Modal Edit Store Info */}
+      {/* 6. Modal Edit Store Info & Specific Location Maps */}
       <Modal visible={storeModalVisible} transparent animationType="slide">
         <View style={styles.modalBgBottom}>
           <View style={styles.sheetContainer}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Edit Informasi Toko</Text>
-              <TouchableOpacity onPress={() => setStoreModalVisible(false)}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.sheetTitle}>Edit Informasi & Lokasi Toko</Text>
+                <Text style={styles.sheetSubtitle}>
+                  Atur alamat spesifik & titik peta agar kurir/driver mudah menjemput
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setStoreModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <X size={20} color="#111827" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.formScrollContainer}>
-              <Text style={styles.inputLabel}>Nama Toko</Text>
-              <TextInput 
-                style={styles.textInput}
-                value={editStoreName}
-                onChangeText={setEditStoreName}
-                placeholder="Nama Toko"
-              />
+            <ScrollView 
+              style={styles.formScrollContainerLarge}
+              contentContainerStyle={{ gap: 14, paddingBottom: 16 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* 1. Nama & Deskripsi Toko */}
+              <View style={styles.formFieldGroup}>
+                <Text style={styles.inputLabel}>
+                  Nama Toko <Text style={{ color: "#DC2626" }}>*</Text>
+                </Text>
+                <TextInput 
+                  style={styles.textInput}
+                  value={editStoreName}
+                  onChangeText={setEditStoreName}
+                  placeholder="Misal: Cemilan Serba Ada"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
 
-              <Text style={styles.inputLabel}>Deskripsi Toko</Text>
-              <TextInput 
-                style={[styles.textInput, styles.textArea]}
-                value={editStoreDesc}
-                onChangeText={setEditStoreDesc}
-                placeholder="Tulis deskripsi toko Anda..."
-                multiline
-                numberOfLines={3}
-              />
+              <View style={styles.formFieldGroup}>
+                <Text style={styles.inputLabel}>Deskripsi Toko</Text>
+                <TextInput 
+                  style={[styles.textInput, styles.textAreaSmall]}
+                  value={editStoreDesc}
+                  onChangeText={setEditStoreDesc}
+                  placeholder="Deskripsikan ragam produk UMKM yang Anda jual..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
 
-              <Text style={styles.inputLabel}>Alamat Toko</Text>
-              <TextInput 
-                style={[styles.textInput, styles.textArea]}
-                value={editStoreAddr}
-                onChangeText={setEditStoreAddr}
-                placeholder="Alamat Lengkap Toko"
-                multiline
-                numberOfLines={3}
-              />
+              {/* 2. Kartu Maps & Titik Koordinat GPS Penjemputan Driver */}
+              <View style={styles.mapCardContainer}>
+                <View style={styles.mapCardHeaderRow}>
+                  <View style={styles.mapCardTitleRow}>
+                    <View style={styles.mapPinBadge}>
+                      <MapPin size={16} color="#15803D" />
+                    </View>
+                    <View>
+                      <Text style={styles.mapCardTitle}>Titik Maps Penjemputan (GPS)</Text>
+                      <Text style={styles.mapCardSubtitle}>Panduan navigasi akurat kurir ke tokomu</Text>
+                    </View>
+                  </View>
+                  <View style={styles.gpsStatusPill}>
+                    <Text style={styles.gpsStatusPillText}>
+                      {editStoreLat && editStoreLng ? "🟢 GPS Terpasang" : "⚠️ Belum Diset"}
+                    </Text>
+                  </View>
+                </View>
 
+                {/* Visual Mini Map Preview */}
+                <View style={styles.miniMapWrapper}>
+                  {Platform.OS === "web" ? (
+                    <iframe
+                      title="Store Location Map"
+                      src={`https://maps.google.com/maps?q=${editStoreLat},${editStoreLng}&z=16&output=embed`}
+                      style={{ width: "100%", height: "100%", border: "none", borderRadius: 12 }}
+                    />
+                  ) : (
+                    <View style={styles.miniMapPlaceholder}>
+                      <MapIcon size={32} color="#16A34A" />
+                      <Text style={styles.miniMapPlaceholderTitle}>Peta Titik Penjemputan</Text>
+                    </View>
+                  )}
+                  <View style={styles.miniMapFloatingPill}>
+                    <NavigationIcon size={12} color="#15803D" />
+                    <Text style={styles.miniMapFloatingPillText}>
+                      {editStoreLat.toFixed(5)}, {editStoreLng.toFixed(5)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Action Buttons for Map & GPS */}
+                <View style={styles.mapButtonsRow}>
+                  <TouchableOpacity
+                    style={styles.openMapBtn}
+                    onPress={() => setLocationPickerVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Compass size={15} color="#FFFFFF" />
+                    <Text style={styles.openMapBtnText}>Buka & Pilih di Maps</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.useGpsBtn}
+                    onPress={handleUseCurrentGps}
+                    disabled={isGettingGps}
+                    activeOpacity={0.8}
+                  >
+                    {isGettingGps ? (
+                      <ActivityIndicator size="small" color="#15803D" />
+                    ) : (
+                      <>
+                        <Crosshair size={15} color="#15803D" />
+                        <Text style={styles.useGpsBtnText}>GPS Saya</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* 3. Detail Alamat Spesifik Toko */}
+              <View style={styles.formFieldGroup}>
+                <View style={styles.fieldLabelRow}>
+                  <Text style={styles.inputLabel}>
+                    Alamat Lengkap (Nama Jalan, No. Bangunan, RT/RW) <Text style={{ color: "#DC2626" }}>*</Text>
+                  </Text>
+                </View>
+                <TextInput 
+                  style={[styles.textInput, styles.textAreaSmall]}
+                  value={editStoreAddressDetails}
+                  onChangeText={setEditStoreAddressDetails}
+                  placeholder="Misal: Jl. Raya Pajajaran No. 88, RT 02 / RW 05"
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+
+              <View style={styles.formFieldGroup}>
+                <Text style={styles.inputLabel}>
+                  Kelurahan, Kecamatan & Kota / Kabupaten <Text style={{ color: "#DC2626" }}>*</Text>
+                </Text>
+                <TextInput 
+                  style={styles.textInput}
+                  value={editStoreDistrictCity}
+                  onChangeText={setEditStoreDistrictCity}
+                  placeholder="Misal: Babakan, Bogor Tengah, Kota Bogor"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              {/* 4. Patokan Khusus Driver */}
+              <View style={styles.driverNoteCard}>
+                <View style={styles.driverNoteHeader}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Truck size={16} color="#15803D" />
+                    <Text style={styles.driverNoteTitle}>Patokan & Catatan Penjemputan Driver</Text>
+                  </View>
+                  <View style={styles.recommendedBadge}>
+                    <Text style={styles.recommendedBadgeText}>Sangat Membantu Driver</Text>
+                  </View>
+                </View>
+                <TextInput 
+                  style={[styles.textInput, styles.textAreaMedium, { backgroundColor: "#FFFFFF" }]}
+                  value={editStoreAddressNote}
+                  onChangeText={setEditStoreAddressNote}
+                  placeholder="Misal: Ruko 2 lantai warna toska sebelah Alfamart. Masuk gerbang hitam, toko di sebelah kanan. Driver bisa parkir gratis di depan toko."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={3}
+                />
+                <View style={styles.driverNoteHintRow}>
+                  <Info size={13} color="#0D9488" />
+                  <Text style={styles.driverNoteHintText}>
+                    Catatan ini akan otomatis tampil di layar Driver saat mengambil pesanan (Pick-Up), sehingga kurir langsung menemukan toko tanpa perlu telepon tanya-tanya jalan.
+                  </Text>
+                </View>
+              </View>
+
+              {/* 5. Pratinjau Alamat Lengkap Toko */}
+              {(editStoreAddressDetails.trim() || editStoreDistrictCity.trim()) && (
+                <View style={styles.addressPreviewBox}>
+                  <Text style={styles.addressPreviewLabel}>PRATINJAU ALAMAT TOKO:</Text>
+                  <Text style={styles.addressPreviewText}>
+                    {[editStoreAddressDetails.trim(), editStoreDistrictCity.trim()].filter(Boolean).join(", ")}
+                  </Text>
+                  {Boolean(editStoreAddressNote.trim()) && (
+                    <Text style={styles.addressPreviewNote}>
+                      📍 Patokan: {editStoreAddressNote.trim()}
+                    </Text>
+                  )}
+                  <Text style={styles.addressPreviewCoords}>
+                    🗺️ Koordinat Maps: {editStoreLat.toFixed(5)}, {editStoreLng.toFixed(5)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Action Buttons */}
               <View style={styles.sheetActions}>
                 <TouchableOpacity 
                   style={[styles.sheetBtn, styles.sheetBtnOutline]}
                   onPress={() => setStoreModalVisible(false)}
+                  disabled={isSavingStore}
                 >
                   <Text style={styles.sheetBtnTextOutline}>Batal</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.sheetBtn, styles.sheetBtnSolid]}
                   onPress={handleSaveStore}
+                  disabled={isSavingStore}
                 >
-                  <Text style={styles.sheetBtnTextSolid}>Simpan</Text>
+                  {isSavingStore ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.sheetBtnTextSolid}>Simpan Alamat & Lokasi</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </ScrollView>
           </View>
         </View>
       </Modal>
+
+      {/* Modal Interactive CustomerLocationPicker */}
+      <CustomerLocationPicker
+        visible={locationPickerVisible}
+        title="Tentukan Titik Toko Marketplace"
+        subtitle="Geser pin atau ketuk peta tepat di depan pintu masuk penjemputan tokomu"
+        badgeText="Toko UMKM"
+        initialLocation={{
+          latitude: editStoreLat,
+          longitude: editStoreLng,
+          detectedAddress: editStoreAddressDetails || editStoreAddr,
+        }}
+        onConfirm={handleLocationPicked}
+        onClose={() => setLocationPickerVisible(false)}
+      />
 
       {/* 7. Modal Verification Checklist */}
       <Modal visible={verifyModalVisible} transparent animationType="slide">
@@ -753,6 +1124,25 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
           </View>
         </View>
       </Modal>
+      {/* In-App Toast & Confirm Dialog */}
+      <ToastBanner
+        visible={toastConfig.visible}
+        type={toastConfig.type}
+        title={toastConfig.title}
+        message={toastConfig.message}
+        onClose={() => setToastConfig((prev) => ({ ...prev, visible: false }))}
+      />
+
+      <ConfirmDialog
+        visible={confirmDialogConfig.visible}
+        title={confirmDialogConfig.title}
+        message={confirmDialogConfig.message}
+        type={confirmDialogConfig.type}
+        confirmText={confirmDialogConfig.confirmText}
+        cancelText={confirmDialogConfig.cancelText}
+        onConfirm={confirmDialogConfig.onConfirm}
+        onCancel={() => setConfirmDialogConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </ResponsiveSafeAreaView>
   );
 };
@@ -1219,5 +1609,259 @@ const styles = StyleSheet.create({
   switchDesc: {
     fontSize: 11,
     color: "#6B7280",
+  },
+
+  sheetSubtitle: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  formScrollContainerLarge: {
+    maxHeight: Platform.OS === "web" ? 520 : 460,
+  },
+  formFieldGroup: {
+    gap: 6,
+  },
+  fieldLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  textAreaSmall: {
+    textAlignVertical: "top",
+    minHeight: 56,
+  },
+  textAreaMedium: {
+    textAlignVertical: "top",
+    minHeight: 76,
+  },
+  mapCardContainer: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
+    padding: 14,
+    gap: 10,
+  },
+  mapCardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  mapCardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  mapPinBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mapCardTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#14532D",
+  },
+  mapCardSubtitle: {
+    fontSize: 10.5,
+    color: "#166534",
+  },
+  gpsStatusPill: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  gpsStatusPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  miniMapWrapper: {
+    width: "100%",
+    height: 140,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#E2E8F0",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  miniMapPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F1F5F9",
+  },
+  miniMapPlaceholderTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#334155",
+  },
+  miniMapFloatingPill: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.94)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  miniMapFloatingPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  mapButtonsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  openMapBtn: {
+    flex: 1.4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#16A34A",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  openMapBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  useGpsBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  useGpsBtnText: {
+    color: "#15803D",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  driverNoteCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+    gap: 8,
+  },
+  driverNoteHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  driverNoteTitle: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  recommendedBadge: {
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  recommendedBadgeText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#B45309",
+  },
+  driverNoteHintRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    backgroundColor: "#F0FDFA",
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+  },
+  driverNoteHintText: {
+    flex: 1,
+    fontSize: 10.5,
+    color: "#0F766E",
+    lineHeight: 15,
+  },
+  addressPreviewBox: {
+    backgroundColor: "#F1F5F9",
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  addressPreviewLabel: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#64748B",
+    letterSpacing: 0.5,
+  },
+  addressPreviewText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0F172A",
+    lineHeight: 17,
+  },
+  addressPreviewNote: {
+    fontSize: 11,
+    color: "#15803D",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  addressPreviewCoords: {
+    fontSize: 10,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  verifiedLocationPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  verifiedLocationPillText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  driverPatokanNoteText: {
+    fontSize: 10.5,
+    color: "#059669",
+    fontWeight: "600",
+    marginTop: 2,
   },
 });

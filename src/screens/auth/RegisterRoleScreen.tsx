@@ -1,7 +1,7 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { ArrowLeft, Bike, Building2, ChevronRight, Coffee, Scale, ShieldCheck, ShoppingBag, UserRound, WashingMachine } from "lucide-react-native";
+import { ArrowLeft, Bike, Building2, ChevronRight, Coffee, Scale, ShieldCheck, ShoppingBag, Store, UserRound, WashingMachine } from "lucide-react-native";
 import * as Google from "expo-auth-session/providers/google";
 import { makeRedirectUri } from "expo-auth-session";
 import { Nav } from "../../types";
@@ -20,7 +20,8 @@ interface Props extends Nav {
 const options: Array<{ role: AuthRegistrationRole; description: string; icon: React.ComponentType<{ size?: number; color?: string }>; color: string }> = [
   { role: "customer", description: "Belanja produk, catering, laundry, dan layanan lokal.", icon: UserRound, color: "#1B7A4E" },
   { role: "driver", description: "Antarkan pesanan dan dapatkan penghasilan fleksibel.", icon: Bike, color: "#EA580C" },
-  { role: "pemilik_marketplace", description: "Jual produk UMKM dan kelola toko online.", icon: ShoppingBag, color: "#059669" },
+  { role: "pemilik_marketplace", description: "Untuk UMKM: jual makanan, kerajinan, fashion, dan produk lokal.", icon: ShoppingBag, color: "#059669" },
+  { role: "pemilik_shop", description: "Untuk minimarket, supermarket, apotek, kebutuhan bayi, dan toko retail.", icon: Store, color: "#2563EB" },
   { role: "pemilik_catering", description: "Terima pesanan catering dan kelola menu usaha.", icon: Coffee, color: "#D97706" },
   { role: "pemilik_laundry", description: "Kelola order laundry dan status pengerjaan.", icon: WashingMachine, color: "#0284C7" },
   { role: "pemilik_kos", description: "Kelola homestay, kamar kos, penginapan & tiket wisata.", icon: Building2, color: "#7C3AED" },

@@ -96,6 +96,8 @@ const getRoleMeta = (role: string) => {
       return { label: "Pemilik Catering", icon: Utensils, color: "#D97706", bg: "#FFFBEB", border: "#FDE68A" };
     case "pemilik_marketplace":
       return { label: "Pemilik Toko", icon: ShoppingBag, color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE" };
+    case "pemilik_shop":
+      return { label: "Pemilik Kanyaah Shop", icon: ShoppingBag, color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" };
     case "driver":
       return { label: "Driver GEOVERSE", icon: Truck, color: "#0284C7", bg: "#F0F9FF", border: "#BAE6FD" };
     case "customer":
@@ -599,6 +601,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           { key: "pemilik_laundry", label: "Laundry", icon: Shirt },
           { key: "pemilik_catering", label: "Catering", icon: Utensils },
           { key: "pemilik_marketplace", label: "Marketplace", icon: ShoppingBag },
+          { key: "pemilik_shop", label: "Kanyaah Shop", icon: ShoppingBag },
           { key: "driver", label: "Driver", icon: Truck },
         ].map((item) => {
           const IconComp = item.icon;
@@ -1296,6 +1299,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     const cateringCount = mitraAccounts.filter((m) => m.role === "pemilik_catering").length;
     const laundryCount = mitraAccounts.filter((m) => m.role === "pemilik_laundry").length;
     const marketCount = mitraAccounts.filter((m) => m.role === "pemilik_marketplace").length;
+    const shopCount = mitraAccounts.filter((m) => m.role === "pemilik_shop").length;
     const driverCount = mitraAccounts.filter((m) => m.role === "driver").length;
 
     const custPct = Math.round((totalCustCount / grandTotalUsers) * 100);
@@ -1303,7 +1307,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     const catPct = Math.round((cateringCount / grandTotalUsers) * 100);
     const laundryPct = Math.round((laundryCount / grandTotalUsers) * 100);
     const marketPct = Math.round((marketCount / grandTotalUsers) * 100);
-    const driverPct = Math.max(100 - custPct - kostPct - catPct - laundryPct - marketPct, 0);
+    const driverPct = Math.max(100 - custPct - kostPct - catPct - laundryPct - marketPct - Math.round((shopCount / grandTotalUsers) * 100), 0);
 
     return (
       <View style={styles.tabContentWrap}>
@@ -1437,6 +1441,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             { key: "pemilik_laundry", label: `Laundry (${mitraAccounts.filter((m) => m.role === "pemilik_laundry").length})`, icon: Shirt },
             { key: "pemilik_catering", label: `Catering (${mitraAccounts.filter((m) => m.role === "pemilik_catering").length})`, icon: Utensils },
             { key: "pemilik_marketplace", label: `Marketplace (${mitraAccounts.filter((m) => m.role === "pemilik_marketplace").length})`, icon: ShoppingBag },
+            { key: "pemilik_shop", label: `Kanyaah Shop (${mitraAccounts.filter((m) => m.role === "pemilik_shop").length})`, icon: ShoppingBag },
             { key: "driver", label: `Driver (${mitraAccounts.filter((m) => m.role === "driver").length})`, icon: Truck },
           ].map((item) => {
             const IconComp = item.icon;

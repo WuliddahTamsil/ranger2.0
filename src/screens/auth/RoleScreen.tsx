@@ -2,7 +2,7 @@ import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-c
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from "react-native";
 import { Nav, Role } from "../../types";
-import { User, Bike, Coffee, Store, Wind, Building2, ShieldCheck, Recycle } from "lucide-react-native";
+import { User, Bike, Coffee, Store, Wind, Building2, ShieldCheck, Recycle, ShoppingBag } from "lucide-react-native";
 
 interface RoleScreenProps extends Nav {
   onSelectRole?: (role: Role) => void;
@@ -45,6 +45,15 @@ export const RoleScreen: React.FC<RoleScreenProps> = ({ navigate, onSelectRole }
       icon: Store,
       color: "#059669",
       bg: "#D1FAE5",
+    },
+    {
+      role: "pemilik_shop" as const,
+      id: "pemilik_shop_home" as const,
+      title: "Pemilik Kanyaah Shop",
+      desc: "Kelola katalog retail, minimarket, supermarket, apotek, dan kebutuhan rumah tangga.",
+      icon: ShoppingBag,
+      color: "#2563EB",
+      bg: "#DBEAFE",
     },
     {
       role: "pemilik_laundry" as const,

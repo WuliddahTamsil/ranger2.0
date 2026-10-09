@@ -599,6 +599,13 @@ const submitRating = async (req, res) => {
 
 // ==================== MERCHANT FLOW ====================
 
+const merchantOwnsOrder = async (order, authUser) => {
+  if (authUser?.role === "admin") return true;
+  if (!order?.storeId || !authUser?._id) return false;
+  const store = await MarketplaceStore.findOne({ _id: order.storeId, ownerId: authUser._id }).select("_id").lean();
+  return Boolean(store);
+};
+
 /**
  * GET /api/shop/merchant/orders
  */
@@ -630,6 +637,7 @@ const merchantAcceptOrder = async (req, res) => {
     const { id } = req.params;
     const order = await ShopOrder.findById(id);
     if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    if (!(await merchantOwnsOrder(order, req.authUser))) return res.status(403).json({ success: false, message: "Anda tidak berwenang mengelola pesanan toko ini" });
 
     order.orderStatus = "STORE_ACCEPTED";
     order.statusHistory.push({
@@ -667,6 +675,7 @@ const merchantUpdateStatus = async (req, res) => {
 
     const order = await ShopOrder.findById(id);
     if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    if (!(await merchantOwnsOrder(order, req.authUser))) return res.status(403).json({ success: false, message: "Anda tidak berwenang mengelola pesanan toko ini" });
 
     order.orderStatus = status;
     order.statusHistory.push({
@@ -704,6 +713,7 @@ const merchantProposeSubstitution = async (req, res) => {
 
     const order = await ShopOrder.findById(id);
     if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
+    if (!(await merchantOwnsOrder(order, req.authUser))) return res.status(403).json({ success: false, message: "Anda tidak berwenang mengelola pesanan toko ini" });
 
     // Mark item
     const item = order.items.find((i) => String(i.productId) === String(outOfStockProductId));

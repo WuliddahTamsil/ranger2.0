@@ -19,6 +19,7 @@ export const subscribeToUserRealtime = async (
   socket.on("notification:new", refresh);
   socket.on("order_status_updated", update);
   socket.on("order_created", update);
+  socket.on("order_assigned", update);
   socket.on("ride:new_available", update);
   socket.on("ride:status_changed", update);
   socket.on("ride_driver_assigned", update);
@@ -38,6 +39,7 @@ export const subscribeToUserRealtime = async (
     socket.off("notification:new", refresh);
     socket.off("order_status_updated", update);
     socket.off("order_created", update);
+    socket.off("order_assigned", update);
     socket.off("ride:new_available", update);
     socket.off("ride:status_changed", update);
     socket.off("ride_driver_assigned", update);

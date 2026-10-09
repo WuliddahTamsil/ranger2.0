@@ -12,7 +12,6 @@ const marketplaceOrderSchema = new mongoose.Schema(
     address: { type: String, required: true },
     addressSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
     notes: { type: String, default: "" },
-    notes: { type: String, default: "" },
     items: [{
       productId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketplaceProduct" },
       name: { type: String, required: true },
@@ -90,6 +89,8 @@ const marketplaceOrderSchema = new mongoose.Schema(
 
 marketplaceOrderSchema.index({ ownerId: 1, createdAt: -1 });
 marketplaceOrderSchema.index({ customerId: 1, createdAt: -1 });
+marketplaceOrderSchema.index({ driverId: 1, status: 1, updatedAt: -1 });
+marketplaceOrderSchema.index({ status: 1, updatedAt: -1 });
 marketplaceOrderSchema.index(
   { idempotencyKey: 1 },
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: "string" } } }

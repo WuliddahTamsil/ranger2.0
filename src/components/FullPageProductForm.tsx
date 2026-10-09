@@ -27,6 +27,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { rp } from "../utils/formatters";
 import { uploadFileToBackend } from "../services/api";
+import { ToastBanner, ToastType, ConfirmDialog } from "./CustomDialog";
 
 export interface ProductFormData {
   id?: string | number;
@@ -94,12 +95,60 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
   const [uploadStatus, setUploadStatus] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // In-App Toast State
+  const [toastConfig, setToastConfig] = useState<{
+    visible: boolean;
+    type: ToastType;
+    title: string;
+    message?: string;
+  }>({
+    visible: false,
+    type: "info",
+    title: "",
+  });
+
+  const showToast = (type: ToastType, title: string, message?: string) => {
+    setToastConfig({ visible: true, type, title, message });
+  };
+
   const showAlert = (alertTitle: string, message: string) => {
-    if (Platform.OS === "web") {
-      alert(`${alertTitle}: ${message}`);
-    } else {
-      Alert.alert(alertTitle, message);
-    }
+    const lower = alertTitle.toLowerCase();
+    const isSuccess = lower.includes("sukses") || lower.includes("berhasil");
+    const isError = lower.includes("gagal") || lower.includes("error");
+    const isWarning = lower.includes("batas") || lower.includes("izin") || lower.includes("tidak valid") || lower.includes("belum lengkap");
+    const type: ToastType = isSuccess ? "success" : isError ? "error" : isWarning ? "warning" : "info";
+    showToast(type, alertTitle, message);
+  };
+
+  // In-App Confirm Dialog State
+  const [confirmDialogConfig, setConfirmDialogConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: "danger" | "warning" | "success" | "info";
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    type: "danger",
+    onConfirm: () => {},
+  });
+
+  const showConfirm = (params: {
+    title: string;
+    message: string;
+    type?: "danger" | "warning" | "success" | "info";
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  }) => {
+    setConfirmDialogConfig({
+      visible: true,
+      ...params,
+    });
   };
 
   // Add multiple images from gallery
@@ -131,13 +180,11 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
               );
               if (res?.success && res?.data?.url) {
                 setImages((prev) => (prev.length < 6 ? [...prev, res.data.url] : prev));
-              } else if (asset.uri) {
-                setImages((prev) => (prev.length < 6 ? [...prev, asset.uri] : prev));
+              } else {
+                showAlert("Gagal Mengunggah", res?.message || "Foto tidak dapat diunggah ke server.");
               }
             } catch {
-              if (asset.uri) {
-                setImages((prev) => (prev.length < 6 ? [...prev, asset.uri] : prev));
-              }
+              showAlert("Gagal Mengunggah", "Terjadi kesalahan saat mengunggah foto.");
             }
           }
           setIsUploading(false);
@@ -148,7 +195,7 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
 
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Izin Ditolak", "Izin akses galeri diperlukan untuk memilih foto.");
+        showAlert("Izin Ditolak", "Izin akses galeri diperlukan untuk memilih foto.");
         return;
       }
 
@@ -174,13 +221,11 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
             );
             if (res?.success && res?.data?.url) {
               setImages((prev) => (prev.length < 6 ? [...prev, res.data.url] : prev));
-            } else if (asset.uri) {
-              setImages((prev) => (prev.length < 6 ? [...prev, asset.uri] : prev));
+            } else {
+              showAlert("Gagal Mengunggah", res?.message || "Foto tidak dapat diunggah ke server.");
             }
           } catch {
-            if (asset.uri) {
-              setImages((prev) => (prev.length < 6 ? [...prev, asset.uri] : prev));
-            }
+            showAlert("Gagal Mengunggah", "Terjadi kesalahan koneksi saat mengunggah foto.");
           }
         }
         setIsUploading(false);
@@ -204,7 +249,7 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
       if (Platform.OS !== "web") {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== "granted") {
-          Alert.alert("Izin Ditolak", "Izin kamera diperlukan untuk mengambil foto.");
+          showAlert("Izin Ditolak", "Izin kamera diperlukan untuk mengambil foto.");
           return;
         }
       }
@@ -226,13 +271,11 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
           );
           if (res?.success && res?.data?.url) {
             setImages((prev) => (prev.length < 6 ? [...prev, res.data.url] : prev));
-          } else if (asset.uri) {
-            setImages((prev) => (prev.length < 6 ? [...prev, asset.uri] : prev));
+          } else {
+            showAlert("Gagal Mengunggah", res?.message || "Foto tidak dapat diunggah ke server.");
           }
         } catch {
-          if (asset.uri) {
-            setImages((prev) => (prev.length < 6 ? [...prev, asset.uri] : prev));
-          }
+          showAlert("Gagal Mengunggah", "Terjadi kesalahan koneksi saat mengunggah foto.");
         }
         setIsUploading(false);
         setUploadStatus("");
@@ -628,19 +671,17 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
           <TouchableOpacity
             style={styles.deleteMenuCard}
             onPress={() => {
-              if (Platform.OS === "web") {
-                const confirmed = window.confirm("Hapus Menu ini secara permanen dari daftar?");
-                if (confirmed) onDelete();
-              } else {
-                Alert.alert(
-                  "Hapus Menu?",
-                  "Menu ini akan dihapus permanen dari sistem.",
-                  [
-                    { text: "Batal", style: "cancel" },
-                    { text: "Hapus Permanen", style: "destructive", onPress: onDelete },
-                  ]
-                );
-              }
+              showConfirm({
+                title: "Hapus Menu?",
+                message: "Menu ini akan dihapus secara permanen dari sistem etalase toko.",
+                type: "danger",
+                confirmText: "Hapus Permanen",
+                cancelText: "Batal",
+                onConfirm: () => {
+                  setConfirmDialogConfig((prev) => ({ ...prev, visible: false }));
+                  onDelete();
+                },
+              });
             }}
             activeOpacity={0.8}
           >
@@ -679,6 +720,26 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
           )}
         </TouchableOpacity>
       </View>
+
+      {/* In-App Toast & Confirmation Dialog */}
+      <ToastBanner
+        visible={toastConfig.visible}
+        type={toastConfig.type}
+        title={toastConfig.title}
+        message={toastConfig.message}
+        onClose={() => setToastConfig((prev) => ({ ...prev, visible: false }))}
+      />
+
+      <ConfirmDialog
+        visible={confirmDialogConfig.visible}
+        title={confirmDialogConfig.title}
+        message={confirmDialogConfig.message}
+        type={confirmDialogConfig.type}
+        confirmText={confirmDialogConfig.confirmText}
+        cancelText={confirmDialogConfig.cancelText}
+        onConfirm={confirmDialogConfig.onConfirm}
+        onCancel={() => setConfirmDialogConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </ResponsiveSafeAreaView>
   );
 };

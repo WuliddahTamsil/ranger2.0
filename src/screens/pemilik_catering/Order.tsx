@@ -494,7 +494,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
       messageText = "Kurir sedang dalam perjalanan menuju dapur catering.";
     } else if (nextStatus === "Sampai Pickup") {
       messageText = "Kurir telah tiba di lokasi dapur catering.";
-    } else if (nextStatus === "Mengantar" || nextStatus === "Diambil") {
+    } else if (nextStatus === "Mengantar" || nextStatus === "Diambil" || nextStatus === "Dikirim") {
       messageText = "Pesanan telah diserahkan ke kurir. Kurir berangkat mengantar ke customer.";
     } else if (nextStatus === "Selesai") {
       messageText = "Pesanan selesai diantar ke alamat customer.";
@@ -737,7 +737,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                             </View>
                           </TouchableOpacity>
                         )}
-                        {item.text && item.text !== "Foto terkirim" && item.text !== "📷 Foto terkirim" ? (
+                        {item.text && !item.text.includes("Foto terkirim") ? (
                           <Text style={[styles.chatText, isOwner ? styles.chatTextOwner : styles.chatTextClient]}>
                             {item.text}
                           </Text>
@@ -2020,7 +2020,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
               </TouchableOpacity>
             )}
 
-            {(selectedOrder.status === "Mengantar" || selectedOrder.status === "Diambil") && (
+            {(selectedOrder.status === "Mengantar" || selectedOrder.status === "Diambil" || selectedOrder.status === "Dikirim") && (
               <View style={styles.dualActionsRow}>
                 <TouchableOpacity
                   style={[styles.sheetBtn, styles.sheetBtnOutline]}

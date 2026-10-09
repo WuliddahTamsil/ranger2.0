@@ -306,6 +306,39 @@ const getProductById = async (req, res) => {
 };
 
 /**
+ * GET /api/shop/merchant/store
+ * Returns the authenticated Kanyaah Shop owner's store.
+ */
+const getMerchantStore = async (req, res) => {
+  try {
+    if (!req.authUser) return res.status(401).json({ success: false, message: "Autentikasi diperlukan" });
+    const store = await MarketplaceStore.findOne({ ownerId: req.authUser._id }).lean();
+    if (!store) return res.status(404).json({ success: false, message: "Toko Kanyaah Shop belum tersedia" });
+    return res.json({ success: true, data: store });
+  } catch (error) {
+    console.error("getMerchantStore error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memuat profil toko" });
+  }
+};
+
+/**
+ * GET /api/shop/merchant/products
+ * Includes inactive products so the owner can manage the full catalog.
+ */
+const getMerchantProducts = async (req, res) => {
+  try {
+    if (!req.authUser) return res.status(401).json({ success: false, message: "Autentikasi diperlukan" });
+    const store = await MarketplaceStore.findOne({ ownerId: req.authUser._id }).select("_id").lean();
+    if (!store) return res.status(404).json({ success: false, message: "Toko Kanyaah Shop belum tersedia" });
+    const products = await MarketplaceProduct.find({ ownerId: req.authUser._id, storeId: store._id }).sort({ createdAt: -1 }).lean();
+    return res.json({ success: true, data: products, storeId: String(store._id) });
+  } catch (error) {
+    console.error("getMerchantProducts error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memuat katalog toko" });
+  }
+};
+
+/**
  * POST /api/shop/products
  * Store owner creates a new product
  */
@@ -529,6 +562,8 @@ module.exports = {
   getCategories,
   searchGlobal,
   getProductById,
+  getMerchantStore,
+  getMerchantProducts,
   createProduct,
   updateProduct,
   deleteProduct,
