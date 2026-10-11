@@ -37,7 +37,10 @@ import {
   AlertCircle,
   Check,
   Image as ImageIcon,
+  Camera,
+  Trash2,
 } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import { AuthAccount } from "../auth/authTypes";
 import {
   fetchStoreOrders,
@@ -65,6 +68,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
   const [isWeighModalOpen, setIsWeighModalOpen] = useState(false);
   const [selectedOrderForWeigh, setSelectedOrderForWeigh] = useState<LaundryOrder | null>(null);
   const [inputWeight, setInputWeight] = useState("");
+  const [weighingProofImage, setWeighingProofImage] = useState<string | null>(null);
   const [isWeighing, setIsWeighing] = useState(false);
 
   // Modal Verify Payment Proof
@@ -113,7 +117,48 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
   const handleOpenWeighModal = (ord: LaundryOrder) => {
     setSelectedOrderForWeigh(ord);
     setInputWeight(ord.actualWeightOrQty ? String(ord.actualWeightOrQty) : "3.8");
+    setWeighingProofImage(ord.weighingProofImage || null);
     setIsWeighModalOpen(true);
+  };
+
+  const handlePickWeighingProof = async (mode: "camera" | "library") => {
+    try {
+      if (mode === "camera") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Kamera", "Mohon berikan izin kamera untuk memotret timbangan.");
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: false,
+          quality: 0.8,
+          base64: true,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const asset = result.assets[0];
+          const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+          setWeighingProofImage(uri);
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Galeri", "Mohon berikan izin galeri untuk memilih foto timbangan.");
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          allowsEditing: false,
+          quality: 0.8,
+          base64: true,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const asset = result.assets[0];
+          const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+          setWeighingProofImage(uri);
+        }
+      }
+    } catch (err: any) {
+      Alert.alert("Error", "Gagal mengambil foto: " + (err?.message || ""));
+    }
   };
 
   const handleConfirmWeighAndBill = async () => {
@@ -127,7 +172,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
     setIsWeighing(true);
     try {
       const ordId = selectedOrderForWeigh._id || selectedOrderForWeigh.id || "";
-      await weighAndBillLaundryOrder(ordId, weightNum);
+      await weighAndBillLaundryOrder(ordId, weightNum, undefined, weighingProofImage || undefined);
       setIsWeighModalOpen(false);
       await loadOrders();
       Alert.alert("Tagihan Terkirim", `Tagihan sebesar ${(weightNum * (selectedOrderForWeigh.pricePerUnit || 6000) + 9000).toLocaleString("id-ID")} telah dikirim ke Customer.`);
@@ -620,6 +665,47 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
               <Text style={styles.weightUnitText}>{selectedOrderForWeigh?.unitType || "kg"}</Text>
             </View>
 
+            {/* Foto Bukti Timbangan */}
+            <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+              Foto Bukti Timbangan <Text style={{ color: "#6B7280", fontSize: 11 }}>(Transparansi untuk Customer)</Text>
+            </Text>
+
+            {weighingProofImage ? (
+              <View style={{ marginBottom: 12, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F9FAFB" }}>
+                <Image source={{ uri: weighingProofImage }} style={{ width: "100%", height: 140 }} resizeMode="cover" />
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 8, backgroundColor: "#FFFFFF" }}>
+                  <Text style={{ fontSize: 12, color: "#166534", fontWeight: "700" }}>✓ Foto timbangan terlampir</Text>
+                  <TouchableOpacity
+                    onPress={() => setWeighingProofImage(null)}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8, backgroundColor: "#FEE2E2", borderRadius: 6 }}
+                  >
+                    <Trash2 size={13} color="#DC2626" />
+                    <Text style={{ fontSize: 11, color: "#DC2626", fontWeight: "700" }}>Hapus</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: "#E8F5EE", borderWidth: 1, borderColor: "#A7F3D0" }}
+                  onPress={() => handlePickWeighingProof("camera")}
+                  activeOpacity={0.8}
+                >
+                  <Camera size={16} color="#0D7A53" />
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#0D7A53" }}>Foto Kamera</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: "#E5E7EB" }}
+                  onPress={() => handlePickWeighingProof("library")}
+                  activeOpacity={0.8}
+                >
+                  <ImageIcon size={16} color="#4B5563" />
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#4B5563" }}>Pilih Galeri</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {parseFloat(inputWeight) > 0 && selectedOrderForWeigh ? (
               <View style={styles.calcPreviewBox}>
                 <View style={styles.calcRow}>
@@ -631,8 +717,12 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
                   <Text style={styles.calcVal}>Rp {(parseFloat(inputWeight) * selectedOrderForWeigh.pricePerUnit).toLocaleString("id-ID")}</Text>
                 </View>
                 <View style={styles.calcRow}>
-                  <Text style={styles.calcLabel}>Ongkir Driver (Jemput & Antar)</Text>
-                  <Text style={styles.calcVal}>Rp 8.000</Text>
+                  <Text style={styles.calcLabel}>Ongkir Jemput Baju Kotor (Trip 1)</Text>
+                  <Text style={styles.calcVal}>Rp 4.000</Text>
+                </View>
+                <View style={styles.calcRow}>
+                  <Text style={styles.calcLabel}>Ongkir Antar Baju Bersih (Trip 2)</Text>
+                  <Text style={styles.calcVal}>Rp 4.000</Text>
                 </View>
                 <View style={styles.calcRow}>
                   <Text style={styles.calcLabel}>Biaya Layanan</Text>

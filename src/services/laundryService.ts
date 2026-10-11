@@ -88,6 +88,7 @@ export interface LaundryOrder {
   driverLiveLat?: number;
   driverLiveLng?: number;
   actualWeightOrQty?: number | null;
+  weighingProofImage?: string;
   laundryCost?: number;
   deliveryFeePickup?: number;
   deliveryFeeDrop?: number;
@@ -757,14 +758,15 @@ export const fetchStoreCustomers = async (ownerId: string = "all"): Promise<Laun
 export const weighAndBillLaundryOrder = async (
   orderId: string,
   weightOrQty: number,
-  customLaundryCost?: number
+  customLaundryCost?: number,
+  weighingProofImage?: string
 ): Promise<LaundryOrder | null> => {
   try {
     const url = getApiUrl(`/laundry/orders/${orderId}/weigh-and-bill`);
     const res = await fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ weightOrQty, customLaundryCost }),
+      body: JSON.stringify({ weightOrQty, customLaundryCost, weighingProofImage }),
     });
     const json = await res.json();
     if (json.success && json.data) {
@@ -782,6 +784,7 @@ export const weighAndBillLaundryOrder = async (
     const updated: LaundryOrder = {
       ...activeCustomerOrder,
       actualWeightOrQty: weightOrQty,
+      weighingProofImage: weighingProofImage || activeCustomerOrder.weighingProofImage,
       laundryCost,
       totalAmount,
       status: "MENUNGGU_PEMBAYARAN",

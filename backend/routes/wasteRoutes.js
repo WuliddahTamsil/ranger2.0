@@ -64,6 +64,7 @@ router.post("/deposits/:id/deliver-to-bank", optionalAuth, driverDeliverToBank);
 router.post("/deposits/:id/weigh", optionalAuth, weighDeposit);
 router.post("/deposits/:id/confirm", optionalAuth, confirmWeighing);
 router.post("/deposits/:id/complaint", optionalAuth, disputeWeighing);
+router.post("/deposits/:id/dispute", optionalAuth, disputeWeighing);
 router.post("/deposits/:id/cancel", optionalAuth, cancelDeposit);
 
 module.exports = router;

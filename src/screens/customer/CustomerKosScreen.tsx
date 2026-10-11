@@ -43,6 +43,7 @@ import {
   FileText,
   Check,
   Hotel,
+  Home,
   Ticket,
   Sparkles,
   Compass,
@@ -285,7 +286,11 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               roomNumber: latest.roomNumber || "101",
               roomType: latest.roomType || "AC",
               entryDate: latest.entryDate ? new Date(latest.entryDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Segera",
+              checkOutDate: latest.checkOutDate ? new Date(latest.checkOutDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : undefined,
+              guestCount: latest.guestCount,
               durationMonths: latest.durationMonths || 1,
+              durationNights: latest.durationNights,
+              ticketCount: latest.ticketCount,
               monthlyPrice: latest.monthlyPrice || 1500000,
               totalAmount: latest.totalAmount || 1500000,
               dpAmount: latest.dpAmount || 300000,
@@ -464,9 +469,19 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
           activeKostGender === "semua" ||
           itemType === activeKostGender.toLowerCase();
       } else if (mainCategory === "hotel") {
-        matchesSub =
-          hotelTypeFilter === "Semua" ||
-          itemType.includes(hotelTypeFilter.toLowerCase());
+        if (hotelTypeFilter === "Semua") {
+          matchesSub = true;
+        } else if (hotelTypeFilter === "Homestay") {
+          const itemDesc = ((item.raw?.description || "") as string).toLowerCase();
+          matchesSub =
+            itemType.includes("homestay") ||
+            (item.name || "").toLowerCase().includes("homestay") ||
+            itemDesc.includes("homestay");
+        } else if (hotelTypeFilter === "Hotel") {
+          matchesSub = itemType.includes("hotel") && !itemType.includes("homestay");
+        } else {
+          matchesSub = itemType.includes(hotelTypeFilter.toLowerCase());
+        }
       } else if (mainCategory === "wisata") {
         matchesSub =
           wisataTypeFilter === "Semua" ||
@@ -850,14 +865,18 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.filterPillsRow}
             >
-              {["Semua", "Hotel Bintang 4", "Resort", "Villa"].map((type, idx) => (
+              {["Semua", "Homestay", "Villa", "Hotel", "Resort"].map((type, idx) => (
                 <TouchableOpacity
                   key={idx}
                   style={[styles.pillBtnHotel, hotelTypeFilter === type && styles.pillBtnHotelActive]}
                   onPress={() => setHotelTypeFilter(type)}
                   activeOpacity={0.8}
                 >
-                  <Hotel size={14} color={hotelTypeFilter === type ? "#FFFFFF" : "#0284C7"} />
+                  {type === "Homestay" ? (
+                    <Home size={14} color={hotelTypeFilter === type ? "#FFFFFF" : "#0284C7"} />
+                  ) : (
+                    <Hotel size={14} color={hotelTypeFilter === type ? "#FFFFFF" : "#0284C7"} />
+                  )}
                   <Text style={[styles.pillTextHotel, hotelTypeFilter === type && styles.pillTextHotelActive]}>
                     {type}
                   </Text>
@@ -1288,8 +1307,10 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                   <Text style={styles.receiptSectionHeader}>
                     {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
                       ? "DETAIL TIKET WISATA"
+                      : (activeBooking?.kostName || "").toLowerCase().includes("homestay")
+                      ? "DETAIL RESERVASI HOMESTAY"
                       : activeBooking?.categoryType === "hotel" || String(activeBooking?.bookingCode || "").startsWith("HTL") || activeBooking?.durationNights
-                      ? "DETAIL RESERVASI HOTEL"
+                      ? "DETAIL RESERVASI PENGINAPAN"
                       : "DETAIL PROPERTI / KOS"}
                   </Text>
                   <View style={styles.receiptRow}>
@@ -1301,6 +1322,8 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                       <Text style={styles.receiptLabel}>
                         {activeBooking?.categoryType === "wisata" || String(activeBooking?.bookingCode || "").startsWith("WST") || activeBooking?.ticketCount
                           ? "Paket Tiket"
+                          : (activeBooking?.kostName || "").toLowerCase().includes("homestay")
+                          ? "Tipe Unit / Kamar"
                           : activeBooking?.categoryType === "hotel" || String(activeBooking?.bookingCode || "").startsWith("HTL") || activeBooking?.durationNights
                           ? "Tipe Kamar"
                           : "Kamar"}
@@ -1324,6 +1347,33 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                     </Text>
                     <Text style={styles.receiptVal}>{activeBooking?.entryDate || "-"}</Text>
                   </View>
+                  {(activeBooking?.categoryType === "hotel" || activeBooking?.durationNights || activeBooking?.checkOutDate) && (
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptLabel}>Tanggal Check-out</Text>
+                      <Text style={styles.receiptVal}>
+                        {activeBooking?.checkOutDate ||
+                          (() => {
+                            if (!activeBooking?.entryDate || !activeBooking?.durationNights) return "-";
+                            const d = new Date(activeBooking.entryDate);
+                            if (isNaN(d.getTime())) return "-";
+                            d.setDate(d.getDate() + Number(activeBooking.durationNights));
+                            return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+                          })()}
+                      </Text>
+                    </View>
+                  )}
+                  {Boolean(activeBooking?.durationNights) && (
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptLabel}>Durasi Menginap</Text>
+                      <Text style={styles.receiptVal}>{activeBooking?.durationNights} Malam</Text>
+                    </View>
+                  )}
+                  {Boolean(activeBooking?.guestCount) && (
+                    <View style={styles.receiptRow}>
+                      <Text style={styles.receiptLabel}>Jumlah Tamu</Text>
+                      <Text style={styles.receiptVal}>{activeBooking?.guestCount} Orang</Text>
+                    </View>
+                  )}
 
                   <View style={styles.receiptTotalBox}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>

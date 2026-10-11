@@ -754,15 +754,22 @@ const disputeWeighing = async (req, res) => {
       return res.status(403).json({ success: false, message: "Akses ditolak." });
     }
 
-    const { reason } = req.body;
+    const { reason, disputeCategory, estimatedWeightKg } = req.body;
+
+    const formattedReason = disputeCategory
+      ? `[${disputeCategory}] ${reason || "Hasil timbang disanggah"}${estimatedWeightKg ? ` (Estimasi user: ${estimatedWeightKg} kg)` : ""}`
+      : reason || "Hasil timbang tidak sesuai kesepakatan.";
 
     deposit.status = "DISPUTED";
-    deposit.disputeReason = reason || "Hasil timbang tidak sesuai kesepakatan.";
+    deposit.disputeReason = formattedReason;
+    if (disputeCategory) deposit.disputeCategory = disputeCategory;
+    if (estimatedWeightKg != null) deposit.estimatedCustomerWeightKg = Number(estimatedWeightKg);
+
     deposit.statusHistory.push({
       status: "DISPUTED",
       actorId: customerId,
       actorRole: "customer",
-      note: `Customer mengajukan komplain: ${deposit.disputeReason}`,
+      note: `Customer mengajukan sanggahan timbangan: ${formattedReason}`,
       createdAt: new Date(),
     });
 

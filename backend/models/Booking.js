@@ -51,6 +51,9 @@ const bookingSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    checkOutDate: {
+      type: Date,
+    },
     durationMonths: {
       type: Number,
       default: 1,
@@ -58,6 +61,10 @@ const bookingSchema = new mongoose.Schema(
     durationNights: {
       type: Number,
       default: 1,
+    },
+    guestCount: {
+      type: Number,
+      default: 2,
     },
     ticketCount: {
       type: Number,

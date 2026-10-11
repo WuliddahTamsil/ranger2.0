@@ -68,6 +68,8 @@ import {
   Compass,
   ShieldAlert,
   AlertCircle,
+  Users,
+  Home,
 } from "lucide-react-native";
 import { addCustomerOrder } from "./customerOrderStore";
 import { CustomerChatModal } from "./CustomerChatModal";
@@ -121,6 +123,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
   const [startDate, setStartDate] = useState("2026-09-01");
   const [durationMonths, setDurationMonths] = useState("1");
   const [nightCount, setNightCount] = useState("1");
+  const [guestCount, setGuestCount] = useState("2");
   const [ticketCount, setTicketCount] = useState("1");
 
   // Interactive Material 3 Date Picker Calendar State
@@ -422,6 +425,24 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
       ? Math.round(totalPrice * 0.5) // 50% DP / booking guarantee for hotel
       : Math.round(totalPrice * 0.2); // 20% DP for kost
 
+  const calculatedCheckOut = React.useMemo(() => {
+    if (!startDate) return "-";
+    const d = new Date(startDate);
+    if (isNaN(d.getTime())) return "-";
+    const nights = Math.max(1, parseInt(nightCount) || 1);
+    d.setDate(d.getDate() + nights);
+    return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  }, [startDate, nightCount]);
+
+  const calculatedCheckOutIso = React.useMemo(() => {
+    if (!startDate) return "";
+    const d = new Date(startDate);
+    if (isNaN(d.getTime())) return "";
+    const nights = Math.max(1, parseInt(nightCount) || 1);
+    d.setDate(d.getDate() + nights);
+    return d.toISOString();
+  }, [startDate, nightCount]);
+
   const handlePickProofImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -544,6 +565,8 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
           ? `${ticketsNum} Tiket / Orang`
           : selectedRoom?.roomType || "AC Exclusive",
       entryDate: startDate,
+      checkOutDate: categoryType === "hotel" ? calculatedCheckOut : undefined,
+      guestCount: categoryType === "hotel" ? (parseInt(guestCount) || 2) : undefined,
       durationMonths: durationNum,
       durationNights: nightsNum,
       ticketCount: ticketsNum,
@@ -571,6 +594,8 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         customerPhone: activeObj.customerPhone,
         customerEmail: activeObj.customerEmail,
         entryDate: startDate || new Date().toISOString(),
+        checkOutDate: categoryType === "hotel" ? calculatedCheckOutIso : undefined,
+        guestCount: categoryType === "hotel" ? (parseInt(guestCount) || 2) : undefined,
         durationMonths: durationNum,
         durationNights: nightsNum,
         ticketCount: ticketsNum,
@@ -578,7 +603,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         totalAmount: totalPrice,
         dpAmount: dpAmount,
         dpProofImage: finalProofUrl,
-        notes: "",
+        notes: categoryType === "hotel" ? `Rombongan: ${guestCount} Tamu` : "",
       }).then((res) => {
         if (res && res.data) {
           const synced = { ...activeObj, _id: res.data._id, bookingCode: res.data.bookingCode };
@@ -1365,6 +1390,69 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                 </View>
               </View>
 
+              {/* Check-out Date Preview Card for Homestay / Hotel */}
+              {categoryType === "hotel" && (
+                <View style={styles.stayScheduleBadge}>
+                  <View style={styles.stayScheduleBadgeHeader}>
+                    <Calendar size={14} color="#0284C7" />
+                    <Text style={styles.stayScheduleBadgeTitle}>Perkiraan Jadwal Menginap</Text>
+                  </View>
+                  <View style={styles.stayScheduleRow}>
+                    <View style={styles.stayCol}>
+                      <Text style={styles.staySubLabel}>Check-in</Text>
+                      <Text style={styles.stayDateVal}>{startDate ? new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "-"}</Text>
+                    </View>
+                    <View style={styles.stayArrowCol}>
+                      <Text style={styles.stayNightsPill}>{nightsNum} Malam</Text>
+                      <ChevronRight size={14} color="#0284C7" />
+                    </View>
+                    <View style={styles.stayColRight}>
+                      <Text style={styles.staySubLabel}>Check-out Otomatis</Text>
+                      <Text style={styles.stayDateVal}>{calculatedCheckOut}</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Jumlah Tamu / Rombongan Input for Homestay & Hotel */}
+              {categoryType === "hotel" && (
+                <View style={styles.fieldGroup}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <Text style={styles.fieldLabel}>Jumlah Tamu / Rombongan</Text>
+                    <Text style={{ fontSize: 11, color: "#6B7280" }}>Kapasitas rombongan</Text>
+                  </View>
+                  <View style={styles.guestCounterRow}>
+                    <TouchableOpacity
+                      style={styles.guestCounterBtn}
+                      onPress={() => setGuestCount((prev) => String(Math.max(1, (parseInt(prev) || 2) - 1)))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.guestCounterBtnText}>−</Text>
+                    </TouchableOpacity>
+                    <View style={styles.guestCounterValueBox}>
+                      <Users size={16} color="#0D7A53" style={{ marginRight: 6 }} />
+                      <TextInput
+                        style={styles.guestCounterInput}
+                        value={guestCount}
+                        onChangeText={(v) => {
+                          const num = parseInt(v.replace(/[^0-9]/g, "")) || 1;
+                          setGuestCount(String(Math.min(50, Math.max(1, num))));
+                        }}
+                        keyboardType="number-pad"
+                      />
+                      <Text style={styles.guestCounterUnit}>Orang</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.guestCounterBtn}
+                      onPress={() => setGuestCount((prev) => String(Math.min(50, (parseInt(prev) || 2) + 1)))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.guestCounterBtnText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
               {/* Price Calculation Box */}
               <View style={styles.priceCalcBlock}>
                 <View style={styles.priceCalcRow}>
@@ -1491,7 +1579,13 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
           <View style={styles.sheetCard}>
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>
-                {categoryType === "wisata" ? "E-Ticket Masuk Wisata" : "Bukti Pemesanan Resmi"}
+                {categoryType === "wisata"
+                  ? "E-Ticket Masuk Wisata"
+                  : (kostData?.name || "").toLowerCase().includes("homestay")
+                  ? "E-Receipt Reservasi Homestay"
+                  : categoryType === "hotel"
+                  ? "E-Receipt Reservasi Hotel"
+                  : "Bukti Pemesanan Resmi"}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -1509,7 +1603,13 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                 <View style={styles.receiptTopHeader}>
                   <Text style={styles.receiptBrand}>GEOVERSE</Text>
                   <Text style={styles.receiptTypeBadge}>
-                    ✓ {categoryType === "wisata" ? "E-TICKET RESMI" : "PEMESANAN TERVERIFIKASI"}
+                    ✓ {categoryType === "wisata"
+                      ? "E-TICKET RESMI"
+                      : (kostData?.name || "").toLowerCase().includes("homestay")
+                      ? "HOMESTAY TERVERIFIKASI"
+                      : categoryType === "hotel"
+                      ? "RESERVASI HOTEL TERVERIFIKASI"
+                      : "PEMESANAN TERVERIFIKASI"}
                   </Text>
                 </View>
 
@@ -1517,12 +1617,23 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                   <Text style={styles.receiptPlaceTitle}>{kostData?.name}</Text>
                   <Text style={styles.receiptSubInfo}>
                     {categoryType === "hotel"
-                      ? `${selectedHotelRoom?.roomName} • ${nightsNum} Malam`
+                      ? `${selectedHotelRoom?.roomName || "Unit Homestay"} • ${nightsNum} Malam`
                       : categoryType === "wisata"
                       ? `${selectedWisataTicket?.ticketName} • ${ticketsNum} Tiket`
                       : `Kamar ${selectedRoom?.roomNumber} • ${durationNum} Bulan`}
                   </Text>
-                  <Text style={styles.receiptDateInfo}>Tgl: {startDate}</Text>
+                  <Text style={styles.receiptDateInfo}>
+                    {categoryType === "hotel"
+                      ? `Check-in: ${startDate} • Check-out: ${calculatedCheckOut}`
+                      : categoryType === "wisata"
+                      ? `Tgl Kunjungan: ${startDate}`
+                      : `Tgl Masuk: ${startDate}`}
+                  </Text>
+                  {categoryType === "hotel" && (
+                    <Text style={[styles.receiptDateInfo, { marginTop: 2 }]}>
+                      Jumlah Tamu: {guestCount} Orang
+                    </Text>
+                  )}
                   <Text style={styles.receiptCustomerInfo}>Pemesan: {tenantName}</Text>
 
                   <View style={styles.receiptPriceHighlight}>
@@ -2653,5 +2764,108 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "800",
+  },
+  stayScheduleBadge: {
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 12,
+  },
+  stayScheduleBadgeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  stayScheduleBadgeTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0369A1",
+  },
+  stayScheduleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  stayCol: {
+    flex: 1,
+  },
+  stayColRight: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  staySubLabel: {
+    fontSize: 11,
+    color: "#64748B",
+    marginBottom: 2,
+  },
+  stayDateVal: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  stayArrowCol: {
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  stayNightsPill: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#0284C7",
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginBottom: 2,
+  },
+  guestCounterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  guestCounterBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guestCounterBtnText: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#0F172A",
+    lineHeight: 22,
+  },
+  guestCounterValueBox: {
+    flex: 1,
+    height: 42,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  guestCounterInput: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+    textAlign: "center",
+    minWidth: 32,
+    padding: 0,
+  },
+  guestCounterUnit: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+    marginLeft: 4,
   },
 });

@@ -593,6 +593,9 @@ const getSystemStats = async (req, res) => {
     const LaundryStore = require("../models/LaundryStore");
     const MarketplaceProduct = require("../models/MarketplaceProduct");
     const CateringProduct = require("../models/CateringProduct");
+    const WasteDeposit = require("../models/WasteDeposit");
+    const RideOrder = require("../models/RideOrder");
+    const SendOrder = require("../models/SendOrder");
 
     const [
       totalMitra,
@@ -608,7 +611,10 @@ const getSystemStats = async (req, res) => {
       marketplaceOrders,
       cateringOrders,
       laundryOrders,
-      bookings
+      bookings,
+      wasteDeposits,
+      rideOrders,
+      sendOrders
     ] = await Promise.all([
       User.countDocuments({ role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos"] } }),
       User.countDocuments({ role: "driver" }),
@@ -624,6 +630,9 @@ const getSystemStats = async (req, res) => {
       CateringOrder.find({ status: { $ne: "Dibatalkan" } }).select("totalAmount createdAt orderNumber customerName restaurantName"),
       LaundryOrder.find({ status: { $ne: "DIBATALKAN" } }).select("totalAmount createdAt orderCode customerName storeName serviceName"),
       Booking.find({ status: { $nin: ["rejected", "cancelled"] } }).select("totalAmount dpAmount createdAt bookingCode customerName kostName roomNumber status verifiedAt"),
+      WasteDeposit.find({ status: { $ne: "CANCELLED" } }).select("finalRupiah estimatedRupiah actualTotalWeightKg estimatedTotalWeightKg createdAt depositCode status"),
+      RideOrder.find({ status: { $ne: "CANCELLED" } }).select("fare totalFare createdAt orderCode status"),
+      SendOrder.find({ status: { $ne: "CANCELLED" } }).select("fare totalFare createdAt orderCode status"),
     ]);
 
     const totalKostRooms = kostList.reduce((acc, curr) => acc + (curr.rooms ? curr.rooms.length : 0), 0);
@@ -674,6 +683,9 @@ const getSystemStats = async (req, res) => {
       ...cateringOrders.map(o => ({ amount: Number(o.totalAmount || 0), date: new Date(o.createdAt) })),
       ...laundryOrders.map(o => ({ amount: Number(o.totalAmount || 0), date: new Date(o.createdAt) })),
       ...bookings.map(o => ({ amount: Number(o.totalAmount || 0), date: new Date(o.createdAt) })),
+      ...wasteDeposits.map(w => ({ amount: Number(w.finalRupiah || w.estimatedRupiah || 0), date: new Date(w.createdAt) })),
+      ...rideOrders.map(r => ({ amount: Number(r.fare || r.totalFare || 0), date: new Date(r.createdAt) })),
+      ...sendOrders.map(s => ({ amount: Number(s.fare || s.totalFare || 0), date: new Date(s.createdAt) })),
     ];
 
     const monthlyRevenue = last6Months.map(m => {
@@ -686,7 +698,7 @@ const getSystemStats = async (req, res) => {
       };
     });
 
-    const totalOrdersCount = marketplaceOrders.length + cateringOrders.length + laundryOrders.length + bookings.length;
+    const totalOrdersCount = allPlatformOrders.length;
     const totalTransactionsAmount = allPlatformOrders.reduce((sum, o) => sum + o.amount, 0);
 
     // Payment Methods Distribution (Simulated / Derived from Orders)
@@ -711,6 +723,8 @@ const getSystemStats = async (req, res) => {
     };
 
     const sumAmounts = (arr) => arr.reduce((acc, curr) => acc + Number(curr.totalAmount || curr.dpAmount || 0), 0);
+    const wasteTotalRupiah = wasteDeposits.reduce((acc, curr) => acc + Number(curr.finalRupiah || curr.estimatedRupiah || 0), 0);
+    const transportTotalFare = [...rideOrders, ...sendOrders].reduce((acc, curr) => acc + Number(curr.fare || curr.totalFare || 0), 0);
 
     return res.status(200).json({
       success: true,
@@ -739,6 +753,8 @@ const getSystemStats = async (req, res) => {
           laundry: { count: laundryOrders.length, total: sumAmounts(laundryOrders), stores: laundryStoreList.length, services: totalLaundryServices },
           catering: { count: cateringOrders.length, total: sumAmounts(cateringOrders), menus: cateringProductsCount },
           marketplace: { count: marketplaceOrders.length, total: sumAmounts(marketplaceOrders), items: marketplaceProductsCount },
+          waste: { count: wasteDeposits.length, total: wasteTotalRupiah },
+          transport: { count: rideOrders.length + sendOrders.length, total: transportTotalFare },
         },
       },
     });
@@ -755,20 +771,26 @@ const getAllPlatformTransactions = async (req, res) => {
     const CateringOrder = require("../models/CateringOrder");
     const LaundryOrder = require("../models/LaundryOrder");
     const Booking = require("../models/Booking");
+    const WasteDeposit = require("../models/WasteDeposit");
+    const RideOrder = require("../models/RideOrder");
+    const SendOrder = require("../models/SendOrder");
 
-    const [marketplaceOrders, cateringOrders, laundryOrders, bookings] = await Promise.all([
+    const [marketplaceOrders, cateringOrders, laundryOrders, bookings, wasteDeposits, rideOrders, sendOrders] = await Promise.all([
       MarketplaceOrder.find().sort({ createdAt: -1 }).limit(30),
       CateringOrder.find().sort({ createdAt: -1 }).limit(30),
       LaundryOrder.find().sort({ createdAt: -1 }).limit(30),
       Booking.find().sort({ createdAt: -1 }).limit(30),
+      WasteDeposit.find().populate("customerId", "name").sort({ createdAt: -1 }).limit(30),
+      RideOrder.find().sort({ createdAt: -1 }).limit(30),
+      SendOrder.find().sort({ createdAt: -1 }).limit(30),
     ]);
 
     const allTx = [
       ...bookings.map(b => ({
         id: b._id,
         code: b.bookingCode || "BOOK-KST",
-        service: "Kost",
-        title: `Sewa Kost - ${b.kostName || "Kost"} (Kmr ${b.roomNumber || "101"})`,
+        service: (b.kostName || "").toLowerCase().includes("homestay") ? "Homestay & Penginapan" : "Kost & Penginapan",
+        title: `${(b.kostName || "").toLowerCase().includes("homestay") ? "Homestay" : "Penginapan"} - ${b.kostName || "Properti"}`,
         customer: b.customerName || "Customer",
         amount: Number(b.totalAmount || 0),
         status: b.status,
@@ -800,13 +822,46 @@ const getAllPlatformTransactions = async (req, res) => {
       ...marketplaceOrders.map(m => ({
         id: m._id,
         code: m.orderNumber || "MKT-ORD",
-        service: "Marketplace",
-        title: `Marketplace - ${m.storeName || "Toko Mitra"}`,
+        service: "Toko / Marketplace",
+        title: `Toko - ${m.storeName || "Toko Mitra"}`,
         customer: m.customerName || "Customer",
         amount: Number(m.totalAmount || 0),
         status: m.status,
         date: m.createdAt,
         type: "marketplace",
+      })),
+      ...wasteDeposits.map(w => ({
+        id: w._id,
+        code: w.depositCode || "WST-DEP",
+        service: "Bank Sampah",
+        title: `Setor Sampah - ${w.categories?.[0]?.category || "Kanyaah Recycle"} (${w.actualTotalWeightKg || w.estimatedTotalWeightKg || 0} kg)`,
+        customer: w.customerId?.name || "Warga Komunitas",
+        amount: Number(w.finalRupiah || w.estimatedRupiah || 0),
+        status: w.status,
+        date: w.createdAt,
+        type: "waste",
+      })),
+      ...rideOrders.map(r => ({
+        id: r._id,
+        code: r.orderCode || "RIDE-ORD",
+        service: "Transportasi",
+        title: `Kanyaah Ride - Antar Jemput Warga`,
+        customer: r.customerName || "Penumpang",
+        amount: Number(r.fare || r.totalFare || 0),
+        status: r.status,
+        date: r.createdAt,
+        type: "transport",
+      })),
+      ...sendOrders.map(s => ({
+        id: s._id,
+        code: s.orderCode || "SEND-ORD",
+        service: "Transportasi",
+        title: `Kanyaah Send - Pengiriman Barang/Paket`,
+        customer: s.customerName || "Pengirim",
+        amount: Number(s.fare || s.totalFare || 0),
+        status: s.status,
+        date: s.createdAt,
+        type: "transport",
       })),
     ];
 

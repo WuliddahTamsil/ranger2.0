@@ -92,7 +92,8 @@ export interface ActiveCustomerBooking {
   roomNumber?: string;
   roomType?: string;
   entryDate: string; // Or check-in date or visit date
-  checkOutDate?: string; // For hotel
+  checkOutDate?: string; // For hotel & homestay
+  guestCount?: number; // For hotel & homestay guests
   durationMonths?: number; // For kost
   durationNights?: number; // For hotel
   ticketCount?: number; // For wisata

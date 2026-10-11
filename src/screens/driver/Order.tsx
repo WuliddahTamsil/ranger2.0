@@ -65,6 +65,7 @@ export type DriverOrderTab =
   | "Shop"
   | "Marketplace"
   | "Catering"
+  | "Sampah/Recycle"
   | "Setor Sampah"
   | "Laundry"
   | "Aktif"
@@ -77,7 +78,7 @@ export const ORDER_TABS: DriverOrderTab[] = [
   "Shop",
   "Marketplace",
   "Catering",
-  "Setor Sampah",
+  "Sampah/Recycle",
   "Laundry",
   "Aktif",
   "Selesai",
@@ -753,8 +754,9 @@ export const Order: React.FC<OrderProps> = ({
           return order.type === "Marketplace";
         case "Catering":
           return order.type === "Catering";
+        case "Sampah/Recycle":
         case "Setor Sampah":
-          return order.type === "Setor Sampah";
+          return order.type === "Setor Sampah" || order.serviceType === "WASTE_PICKUP";
         case "Laundry":
           return order.type === "Laundry";
         case "Aktif":
@@ -2531,7 +2533,7 @@ export const Order: React.FC<OrderProps> = ({
               tab === "Shop" ? orders.filter((o) => o.type === "Shop").length :
               tab === "Marketplace" ? orders.filter((o) => o.type === "Marketplace").length :
               tab === "Catering" ? orders.filter((o) => o.type === "Catering").length :
-              tab === "Setor Sampah" ? orders.filter((o) => o.type === "Setor Sampah").length :
+              tab === "Sampah/Recycle" || tab === "Setor Sampah" ? orders.filter((o) => o.type === "Setor Sampah" || o.serviceType === "WASTE_PICKUP").length :
               tab === "Laundry" ? orders.filter((o) => o.type === "Laundry").length :
               tab === "Aktif" ? orders.filter(isDriverOrderActive).length :
               orders.filter((o) => o.status === "Selesai").length;

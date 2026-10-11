@@ -104,6 +104,10 @@ const laundryOrderSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    weighingProofImage: {
+      type: String,
+      default: "",
+    },
     laundryCost: {
       type: Number,
       default: 0,

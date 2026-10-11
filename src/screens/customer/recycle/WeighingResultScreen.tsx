@@ -40,6 +40,15 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
   const { selectedDeposit, setSelectedDeposit, refreshWallet: refreshRecycleWallet } = useRecycle();
   const { refreshWallet: refreshPointWallet } = useGeoversePoint();
   const [confirming, setConfirming] = useState(false);
+  const DISPUTE_CATEGORIES = [
+    "Selisih Berat Terlalu Jauh",
+    "Kategori Sampah Tidak Sesuai",
+    "Perbedaan Harga per Kg",
+    "Foto Timbangan Kurang Jelas",
+    "Lainnya",
+  ];
+  const [selectedDisputeCategory, setSelectedDisputeCategory] = useState("Selisih Berat Terlalu Jauh");
+  const [customerEstimatedWeight, setCustomerEstimatedWeight] = useState("");
   const [disputeModalVisible, setDisputeModalVisible] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [disputing, setDisputing] = useState(false);
@@ -96,17 +105,27 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
   };
 
   const handleDispute = async () => {
-    if (!disputeReason.trim()) {
+    if (!disputeReason.trim() && selectedDisputeCategory === "Lainnya") {
       Alert.alert("Alasan Diperlukan", "Tuliskan alasan komplain Anda terhadap hasil timbang.");
       return;
     }
 
     setDisputing(true);
     try {
-      const res = await disputeWasteDeposit(deposit._id, disputeReason);
+      const estWeightNum = parseFloat(customerEstimatedWeight) || undefined;
+      const res = await disputeWasteDeposit(
+        deposit._id,
+        disputeReason.trim() || selectedDisputeCategory,
+        selectedDisputeCategory,
+        estWeightNum
+      );
       if (res.success && res.data) {
         setSelectedDeposit(res.data);
         setDisputeModalVisible(false);
+        Alert.alert(
+          "Sanggahan Berhasil Terkirim",
+          "Permohonan sanggahan timbangan Anda telah diterima. Pengelola Bank Sampah akan segera meninjau dan melakukan verifikasi mediasi."
+        );
         navigate("c_recycle_tracking");
       } else {
         Alert.alert("Gagal", res.message || "Gagal mengajukan komplain.");
@@ -315,7 +334,7 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Dispute Modal */}
+      {/* Dispute Modal: Form Mediasi Sanggahan Timbangan */}
       <Modal
         visible={disputeModalVisible}
         transparent
@@ -324,25 +343,106 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.disputeModalCard}>
-            <Text style={styles.disputeModalTitle}>Ajukan Komplain Timbangan</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center" }}>
+                  <AlertTriangle size={18} color="#DC2626" />
+                </View>
+                <Text style={styles.disputeModalTitle}>Form Sanggahan Timbangan</Text>
+              </View>
+              <TouchableOpacity onPress={() => setDisputeModalVisible(false)} activeOpacity={0.7}>
+                <X size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
             <Text style={styles.disputeModalSub}>
-              Tuliskan keberatan Anda (misal: selisih berat terlalu jauh atau kategori tidak sesuai).
+              Pilih alasan keberatan & sertakan catatan Anda untuk proses verifikasi ulang oleh Bank Sampah.
             </Text>
 
-            <TextInput
-              style={styles.disputeInput}
-              placeholder="Jelaskan alasan komplain Anda secara rinci..."
-              placeholderTextColor="#9CA3AF"
-              value={disputeReason}
-              onChangeText={setDisputeReason}
-              multiline
-              numberOfLines={4}
-            />
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {/* Category Chips */}
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 8 }}>
+                Kategori Keberatan:
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                {DISPUTE_CATEGORIES.map((cat) => {
+                  const isSelected = selectedDisputeCategory === cat;
+                  return (
+                    <TouchableOpacity
+                      key={cat}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: isSelected ? "#FEE2E2" : "#F3F4F6",
+                        borderWidth: 1,
+                        borderColor: isSelected ? "#EF4444" : "#E5E7EB",
+                      }}
+                      onPress={() => setSelectedDisputeCategory(cat)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: isSelected ? "700" : "500", color: isSelected ? "#DC2626" : "#4B5563" }}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Input Perkiraan Berat Customer */}
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 6 }}>
+                Perkiraan Berat Menurut Anda (kg):
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: "#F9FAFB",
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: "#D1D5DB",
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  fontSize: 13,
+                  color: "#111827",
+                  marginBottom: 14,
+                }}
+                keyboardType="numeric"
+                placeholder="Contoh: 5.5"
+                placeholderTextColor="#9CA3AF"
+                value={customerEstimatedWeight}
+                onChangeText={setCustomerEstimatedWeight}
+              />
+
+              {/* Catatan Sanggahan */}
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 6 }}>
+                Catatan Penjelasan Rinci:
+              </Text>
+              <TextInput
+                style={styles.disputeInput}
+                placeholder="Jelaskan detail ketidaksesuaian hasil timbangan Anda..."
+                placeholderTextColor="#9CA3AF"
+                value={disputeReason}
+                onChangeText={setDisputeReason}
+                multiline
+                numberOfLines={3}
+              />
+
+              {/* Mediation Info Banner */}
+              <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, borderWidth: 1, borderColor: "#BBF7D0", padding: 10, marginBottom: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                  <ShieldCheck size={14} color="#15803D" />
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#15803D" }}>Alur Mediasi Transparan</Text>
+                </View>
+                <Text style={{ fontSize: 10, color: "#166534", lineHeight: 14 }}>
+                  Petugas Bank Sampah akan memeriksa foto arsip timbangan dan menghubungi Anda untuk verifikasi ulang bobot & nilai poin.
+                </Text>
+              </View>
+            </ScrollView>
 
             <View style={styles.disputeActions}>
               <TouchableOpacity
                 style={styles.btnCancelDispute}
                 onPress={() => setDisputeModalVisible(false)}
+                activeOpacity={0.8}
               >
                 <Text style={styles.btnCancelDisputeText}>Batal</Text>
               </TouchableOpacity>
@@ -351,11 +451,12 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
                 style={[styles.btnSubmitDispute, disputing && { opacity: 0.7 }]}
                 onPress={handleDispute}
                 disabled={disputing}
+                activeOpacity={0.85}
               >
                 {disputing ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.btnSubmitDisputeText}>Kirim Komplain</Text>
+                  <Text style={styles.btnSubmitDisputeText}>Kirim Sanggahan</Text>
                 )}
               </TouchableOpacity>
             </View>

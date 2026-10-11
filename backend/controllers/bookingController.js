@@ -18,8 +18,10 @@ const createBooking = async (req, res) => {
       customerEmail,
       customerKtpUrl,
       entryDate,
+      checkOutDate: incomingCheckOutDate,
       durationMonths,
       durationNights,
+      guestCount,
       ticketCount,
       monthlyPrice,
       totalAmount,
@@ -41,6 +43,12 @@ const createBooking = async (req, res) => {
     }
 
     const categoryType = incomingCategoryType || kost.categoryType || "kost";
+
+    // Auto-calculate checkOutDate if not provided for hotel/homestay
+    let calculatedCheckOutDate = incomingCheckOutDate ? new Date(incomingCheckOutDate) : null;
+    if (!calculatedCheckOutDate && (categoryType === "hotel" || categoryType === "homestay") && Number(durationNights) > 0) {
+      calculatedCheckOutDate = new Date(new Date(entryDate).getTime() + Number(durationNights) * 24 * 60 * 60 * 1000);
+    }
 
     // Resolve customerId if it is an email or empty
     let resolvedCustomerId = customerId;
@@ -76,8 +84,10 @@ const createBooking = async (req, res) => {
       customerEmail: customerEmail?.trim() || "aisyahphr@gmail.com",
       customerKtpUrl: customerKtpUrl || "",
       entryDate: new Date(entryDate),
+      checkOutDate: calculatedCheckOutDate,
       durationMonths: Number(durationMonths) || 1,
       durationNights: Number(durationNights) || 1,
+      guestCount: Number(guestCount) || 2,
       ticketCount: Number(ticketCount) || 1,
       monthlyPrice: Number(monthlyPrice) || kost.price,
       totalAmount: Number(totalAmount) || (Number(monthlyPrice) || kost.price),
@@ -96,9 +106,10 @@ const createBooking = async (req, res) => {
     if (categoryType === "wisata") {
       notifTitle = "🎟️ Tiket Wisata Terjual!";
       notifMsg = `${customerName} telah membeli tiket (${ticketCount || 1}x) di '${kost.name}'. Kode: ${bookingCode}`;
-    } else if (categoryType === "hotel") {
-      notifTitle = "🏨 Reservasi Kamar Hotel Baru!";
-      notifMsg = `${customerName} telah memesan kamar '${roomNumber || "Kamar"}' (${durationNights || 1} Malam) di '${kost.name}'.`;
+    } else if (categoryType === "hotel" || categoryType === "homestay") {
+      const isHomestay = (kost.type || "").toLowerCase().includes("homestay") || (kost.name || "").toLowerCase().includes("homestay");
+      notifTitle = isHomestay ? "🏡 Reservasi Homestay Baru!" : "🏨 Reservasi Hotel & Villa Baru!";
+      notifMsg = `${customerName} telah memesan unit '${roomNumber || "Unit"}' (${durationNights || 1} Malam, ${guestCount || 2} Tamu) di '${kost.name}'.`;
     }
 
     const notif = await Notification.create({

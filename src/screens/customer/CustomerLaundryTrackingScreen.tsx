@@ -63,6 +63,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const [storeInfo, setStoreInfo] = useState<LaundryStore | null>(null);
   const [chatVisible, setChatVisible] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isWeighingPreviewOpen, setIsWeighingPreviewOpen] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"QRIS" | "Transfer Bank">("Transfer Bank");
   const [proofImageUri, setProofImageUri] = useState<string>("");
   const [isSubmittingProof, setIsSubmittingProof] = useState(false);
@@ -506,6 +507,24 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
 
             <View style={styles.billDivider} />
 
+            {/* Foto Bukti Timbangan dari Mitra (Jika Tersedia) */}
+            {order?.weighingProofImage ? (
+              <View style={{ marginBottom: 12, backgroundColor: "#F0FDF4", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "#BBF7D0" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Scale size={15} color="#15803D" />
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#15803D" }}>Foto Bukti Timbangan dari Mitra</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setIsWeighingPreviewOpen(true)} activeOpacity={0.7}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: "#15803D" }}>🔍 Perbesar</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity onPress={() => setIsWeighingPreviewOpen(true)} activeOpacity={0.85}>
+                  <Image source={{ uri: order.weighingProofImage }} style={{ width: "100%", height: 140, borderRadius: 8 }} resizeMode="cover" />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
             <View style={styles.billRow}>
               <Text style={styles.billLabel}>Berat Cucian</Text>
               <Text style={styles.billValueHighlight}>{weight}</Text>
@@ -516,9 +535,15 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
               <Text style={styles.billValue}>Rp {laundryPrice.toLocaleString("id-ID")}</Text>
             </View>
 
+            {/* Rincian Transparan Ongkir Perjalanan Ganda (2x Trip) */}
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Ongkir Driver (Jemput & Antar)</Text>
-              <Text style={styles.billValue}>Rp {(deliveryPickup + deliveryDrop).toLocaleString("id-ID")}</Text>
+              <Text style={styles.billLabel}>• Ongkir Penjemputan Baju Kotor (Trip 1)</Text>
+              <Text style={styles.billValue}>Rp {deliveryPickup.toLocaleString("id-ID")}</Text>
+            </View>
+
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>• Ongkir Pengantaran Baju Bersih (Trip 2)</Text>
+              <Text style={styles.billValue}>Rp {deliveryDrop.toLocaleString("id-ID")}</Text>
             </View>
 
             <View style={styles.billRow}>
@@ -617,6 +642,34 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Full Preview Modal Foto Bukti Timbangan */}
+      <Modal
+        visible={isWeighingPreviewOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsWeighingPreviewOpen(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", padding: 16 }}>
+          <TouchableOpacity
+            style={{ position: "absolute", top: 40, right: 20, zIndex: 10, padding: 8, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20 }}
+            onPress={() => setIsWeighingPreviewOpen(false)}
+            activeOpacity={0.8}
+          >
+            <X size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+          {order?.weighingProofImage ? (
+            <Image
+              source={{ uri: order.weighingProofImage }}
+              style={{ width: "100%", height: "70%", borderRadius: 12 }}
+              resizeMode="contain"
+            />
+          ) : null}
+          <Text style={{ color: "#FFFFFF", marginTop: 12, fontSize: 13, fontWeight: "700" }}>
+            Foto Bukti Timbangan Resmi dari Mitra
+          </Text>
+        </View>
+      </Modal>
 
       {/* Payment & Upload Proof Modal */}
       <Modal visible={isPaymentModalOpen} transparent animationType="slide">

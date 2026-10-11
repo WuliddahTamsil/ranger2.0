@@ -52,8 +52,10 @@ export interface BookingData {
   customerEmail?: string;
   customerKtpUrl?: string;
   entryDate: string;
+  checkOutDate?: string;
   durationMonths?: number;
   durationNights?: number;
+  guestCount?: number;
   ticketCount?: number;
   monthlyPrice: number;
   totalAmount: number;

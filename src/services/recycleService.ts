@@ -669,14 +669,16 @@ export const cancelWasteDeposit = async (
 
 export const disputeWasteDeposit = async (
   id: string,
-  reason: string
+  reason: string,
+  disputeCategory?: string,
+  estimatedWeightKg?: number
 ): Promise<{ success: boolean; data?: WasteDepositUI; message?: string }> => {
   try {
     const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/waste/deposits/${id}/complaint`), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ reason, disputeCategory, estimatedWeightKg }),
     });
     return await readApiJson(res);
   } catch (err: any) {

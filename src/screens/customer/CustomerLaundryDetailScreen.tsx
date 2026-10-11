@@ -610,6 +610,12 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
                 </Text>
               </View>
 
+              <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, borderWidth: 1, borderColor: "#BBF7D0", padding: 10, marginBottom: 12 }}>
+                <Text style={{ fontSize: 11, color: "#166534", lineHeight: 15 }}>
+                  <Text style={{ fontWeight: "700" }}>ℹ️ Transparansi Ongkir:</Text> Biaya pengantaran mencakup perjalanan ganda (2x Trip): Penjemputan pakaian kotor ke rumah Anda dan pengantaran pakaian bersih setelah selesai dicuci.
+                </Text>
+              </View>
+
               {/* Confirm Button */}
               <TouchableOpacity
                 style={[styles.btnConfirmOrder, isSubmitting && { opacity: 0.7 }]}

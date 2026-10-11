@@ -626,7 +626,7 @@ exports.getDriverOrders = async (req, res) => {
 exports.weighAndBillOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const { weightOrQty, customLaundryCost } = req.body;
+    const { weightOrQty, customLaundryCost, weighingProofImage } = req.body;
 
     const order = await LaundryOrder.findById(id);
     if (!order) {
@@ -639,6 +639,9 @@ exports.weighAndBillOrder = async (req, res) => {
     }
 
     order.actualWeightOrQty = actualWeight;
+    if (weighingProofImage) {
+      order.weighingProofImage = weighingProofImage;
+    }
     // Hitung biaya laundry
     const laundryCost = customLaundryCost ? Number(customLaundryCost) : Math.round(actualWeight * order.pricePerUnit);
     order.laundryCost = laundryCost;

@@ -16,6 +16,7 @@ import {
   Linking,
   Platform,
   RefreshControl,
+  Share,
 } from "react-native";
 import {
   ShieldCheck,
@@ -44,6 +45,7 @@ import {
   Bell,
   Activity,
   Receipt,
+  Share2,
   User,
   Settings,
   Store,
@@ -130,6 +132,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   // Filters for Transactions Tab
   const [txSearch, setTxSearch] = useState<string>("");
   const [txStatusFilter, setTxStatusFilter] = useState<string>("semua");
+  const [txServiceFilter, setTxServiceFilter] = useState<string>("semua");
 
   // Modal State for Full Registration Detail (Where ACC & Reject Buttons Live)
   const [selectedMitraForDetail, setSelectedMitraForDetail] = useState<AuthAccount | null>(null);
@@ -364,13 +367,70 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 
   // Filtered Transactions for Tab 2
   const filteredTransactions = transactions.filter((tx) => {
+    const q = txSearch.toLowerCase().trim();
     const matchesSearch =
-      (tx.code || "").toLowerCase().includes(txSearch.toLowerCase()) ||
-      (tx.title || "").toLowerCase().includes(txSearch.toLowerCase()) ||
-      (tx.customer || "").toLowerCase().includes(txSearch.toLowerCase());
+      !q ||
+      (tx.code || "").toLowerCase().includes(q) ||
+      (tx.title || "").toLowerCase().includes(q) ||
+      (tx.customer || "").toLowerCase().includes(q) ||
+      (tx.service || "").toLowerCase().includes(q);
     const matchesStatus = txStatusFilter === "semua" ? true : tx.status === txStatusFilter;
-    return matchesSearch && matchesStatus;
+
+    let matchesService = true;
+    if (txServiceFilter !== "semua") {
+      const s = (tx.service || "").toLowerCase();
+      const type = (tx.type || "").toLowerCase();
+      if (txServiceFilter === "homestay_kos") {
+        matchesService = s.includes("homestay") || s.includes("kost") || s.includes("penginapan") || type === "booking";
+      } else if (txServiceFilter === "laundry") {
+        matchesService = s.includes("laundry") || type === "laundry";
+      } else if (txServiceFilter === "catering") {
+        matchesService = s.includes("catering") || type === "catering";
+      } else if (txServiceFilter === "toko") {
+        matchesService = s.includes("toko") || s.includes("marketplace") || type === "marketplace";
+      } else if (txServiceFilter === "sampah") {
+        matchesService = s.includes("sampah") || s.includes("recycle") || type === "waste";
+      } else if (txServiceFilter === "transportasi") {
+        matchesService = s.includes("transportasi") || s.includes("ride") || s.includes("send") || type === "transport";
+      }
+    }
+    return matchesSearch && matchesStatus && matchesService;
   });
+
+  const handleExportTransactions = async () => {
+    if (filteredTransactions.length === 0) {
+      Alert.alert("Perhatian", "Tidak ada data transaksi yang dapat diekspor.");
+      return;
+    }
+
+    const totalExportAmount = filteredTransactions.reduce((acc: number, t: any) => acc + (t.amount || 0), 0);
+    const dateStr = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+
+    const header = "Tanggal,Kode,Layanan,Nama_Item,Pelanggan,Nominal,Status\n";
+    const rows = filteredTransactions
+      .map((t: any) => {
+        const d = t.date ? new Date(t.date).toISOString().slice(0, 19).replace("T", " ") : "-";
+        const c = `"${t.code || "-"}"`;
+        const s = `"${t.service || "-"}"`;
+        const title = `"${(t.title || "-").replace(/"/g, '""')}"`;
+        const cust = `"${(t.customer || "-").replace(/"/g, '""')}"`;
+        const amt = t.amount || 0;
+        const st = `"${t.status || "Selesai"}"`;
+        return `${d},${c},${s},${title},${cust},${amt},${st}`;
+      })
+      .join("\n");
+
+    const messageText = `📊 REKAP LAPORAN TRANSAKSI GEOVERSE - PGE KAMOJANG\nTanggal: ${dateStr}\nFilter: ${txServiceFilter.toUpperCase()}\nTotal Transaksi: ${filteredTransactions.length}\nTotal Omset: Rp ${totalExportAmount.toLocaleString("id-ID")}\n\n=== DATA CSV ===\n${header}${rows}`;
+
+    try {
+      await Share.share({
+        title: `Laporan Transaksi GEOVERSE - ${dateStr}`,
+        message: messageText,
+      });
+    } catch (err) {
+      Alert.alert("Gagal", "Tidak dapat membuka menu bagikan laporan.");
+    }
+  };
 
   // Bottom Navigation Config
   const navItems = [
@@ -1242,9 +1302,55 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           ) : null}
         </View>
 
+        {/* Category Service Filter Chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.statusPillsRow, { marginBottom: 12 }]}
+        >
+          {[
+            { key: "semua", label: "Semua Layanan" },
+            { key: "homestay_kos", label: "Homestay & Kos" },
+            { key: "laundry", label: "Laundry" },
+            { key: "catering", label: "Catering" },
+            { key: "toko", label: "Toko" },
+            { key: "sampah", label: "Bank Sampah" },
+            { key: "transportasi", label: "Transportasi" },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              style={[
+                styles.statusPill,
+                txServiceFilter === item.key && styles.statusPillActive,
+              ]}
+              onPress={() => setTxServiceFilter(item.key)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.statusPillText,
+                  txServiceFilter === item.key && styles.statusPillTextActive,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
         <View style={styles.txHeaderRow}>
-          <Text style={styles.sectionHeaderTitle}>Riwayat Aliran Transaksi</Text>
-          <Text style={styles.txCounterSub}>Total {filteredTransactions.length} transaksi</Text>
+          <View>
+            <Text style={styles.sectionHeaderTitle}>Riwayat Aliran Transaksi</Text>
+            <Text style={styles.txCounterSub}>Total {filteredTransactions.length} transaksi</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.exportReportBtn}
+            onPress={handleExportTransactions}
+            activeOpacity={0.8}
+          >
+            <Share2 size={13} color="#FFFFFF" />
+            <Text style={styles.exportReportBtnText}>Ekspor CSV</Text>
+          </TouchableOpacity>
         </View>
 
         {filteredTransactions.length === 0 ? (
@@ -3804,6 +3910,25 @@ const styles = StyleSheet.create({
   txCounterSub: {
     fontSize: 12,
     color: "#6B7280",
+  },
+  exportReportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#1B7A4E",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    elevation: 2,
+    shadowColor: "#1B7A4E",
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  exportReportBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
   },
   txCard: {
     backgroundColor: "#FFFFFF",
