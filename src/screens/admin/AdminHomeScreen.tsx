@@ -258,10 +258,10 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   }, []);
 
   // Action: Approve / ACC Mitra
-  const handleApproveMitra = async (account: AuthAccount) => {
+  const handleApproveMitra = async (account: AuthAccount, options?: { approveBrandPartner?: boolean }) => {
     setIsSubmittingAction(true);
     try {
-      await updateAccountStatus(account.id, "verified");
+      await updateAccountStatus(account.id, "verified", undefined, options);
       await refreshData();
       setSelectedMitraForDetail(null);
       Alert.alert(
@@ -2284,6 +2284,62 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                           {ROLE_LABELS[selectedMitraForDetail.role as keyof typeof ROLE_LABELS] || selectedMitraForDetail.role}
                         </Text>
                       </View>
+                      {selectedMitraForDetail.role === "pemilik_shop" ? (
+                        <>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Kategori Usaha:</Text>
+                            <Text style={styles.detailVal}>
+                              {roleData.businessCategory || roleData.storeType || "MINIMARKET"}
+                            </Text>
+                          </View>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Jaringan / Brand:</Text>
+                            <Text style={styles.detailVal}>
+                              {roleData.brandType || "INDEPENDENT"}{roleData.brandName ? ` (${roleData.brandName})` : ""}
+                            </Text>
+                          </View>
+                          {roleData.legalBusinessName ? (
+                            <View style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>Nama Legal Usaha:</Text>
+                              <Text style={styles.detailVal}>{roleData.legalBusinessName}</Text>
+                            </View>
+                          ) : null}
+                          <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Nama Outlet:</Text>
+                            <Text style={styles.detailVal}>{roleData.outletName || roleData.businessName || "-"}</Text>
+                          </View>
+                          {roleData.businessPhone ? (
+                            <View style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>No. WA Usaha:</Text>
+                              <Text style={styles.detailVal}>{roleData.businessPhone}</Text>
+                            </View>
+                          ) : null}
+                          {roleData.openTime || roleData.closeTime ? (
+                            <View style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>Jam Operasional:</Text>
+                              <Text style={styles.detailVal}>{roleData.openTime || "07:00"} - {roleData.closeTime || "22:00"}</Text>
+                            </View>
+                          ) : null}
+                          <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Status Partner Brand:</Text>
+                            <Text style={[styles.detailVal, { color: roleData.isOfficialPartnerRequested === "true" ? "#D97706" : "#4B5563" }]}>
+                              {roleData.isOfficialPartnerRequested === "true" ? "Mengajukan Partner Brand Resmi" : "Toko Independen"}
+                            </Text>
+                          </View>
+                          {roleData.pharmacistName ? (
+                            <View style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>Apoteker Penanggung Jawab:</Text>
+                              <Text style={styles.detailVal}>{roleData.pharmacistName}</Text>
+                            </View>
+                          ) : null}
+                          {roleData.pharmacistSipa ? (
+                            <View style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>Nomor SIPA/SIPTTK:</Text>
+                              <Text style={styles.detailVal}>{roleData.pharmacistSipa}</Text>
+                            </View>
+                          ) : null}
+                        </>
+                      ) : null}
                       {roleData.propertyType ? (
                         <View style={styles.detailRow}>
                           <Text style={styles.detailLabel}>Tipe Properti:</Text>
@@ -2307,7 +2363,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                     {/* Section 3: Berkas Dokumen Terunggah */}
                     <Text style={styles.formSectionHeader}>3. Berkas Dokumen Terunggah</Text>
                     {(() => {
-                      const docRequirements = getDocumentRequirements(selectedMitraForDetail.role as any) || [];
+                      const docRequirements = getDocumentRequirements(selectedMitraForDetail.role as any, roleData) || [];
                       const renderedDocs: { key: string; label: string; uri: string }[] = [];
 
                       // From documents object

@@ -1,6 +1,6 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
-import { Plus, Minus, Star, HeartPulse, Leaf } from "lucide-react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { Plus, Minus, HeartPulse, AlertCircle } from "lucide-react-native";
 import { ShopProduct, ShopStore } from "../../services/shopService";
 import { useShopCart } from "../../context/ShopCartContext";
 import { rp } from "../../utils/formatters";
@@ -9,130 +9,164 @@ interface ProductCardProps {
   product: ShopProduct;
   store: ShopStore;
   onPressProduct: (product: ShopProduct) => void;
+  accentColor?: string;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   store,
   onPressProduct,
+  accentColor = "#16A34A",
 }) => {
   const { addToCart, updateQuantity, getItemQuantity } = useShopCart();
   const quantity = getItemQuantity(product._id);
   const isOutOfStock = product.stock <= 0;
-  const isPromo = product.promoPrice != null && product.promoPrice > 0;
+  const isPromo = product.promoPrice != null && product.promoPrice > 0 && product.promoPrice < product.price;
   const discountPercent = isPromo
     ? Math.round(((product.price - (product.promoPrice || product.price)) / product.price) * 100)
     : 0;
 
-  const handleAdd = () => {
+  const handleAdd = (e?: any) => {
+    e?.stopPropagation?.();
     if (isOutOfStock) return;
     addToCart(product, store);
   };
 
-  const handleIncrement = () => {
+  const handleIncrement = (e?: any) => {
+    e?.stopPropagation?.();
     if (quantity >= product.stock) return;
     updateQuantity(product._id, 1);
   };
 
-  const handleDecrement = () => {
+  const handleDecrement = (e?: any) => {
+    e?.stopPropagation?.();
     updateQuantity(product._id, -1);
   };
+
+  // Determine unit pill text
+  const unitBadgeText = product.weight && product.weight > 0
+    ? `${product.weight}g`
+    : product.unit || "pcs";
 
   return (
     <TouchableOpacity
       style={styles.card}
       onPress={() => onPressProduct(product)}
-      activeOpacity={0.85}
+      activeOpacity={0.88}
     >
-      {/* Image Container */}
+      {/* Product Image Container */}
       <View style={styles.imageWrapper}>
-        <Image source={{ uri: product.img }} style={styles.image} />
-
-        {/* Promo Discount Badge */}
-        {isPromo && discountPercent > 0 && (
-          <View style={styles.promoBadge}>
-            <Text style={styles.promoBadgeText}>-{discountPercent}%</Text>
+        {product.img ? (
+          <Image source={{ uri: product.img }} style={styles.image} resizeMode="contain" />
+        ) : (
+          <View style={styles.placeholderImage}>
+            <Text style={styles.placeholderText}>Kanyaah Shop</Text>
           </View>
         )}
 
-        {/* Prescription Tag */}
-        {product.requiresPrescription && (
-          <View style={styles.rxBadge}>
-            <HeartPulse size={10} color="#FFFFFF" />
-            <Text style={styles.rxBadgeText}>Resep</Text>
+        {/* Top-Left: Populer or Promo Discount Badge */}
+        {isPromo && discountPercent > 0 ? (
+          <View style={styles.promoDiscountBadge}>
+            <Text style={styles.promoDiscountText}>-{discountPercent}%</Text>
+          </View>
+        ) : (
+          <View style={styles.populerBadge}>
+            <Text style={styles.populerBadgeText}>Populer</Text>
           </View>
         )}
 
-        {/* Eco Product Tag */}
-        {product.isEcoProduct && (
-          <View style={styles.ecoBadge}>
-            <Leaf size={10} color="#15803D" />
-          </View>
-        )}
+        {/* Top-Right: 21+ or Resep Badges */}
+        <View style={styles.topRightBadges}>
+          {product.requiresAgeVerification && (
+            <View style={styles.ageBadge}>
+              <Text style={styles.ageBadgeText}>21+</Text>
+            </View>
+          )}
 
-        {/* Out of stock overlay */}
-        {isOutOfStock && (
+          {product.requiresPrescription && (
+            <View style={styles.rxBadge}>
+              <HeartPulse size={9} color="#FFFFFF" strokeWidth={2.5} />
+              <Text style={styles.rxBadgeText}>Resep</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Out of Stock Overlay */}
+        {isOutOfStock ? (
           <View style={styles.outOfStockOverlay}>
-            <Text style={styles.outOfStockText}>Stok Habis</Text>
+            <Text style={styles.outOfStockText}>Habis</Text>
+          </View>
+        ) : quantity === 0 ? (
+          /* Bottom-Right: Circular (+) Add Button (Inspired by reference screenshots) */
+          <TouchableOpacity
+            style={[styles.floatingAddBtn, { backgroundColor: accentColor }]}
+            onPress={handleAdd}
+            activeOpacity={0.8}
+          >
+            <Plus size={18} color="#FFFFFF" strokeWidth={3} />
+          </TouchableOpacity>
+        ) : (
+          /* Bottom-Right: Interactive Stepper pill */
+          <View style={styles.floatingStepper}>
+            <TouchableOpacity
+              style={styles.stepperSubBtn}
+              onPress={handleDecrement}
+              activeOpacity={0.7}
+            >
+              <Minus size={12} color="#FFFFFF" strokeWidth={2.5} />
+            </TouchableOpacity>
+            <Text style={styles.stepperCountText}>{quantity}</Text>
+            <TouchableOpacity
+              style={styles.stepperSubBtn}
+              onPress={handleIncrement}
+              activeOpacity={0.7}
+              disabled={quantity >= product.stock}
+            >
+              <Plus size={12} color="#FFFFFF" strokeWidth={2.5} />
+            </TouchableOpacity>
           </View>
         )}
       </View>
 
-      {/* Details */}
+      {/* Details Container */}
       <View style={styles.details}>
-        {product.brand ? <Text style={styles.brandText}>{product.brand}</Text> : null}
+        {/* Unit & Characteristic Pills */}
+        <View style={styles.pillsRow}>
+          <View style={styles.unitPill}>
+            <Text style={styles.unitPillText}>{unitBadgeText}</Text>
+          </View>
+
+          {product.requiresAgeVerification && (
+            <View style={[styles.unitPill, styles.specialPill]}>
+              <Text style={styles.specialPillText}>21+</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Brand name if available */}
+        {product.brand ? (
+          <Text style={styles.brandText} numberOfLines={1}>
+            {product.brand}
+          </Text>
+        ) : null}
+
+        {/* Product Name */}
         <Text style={styles.nameText} numberOfLines={2}>
           {product.name}
         </Text>
 
-        <Text style={styles.unitText}>{product.unit || "pcs"}</Text>
-
-        {/* Pricing */}
-        <View style={styles.priceRow}>
-          <Text style={styles.activePrice}>
+        {/* Pricing Area */}
+        <View style={styles.priceContainer}>
+          <Text style={[styles.activePrice, isPromo && styles.promoActivePrice]}>
             {rp(isPromo ? product.promoPrice || product.price : product.price)}
           </Text>
-          {isPromo && <Text style={styles.strikePrice}>{rp(product.price)}</Text>}
-        </View>
 
-        {/* Stock Alert if low */}
-        {product.stock > 0 && product.stock <= 5 && (
-          <Text style={styles.lowStockText}>Sisa {product.stock} lagi!</Text>
-        )}
-
-        {/* Add / Stepper CTA */}
-        <View style={styles.actionRow}>
-          {isOutOfStock ? (
-            <View style={styles.disabledAddBtn}>
-              <Text style={styles.disabledAddText}>Habis</Text>
-            </View>
-          ) : quantity === 0 ? (
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={handleAdd}
-              activeOpacity={0.8}
-            >
-              <Plus size={14} color="#15803D" />
-              <Text style={styles.addBtnText}>Tambah</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.stepperWrapper}>
-              <TouchableOpacity
-                style={styles.stepperBtn}
-                onPress={handleDecrement}
-                activeOpacity={0.7}
-              >
-                <Minus size={13} color="#15803D" />
-              </TouchableOpacity>
-              <Text style={styles.quantityText}>{quantity}</Text>
-              <TouchableOpacity
-                style={[styles.stepperBtn, quantity >= product.stock && styles.stepperDisabled]}
-                onPress={handleIncrement}
-                activeOpacity={0.7}
-                disabled={quantity >= product.stock}
-              >
-                <Plus size={13} color={quantity >= product.stock ? "#9CA3AF" : "#15803D"} />
-              </TouchableOpacity>
+          {isPromo && (
+            <View style={styles.oldPriceRow}>
+              <Text style={styles.strikePrice}>{rp(product.price)}</Text>
+              <View style={styles.miniDiscountPill}>
+                <Text style={styles.miniDiscountText}>{discountPercent}%</Text>
+              </View>
             </View>
           )}
         </View>
@@ -144,68 +178,153 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
+    borderColor: "#F1F5F9",
     overflow: "hidden",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1.5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
     flex: 1,
     margin: 5,
     justifyContent: "space-between",
   },
   imageWrapper: {
-    height: 120,
+    height: 140,
     width: "100%",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
     position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 8,
   },
   image: {
+    width: "88%",
+    height: "88%",
+  },
+  placeholderImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
   },
-  promoBadge: {
+  placeholderText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94A3B8",
+  },
+  populerBadge: {
     position: "absolute",
-    top: 6,
-    left: 6,
-    backgroundColor: "#DC2626",
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
+    top: 8,
+    left: 8,
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
   },
-  promoBadgeText: {
+  populerBadgeText: {
+    color: "#0284C7",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  promoDiscountBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "#DC2626",
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  promoDiscountText: {
     color: "#FFFFFF",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
   },
-  rxBadge: {
+  topRightBadges: {
     position: "absolute",
-    top: 6,
-    right: 6,
-    backgroundColor: "#0284C7",
+    top: 8,
+    right: 8,
+    flexDirection: "row",
+    gap: 4,
+  },
+  ageBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#DC2626",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
+  ageBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  rxBadge: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#0284C7",
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 6,
     gap: 3,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
   },
   rxBadgeText: {
     color: "#FFFFFF",
     fontSize: 9,
-    fontWeight: "700",
+    fontWeight: "800",
   },
-  ecoBadge: {
+  floatingAddBtn: {
     position: "absolute",
-    bottom: 6,
-    left: 6,
-    backgroundColor: "#DCFCE7",
-    borderRadius: 10,
-    padding: 3,
+    bottom: 8,
+    right: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  floatingStepper: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#16A34A",
+    borderRadius: 16,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+    gap: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  stepperSubBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepperCountText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+    minWidth: 14,
+    textAlign: "center",
   },
   outOfStockOverlay: {
     position: "absolute",
@@ -213,119 +332,94 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(17, 24, 39, 0.65)",
+    backgroundColor: "rgba(15, 23, 42, 0.55)",
     justifyContent: "center",
     alignItems: "center",
   },
   outOfStockText: {
     color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   details: {
     padding: 10,
     flex: 1,
     justifyContent: "space-between",
   },
+  pillsRow: {
+    flexDirection: "row",
+    gap: 4,
+    marginBottom: 4,
+  },
+  unitPill: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  unitPillText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  specialPill: {
+    backgroundColor: "#DCFCE7",
+  },
+  specialPillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#15803D",
+  },
   brandText: {
     fontSize: 10,
-    color: "#6B7280",
-    fontWeight: "500",
+    color: "#64748B",
+    fontWeight: "600",
     textTransform: "uppercase",
-    marginBottom: 2,
+    marginBottom: 1,
   },
   nameText: {
     fontSize: 13,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "700",
+    color: "#0F172A",
     lineHeight: 17,
     minHeight: 34,
+    marginBottom: 6,
   },
-  unitText: {
-    fontSize: 11,
-    color: "#9CA3AF",
-    marginVertical: 2,
-  },
-  priceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 4,
-    flexWrap: "wrap",
+  priceContainer: {
+    marginTop: "auto",
   },
   activePrice: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#15803D",
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  promoActivePrice: {
+    color: "#DC2626",
+  },
+  oldPriceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
   },
   strikePrice: {
     fontSize: 10,
-    color: "#9CA3AF",
+    color: "#94A3B8",
     textDecorationLine: "line-through",
   },
-  lowStockText: {
-    fontSize: 10,
-    color: "#D97706",
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  actionRow: {
-    marginTop: 8,
-  },
-  addBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    backgroundColor: "#DCFCE7",
-    borderColor: "#BBF7D0",
-    borderWidth: 1,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  addBtnText: {
-    color: "#15803D",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  disabledAddBtn: {
-    backgroundColor: "#F3F4F6",
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  disabledAddText: {
-    color: "#9CA3AF",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  stepperWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+  miniDiscountPill: {
+    backgroundColor: "#FEE2E2",
     paddingHorizontal: 4,
-    paddingVertical: 2,
+    paddingVertical: 1,
+    borderRadius: 4,
   },
-  stepperBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  stepperDisabled: {
-    opacity: 0.5,
-  },
-  quantityText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#111827",
+  miniDiscountText: {
+    color: "#DC2626",
+    fontSize: 9,
+    fontWeight: "800",
   },
 });

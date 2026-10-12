@@ -12,6 +12,7 @@ const {
   updateProduct,
   deleteProduct,
   updateProductStock,
+  bulkImportProducts,
 } = require("../controllers/shopController");
 
 const {
@@ -59,6 +60,7 @@ router.post("/products", requireAuth, createProduct);
 router.put("/products/:id", requireAuth, updateProduct);
 router.delete("/products/:id", requireAuth, deleteProduct);
 router.put("/products/:id/stock", requireAuth, updateProductStock);
+router.post("/merchant/products/bulk", requireAuth, bulkImportProducts);
 
 // ==================== CUSTOMER ORDER ====================
 router.post("/orders", requireAuth, createShopOrder);

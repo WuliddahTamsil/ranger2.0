@@ -13,6 +13,23 @@ export type AuthRegistrationRole =
 export type AuthAccountStatus = "pending" | "verified" | "rejected";
 export type AuthDocumentStatus = "pending" | "verified" | "rejected";
 
+export type ShopBusinessCategory =
+  | "MINIMARKET"
+  | "SUPERMARKET"
+  | "PHARMACY"
+  | "COSMETICS"
+  | "BABY"
+  | "HEALTH"
+  | "HOUSEHOLD"
+  | "OTHER";
+
+export type ShopBrandType =
+  | "ALFAMART"
+  | "INDOMARET"
+  | "CIRCLE_K"
+  | "INDEPENDENT"
+  | "OTHER";
+
 export interface AuthDocument {
   key: string;
   label: string;

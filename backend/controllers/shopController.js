@@ -41,22 +41,46 @@ const isStoreOpen = (openingHours) => {
  */
 const getStores = async (req, res) => {
   try {
-    const { latitude, longitude, storeType, query, openNow, sortBy } = req.query;
+    const { latitude, longitude, storeType, businessCategory, brandType, query, openNow, sortBy } = req.query;
     const userLat = parseFloat(latitude) || -7.1475;
     const userLon = parseFloat(longitude) || 107.8015;
 
-    const filter = { status: { $ne: "INACTIVE" } };
+    // Only ACTIVE outlets are shown to customers
+    const filter = { status: "ACTIVE" };
 
-    if (storeType && storeType !== "ALL" && storeType !== "Semua") {
-      filter.storeType = storeType.toUpperCase();
+    if (businessCategory && businessCategory !== "ALL" && businessCategory !== "Semua") {
+      const catUpper = businessCategory.toUpperCase();
+      filter.$or = [
+        { businessCategory: catUpper },
+        { storeType: catUpper },
+      ];
+    } else if (storeType && storeType !== "ALL" && storeType !== "Semua") {
+      const storeUpper = storeType.toUpperCase();
+      filter.$or = [
+        { storeType: storeUpper },
+        { businessCategory: storeUpper },
+      ];
+    }
+
+    if (brandType && brandType !== "ALL" && brandType !== "Semua") {
+      filter.brandType = brandType.toUpperCase();
     }
 
     if (query && query.trim()) {
-      filter.$or = [
-        { name: { $regex: query.trim(), $options: "i" } },
-        { address: { $regex: query.trim(), $options: "i" } },
-        { description: { $regex: query.trim(), $options: "i" } },
+      const q = query.trim();
+      const queryCond = [
+        { name: { $regex: q, $options: "i" } },
+        { outletName: { $regex: q, $options: "i" } },
+        { brandName: { $regex: q, $options: "i" } },
+        { address: { $regex: q, $options: "i" } },
+        { description: { $regex: q, $options: "i" } },
       ];
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: queryCond }];
+        delete filter.$or;
+      } else {
+        filter.$or = queryCond;
+      }
     }
 
     let stores = await MarketplaceStore.find(filter).lean();
@@ -150,9 +174,16 @@ const getStoreProducts = async (req, res) => {
     const { id } = req.params;
     const { category, query, requiresPrescription, page = 1, limit = 50 } = req.query;
 
+    // Verify store exists and is ACTIVE
+    const store = await MarketplaceStore.findById(id).lean();
+    if (!store || store.status !== "ACTIVE") {
+      return res.status(404).json({ success: false, message: "Toko tidak tersedia atau belum aktif" });
+    }
+
     const filter = {
       storeId: id,
       isActive: true,
+      productType: "SHOP",
     };
 
     if (category && category !== "Semua" && category !== "ALL") {
@@ -181,7 +212,7 @@ const getStoreProducts = async (req, res) => {
     ]);
 
     // Categories in this store
-    const storeCategories = await MarketplaceProduct.distinct("category", { storeId: id, isActive: true });
+    const storeCategories = await MarketplaceProduct.distinct("category", { storeId: id, isActive: true, productType: "SHOP" });
 
     return res.json({
       success: true,
@@ -234,8 +265,26 @@ const searchGlobal = async (req, res) => {
       return res.json({ success: true, products: [], stores: [] });
     }
 
-    const productFilter = { isActive: true };
+    // Only active stores
     const storeFilter = { status: "ACTIVE" };
+    if (query) {
+      storeFilter.$or = [
+        { name: { $regex: query, $options: "i" } },
+        { outletName: { $regex: query, $options: "i" } },
+        { brandName: { $regex: query, $options: "i" } },
+        { description: { $regex: query, $options: "i" } },
+        { address: { $regex: query, $options: "i" } },
+      ];
+    }
+
+    const matchedStores = await MarketplaceStore.find(storeFilter).limit(10).lean();
+    const activeStoreIds = await MarketplaceStore.find({ status: "ACTIVE" }).distinct("_id");
+
+    const productFilter = {
+      isActive: true,
+      productType: "SHOP",
+      storeId: { $in: activeStoreIds },
+    };
 
     if (query) {
       productFilter.$or = [
@@ -244,26 +293,21 @@ const searchGlobal = async (req, res) => {
         { category: { $regex: query, $options: "i" } },
         { description: { $regex: query, $options: "i" } },
       ];
-      storeFilter.$or = [
-        { name: { $regex: query, $options: "i" } },
-        { description: { $regex: query, $options: "i" } },
-        { address: { $regex: query, $options: "i" } },
-      ];
     }
 
     if (category && category !== "Semua") {
       productFilter.category = { $regex: category, $options: "i" };
     }
 
-    const [products, stores] = await Promise.all([
-      MarketplaceProduct.find(productFilter).populate("storeId", "name logo rating storeType").limit(30).lean(),
-      MarketplaceStore.find(storeFilter).limit(10).lean(),
-    ]);
+    const products = await MarketplaceProduct.find(productFilter)
+      .populate("storeId", "name outletName logo rating storeType businessCategory brandType")
+      .limit(30)
+      .lean();
 
     return res.json({
       success: true,
       products,
-      stores,
+      stores: matchedStores,
     });
   } catch (error) {
     console.error("searchGlobal error:", error);
@@ -354,10 +398,14 @@ const createProduct = async (req, res) => {
       name,
       brand,
       category,
+      subcategory,
+      sku,
+      barcode,
       description,
       price,
       promoPrice,
       stock,
+      minimumStock,
       unit,
       weight,
       requiresPrescription,
@@ -382,25 +430,31 @@ const createProduct = async (req, res) => {
       return res.status(403).json({ success: false, message: "Anda tidak memiliki izin mengelola produk toko ini" });
     }
 
+    const initialStock = Math.max(0, Number(stock));
     const newProduct = await MarketplaceProduct.create({
       storeId,
       ownerId: authUser._id,
       name: name.trim(),
       brand: brand ? brand.trim() : "",
       category: category || "General",
+      subcategory: subcategory ? subcategory.trim() : "",
       cat: category || "General",
+      sku: sku ? sku.trim() : "",
+      barcode: barcode ? barcode.trim() : "",
       description: description || "",
       price: Number(price),
       promoPrice: promoPrice !== undefined && promoPrice !== null ? Number(promoPrice) : null,
-      stock: Math.max(0, Number(stock)),
+      stock: initialStock,
+      minimumStock: Number(minimumStock) || 5,
       unit: unit || "pcs",
       weight: Number(weight) || 250,
       requiresPrescription: Boolean(requiresPrescription),
       requiresAgeVerification: Boolean(requiresAgeVerification),
       isEcoProduct: Boolean(isEcoProduct),
-      img: img || "",
+      img: img || (Array.isArray(images) && images[0]) || "",
       images: Array.isArray(images) ? images : img ? [img] : [],
       imageUrls: Array.isArray(images) ? images : img ? [img] : [],
+      productType: "SHOP",
     });
 
     // Record initial inventory log
@@ -412,7 +466,7 @@ const createProduct = async (req, res) => {
       beforeStock: 0,
       afterStock: newProduct.stock,
       createdBy: authUser._id,
-      note: "Stok awal produk baru",
+      note: "Stok awal produk baru Kanyaah Shop",
     });
 
     return res.status(201).json({
@@ -453,6 +507,30 @@ const updateProduct = async (req, res) => {
     delete updates._id;
     delete updates.ownerId;
     delete updates.storeId;
+    updates.productType = "SHOP";
+
+    // If stock is changed directly in updateProduct, create InventoryLog audit
+    if (updates.stock !== undefined && Number(updates.stock) !== product.stock) {
+      const beforeStock = product.stock;
+      const afterStock = Math.max(0, Number(updates.stock));
+      const delta = afterStock - beforeStock;
+
+      await InventoryLog.create({
+        productId: product._id,
+        storeId: product.storeId,
+        type: delta >= 0 ? "RESTOCK" : "ADJUSTMENT",
+        quantity: Math.abs(delta),
+        beforeStock,
+        afterStock,
+        createdBy: authUser._id,
+        note: `Penyesuaian stok saat update data produk (${delta >= 0 ? "+" : ""}${delta})`,
+      });
+      updates.stock = afterStock;
+    }
+
+    if (updates.category && !updates.cat) {
+      updates.cat = updates.category;
+    }
 
     const updated = await MarketplaceProduct.findByIdAndUpdate(id, updates, { new: true });
 
@@ -555,6 +633,88 @@ const updateProductStock = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/shop/merchant/products/bulk
+ * Store owner imports products in bulk (CSV/JSON)
+ */
+const bulkImportProducts = async (req, res) => {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return res.status(401).json({ success: false, message: "Autentikasi diperlukan" });
+    }
+
+    const { storeId, items } = req.body;
+    if (!storeId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: "storeId dan daftar produk (items) wajib diisi" });
+    }
+
+    const store = await MarketplaceStore.findById(storeId);
+    if (!store) {
+      return res.status(404).json({ success: false, message: "Toko tidak ditemukan" });
+    }
+
+    const isOwner = String(store.ownerId) === String(authUser._id) || authUser.role === "admin";
+    if (!isOwner) {
+      return res.status(403).json({ success: false, message: "Anda tidak memiliki izin mengelola produk toko ini" });
+    }
+
+    const imported = [];
+    for (const item of items) {
+      if (!item.name || item.price === undefined) continue;
+      const initialStock = Math.max(0, Number(item.stock) || 0);
+      const prod = await MarketplaceProduct.create({
+        storeId,
+        ownerId: authUser._id,
+        name: String(item.name).trim(),
+        brand: String(item.brand || "").trim(),
+        category: String(item.category || item.cat || "General").trim(),
+        subcategory: String(item.subcategory || "").trim(),
+        cat: String(item.category || item.cat || "General").trim(),
+        sku: String(item.sku || "").trim(),
+        barcode: String(item.barcode || "").trim(),
+        description: String(item.description || "").trim(),
+        price: Number(item.price),
+        promoPrice: item.promoPrice != null ? Number(item.promoPrice) : null,
+        stock: initialStock,
+        minimumStock: Number(item.minimumStock) || 5,
+        unit: String(item.unit || "pcs").trim(),
+        weight: Number(item.weight) || 250,
+        images: Array.isArray(item.images) ? item.images : item.img ? [item.img] : [],
+        img: item.img || (item.images && item.images[0]) || "",
+        isActive: item.isActive !== false,
+        requiresPrescription: Boolean(item.requiresPrescription),
+        requiresAgeVerification: Boolean(item.requiresAgeVerification),
+        productType: "SHOP",
+      });
+
+      if (initialStock > 0) {
+        await InventoryLog.create({
+          productId: prod._id,
+          storeId,
+          type: "RESTOCK",
+          quantity: initialStock,
+          beforeStock: 0,
+          afterStock: initialStock,
+          createdBy: authUser._id,
+          note: "Import massal katalog produk",
+        });
+      }
+      imported.push(prod);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `${imported.length} produk berhasil diimport`,
+      count: imported.length,
+      data: imported,
+    });
+  } catch (error) {
+    console.error("bulkImportProducts error:", error);
+    return res.status(500).json({ success: false, message: "Gagal import produk massal", error: error.message });
+  }
+};
+
 module.exports = {
   getStores,
   getStoreById,
@@ -568,6 +728,7 @@ module.exports = {
   updateProduct,
   deleteProduct,
   updateProductStock,
+  bulkImportProducts,
   calculateDistanceKm,
   isStoreOpen,
 };

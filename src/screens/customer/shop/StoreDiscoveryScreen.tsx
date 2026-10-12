@@ -24,8 +24,9 @@ const STORE_TABS = [
   { label: "Apotek", value: "PHARMACY" },
   { label: "Minimarket", value: "MINIMARKET" },
   { label: "Kesehatan", value: "HEALTH" },
+  { label: "Kosmetik", value: "COSMETICS" },
   { label: "Ibu & Bayi", value: "BABY" },
-  { label: "UMKM Lokal", value: "UMKM" },
+  { label: "Rumah Tangga", value: "HOUSEHOLD" },
 ];
 
 const SORT_OPTIONS: Array<{ label: string; value: "nearest" | "fastest" | "rating" | "cheapest_fee" }> = [

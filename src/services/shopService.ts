@@ -11,6 +11,12 @@ const getHeaders = async () => {
 export interface ShopStore {
   _id: string;
   name: string;
+  outletName?: string;
+  legalBusinessName?: string;
+  businessCategory?: "MINIMARKET" | "SUPERMARKET" | "PHARMACY" | "COSMETICS" | "BABY" | "HEALTH" | "HOUSEHOLD" | "OTHER";
+  brandType?: "ALFAMART" | "INDOMARET" | "CIRCLE_K" | "INDEPENDENT" | "OTHER";
+  brandName?: string;
+  businessPhone?: string;
   storeType: "SUPERMARKET" | "MINIMARKET" | "PHARMACY" | "HEALTH" | "BABY" | "BEAUTY" | "HOUSEHOLD" | "UMKM" | "OTHER";
   logo: string;
   coverImage: string;
@@ -26,7 +32,11 @@ export interface ShopStore {
   estimatedDeliveryMinutes: number;
   deliveryFee: number;
   distanceKm?: number;
+  status?: "PENDING_REVIEW" | "ACTIVE" | "INACTIVE" | "REJECTED" | "CLOSED";
   isVerified?: boolean;
+  isOfficialBrandPartner?: boolean;
+  brandVerificationStatus?: "UNVERIFIED" | "PENDING_VERIFICATION" | "VERIFIED" | "REJECTED";
+  rejectionReason?: string;
   isOfficialPharmacy?: boolean;
   pharmacistName?: string;
   pharmacistSipa?: string;
@@ -45,18 +55,24 @@ export interface ShopProduct {
   name: string;
   brand?: string;
   category: string;
+  subcategory?: string;
+  sku?: string;
+  barcode?: string;
   description?: string;
   price: number;
   promoPrice?: number | null;
   stock: number;
+  minimumStock?: number;
   unit: string;
   weight: number;
   isActive: boolean;
   requiresPrescription: boolean;
+  requiresAgeVerification?: boolean;
   isEcoProduct?: boolean;
   img: string;
   images?: string[];
   imageUrls?: string[];
+  productType?: "UMKM" | "SHOP";
   rating: number;
   sold: number;
 }
@@ -272,6 +288,38 @@ export const updateShopProduct = async (productId: string, payload: Record<strin
 export const deleteShopProduct = async (productId: string) => {
   try {
     const res = await fetch(getApiUrl(`/shop/products/${productId}`), { method: "DELETE", headers: await getHeaders() });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+};
+
+export const updateShopProductStock = async (
+  productId: string,
+  payload: { quantity: number; type?: "RESTOCK" | "ADJUSTMENT" | "SALE"; note?: string }
+) => {
+  try {
+    const res = await fetch(getApiUrl(`/shop/products/${productId}/stock`), {
+      method: "PUT",
+      headers: await getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+};
+
+export const bulkImportShopProducts = async (
+  storeId: string,
+  items: Array<Record<string, any>>
+) => {
+  try {
+    const res = await fetch(getApiUrl(`/shop/merchant/products/bulk`), {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify({ storeId, items }),
+    });
     return await res.json();
   } catch (error: any) {
     return { success: false, message: error.message };

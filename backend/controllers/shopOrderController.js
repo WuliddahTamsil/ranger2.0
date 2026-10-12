@@ -181,10 +181,16 @@ const createShopOrder = async (req, res) => {
       if (!prescriptionDoc) {
         return res.status(404).json({ success: false, message: "Resep dokter tidak ditemukan" });
       }
-      if (prescriptionDoc.status === "REJECTED") {
+      if (prescriptionDoc.status !== "APPROVED") {
+        if (prescriptionDoc.status === "REJECTED") {
+          return res.status(400).json({
+            success: false,
+            message: `Resep ditolak oleh apoteker: ${prescriptionDoc.rejectionReason || "Tidak valid"}`,
+          });
+        }
         return res.status(400).json({
           success: false,
-          message: `Resep ditolak oleh apoteker: ${prescriptionDoc.rejectionReason || "Tidak valid"}`,
+          message: "Resep dokter Anda masih dalam proses verifikasi oleh apoteker. Checkout baru dapat dilanjutkan setelah resep disetujui.",
         });
       }
     }

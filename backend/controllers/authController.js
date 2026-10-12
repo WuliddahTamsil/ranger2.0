@@ -124,19 +124,66 @@ const registerUser = async (req, res) => {
 
         if (role === "pemilik_shop") {
           const MarketplaceStore = require("../models/MarketplaceStore");
+          const rawCat = String(finalRoleData?.businessCategory || finalRoleData?.storeType || "MINIMARKET").toUpperCase();
+          const categoryMap = { BEAUTY: "COSMETICS", KOSMETIK: "COSMETICS", APOTEK: "PHARMACY" };
+          const validCategories = ["MINIMARKET", "SUPERMARKET", "PHARMACY", "COSMETICS", "BABY", "HEALTH", "HOUSEHOLD", "OTHER"];
+          const businessCategory = validCategories.includes(categoryMap[rawCat] || rawCat) ? (categoryMap[rawCat] || rawCat) : "MINIMARKET";
+
+          const rawBrand = String(finalRoleData?.brandType || "INDEPENDENT").toUpperCase();
+          const validBrands = ["ALFAMART", "INDOMARET", "CIRCLE_K", "INDEPENDENT", "OTHER"];
+          const brandType = validBrands.includes(rawBrand) ? rawBrand : "INDEPENDENT";
+
+          const brandName = finalRoleData?.brandName || (brandType !== "INDEPENDENT" && brandType !== "OTHER" ? brandType : "");
+          const legalBusinessName = finalRoleData?.legalBusinessName || finalRoleData?.businessName || user.name;
+          const outletName = finalRoleData?.outletName || finalRoleData?.businessName || user.name;
+
+          const categoryToStoreType = {
+            COSMETICS: "BEAUTY",
+            PHARMACY: "PHARMACY",
+            MINIMARKET: "MINIMARKET",
+            SUPERMARKET: "SUPERMARKET",
+            HEALTH: "HEALTH",
+            BABY: "BABY",
+            HOUSEHOLD: "HOUSEHOLD",
+            OTHER: "OTHER",
+          };
+          const storeType = categoryToStoreType[businessCategory] || "OTHER";
+
           await MarketplaceStore.updateOne(
             { ownerId: user._id },
             {
               $set: {
-                name: finalRoleData?.businessName || user.name,
-                storeType: finalRoleData?.storeType || "OTHER",
+                name: outletName,
+                outletName,
+                legalBusinessName,
+                businessCategory,
+                brandType,
+                brandName,
+                storeType,
                 address: finalRoleData?.businessAddress || user.address || "",
+                businessPhone: finalRoleData?.businessPhone || user.phone || "",
+                description: finalRoleData?.businessDescription || "Toko retail mitra Kanyaah Shop.",
+                latitude: Number(finalRoleData?.latitude) || -7.1475,
+                longitude: Number(finalRoleData?.longitude) || 107.8015,
+                openingHours: {
+                  openTime: finalRoleData?.openTime || "07:00",
+                  closeTime: finalRoleData?.closeTime || "22:00",
+                  daysOpen: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"],
+                  isOpenNow: true,
+                },
+                isOfficialBrandPartner: false,
+                brandVerificationStatus:
+                  finalRoleData?.isOfficialPartnerRequested === "true" || finalRoleData?.isOfficialBrandPartner === "true"
+                    ? "PENDING_VERIFICATION"
+                    : "UNVERIFIED",
+                status: "PENDING_REVIEW",
+                isVerified: false,
+                isOfficialPharmacy: businessCategory === "PHARMACY",
                 pharmacistName: finalRoleData?.pharmacistName || "",
                 pharmacistSipa: finalRoleData?.pharmacistSipa || "",
-                status: "INACTIVE",
-                isVerified: false,
               },
             },
+            { upsert: true }
           );
         }
 
@@ -222,19 +269,59 @@ const registerUser = async (req, res) => {
 
     if (role === "pemilik_shop") {
       const MarketplaceStore = require("../models/MarketplaceStore");
-      const storeType = String(finalRoleData?.storeType || "OTHER").toUpperCase();
-      const allowedStoreTypes = ["SUPERMARKET", "MINIMARKET", "PHARMACY", "HEALTH", "BABY", "BEAUTY", "HOUSEHOLD", "OTHER"];
+      const rawCat = String(finalRoleData?.businessCategory || finalRoleData?.storeType || "MINIMARKET").toUpperCase();
+      const categoryMap = { BEAUTY: "COSMETICS", KOSMETIK: "COSMETICS", APOTEK: "PHARMACY" };
+      const validCategories = ["MINIMARKET", "SUPERMARKET", "PHARMACY", "COSMETICS", "BABY", "HEALTH", "HOUSEHOLD", "OTHER"];
+      const businessCategory = validCategories.includes(categoryMap[rawCat] || rawCat) ? (categoryMap[rawCat] || rawCat) : "MINIMARKET";
+
+      const rawBrand = String(finalRoleData?.brandType || "INDEPENDENT").toUpperCase();
+      const validBrands = ["ALFAMART", "INDOMARET", "CIRCLE_K", "INDEPENDENT", "OTHER"];
+      const brandType = validBrands.includes(rawBrand) ? rawBrand : "INDEPENDENT";
+
+      const brandName = finalRoleData?.brandName || (brandType !== "INDEPENDENT" && brandType !== "OTHER" ? brandType : "");
+      const legalBusinessName = finalRoleData?.legalBusinessName || finalRoleData?.businessName || user.name;
+      const outletName = finalRoleData?.outletName || finalRoleData?.businessName || user.name;
+
+      const categoryToStoreType = {
+        COSMETICS: "BEAUTY",
+        PHARMACY: "PHARMACY",
+        MINIMARKET: "MINIMARKET",
+        SUPERMARKET: "SUPERMARKET",
+        HEALTH: "HEALTH",
+        BABY: "BABY",
+        HOUSEHOLD: "HOUSEHOLD",
+        OTHER: "OTHER",
+      };
+      const storeType = categoryToStoreType[businessCategory] || "OTHER";
+
       await MarketplaceStore.create({
         ownerId: user._id,
-        name: finalRoleData?.businessName || user.name || "Toko Kanyaah Shop",
-        storeType: allowedStoreTypes.includes(storeType) ? storeType : "OTHER",
+        name: outletName,
+        outletName,
+        legalBusinessName,
+        businessCategory,
+        brandType,
+        brandName,
+        storeType,
         address: finalRoleData?.businessAddress || user.address || "",
+        businessPhone: finalRoleData?.businessPhone || user.phone || "",
         description: finalRoleData?.businessDescription || "Toko retail mitra Kanyaah Shop.",
         latitude: Number(finalRoleData?.latitude) || -7.1475,
         longitude: Number(finalRoleData?.longitude) || 107.8015,
-        status: "INACTIVE",
+        openingHours: {
+          openTime: finalRoleData?.openTime || "07:00",
+          closeTime: finalRoleData?.closeTime || "22:00",
+          daysOpen: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"],
+          isOpenNow: true,
+        },
+        isOfficialBrandPartner: false,
+        brandVerificationStatus:
+          finalRoleData?.isOfficialPartnerRequested === "true" || finalRoleData?.isOfficialBrandPartner === "true"
+            ? "PENDING_VERIFICATION"
+            : "UNVERIFIED",
+        status: "PENDING_REVIEW",
         isVerified: false,
-        isOfficialPharmacy: storeType === "PHARMACY",
+        isOfficialPharmacy: businessCategory === "PHARMACY",
         pharmacistName: finalRoleData?.pharmacistName || "",
         pharmacistSipa: finalRoleData?.pharmacistSipa || "",
       }).catch(err => console.warn("Auto MarketplaceStore creation note:", err.message));
@@ -490,9 +577,29 @@ const updateMitraStatus = async (req, res) => {
 
     if (user.role === "pemilik_shop") {
       const MarketplaceStore = require("../models/MarketplaceStore");
+      const storeUpdate = {
+        isVerified: status === "verified",
+        status: status === "verified" ? "ACTIVE" : status === "rejected" ? "REJECTED" : "INACTIVE",
+        verifiedAt: status === "verified" ? new Date() : null,
+      };
+
+      if (status === "rejected") {
+        storeUpdate.rejectionReason = user.rejectionReason || "Dokumen registrasi belum lengkap atau belum valid.";
+      } else if (status === "verified") {
+        storeUpdate.rejectionReason = "";
+      }
+
+      if (req.body.isOfficialBrandPartner !== undefined) {
+        storeUpdate.isOfficialBrandPartner = Boolean(req.body.isOfficialBrandPartner);
+        storeUpdate.brandVerificationStatus = req.body.isOfficialBrandPartner ? "VERIFIED" : "REJECTED";
+      } else if (status === "verified" && req.body.approveBrandPartner) {
+        storeUpdate.isOfficialBrandPartner = true;
+        storeUpdate.brandVerificationStatus = "VERIFIED";
+      }
+
       await MarketplaceStore.updateMany(
         { ownerId: user._id },
-        { $set: { isVerified: status === "verified", status: status === "verified" ? "ACTIVE" : "INACTIVE" } },
+        { $set: storeUpdate },
       );
     }
 

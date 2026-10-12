@@ -334,12 +334,12 @@ export const loadMitraAccounts = async (includeCustomers: boolean = true) => {
     : accounts.filter((account) => account.role !== "customer" && account.role !== "admin");
 };
 
-export const updateAccountStatus = async (accountId: string, status: AuthAccount["status"], rejectionReason?: string) => {
+export const updateAccountStatus = async (accountId: string, status: AuthAccount["status"], rejectionReason?: string, options?: { isOfficialBrandPartner?: boolean; approveBrandPartner?: boolean }) => {
   try {
     const res = await fetch(getApiUrl(`/auth/mitra/${accountId}/status`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, rejectionReason }),
+      body: JSON.stringify({ status, rejectionReason, ...options }),
     });
     const result = await res.json();
     if (result.success && result.data) {

@@ -32,10 +32,19 @@ import { ToastBanner, ToastType, ConfirmDialog } from "./CustomDialog";
 export interface ProductFormData {
   id?: string | number;
   name: string;
+  brand?: string;
   description: string;
   cat: string;
   price: number;
+  promoPrice?: number | null;
   stock: number;
+  minimumStock?: number;
+  sku?: string;
+  barcode?: string;
+  unit?: string;
+  weight?: number;
+  requiresPrescription?: boolean;
+  requiresAgeVerification?: boolean;
   isActive: boolean;
   img: string;
   images: string[];
@@ -73,10 +82,19 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
   onDelete,
 }) => {
   const [name, setName] = useState(initialData?.name || "");
+  const [brand, setBrand] = useState(initialData?.brand || "");
   const [description, setDescription] = useState(initialData?.description || "");
   const [cat, setCat] = useState(initialData?.cat || categories[0] || "Umum");
   const [price, setPrice] = useState(initialData?.price ? initialData.price.toString() : "");
+  const [promoPrice, setPromoPrice] = useState(initialData?.promoPrice ? initialData.promoPrice.toString() : "");
   const [stock, setStock] = useState(initialData?.stock !== undefined ? initialData.stock.toString() : "10");
+  const [minimumStock, setMinimumStock] = useState(initialData?.minimumStock !== undefined ? initialData.minimumStock.toString() : "5");
+  const [sku, setSku] = useState(initialData?.sku || "");
+  const [barcode, setBarcode] = useState(initialData?.barcode || "");
+  const [unit, setUnit] = useState(initialData?.unit || "pcs");
+  const [weight, setWeight] = useState(initialData?.weight !== undefined ? initialData.weight.toString() : "250");
+  const [requiresPrescription, setRequiresPrescription] = useState(Boolean(initialData?.requiresPrescription));
+  const [requiresAgeVerification, setRequiresAgeVerification] = useState(Boolean(initialData?.requiresAgeVerification));
   const [isActive, setIsActive] = useState(initialData?.isActive !== undefined ? initialData.isActive : true);
 
   // Multi-image state
@@ -337,16 +355,29 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
       return;
     }
 
+    const promoNum = promoPrice.trim() ? parseInt(promoPrice, 10) : undefined;
+    const minStockNum = minimumStock.trim() ? parseInt(minimumStock, 10) : 5;
+    const weightNum = weight.trim() ? parseInt(weight, 10) : 250;
+
     setIsSaving(true);
     try {
       const primaryImg = images.length > 0 ? images[0] : "";
       await onSave({
         id: initialData?.id,
         name: name.trim(),
+        brand: brand.trim(),
         description: description.trim(),
         cat,
         price: priceNum,
+        promoPrice: promoNum,
         stock: stockNum,
+        minimumStock: minStockNum,
+        sku: sku.trim(),
+        barcode: barcode.trim(),
+        unit: unit.trim() || "pcs",
+        weight: weightNum,
+        requiresPrescription,
+        requiresAgeVerification,
         isActive,
         img: primaryImg,
         images,
@@ -544,10 +575,22 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
             </View>
             <TextInput
               style={styles.textInput}
-              placeholder="Contoh: Paket Nasi Ayam Bakar Komplit"
+              placeholder="Contoh: Indomie Goreng Spesial / Paket Nasi Ayam"
               placeholderTextColor="#9CA3AF"
               value={name}
               onChangeText={setName}
+            />
+          </View>
+
+          {/* Brand / Merk */}
+          <View style={styles.formGroup}>
+            <Text style={styles.inputLabel}>Brand / Merk (Opsional)</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Contoh: Indofood, Unilever, Kalbe, atau Kosongkan"
+              placeholderTextColor="#9CA3AF"
+              value={brand}
+              onChangeText={setBrand}
             />
           </View>
 
@@ -592,7 +635,7 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
             <Text style={styles.inputLabel}>Deskripsi Lengkap</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}
-              placeholder="Jelaskan porsi, lauk pauk, rasa, keunggulan, atau catatan penyajian..."
+              placeholder="Jelaskan spesifikasi produk, komposisi, keunggulan, atau catatan..."
               placeholderTextColor="#9CA3AF"
               value={description}
               onChangeText={setDescription}
@@ -607,9 +650,10 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Harga & Stok</Text>
 
+          {/* Harga Normal & Harga Promo */}
           <View style={styles.twoColRow}>
             {/* Harga */}
-            <View style={[styles.formGroup, { flex: 1, marginRight: 10 }]}>
+            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
               <View style={styles.labelRow}>
                 <Text style={styles.inputLabel}>{priceLabel}</Text>
                 <Text style={styles.requiredMark}>*</Text>
@@ -629,8 +673,25 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
               )}
             </View>
 
+            {/* Harga Promo */}
+            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.inputLabel}>Harga Promo (Rp)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Opsional (Cth: 19000)"
+                placeholderTextColor="#9CA3AF"
+                value={promoPrice}
+                onChangeText={setPromoPrice}
+                keyboardType="numeric"
+              />
+              <Text style={styles.fieldHint}>Coret harga normal jika diisi</Text>
+            </View>
+          </View>
+
+          {/* Stok & Minimal Stok */}
+          <View style={styles.twoColRow}>
             {/* Stok */}
-            <View style={[styles.formGroup, { flex: 1, marginLeft: 10 }]}>
+            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
               <View style={styles.labelRow}>
                 <Text style={styles.inputLabel}>{stockLabel}</Text>
                 <Text style={styles.requiredMark}>*</Text>
@@ -645,16 +706,113 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
               />
               <Text style={styles.fieldHint}>Tersedia untuk dipesan</Text>
             </View>
+
+            {/* Minimum Stok Alert */}
+            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.inputLabel}>Batas Stok Menipis</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Cth: 5"
+                placeholderTextColor="#9CA3AF"
+                value={minimumStock}
+                onChangeText={setMinimumStock}
+                keyboardType="numeric"
+              />
+              <Text style={styles.fieldHint}>Notifikasi stok hampir habis</Text>
+            </View>
+          </View>
+
+          {/* Satuan & Berat */}
+          <View style={styles.twoColRow}>
+            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+              <Text style={styles.inputLabel}>Satuan (Unit)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Cth: pcs, botol, pack, strip"
+                placeholderTextColor="#9CA3AF"
+                value={unit}
+                onChangeText={setUnit}
+              />
+            </View>
+
+            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.inputLabel}>Berat (Gram)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Cth: 250"
+                placeholderTextColor="#9CA3AF"
+                value={weight}
+                onChangeText={setWeight}
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+
+          {/* SKU & Barcode */}
+          <View style={styles.twoColRow}>
+            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+              <Text style={styles.inputLabel}>Kode SKU (Opsional)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Cth: SKU-8891"
+                placeholderTextColor="#9CA3AF"
+                value={sku}
+                onChangeText={setSku}
+              />
+            </View>
+
+            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.inputLabel}>Barcode (Opsional)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Cth: 8991234567890"
+                placeholderTextColor="#9CA3AF"
+                value={barcode}
+                onChangeText={setBarcode}
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+
+          {/* Special Verification Switches */}
+          <View style={styles.switchCard}>
+            <View style={styles.switchInfo}>
+              <Text style={styles.switchTitle}>Perlu Resep Dokter (Apotek)</Text>
+              <Text style={styles.switchDesc}>
+                Customer wajib upload resep dokter dan menunggu verifikasi apoteker sebelum checkout.
+              </Text>
+            </View>
+            <Switch
+              value={requiresPrescription}
+              onValueChange={setRequiresPrescription}
+              trackColor={{ false: "#D1D5DB", true: "#BAE6FD" }}
+              thumbColor={requiresPrescription ? "#0284C7" : "#9CA3AF"}
+            />
+          </View>
+
+          <View style={styles.switchCard}>
+            <View style={styles.switchInfo}>
+              <Text style={styles.switchTitle}>Verifikasi Usia Dewasa (21+)</Text>
+              <Text style={styles.switchDesc}>
+                Tampilkan badge 21+ dan batasi hanya untuk pembeli dewasa.
+              </Text>
+            </View>
+            <Switch
+              value={requiresAgeVerification}
+              onValueChange={setRequiresAgeVerification}
+              trackColor={{ false: "#D1D5DB", true: "#FECDD3" }}
+              thumbColor={requiresAgeVerification ? "#E11D48" : "#9CA3AF"}
+            />
           </View>
 
           {/* Availability Switch */}
           <View style={styles.switchCard}>
             <View style={styles.switchInfo}>
-              <Text style={styles.switchTitle}>Menu Tersedia / Aktif</Text>
+              <Text style={styles.switchTitle}>Produk Tersedia / Aktif</Text>
               <Text style={styles.switchDesc}>
                 {isActive
-                  ? "Menu aktif dan langsung tampil di halaman customer."
-                  : "Menu dinonaktifkan sementara. Customer tidak dapat melihat atau memesan."}
+                  ? "Produk aktif dan langsung tampil di etalase Kanyaah Shop customer."
+                  : "Produk dinonaktifkan sementara. Customer tidak dapat melihat atau memesan."}
               </Text>
             </View>
             <Switch

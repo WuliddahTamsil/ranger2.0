@@ -20,7 +20,10 @@ export const validateEmail = (value: string) =>
 export const validatePassword = (value: string) =>
   value.length >= 8 && /[A-Za-z]/.test(value) && /\d/.test(value);
 
-export const getDocumentRequirements = (role: AuthRegistrationRole): AuthDocumentRequirement[] => {
+export const getDocumentRequirements = (
+  role: AuthRegistrationRole,
+  roleData?: Record<string, string>,
+): AuthDocumentRequirement[] => {
   if (role === "driver") {
     return [
       { key: "ktp", label: "KTP", description: "Foto KTP yang jelas dan tidak terpotong.", required: true },
@@ -37,11 +40,61 @@ export const getDocumentRequirements = (role: AuthRegistrationRole): AuthDocumen
   }
 
   if (role === "pemilik_shop") {
-    return [
+    const requirements: AuthDocumentRequirement[] = [
       { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik atau penanggung jawab usaha.", required: true },
-      { key: "business_license", label: "NIB / SIUP / izin usaha", description: "Dokumen legalitas usaha atau surat izin operasional.", required: true },
-      { key: "store_photo", label: "Foto outlet", description: "Foto bagian depan outlet atau papan nama toko.", required: true },
+      { key: "business_license", label: "NIB / SIUP / Izin Usaha", description: "Dokumen legalitas usaha atau surat izin operasional.", required: true },
+      { key: "store_photo", label: "Foto Outlet", description: "Foto tampak depan outlet lengkap dengan papan nama toko.", required: true },
     ];
+
+    const category = String(roleData?.businessCategory || roleData?.storeType || "").toUpperCase();
+    const brandType = String(roleData?.brandType || "").toUpperCase();
+    const isOfficialPartnerRequested = roleData?.isOfficialPartnerRequested === "true" || roleData?.isOfficialBrandPartner === "true";
+
+    // Alfamart / Indomaret / Circle K / Official Partner authorization
+    if (["ALFAMART", "INDOMARET", "CIRCLE_K"].includes(brandType) || isOfficialPartnerRequested) {
+      requirements.push({
+        key: "brand_authorization",
+        label: "Surat Otorisasi / Perjanjian Franchise",
+        description: "Dokumen kerja sama franchise atau bukti kepemilikan/izin brand resmi dari pemilik jaringan.",
+        required: true,
+      });
+    }
+
+    // Apotek specific documents
+    if (category === "PHARMACY") {
+      requirements.push(
+        {
+          key: "pharmacy_license",
+          label: "Surat Izin Apotek (SIA)",
+          description: "Surat Izin Operasional Apotek (SIA) yang masih berlaku.",
+          required: true,
+        },
+        {
+          key: "pharmacist_sipa",
+          label: "SIPA / SIPTTK Apoteker",
+          description: "Surat Izin Praktik Apoteker penanggung jawab yang aktif.",
+          required: true,
+        },
+        {
+          key: "pharmacist_identity",
+          label: "KTP & STRA Apoteker",
+          description: "Identitas KTP dan Surat Tanda Registrasi Apoteker (STRA) penanggung jawab.",
+          required: true,
+        }
+      );
+    }
+
+    // Kosmetik conditional document
+    if (category === "COSMETICS" || category === "BEAUTY") {
+      requirements.push({
+        key: "product_legal_document",
+        label: "Notifikasi / Izin Edar BPOM",
+        description: "Dokumen bukti legalitas atau notifikasi BPOM untuk produk kosmetik & skincare (opsional).",
+        required: false,
+      });
+    }
+
+    return requirements;
   }
 
   if (role === "pemilik_catering") {
@@ -78,7 +131,8 @@ export const getDocumentRequirements = (role: AuthRegistrationRole): AuthDocumen
 export const getMissingDocuments = (
   role: AuthRegistrationRole,
   documents: Record<string, AuthDocument>,
-) => getDocumentRequirements(role)
+  roleData?: Record<string, string>,
+) => getDocumentRequirements(role, roleData)
   .filter((requirement) => requirement.required && !documents[requirement.key])
   .map((requirement) => requirement.label);
 
@@ -112,10 +166,21 @@ export const validateRoleStep = (role: AuthRegistrationRole, roleData: Record<st
   }
 
   if (role === "pemilik_shop") {
-    if (!roleData.storeType?.trim()) return "Jenis toko wajib dipilih.";
-    if (!roleData.businessName?.trim()) return "Nama toko wajib diisi.";
+    const category = roleData.businessCategory || roleData.storeType;
+    if (!category?.trim()) return "Kategori usaha wajib dipilih.";
+    if (!roleData.brandType?.trim()) return "Jaringan / brand usaha wajib dipilih.";
+    if (roleData.brandType === "OTHER" && !roleData.brandName?.trim()) {
+      return "Nama brand / jaringan usaha lainnya wajib diisi.";
+    }
+    const outletName = roleData.outletName || roleData.businessName;
+    if (!outletName?.trim()) return "Nama outlet wajib diisi.";
+    if (!roleData.legalBusinessName?.trim() && !roleData.businessName?.trim()) {
+      return "Nama legal usaha wajib diisi.";
+    }
     if (!roleData.businessAddress?.trim()) return "Alamat lengkap outlet wajib diisi.";
-    if (roleData.storeType === "PHARMACY") {
+    if (!roleData.businessPhone?.trim()) return "Nomor WhatsApp usaha wajib diisi.";
+
+    if (category.toUpperCase() === "PHARMACY") {
       if (!roleData.pharmacistName?.trim()) return "Nama apoteker penanggung jawab wajib diisi.";
       if (!roleData.pharmacistSipa?.trim()) return "Nomor SIPA / SIPTTK wajib diisi.";
     }

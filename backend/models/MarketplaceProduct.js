@@ -17,11 +17,15 @@ const marketplaceProductSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     brand: { type: String, default: "", trim: true },
     category: { type: String, default: "General", trim: true },
+    subcategory: { type: String, default: "", trim: true },
     cat: { type: String, required: true, default: "Makanan" }, // Legacy compatibility
+    sku: { type: String, default: "", trim: true, sparse: true, index: true },
+    barcode: { type: String, default: "", trim: true, sparse: true, index: true },
     description: { type: String, trim: true, default: "" },
     price: { type: Number, required: true, min: 0 },
     promoPrice: { type: Number, default: null, min: 0 },
     stock: { type: Number, required: true, min: 0, default: 0 },
+    minimumStock: { type: Number, default: 5, min: 0 },
     unit: { type: String, default: "pcs" }, // e.g. "pcs", "kg", "pack", "strip", "botol"
     weight: { type: Number, default: 250 }, // in grams
     isActive: { type: Boolean, default: true },

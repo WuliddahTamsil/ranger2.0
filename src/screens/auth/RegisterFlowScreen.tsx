@@ -71,7 +71,7 @@ export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEma
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const requirements = useMemo(() => getDocumentRequirements(role), [role]);
+  const requirements = useMemo(() => getDocumentRequirements(role, form.roleData), [role, form.roleData]);
   const isCustomer = role === "customer";
   const labels = isCustomer ? ["Akun"] : ["Akun", "Profil", "Dokumen"];
 
@@ -89,7 +89,7 @@ export const RegisterFlowScreen: React.FC<Props> = ({ navigate, role, initialEma
       if (validation) { setError(validation); return; }
     }
     if (step === 2) {
-      const missing = getMissingDocuments(role, form.documents);
+      const missing = getMissingDocuments(role, form.documents, form.roleData);
       if (missing.length) { setError(`Dokumen wajib belum lengkap: ${missing.join(", ")}.`); return; }
     }
     if (step < labels.length - 1) { setStep((current) => current + 1); return; }
@@ -347,40 +347,354 @@ const RoleStep: React.FC<{ role: AuthRegistrationRole; roleData: Record<string, 
   }
 
   if (role === "pemilik_shop") {
-    const shopTypes = [
-      { id: "MINIMARKET", label: "Minimarket", sub: "Indomaret, Alfamart, Circle K, toko harian", icon: "🛒" },
-      { id: "SUPERMARKET", label: "Supermarket", sub: "Belanja mingguan dan kebutuhan rumah", icon: "🏬" },
-      { id: "PHARMACY", label: "Apotek", sub: "Obat, vitamin, dan layanan resep", icon: "💊" },
-      { id: "BABY", label: "Ibu & Bayi", sub: "Popok, susu, botol, dan perlengkapan bayi", icon: "🍼" },
-      { id: "HEALTH", label: "Kesehatan", sub: "Alat kesehatan dan P3K", icon: "🩺" },
-      { id: "BEAUTY", label: "Kecantikan", sub: "Kosmetik dan skincare", icon: "✨" },
-      { id: "HOUSEHOLD", label: "Rumah Tangga", sub: "Deterjen, tisu, dan perlengkapan rumah", icon: "🏠" },
-      { id: "OTHER", label: "Retail lainnya", sub: "Kategori toko lain yang relevan", icon: "🏪" },
+    const brandTypes = [
+      { id: "ALFAMART", label: "Alfamart", sub: "Jaringan minimarket Alfamart", icon: "🛒" },
+      { id: "INDOMARET", label: "Indomaret", sub: "Jaringan minimarket Indomaret", icon: "🏪" },
+      { id: "CIRCLE_K", label: "Circle K", sub: "Convenience store Circle K", icon: "☕" },
+      { id: "INDEPENDENT", label: "Toko Independen", sub: "Toko milik sendiri / ritel perorangan", icon: "🏠" },
+      { id: "OTHER", label: "Brand Lainnya", sub: "Brand atau jaringan ritel lainnya", icon: "🏷️" },
     ];
-    const selectedType = roleData.storeType || "MINIMARKET";
+
+    const categoryTypes = [
+      { id: "MINIMARKET", label: "Minimarket", sub: "Sembako, snack, dan kebutuhan cepat", icon: "🛒" },
+      { id: "SUPERMARKET", label: "Supermarket", sub: "Belanja lengkap mingguan & rumah tangga", icon: "🏬" },
+      { id: "PHARMACY", label: "Apotek", sub: "Obat resep, vitamin, dan perlengkapan medis", icon: "💊" },
+      { id: "COSMETICS", label: "Kosmetik & Skincare", sub: "Perawatan kulit, wajah, dan kecantikan", icon: "✨" },
+      { id: "BABY", label: "Ibu & Bayi", sub: "Popok, susu, botol, dan perlengkapan bayi", icon: "🍼" },
+      { id: "HEALTH", label: "Kesehatan", sub: "Alat kesehatan, suplemen, dan P3K", icon: "🩺" },
+      { id: "HOUSEHOLD", label: "Rumah Tangga", sub: "Deterjen, sabun, dan kebutuhan rumah", icon: "🧹" },
+      { id: "OTHER", label: "Retail Lainnya", sub: "Kategori produk retail umum lainnya", icon: "📦" },
+    ];
+
+    const selectedBrand = roleData.brandType || "INDEPENDENT";
+    const selectedCategory = roleData.businessCategory || roleData.storeType || "MINIMARKET";
+    const isChainBrand = ["ALFAMART", "INDOMARET", "CIRCLE_K"].includes(selectedBrand);
+    const isPharmacy = selectedCategory === "PHARMACY";
+    const isCosmetics = selectedCategory === "COSMETICS" || selectedCategory === "BEAUTY";
+
+    const handleSelectCategory = (catId: string) => {
+      updateRoleData("businessCategory", catId);
+      // Synchronize legacy storeType
+      const catToStoreType: Record<string, string> = {
+        COSMETICS: "BEAUTY",
+        PHARMACY: "PHARMACY",
+        MINIMARKET: "MINIMARKET",
+        SUPERMARKET: "SUPERMARKET",
+        HEALTH: "HEALTH",
+        BABY: "BABY",
+        HOUSEHOLD: "HOUSEHOLD",
+        OTHER: "OTHER",
+      };
+      updateRoleData("storeType", catToStoreType[catId] || catId);
+    };
+
+    const handleSelectBrand = (brandId: string) => {
+      updateRoleData("brandType", brandId);
+      if (brandId !== "OTHER") {
+        updateRoleData("brandName", brandId === "INDEPENDENT" ? "" : brandId);
+      }
+    };
+
     return (
       <View style={authStyles.card}>
-        <SectionHeading icon={<ShieldCheck size={18} color={authColors.primary} />} title="Data Kanyaah Shop" text="Pilih tipe bisnis agar katalog, dokumen, dan tampilan toko sesuai dengan operasionalmu." />
-        <Text style={[authStyles.label, { marginTop: 14 }]}>Jenis toko *</Text>
+        <SectionHeading
+          icon={<ShieldCheck size={18} color={authColors.primary} />}
+          title="Data Kanyaah Shop"
+          text="Lengkapi brand jaringan, kategori usaha, dan profil outlet Anda untuk tampil di katalog customer."
+        />
+
+        {/* 1. Pilihan Brand / Jaringan */}
+        <Text style={[authStyles.label, { marginTop: 14 }]}>1. Brand / Jaringan Usaha *</Text>
+        <Text style={{ fontSize: 11, color: "#6B7280", marginBottom: 6 }}>
+          Pilih apakah outlet terafiliasi dengan jaringan ritel ternama atau beroperasi mandiri (independen).
+        </Text>
         <View style={styles.categoryGrid}>
-          {shopTypes.map((type) => {
-            const isSelected = selectedType === type.id;
+          {brandTypes.map((b) => {
+            const isSelected = selectedBrand === b.id;
             return (
-              <TouchableOpacity key={type.id} style={[styles.categoryCard, isSelected && styles.categoryCardSelected]} onPress={() => updateRoleData("storeType", type.id)} activeOpacity={0.8}>
-                <Text style={styles.categoryEmoji}>{type.icon}</Text>
-                <View style={{ flex: 1 }}><Text style={[styles.categoryLabel, isSelected && styles.categoryLabelSelected]}>{type.label}</Text><Text style={styles.categorySub}>{type.sub}</Text></View>
-                <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>{isSelected && <View style={styles.radioInner} />}</View>
+              <TouchableOpacity
+                key={b.id}
+                style={[styles.categoryCard, isSelected && styles.categoryCardSelected]}
+                onPress={() => handleSelectBrand(b.id)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.categoryEmoji}>{b.icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.categoryLabel, isSelected && styles.categoryLabelSelected]}>{b.label}</Text>
+                  <Text style={styles.categorySub}>{b.sub}</Text>
+                </View>
+                <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                  {isSelected && <View style={styles.radioInner} />}
+                </View>
               </TouchableOpacity>
             );
           })}
         </View>
-        <TextField label="Nama toko / jaringan *" value={roleData.businessName || ""} onChangeText={(value) => updateRoleData("businessName", value)} placeholder="Contoh: Apotek Sehat Bersama" />
-        <TextField label="Alamat outlet *" value={roleData.businessAddress || ""} onChangeText={(value) => updateRoleData("businessAddress", value)} placeholder="Jalan, nomor, kelurahan, kecamatan, kota" multiline icon={<MapPin size={17} color="#6B7280" />} />
-        {selectedType === "PHARMACY" && <>
-          <TextField label="Nama apoteker penanggung jawab *" value={roleData.pharmacistName || ""} onChangeText={(value) => updateRoleData("pharmacistName", value)} placeholder="Nama sesuai SIPA" />
-          <TextField label="Nomor SIPA / SIPTTK *" value={roleData.pharmacistSipa || ""} onChangeText={(value) => updateRoleData("pharmacistSipa", value)} placeholder="Nomor izin praktik" />
-        </>}
-        <View style={styles.shopHint}><Text style={styles.shopHintText}>Siapkan KTP pemilik, NIB/SIUP atau izin usaha, dan foto outlet. Apotek juga perlu data apoteker penanggung jawab.</Text></View>
+
+        {selectedBrand === "OTHER" && (
+          <TextField
+            label="Nama Brand / Jaringan Lainnya *"
+            value={roleData.brandName || ""}
+            onChangeText={(value) => updateRoleData("brandName", value)}
+            placeholder="Contoh: FamilyMart / Lawson / Toko Berkah"
+          />
+        )}
+
+        {/* Tanya Partner Resmi jika memilih brand ritel terkenal */}
+        {isChainBrand && (
+          <View style={[styles.shopHint, { marginTop: 12, backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
+            <Text style={[styles.shopHintText, { color: "#92400E", fontWeight: "700" }]}>
+              Verifikasi Mitra Brand Resmi:
+            </Text>
+            <Text style={[styles.shopHintText, { color: "#78350F", marginTop: 4 }]}>
+              Apakah outlet ini merupakan cabang/franchise resmi {selectedBrand}?
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+              <TouchableOpacity
+                style={[
+                  styles.subTypeChip,
+                  roleData.isOfficialPartnerRequested === "true" && styles.subTypeChipActive,
+                ]}
+                onPress={() => updateRoleData("isOfficialPartnerRequested", "true")}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.subTypeText,
+                    roleData.isOfficialPartnerRequested === "true" && styles.subTypeTextActive,
+                  ]}
+                >
+                  Ya, Partner / Franchise Resmi
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.subTypeChip,
+                  roleData.isOfficialPartnerRequested === "false" && styles.subTypeChipActive,
+                ]}
+                onPress={() => updateRoleData("isOfficialPartnerRequested", "false")}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.subTypeText,
+                    roleData.isOfficialPartnerRequested === "false" && styles.subTypeTextActive,
+                  ]}
+                >
+                  Bukan / Toko Independen
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 10.5, color: "#92400E", marginTop: 8, fontStyle: "italic" }}>
+              ⚠️ Catatan: Badge "Official Partner" tidak otomatis aktif. Admin akan memverifikasi dokumen kerja sama/franchise Anda terlebih dahulu.
+            </Text>
+          </View>
+        )}
+
+        {/* 2. Pilihan Kategori Usaha */}
+        <Text style={[authStyles.label, { marginTop: 16 }]}>2. Kategori Usaha *</Text>
+        <Text style={{ fontSize: 11, color: "#6B7280", marginBottom: 6 }}>
+          Pilih kategori produk utama outlet Anda untuk segmentasi katalog dan persyaratan dokumen.
+        </Text>
+        <View style={styles.categoryGrid}>
+          {categoryTypes.map((c) => {
+            const isSelected = selectedCategory === c.id;
+            return (
+              <TouchableOpacity
+                key={c.id}
+                style={[styles.categoryCard, isSelected && styles.categoryCardSelected]}
+                onPress={() => handleSelectCategory(c.id)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.categoryEmoji}>{c.icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.categoryLabel, isSelected && styles.categoryLabelSelected]}>{c.label}</Text>
+                  <Text style={styles.categorySub}>{c.sub}</Text>
+                </View>
+                <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                  {isSelected && <View style={styles.radioInner} />}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Conditional Information for Cosmetics */}
+        {isCosmetics && (
+          <View style={[styles.shopHint, { marginTop: 12, backgroundColor: "#FDF2F8", borderColor: "#FBCFE8" }]}>
+            <Text style={[styles.shopHintText, { color: "#9D174D", fontWeight: "700" }]}>
+              Informasi Kategori Kosmetik & Skincare:
+            </Text>
+            <Text style={[styles.shopHintText, { color: "#831843", marginTop: 3 }]}>
+              Produk kecantikan dan perawatan tubuh yang dijual harus memenuhi ketentuan edar dan memiliki notifikasi BPOM. Bukti izin/notifikasi BPOM dapat disertakan pada tahap dokumen berkas.
+            </Text>
+          </View>
+        )}
+
+        {/* 3. Field Dasar Outlet */}
+        <Text style={[authStyles.label, { marginTop: 16 }]}>3. Informasi Dasar Outlet *</Text>
+        <TextField
+          label="Nama Legal Usaha (PT / CV / Perseorangan) *"
+          value={roleData.legalBusinessName || roleData.businessName || ""}
+          onChangeText={(value) => {
+            updateRoleData("legalBusinessName", value);
+            if (!roleData.businessName) updateRoleData("businessName", value);
+          }}
+          placeholder="Contoh: PT Sumber Alfaria Trijaya / CV Berkah Sehat"
+        />
+        <TextField
+          label="Nama Outlet (Tampil di Aplikasi Customer) *"
+          value={roleData.outletName || roleData.businessName || ""}
+          onChangeText={(value) => {
+            updateRoleData("outletName", value);
+            updateRoleData("businessName", value);
+          }}
+          placeholder="Contoh: Alfamart Kamojang / Apotek Sehat Mandiri"
+        />
+        <TextField
+          label="Nomor WhatsApp Usaha *"
+          value={roleData.businessPhone || ""}
+          onChangeText={(value) => updateRoleData("businessPhone", value)}
+          placeholder="081234567890"
+          keyboardType="phone-pad"
+        />
+        <TextField
+          label="Deskripsi Usaha *"
+          value={roleData.businessDescription || ""}
+          onChangeText={(value) => updateRoleData("businessDescription", value)}
+          placeholder="Contoh: Menyediakan sembako, minuman dingin, dan aneka snack kebutuhan harian lengkap."
+          multiline
+        />
+
+        {/* Jam Operasional */}
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+          <View style={{ flex: 1 }}>
+            <TextField
+              label="Jam Buka *"
+              value={roleData.openTime || "07:00"}
+              onChangeText={(val) => updateRoleData("openTime", val)}
+              placeholder="07:00"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <TextField
+              label="Jam Tutup *"
+              value={roleData.closeTime || "22:00"}
+              onChangeText={(val) => updateRoleData("closeTime", val)}
+              placeholder="22:00"
+            />
+          </View>
+        </View>
+
+        {/* Alamat Outlet */}
+        <TextField
+          label="Alamat Lengkap Outlet *"
+          value={roleData.businessAddress || ""}
+          onChangeText={(value) => {
+            updateRoleData("businessAddress", value);
+            const lower = value.toLowerCase();
+            if (lower.includes("cipanas") || lower.includes("tarogong")) {
+              updateRoleData("latitude", "-7.1852");
+              updateRoleData("longitude", "107.8765");
+            } else if (lower.includes("kamojang") || lower.includes("samarang")) {
+              updateRoleData("latitude", "-7.2145");
+              updateRoleData("longitude", "107.7982");
+            } else if (lower.includes("garut kota")) {
+              updateRoleData("latitude", "-7.2278");
+              updateRoleData("longitude", "107.9087");
+            }
+          }}
+          placeholder="Jalan, nomor, kelurahan, kecamatan, kota"
+          multiline
+          icon={<MapPin size={17} color="#6B7280" />}
+        />
+
+        {/* Quick Area Mapping Chips */}
+        <Text style={[authStyles.label, { marginTop: 12 }]}>Pilih Lokasi Cepat di Peta / Wilayah</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaChipsScroll}>
+          {[
+            { label: "📍 Tarogong / Cipanas", address: "Jl. Raya Cipanas, Tarogong Kaler, Garut", lat: "-7.1852", lng: "107.8765" },
+            { label: "📍 Samarang / Kamojang", address: "Jl. Raya Kamojang, Samarang, Garut", lat: "-7.2145", lng: "107.7982" },
+            { label: "📍 Garut Kota", address: "Pusat Kota Garut, Jawa Barat", lat: "-7.2278", lng: "107.9087" },
+          ].map((area, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={[
+                styles.areaQuickChip,
+                roleData.latitude === area.lat && styles.areaQuickChipActive,
+              ]}
+              onPress={() => {
+                if (!roleData.businessAddress) {
+                  updateRoleData("businessAddress", area.address);
+                }
+                updateRoleData("latitude", area.lat);
+                updateRoleData("longitude", area.lng);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.areaQuickChipText, roleData.latitude === area.lat && styles.areaQuickChipTextActive]}>
+                {area.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* GPS Coordinates Card */}
+        <View style={styles.gpsCardWrapper}>
+          <Text style={styles.gpsCardTitle}>Titik Koordinat Outlet (Latitude & Longitude):</Text>
+          <View style={styles.gpsRowClean}>
+            <View style={styles.gpsInputCol}>
+              <Text style={styles.gpsMiniLabel}>Latitude</Text>
+              <TextInput
+                style={styles.gpsInputBox}
+                value={roleData.latitude || "-7.1475"}
+                onChangeText={(value) => updateRoleData("latitude", value)}
+                placeholder="-7.1475"
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.gpsInputCol}>
+              <Text style={styles.gpsMiniLabel}>Longitude</Text>
+              <TextInput
+                style={styles.gpsInputBox}
+                value={roleData.longitude || "107.8015"}
+                onChangeText={(value) => updateRoleData("longitude", value)}
+                placeholder="107.8015"
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* 4. Apotek Specific Fields */}
+        {isPharmacy && (
+          <View style={{ marginTop: 14 }}>
+            <Text style={[authStyles.label, { color: "#0284C7" }]}>Data Apoteker Penanggung Jawab *</Text>
+            <TextField
+              label="Nama Apoteker Penanggung Jawab *"
+              value={roleData.pharmacistName || ""}
+              onChangeText={(value) => updateRoleData("pharmacistName", value)}
+              placeholder="apt. Nama Lengkap, S.Farm."
+            />
+            <TextField
+              label="Nomor SIPA / SIPTTK *"
+              value={roleData.pharmacistSipa || ""}
+              onChangeText={(value) => updateRoleData("pharmacistSipa", value)}
+              placeholder="Contoh: 19850101/SIPA_32.05/2024/2001"
+            />
+            <View style={[styles.shopHint, { backgroundColor: "#E0F2FE", borderColor: "#BAE6FD" }]}>
+              <Text style={[styles.shopHintText, { color: "#0369A1" }]}>
+                Data apoteker wajib diisi untuk verifikasi kefarmasian. Pada tahap berikutnya, siapkan Surat Izin Apotek (SIA), SIPA, dan KTP/STRA Apoteker.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.shopHint}>
+          <Text style={styles.shopHintText}>
+            💡 Dokumen legalitas dan izin usaha yang diperlukan akan disesuaikan secara otomatis di tahap berikutnya berdasarkan brand dan kategori usaha yang Anda pilih.
+          </Text>
+        </View>
       </View>
     );
   }
