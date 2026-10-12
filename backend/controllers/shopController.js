@@ -4,6 +4,47 @@ const MarketplaceProduct = require("../models/MarketplaceProduct");
 const InventoryLog = require("../models/InventoryLog");
 const User = require("../models/User");
 
+// Normalize image URLs, converting Google Drive links and Google search redirects into direct image stream URLs
+const normalizeImageUrl = (rawUrl) => {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  let url = rawUrl.trim();
+  if (!url) return "";
+
+  if (url.startsWith("data:image") || url.startsWith("file://") || url.startsWith("blob:")) {
+    return url;
+  }
+
+  // Google Image search redirect URL
+  const imgUrlMatch = url.match(/[?&]imgurl=([^&]+)/i);
+  if (imgUrlMatch && imgUrlMatch[1]) {
+    try {
+      url = decodeURIComponent(imgUrlMatch[1]);
+    } catch {
+      url = imgUrlMatch[1];
+    }
+  }
+
+  // Google Drive: /file/d/<id>
+  const driveFileMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i);
+  if (driveFileMatch && driveFileMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${driveFileMatch[1]}`;
+  }
+
+  // Google Drive: ?id=<id> or uc?id=<id>
+  const driveIdMatch = url.match(/(?:drive|docs)\.google\.com\/.*[?&]id=([a-zA-Z0-9_-]+)/i);
+  if (driveIdMatch && driveIdMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${driveIdMatch[1]}`;
+  }
+
+  // Google Drive thumbnail: /thumbnail?id=<id>
+  const driveThumbMatch = url.match(/drive\.google\.com\/thumbnail\?id=([a-zA-Z0-9_-]+)/i);
+  if (driveThumbMatch && driveThumbMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${driveThumbMatch[1]}`;
+  }
+
+  return url;
+};
+
 // Standard Haversine distance calculator in kilometers
 const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 1.5; // default fallback
@@ -356,12 +397,81 @@ const getProductById = async (req, res) => {
 const getMerchantStore = async (req, res) => {
   try {
     if (!req.authUser) return res.status(401).json({ success: false, message: "Autentikasi diperlukan" });
-    const store = await MarketplaceStore.findOne({ ownerId: req.authUser._id }).lean();
+    let store = await MarketplaceStore.findOne({ ownerId: req.authUser._id }).lean();
+    if (!store) {
+      const outletNameCandidate = req.authUser.roleData?.outletName || req.authUser.roleData?.businessName;
+      if (outletNameCandidate) {
+        store = await MarketplaceStore.findOne({
+          $or: [{ name: outletNameCandidate }, { outletName: outletNameCandidate }],
+        }).lean();
+      }
+    }
     if (!store) return res.status(404).json({ success: false, message: "Toko Kanyaah Shop belum tersedia" });
     return res.json({ success: true, data: store });
   } catch (error) {
     console.error("getMerchantStore error:", error);
     return res.status(500).json({ success: false, message: "Gagal memuat profil toko" });
+  }
+};
+
+/**
+ * PUT /api/shop/merchant/store
+ * Updates the authenticated Kanyaah Shop owner's store.
+ */
+const updateMerchantStore = async (req, res) => {
+  try {
+    if (!req.authUser) return res.status(401).json({ success: false, message: "Autentikasi diperlukan" });
+    const {
+      isOpen,
+      name,
+      outletName,
+      address,
+      businessPhone,
+      openingHours,
+      openingDays,
+      brandType,
+      businessCategory,
+      bankName,
+      bankAccountNumber,
+      bankAccountHolder,
+      qrisImageUrl,
+    } = req.body;
+
+    let store = await MarketplaceStore.findOne({ ownerId: req.authUser._id });
+    if (!store) {
+      const outletNameCandidate = req.authUser.roleData?.outletName || req.authUser.roleData?.businessName;
+      if (outletNameCandidate) {
+        store = await MarketplaceStore.findOne({
+          $or: [{ name: outletNameCandidate }, { outletName: outletNameCandidate }],
+        });
+        if (store) store.ownerId = req.authUser._id;
+      }
+    }
+    if (!store) return res.status(404).json({ success: false, message: "Toko Kanyaah Shop belum tersedia" });
+
+    if (typeof isOpen === "boolean") {
+      store.isOpen = isOpen;
+      if (!store.openingHours) store.openingHours = {};
+      store.openingHours.isOpenNow = isOpen;
+    }
+    if (name) store.name = name;
+    if (outletName) store.outletName = outletName;
+    if (address) store.address = address;
+    if (businessPhone) store.businessPhone = businessPhone;
+    if (openingHours) store.openingHours = { ...(store.openingHours || {}), ...openingHours };
+    if (openingDays) store.openingDays = openingDays;
+    if (brandType) store.brandType = brandType;
+    if (businessCategory) store.businessCategory = businessCategory;
+    if (bankName) store.bankName = bankName;
+    if (bankAccountNumber !== undefined) store.bankAccountNumber = bankAccountNumber;
+    if (bankAccountHolder !== undefined) store.bankAccountHolder = bankAccountHolder;
+    if (qrisImageUrl !== undefined) store.qrisImageUrl = qrisImageUrl;
+
+    await store.save();
+    return res.json({ success: true, message: "Profil toko berhasil diperbarui", data: store });
+  } catch (error) {
+    console.error("updateMerchantStore error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memperbarui toko" });
   }
 };
 
@@ -431,6 +541,14 @@ const createProduct = async (req, res) => {
     }
 
     const initialStock = Math.max(0, Number(stock));
+    const rawImg = img || (Array.isArray(images) && images[0]) || "";
+    const primaryImg = normalizeImageUrl(rawImg);
+    const normalizedImages = Array.isArray(images) && images.length > 0
+      ? images.map((u) => normalizeImageUrl(u)).filter(Boolean)
+      : primaryImg
+      ? [primaryImg]
+      : [];
+
     const newProduct = await MarketplaceProduct.create({
       storeId,
       ownerId: authUser._id,
@@ -451,9 +569,9 @@ const createProduct = async (req, res) => {
       requiresPrescription: Boolean(requiresPrescription),
       requiresAgeVerification: Boolean(requiresAgeVerification),
       isEcoProduct: Boolean(isEcoProduct),
-      img: img || (Array.isArray(images) && images[0]) || "",
-      images: Array.isArray(images) ? images : img ? [img] : [],
-      imageUrls: Array.isArray(images) ? images : img ? [img] : [],
+      img: primaryImg,
+      images: normalizedImages,
+      imageUrls: normalizedImages,
       productType: "SHOP",
     });
 
@@ -532,6 +650,12 @@ const updateProduct = async (req, res) => {
       updates.cat = updates.category;
     }
 
+    if (updates.img) updates.img = normalizeImageUrl(updates.img);
+    if (Array.isArray(updates.images)) {
+      updates.images = updates.images.map((u) => normalizeImageUrl(u)).filter(Boolean);
+      if (!updates.img && updates.images.length > 0) updates.img = updates.images[0];
+    }
+
     const updated = await MarketplaceProduct.findByIdAndUpdate(id, updates, { new: true });
 
     return res.json({
@@ -563,12 +687,13 @@ const deleteProduct = async (req, res) => {
       return res.status(403).json({ success: false, message: "Anda tidak berhak menghapus produk ini" });
     }
 
-    product.isActive = false;
-    await product.save();
+    // Hapus produk permanen dari katalog dan bersihkan log inventaris
+    await MarketplaceProduct.findByIdAndDelete(id);
+    await InventoryLog.deleteMany({ productId: id });
 
     return res.json({
       success: true,
-      message: "Produk berhasil dinonaktifkan",
+      message: "Produk berhasil dihapus dari katalog",
     });
   } catch (error) {
     console.error("deleteProduct error:", error);
@@ -663,6 +788,14 @@ const bulkImportProducts = async (req, res) => {
     for (const item of items) {
       if (!item.name || item.price === undefined) continue;
       const initialStock = Math.max(0, Number(item.stock) || 0);
+      const rawImg = item.img || (item.images && item.images[0]) || item.imageUrl || "";
+      const primaryImg = normalizeImageUrl(rawImg);
+      const normalizedImages = Array.isArray(item.images) && item.images.length > 0
+        ? item.images.map((u) => normalizeImageUrl(u)).filter(Boolean)
+        : primaryImg
+        ? [primaryImg]
+        : [];
+
       const prod = await MarketplaceProduct.create({
         storeId,
         ownerId: authUser._id,
@@ -680,8 +813,8 @@ const bulkImportProducts = async (req, res) => {
         minimumStock: Number(item.minimumStock) || 5,
         unit: String(item.unit || "pcs").trim(),
         weight: Number(item.weight) || 250,
-        images: Array.isArray(item.images) ? item.images : item.img ? [item.img] : [],
-        img: item.img || (item.images && item.images[0]) || "",
+        images: normalizedImages,
+        img: primaryImg || "",
         isActive: item.isActive !== false,
         requiresPrescription: Boolean(item.requiresPrescription),
         requiresAgeVerification: Boolean(item.requiresAgeVerification),
@@ -723,6 +856,7 @@ module.exports = {
   searchGlobal,
   getProductById,
   getMerchantStore,
+  updateMerchantStore,
   getMerchantProducts,
   createProduct,
   updateProduct,

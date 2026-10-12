@@ -46,6 +46,11 @@ export interface ShopStore {
     daysOpen: string[];
     isOpenNow: boolean;
   };
+  openingDays?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolder?: string;
+  qrisImageUrl?: string;
 }
 
 export interface ShopProduct {
@@ -255,6 +260,30 @@ export const fetchMerchantShopStore = async (): Promise<{ success: boolean; data
     return await res.json();
   } catch (error: any) {
     return { success: false, message: error.message };
+  }
+};
+
+export const updateMerchantShopStore = async (
+  payload: Partial<ShopStore>
+): Promise<{ success: boolean; data?: ShopStore; message?: string }> => {
+  try {
+    const res = await fetch(getApiUrl("/shop/merchant/store"), {
+      method: "PUT",
+      headers: await getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+};
+
+export const fetchMerchantShopOrders = async (): Promise<{ success: boolean; data?: any[]; message?: string }> => {
+  try {
+    const res = await fetch(getApiUrl("/shop/merchant/orders"), { headers: await getHeaders() });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, data: [], message: error.message };
   }
 };
 

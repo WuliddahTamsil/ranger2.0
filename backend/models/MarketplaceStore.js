@@ -131,6 +131,31 @@ const marketplaceStoreSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    isOpen: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    openingDays: {
+      type: String,
+      default: "Buka Setiap Hari",
+    },
+    bankName: {
+      type: String,
+      default: "BCA",
+    },
+    bankAccountNumber: {
+      type: String,
+      default: "",
+    },
+    bankAccountHolder: {
+      type: String,
+      default: "",
+    },
+    qrisImageUrl: {
+      type: String,
+      default: "",
+    },
     openingHours: {
       openTime: { type: String, default: "07:00" },
       closeTime: { type: String, default: "22:00" },

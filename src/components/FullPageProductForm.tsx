@@ -25,7 +25,7 @@ import {
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import { rp } from "../utils/formatters";
+import { rp, normalizeImageUrl } from "../utils/formatters";
 import { uploadFileToBackend } from "../services/api";
 import { ToastBanner, ToastType, ConfirmDialog } from "./CustomDialog";
 
@@ -305,7 +305,7 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
     }
   };
 
-  // Add image via URL
+  // Add image via URL (Supports Google Drive & Web URLs)
   const handleAddUrlImage = () => {
     const trimmed = urlInput.trim();
     if (!trimmed) return;
@@ -317,8 +317,10 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
       showAlert("Batas Maksimal", "Maksimal 6 foto per produk.");
       return;
     }
-    setImages((prev) => [...prev, trimmed]);
+    const normalized = normalizeImageUrl(trimmed);
+    setImages((prev) => [...prev, normalized]);
     setUrlInput("");
+    showAlert("Berhasil", "Foto dari URL / Google Drive berhasil ditambahkan.");
   };
 
   // Set specific image as cover (primary / index 0)
@@ -534,7 +536,7 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
             <View style={styles.urlInputRow}>
               <TextInput
                 style={styles.urlInput}
-                placeholder="Atau masukkan URL link foto (https://...)"
+                placeholder="Link foto (Google Drive / Web URL: https://...)"
                 placeholderTextColor="#9CA3AF"
                 value={urlInput}
                 onChangeText={setUrlInput}
@@ -560,6 +562,9 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
                 </Text>
               </TouchableOpacity>
             </View>
+            <Text style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>
+              💡 Bisa pakai link Google Drive (pastikan akses 'Siapa saja yang memiliki link / Anyone with link') atau link foto web.
+            </Text>
           </View>
         </View>
 
@@ -851,6 +856,32 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
 
       {/* Sticky Bottom Action Bar */}
       <View style={styles.bottomActionBar}>
+        {isEdit && onDelete ? (
+          <TouchableOpacity
+            style={[styles.cancelButton, { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2", flex: 1 }]}
+            onPress={() => {
+              showConfirm({
+                title: "Hapus Produk?",
+                message: "Produk ini akan dihapus secara permanen dari sistem etalase toko.",
+                type: "danger",
+                confirmText: "Hapus Permanen",
+                cancelText: "Batal",
+                onConfirm: () => {
+                  setConfirmDialogConfig((prev) => ({ ...prev, visible: false }));
+                  onDelete();
+                },
+              });
+            }}
+            disabled={isSaving}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+              <Trash2 size={16} color="#DC2626" />
+              <Text style={[styles.cancelButtonText, { color: "#DC2626" }]}>Hapus</Text>
+            </View>
+          </TouchableOpacity>
+        ) : null}
+
         <TouchableOpacity
           style={styles.cancelButton}
           onPress={onCancel}

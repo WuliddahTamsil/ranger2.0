@@ -122,6 +122,22 @@ export default function App() {
       setCurrentAuthAccount(account);
       setCurrentScreen(roleToScreen(account.role, account.status));
     });
+
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      const styleId = "rnw-focus-reset";
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement("style");
+        style.id = styleId;
+        style.textContent = `
+          *:focus, *:focus-visible, [role="button"]:focus, button:focus, a:focus {
+            outline: none !important;
+            box-shadow: none !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+
     return () => {
       active = false;
     };
