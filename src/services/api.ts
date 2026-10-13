@@ -55,16 +55,17 @@ const resolveApiBaseUrl = (): string => {
   const configured = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
 
   if (configured) {
-    if (Platform.OS !== "web" && (configured.includes("localhost") || configured.includes("127.0.0.1"))) {
+    const cleanConfigured = configured.endsWith("/api") ? configured.slice(0, -4) : configured;
+    if (Platform.OS !== "web" && (cleanConfigured.includes("localhost") || cleanConfigured.includes("127.0.0.1"))) {
       const devHost = getDevHost();
       if (devHost) {
-        return `${configured.replace(/localhost|127\.0\.0\.1/, devHost)}/api`;
+        return `${cleanConfigured.replace(/localhost|127\.0\.0\.1/, devHost)}/api`;
       }
       if (Platform.OS === "android") {
-        return `${configured.replace(/localhost|127\.0\.0\.1/, "10.0.2.2")}/api`;
+        return `${cleanConfigured.replace(/localhost|127\.0\.0\.1/, "10.0.2.2")}/api`;
       }
     }
-    return `${configured}/api`;
+    return `${cleanConfigured}/api`;
   }
 
   const devHost = getDevHost();

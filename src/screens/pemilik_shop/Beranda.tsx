@@ -2126,10 +2126,7 @@ const styles = StyleSheet.create({
   },
   modalSubmitBtnText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
 
-  // Main Tab Body & Bottom Navigation Bar
-  mainTabBody: {
-    flex: 1,
-  },
+  // Bottom Navigation Bar
   bottomNavContainer: {
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
