@@ -168,7 +168,8 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
       setIsPaid(true);
     }
 
-    const socket = io(API_BASE_URL, { transports: ["websocket", "polling"] });
+    const socketUrl = API_BASE_URL.replace(/\/api\/?$/, "");
+    const socket = io(socketUrl, { transports: ["websocket", "polling"] });
     socket.emit("join_send_room", { orderId: activeOrder._id, token: authAccount?.token });
 
     const handlePaymentUpdated = (updatedOrder: any) => {
