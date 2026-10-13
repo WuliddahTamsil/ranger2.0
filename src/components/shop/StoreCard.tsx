@@ -21,7 +21,7 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onPress, horizontal
     >
       {/* Cover Image */}
       <View style={styles.coverWrapper}>
-        <Image source={{ uri: store.coverImage }} style={styles.coverImage} />
+        <Image source={{ uri: store.coverImage }} style={styles.coverImage} resizeMode="cover" />
 
         {/* Closed Overlay */}
         {isClosed && (
@@ -55,7 +55,7 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onPress, horizontal
 
         {/* Logo floating */}
         <View style={styles.logoWrapper}>
-          <Image source={{ uri: store.logo }} style={styles.logoImage} />
+          <Image source={{ uri: store.logo }} style={styles.logoImage} resizeMode="cover" />
         </View>
       </View>
 
@@ -138,7 +138,6 @@ const styles = StyleSheet.create({
   coverImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
   closedOverlay: {
     position: "absolute",
@@ -222,7 +221,6 @@ const styles = StyleSheet.create({
   logoImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
   body: {
     paddingHorizontal: 12,

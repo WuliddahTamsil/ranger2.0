@@ -534,3 +534,20 @@ export const updateDriverShopStatus = async (
   }
 };
 
+export const simulateShopPayment = async (
+  orderId: string
+): Promise<{ success: boolean; data?: any; message?: string }> => {
+  try {
+    const url = getApiUrl(`/shop/orders/${orderId}/simulate-payment`);
+    const headers = await getHeaders();
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+    });
+    const json = await res.json();
+    return json;
+  } catch (error: any) {
+    return { success: false, message: error.message || "Gagal memproses simulasi pembayaran belanja" };
+  }
+};
+

@@ -205,16 +205,26 @@ export const ShopOrderTab: React.FC<ShopOrderTabProps> = ({
     (o) =>
       o.orderStatus === "PENDING" ||
       o.orderStatus === "PAID" ||
+      o.orderStatus === "WAITING_STORE_CONFIRMATION" ||
       o.orderStatus === "WAITING_MERCHANT_CONFIRMATION" ||
-      o.orderStatus === "STORE_PENDING"
+      o.orderStatus === "STORE_PENDING" ||
+      o.orderStatus === "CREATED"
   );
   const preparingOrders = orders.filter(
-    (o) => o.orderStatus === "STORE_ACCEPTED" || o.orderStatus === "PREPARING"
+    (o) =>
+      o.orderStatus === "STORE_ACCEPTED" ||
+      o.orderStatus === "PREPARING" ||
+      o.orderStatus === "PICKING" ||
+      o.orderStatus === "WAITING_SUBSTITUTION"
   );
   const readyOrders = orders.filter(
     (o) =>
       o.orderStatus === "READY_FOR_PICKUP" ||
       o.orderStatus === "DRIVER_ASSIGNED" ||
+      o.orderStatus === "DRIVER_AT_STORE" ||
+      o.orderStatus === "PICKED_UP" ||
+      o.orderStatus === "DELIVERING" ||
+      o.orderStatus === "ARRIVED" ||
       o.orderStatus === "ON_DELIVERY"
   );
   const completedOrders = orders.filter(
@@ -535,8 +545,10 @@ export const ShopOrderTab: React.FC<ShopOrderTabProps> = ({
                   {/* Actions depending on status */}
                   {order.orderStatus === "PAID" ||
                   order.orderStatus === "PENDING" ||
+                  order.orderStatus === "WAITING_STORE_CONFIRMATION" ||
                   order.orderStatus === "WAITING_MERCHANT_CONFIRMATION" ||
-                  order.orderStatus === "STORE_PENDING" ? (
+                  order.orderStatus === "STORE_PENDING" ||
+                  order.orderStatus === "CREATED" ? (
                     <TouchableOpacity
                       style={styles.btnPrimary}
                       onPress={() => handleAcceptOrder(order._id)}
@@ -554,7 +566,7 @@ export const ShopOrderTab: React.FC<ShopOrderTabProps> = ({
                       <Boxes size={14} color="#FFFFFF" />
                       <Text style={styles.btnPrimaryText}>Mulai Siapkan</Text>
                     </TouchableOpacity>
-                  ) : order.orderStatus === "PREPARING" ? (
+                  ) : order.orderStatus === "PREPARING" || order.orderStatus === "PICKING" ? (
                     <TouchableOpacity
                       style={[styles.btnPrimary, { backgroundColor: "#059669" }]}
                       onPress={() =>
@@ -707,7 +719,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     flexShrink: 0,
-    ...(Platform.OS === "web" ? ({ outline: "none", outlineStyle: "none" } as any) : {}),
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
   },
   tabBtnActive: {
     backgroundColor: "#0D7A53",

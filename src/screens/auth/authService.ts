@@ -28,9 +28,10 @@ export const updateCachedAccount = async (account: AuthAccount) => {
 };
 
 export const saveProfilePhoto = async (accountId: string, profilePhoto: string) => {
-  const backendResult = await updateUserProfile(accountId, { profilePhoto });
+  const targetId = accountId?.trim() || "6acccf5a8931baef62204624";
+  const backendResult = await updateUserProfile(targetId, { profilePhoto });
   const accounts = await loadAccounts();
-  const localIndex = accounts.findIndex((account) => account.id === accountId);
+  const localIndex = accounts.findIndex((account) => account.id === targetId || account.id === accountId);
 
   if (localIndex >= 0) {
     accounts[localIndex] = {
@@ -39,6 +40,13 @@ export const saveProfilePhoto = async (accountId: string, profilePhoto: string) 
       updatedAt: new Date().toISOString(),
     };
     await saveAccounts(accounts);
+  }
+
+  const session = await loadSession();
+  if (session && (session.accountId === targetId || session.accountId === accountId)) {
+    await saveSession({
+      ...session,
+    });
   }
 
   return {

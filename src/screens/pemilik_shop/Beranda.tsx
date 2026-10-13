@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -66,6 +67,7 @@ import { ShopProfilTab } from "./ShopProfilTab";
 
 interface Props extends Nav {
   authAccount?: AuthAccount | null;
+  onUpdateAccount?: (account: AuthAccount) => void;
 }
 
 const showMessage = (title: string, message: string) => {
@@ -73,7 +75,7 @@ const showMessage = (title: string, message: string) => {
   else Alert.alert(title, message);
 };
 
-export const Beranda: React.FC<Props> = ({ navigate, authAccount }) => {
+export const Beranda: React.FC<Props> = ({ navigate, authAccount, onUpdateAccount }) => {
   const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState<number>(0);
   const [orders, setOrders] = useState<any[]>([]);
@@ -566,6 +568,7 @@ Madu TJ Murni 150g, Kesehatan, 23500, 25, botol, Tresno Joyo, 8997001600055, htt
             setStore={setStore}
             authAccount={authAccount}
             navigate={navigate}
+            onUpdateAccount={onUpdateAccount}
           />
         );
       case 0:
@@ -576,17 +579,24 @@ Madu TJ Murni 150g, Kesehatan, 23500, 25, botol, Tresno Joyo, 8997001600055, htt
 
   const renderCatalogContent = () => {
     return (
-      <View style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <RoleHeader
-          name={authAccount?.name || "Mitra Shop"}
-          role="PEMILIK KANYAAH SHOP"
-          icon={Store}
-          onRolePress={() => navigate("role")}
-        />
+      <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <RoleHeader
+            name={authAccount?.name || "Mitra Shop"}
+            role="PEMILIK KANYAAH SHOP"
+            icon={Store}
+            fullBleed={false}
+            includeTopInset={true}
+            onRolePress={() => navigate("role")}
+          />
 
-        {/* Outlet Header Card */}
-        <View style={styles.hero}>
+          <View style={styles.catalogBody}>
+            {/* Outlet Header Card */}
+            <View style={styles.hero}>
           <View style={styles.heroIcon}>
             <Store size={22} color="#0D7A53" />
           </View>
@@ -1148,7 +1158,8 @@ Madu TJ Murni 150g, Kesehatan, 23500, 25, botol, Tresno Joyo, 8997001600055, htt
           <ClipboardList size={18} color="#1D4ED8" />
           <Text style={styles.orderText}>Buka Manajemen Pesanan & Resep Apotek</Text>
         </TouchableOpacity>
-      </ScrollView>
+          </View>
+        </ScrollView>
 
       {/* Quick Stock Modal */}
       <Modal
@@ -1357,7 +1368,17 @@ Madu TJ Murni 150g, Kesehatan, 23500, 25, botol, Tresno Joyo, 8997001600055, htt
 };
 
   return (
-    <ResponsiveSafeAreaView style={styles.safe} edges={["top"]}>
+    <ResponsiveSafeAreaView
+      style={[
+        styles.safe,
+        currentTab === 0 && { backgroundColor: "#0E6641" },
+      ]}
+      edges={currentTab === 0 ? [] : ["top"]}
+    >
+      <StatusBar
+        barStyle={currentTab === 0 ? "light-content" : "dark-content"}
+        backgroundColor={currentTab === 0 ? "#0E6641" : "#F8FAFC"}
+      />
       {/* Dynamic Tab Body */}
       <View style={styles.mainTabBody}>{renderTabContent()}</View>
 
@@ -1410,7 +1431,10 @@ const Stat = ({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#F8FAFC" },
-  content: { padding: 14, paddingBottom: 36 },
+  mainTabBody: { flex: 1 },
+  scrollContent: { paddingBottom: 36 },
+  content: { paddingBottom: 36 },
+  catalogBody: { paddingHorizontal: 14, paddingTop: 4 },
   hero: {
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
@@ -2126,7 +2150,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flex: 1,
     paddingVertical: 2,
-    ...(Platform.OS === "web" ? ({ outline: "none", outlineStyle: "none" } as any) : {}),
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
   },
   navIconBg: {
     width: 38,

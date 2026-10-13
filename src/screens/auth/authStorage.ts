@@ -190,6 +190,27 @@ export const DEFAULT_ACCOUNTS: AuthAccount[] = [
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   },
+  {
+    id: "6acccf5a8931baef62204624",
+    role: "pemilik_shop",
+    name: "Dyaska",
+    email: "dyaskaaa@gmail.com",
+    phone: "085294939357",
+    address: "Lodaya",
+    passwordHash: PW_12345678_HASH,
+    status: "verified",
+    roleData: {
+      outletName: "Indomart Loadaya",
+      businessName: "Indomart Loadaya",
+      businessAddress: "Lodaya",
+      brandType: "ALFAMART",
+      businessCategory: "SUPERMARKET",
+      businessPhone: "085294939357",
+    },
+    documents: {},
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  },
 ];
 
 export const loadAccounts = async (): Promise<AuthAccount[]> => {

@@ -48,6 +48,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     ? `${product.weight}g`
     : product.unit || "pcs";
 
+  const [imgError, setImgError] = React.useState(false);
+
   return (
     <TouchableOpacity
       style={styles.card}
@@ -56,8 +58,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     >
       {/* Product Image Container */}
       <View style={styles.imageWrapper}>
-        {product.img ? (
-          <Image source={{ uri: product.img }} style={styles.image} resizeMode="contain" />
+        {product.img && !imgError ? (
+          <Image
+            source={{ uri: product.img }}
+            style={styles.image}
+            resizeMode="contain"
+            onError={() => setImgError(true)}
+          />
         ) : (
           <View style={styles.placeholderImage}>
             <Text style={styles.placeholderText}>Kanyaah Shop</Text>

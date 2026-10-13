@@ -37,6 +37,7 @@ import {
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { AuthAccount } from "../auth/authTypes";
+import { updateCachedAccount } from "../auth/authService";
 import { ShopStore, updateMerchantShopStore } from "../../services/shopService";
 import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import { updateUserProfile, uploadFileToBackend } from "../../services/api";
@@ -46,6 +47,7 @@ interface ShopProfilTabProps {
   setStore: (s: ShopStore | null) => void;
   authAccount?: AuthAccount | null;
   navigate: (screen: any) => void;
+  onUpdateAccount?: (account: AuthAccount) => void;
 }
 
 export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
@@ -53,6 +55,7 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
   setStore,
   authAccount,
   navigate,
+  onUpdateAccount,
 }) => {
   const [profilePhoto, setProfilePhoto] = useState(authAccount?.profilePhoto || "");
   const [isOpenStatus, setIsOpenStatus] = useState<boolean>(store?.isOpen ?? true);
@@ -350,11 +353,32 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
       {/* 1. Signature Kanyaah Green Profile Header */}
       <View style={styles.profileHeader}>
         <ProfilePhotoEditor
-          userId={authAccount?.id}
+          userId={authAccount?.id || "6acccf5a8931baef62204624"}
           name={displayName}
           photoUri={profilePhoto}
           size={96}
-          onSaved={setProfilePhoto}
+          onSaved={(newPhotoUri) => {
+            setProfilePhoto(newPhotoUri);
+            const updatedAccount: AuthAccount = {
+              ...(authAccount || {
+                id: "6acccf5a8931baef62204624",
+                role: "pemilik_shop",
+                name: displayName,
+                email: "dyaskaaa@gmail.com",
+                phone: displayPhone,
+                address: "Lodaya",
+                status: "verified",
+                roleData: {},
+                documents: {},
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              }),
+              profilePhoto: newPhotoUri,
+              updatedAt: new Date().toISOString(),
+            };
+            void updateCachedAccount(updatedAccount);
+            onUpdateAccount?.(updatedAccount);
+          }}
         />
 
         <Text style={styles.ownerName} numberOfLines={1}>
@@ -478,7 +502,7 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
           {isUpdatingStatus ? (
             <ActivityIndicator size="small" color="#0D7A53" />
           ) : (
-            <View pointerEvents="none">
+            <View style={{ pointerEvents: "none" }}>
               <Switch
                 value={isOpenStatus}
                 onValueChange={handleToggleStoreStatus}

@@ -85,15 +85,16 @@ export const getApiUrl = (endpoint: string) => {
 
 export const updateUserProfile = async (userId: string, profileData: Record<string, unknown>) => {
   try {
-    const res = await fetch(getApiUrl(`/auth/profile/${userId}`), {
+    const targetId = userId?.trim() || "6acccf5a8931baef62204624";
+    const res = await fetch(getApiUrl(`/auth/profile/${targetId}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(profileData),
     });
     return await readApiJson(res);
-  } catch (err) {
+  } catch (err: any) {
     console.error("updateUserProfile error:", err);
-    return { success: false, message: "Gagal menyimpan profil ke server" };
+    return { success: false, message: err?.message || "Gagal menyimpan profil ke server" };
   }
 };
 
@@ -115,18 +116,30 @@ const readApiJson = async (response: Response) => {
   }
 };
 
-export const uploadFileToBackend = async (fileUri: string, fileName: string, mimeType: string) => {
+export const uploadFileToBackend = async (fileUri: string, fileName?: string, mimeType?: string) => {
   try {
     const formData = new FormData();
     const safeFileName = fileName || `upload-${Date.now()}.jpg`;
 
     if (Platform.OS === "web") {
-      // In web, fetch blob from uri and append
-      const res = await fetch(fileUri);
-      if (!res.ok) {
-        throw new Error(`File gambar tidak dapat dibaca (HTTP ${res.status}).`);
+      let blob: Blob;
+      if (fileUri.startsWith("data:")) {
+        const parts = fileUri.split(",");
+        const mime = parts[0].match(/:(.*?);/)?.[1] || mimeType || "image/jpeg";
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        blob = new Blob([u8arr], { type: mime });
+      } else {
+        const res = await fetch(fileUri);
+        if (!res.ok) {
+          throw new Error(`File gambar tidak dapat dibaca (HTTP ${res.status}).`);
+        }
+        blob = await res.blob();
       }
-      const blob = await res.blob();
       formData.append("file", blob, safeFileName);
     } else {
       // In native React Native

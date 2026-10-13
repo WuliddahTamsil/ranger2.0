@@ -144,7 +144,7 @@ const Field: React.FC<React.ComponentProps<typeof TextInput> & { label: string; 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   viewport: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 16, paddingTop: 28, paddingBottom: 38 },
-  card: { width: "100%", maxWidth: 560, backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: "#E5E9EE", paddingHorizontal: 38, paddingTop: 38, paddingBottom: 30, shadowColor: "#142238", shadowOpacity: 0.07, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
+  card: { width: "100%", maxWidth: 560, backgroundColor: "#FFFFFF", borderRadius: 24, borderWidth: 1, borderColor: "#E5E9EE", paddingHorizontal: 38, paddingTop: 38, paddingBottom: 30, ...(Platform.OS === "web" ? { boxShadow: "0px 10px 24px rgba(20, 34, 56, 0.07)" } : { shadowColor: "#142238", shadowOpacity: 0.07, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 3 }) },
   shapeTop: { position: "absolute", width: 280, height: 160, borderRadius: 140, borderWidth: 1, borderColor: "rgba(8, 122, 75, 0.06)", top: -80, right: -90, transform: [{ rotate: "-18deg" }] },
   shapeBottom: { position: "absolute", width: 360, height: 190, borderRadius: 190, borderWidth: 1, borderColor: "rgba(20, 34, 56, 0.045)", bottom: -115, left: -140, transform: [{ rotate: "18deg" }] },
   heading: { marginTop: 34 },

@@ -16,6 +16,7 @@ interface RoleHeaderProps {
   icon: RoleIcon;
   notificationCount?: number;
   fullBleed?: boolean;
+  includeTopInset?: boolean;
   onNotificationPress?: () => void;
   onRolePress?: () => void;
 }
@@ -26,16 +27,28 @@ export const RoleHeader: React.FC<RoleHeaderProps> = ({
   icon: RoleIcon,
   notificationCount = 0,
   fullBleed = true,
+  includeTopInset = false,
   onNotificationPress,
   onRolePress,
 }) => {
   const greeting = useTimeGreeting();
-  const { gutter, scale } = useResponsiveLayout();
+  const { gutter, scale, topInset } = useResponsiveLayout();
+
+  const topPadding = includeTopInset && topInset > 0 ? topInset + 10 * scale : 18 * scale;
 
   return (
     <View style={fullBleed ? [styles.fullBleed, { marginHorizontal: -gutter }] : undefined}>
       <StatusBar barStyle="light-content" backgroundColor="#0E6641" />
-      <View style={[styles.header, { paddingHorizontal: gutter, paddingTop: 18 * scale, paddingBottom: 18 * scale }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingHorizontal: gutter,
+            paddingTop: topPadding,
+            paddingBottom: 18 * scale,
+          },
+        ]}
+      >
         <View style={styles.titleContainer}>
           <Text style={styles.greetingText}>Halo, {greeting} 🌿</Text>
           <Text style={styles.nameText} numberOfLines={1} ellipsizeMode="tail">

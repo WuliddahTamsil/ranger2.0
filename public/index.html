@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <title>GEOVERSE</title>
+    
+    <!-- PWA Web Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Theme & Color for Mobile Status Bar & Navigation -->
+    <meta name="theme-color" content="#0D7A53" />
+    <meta name="msapplication-navbutton-color" content="#0D7A53" />
+    <meta name="msapplication-TileColor" content="#0D7A53" />
+    <meta name="msapplication-TileImage" content="/icon-512.png" />
+
+    <!-- Standalone & Mobile Web App Capabilities -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GEOVERSE" />
+    <meta name="application-name" content="GEOVERSE" />
+
+    <!-- App Icons for Android, iOS & Desktop -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+
+    <!-- Splash Screen Link for iOS -->
+    <link rel="apple-touch-startup-image" href="/icon-512.png" />
+
+    <!-- The react-native-web recommended style reset -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #0D7A53;
+      }
+      body {
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+        background-color: #FFFFFF;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Fallback if JavaScript is disabled -->
+    <noscript>
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px;">
+        <div>
+          <h2>GEOVERSE Memerlukan JavaScript</h2>
+          <p>Silakan aktifkan JavaScript di browser Anda untuk menjalankan aplikasi GEOVERSE.</p>
+        </div>
+      </div>
+    </noscript>
+
+    <!-- The root element for your Expo app -->
+    <div id="root"></div>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js')
+            .then(function(registration) {
+              console.log('[GEOVERSE PWA] Service Worker registered with scope:', registration.scope);
+            })
+            .catch(function(error) {
+              console.warn('[GEOVERSE PWA] Service Worker registration failed:', error);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -23,6 +23,7 @@ const {
   cancelOrder,
   submitComplaint,
   submitRating,
+  simulateShopPayment,
   getMerchantOrders,
   merchantAcceptOrder,
   merchantUpdateStatus,
@@ -71,6 +72,7 @@ router.get("/orders/:id", requireAuth, getOrderById);
 router.post("/orders/:id/cancel", requireAuth, cancelOrder);
 router.post("/orders/:id/complaint", requireAuth, submitComplaint);
 router.post("/orders/:id/rating", requireAuth, submitRating);
+router.post("/orders/:id/simulate-payment", requireAuth, simulateShopPayment);
 router.post("/orders/:id/substitution-response", requireAuth, customerRespondSubstitution);
 
 // ==================== MERCHANT / PICKER ====================

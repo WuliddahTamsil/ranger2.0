@@ -641,8 +641,87 @@ const simulateMarketplacePayment = async (req, res) => {
     }
 
     const { id } = req.params;
-    const order = await MarketplaceOrder.findById(id);
+    let order = mongoose.Types.ObjectId.isValid(id) ? await MarketplaceOrder.findById(id) : null;
     if (!order) {
+      order = await MarketplaceOrder.findOne({ orderCode: id });
+    }
+
+    if (!order) {
+      const ShopOrder = require("../models/ShopOrder");
+      const MarketplaceStore = require("../models/MarketplaceStore");
+      const shopOrder = (mongoose.Types.ObjectId.isValid(id) ? await ShopOrder.findById(id) : null) || await ShopOrder.findOne({ orderCode: id });
+
+      if (shopOrder) {
+        const isShopAuthorized =
+          authUser.role === "admin" ||
+          String(shopOrder.customerId) === String(authUser._id);
+
+        if (!isShopAuthorized) {
+          return res.status(403).json({
+            success: false,
+            message: "Anda tidak berhak mensimulasikan pembayaran pesanan ini.",
+          });
+        }
+
+        shopOrder.paymentStatus = "PAID";
+        if (shopOrder.orderStatus === "PAYMENT_PENDING" || shopOrder.orderStatus === "CREATED") {
+          shopOrder.orderStatus = "WAITING_STORE_CONFIRMATION";
+        }
+        shopOrder.statusHistory.push({
+          status: "WAITING_STORE_CONFIRMATION",
+          actorId: String(authUser._id),
+          actorRole: "customer",
+          note: "Pembayaran digital (QRIS/E-Wallet) berhasil diverifikasi. Pesanan diteruskan ke toko.",
+          timestamp: new Date(),
+        });
+        await shopOrder.save();
+
+        if (shopOrder.paymentId) {
+          await Payment.findOneAndUpdate(
+            { paymentId: shopOrder.paymentId },
+            { status: "PAID", paidAt: new Date() }
+          ).catch(() => undefined);
+        }
+
+        const store = await MarketplaceStore.findById(shopOrder.storeId);
+        const ownerId = store?.ownerId;
+
+        await Notification.create([
+          {
+            userId: shopOrder.customerId,
+            title: "Pembayaran Kanyaah Shop Berhasil!",
+            message: `Pembayaran pesanan #${shopOrder.orderCode} sebesar Rp ${shopOrder.totalAmount.toLocaleString("id-ID")} telah lunas. Toko segera menyiapkan pesananmu.`,
+            type: "order_status",
+            relatedId: shopOrder._id,
+          },
+          ...(ownerId
+            ? [
+                {
+                  userId: ownerId,
+                  title: "Pesanan Masuk (Sudah Dibayar)!",
+                  message: `Pesanan baru #${shopOrder.orderCode} sebesar Rp ${shopOrder.totalAmount.toLocaleString("id-ID")} telah lunas dan siap diproses!`,
+                  type: "order_new",
+                  relatedId: shopOrder._id,
+                },
+              ]
+            : []),
+        ]).catch(() => undefined);
+
+        if (req.io) {
+          req.io.to(`shop:${String(shopOrder._id)}`).emit("shop:order_updated", shopOrder);
+          req.io.to(`user:${String(shopOrder.customerId)}`).emit("shop:order_updated", shopOrder);
+          if (ownerId) {
+            req.io.to(`user:${String(ownerId)}`).emit("shop:new_order", shopOrder);
+          }
+        }
+
+        return res.json({
+          success: true,
+          message: "Pembayaran berhasil diverifikasi (Simulasi Sandbox).",
+          data: shopOrder,
+        });
+      }
+
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
     }
 

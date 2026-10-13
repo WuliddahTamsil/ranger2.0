@@ -185,13 +185,30 @@ io.on("connection", (socket) => {
   });
 });
 
+// Serve PWA & Web Build if available
+const webBuildPath = path.join(__dirname, "..", "web-build");
+app.use(express.static(webBuildPath));
+app.get("*", (req, res, next) => {
+  if (
+    req.path.startsWith("/api") ||
+    req.path.startsWith("/uploads") ||
+    req.path.startsWith("/socket.io")
+  ) {
+    return next();
+  }
+  const indexPath = path.join(webBuildPath, "index.html");
+  res.sendFile(indexPath, (err) => {
+    if (err) next();
+  });
+});
+
 // Start Server & Connect Database
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
     await connectDB();
-    server.listen(PORT, () => {
+    server.listen(PORT, "0.0.0.0", () => {
       console.log(`=========================================`);
       console.log(`🚀 GEOVERSE Backend Server running on port ${PORT}`);
       console.log(`📡 Local API URL: http://localhost:${PORT}`);

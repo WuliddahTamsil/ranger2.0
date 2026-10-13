@@ -35,6 +35,7 @@ import { toQR } from "toqr";
 import * as Clipboard from "expo-clipboard";
 import { rp } from "../utils/formatters";
 import { simulateMarketplacePayment } from "../services/api";
+import { simulateShopPayment } from "../services/shopService";
 import { ToastBanner, ToastType } from "./CustomDialog";
 import { AuthAccount } from "../screens/auth/authTypes";
 
@@ -123,12 +124,31 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
     try {
       setIsSimulating(true);
       const targetId = order._id || order.id || order.orderCode;
-      const result = await simulateMarketplacePayment(targetId, authAccount?.id);
+
+      const isShopOrder =
+        order.orderType === "KANYAAH_SHOP" ||
+        order.orderType === "SHOP" ||
+        String(order.orderCode || "").includes("SHOP") ||
+        Boolean(order.storeId && (order.items || order.deliverySlot));
+
+      let result: any;
+      if (isShopOrder) {
+        result = await simulateShopPayment(targetId);
+      } else {
+        result = await simulateMarketplacePayment(targetId, authAccount?.id);
+      }
+
+      if (!result?.success && String(result?.message || "").includes("tidak ditemukan")) {
+        result = isShopOrder
+          ? await simulateMarketplacePayment(targetId, authAccount?.id)
+          : await simulateShopPayment(targetId);
+      }
+
       if (result.success) {
         setIsPaid(true);
         if (timerRef.current) clearInterval(timerRef.current);
         if (onPaymentSuccess) {
-          onPaymentSuccess(result.data || { ...order, paymentStatus: "Lunas" });
+          onPaymentSuccess(result.data || { ...order, paymentStatus: "PAID", orderStatus: "WAITING_STORE_CONFIRMATION" });
         }
       } else {
         showToast("error", "Simulasi Gagal", result.message || "Gagal memproses simulasi.");

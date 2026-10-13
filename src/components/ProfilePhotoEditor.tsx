@@ -64,13 +64,13 @@ export const ProfilePhotoEditor: React.FC<ProfilePhotoEditorProps> = ({
 
       const result = source === "gallery"
         ? await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
           })
         : await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
@@ -101,9 +101,21 @@ export const ProfilePhotoEditor: React.FC<ProfilePhotoEditorProps> = ({
       onSaved(uploadedUri);
       if (Platform.OS === "web") window.alert("Foto profil berhasil diperbarui.");
       else Alert.alert("Berhasil", "Foto profil berhasil diperbarui.");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Profile photo upload error:", error);
-      showError(error instanceof Error ? error.message : "Foto profil gagal disimpan.");
+      let errMsg = "Foto profil gagal disimpan.";
+      if (error instanceof Error) {
+        if (
+          error.message?.includes("Failed to fetch") ||
+          error.message?.includes("Network request failed") ||
+          error.message?.includes("ERR_CONNECTION_REFUSED")
+        ) {
+          errMsg = "Gagal terhubung ke server backend (port 5000). Pastikan backend server sedang berjalan.";
+        } else {
+          errMsg = error.message;
+        }
+      }
+      showError(errMsg);
     } finally {
       setIsUploading(false);
     }
@@ -164,7 +176,26 @@ const styles = StyleSheet.create({
   avatar: { alignItems: "center", justifyContent: "center", overflow: "hidden" },
   initial: { fontWeight: "800" },
   loadingOverlay: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(15, 23, 42, 0.48)" },
-  cameraButton: { position: "absolute", right: -2, bottom: -1, width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", borderWidth: 2, shadowColor: "#0F172A", shadowOpacity: 0.12, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  cameraButton: {
+    position: "absolute",
+    right: -2,
+    bottom: -1,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 2px 5px rgba(15, 23, 42, 0.12)" }
+      : {
+          shadowColor: "#0F172A",
+          shadowOpacity: 0.12,
+          shadowRadius: 5,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 3,
+        }),
+  },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.38)", justifyContent: "flex-end" },
   sheet: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 30 },
   sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

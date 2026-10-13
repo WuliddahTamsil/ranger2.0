@@ -1621,6 +1621,8 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
         ? "Kanyaah Catering"
         : order.type === "Kanyaah Send"
         ? "Kanyaah Send"
+        : order.type === "Shop"
+        ? "Kanyaah Shop"
         : isWaste
         ? "Kanyaah Recycle"
         : "Kanyaah Laundry";
@@ -1628,6 +1630,8 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       ? "Jemput Sampah Daur Ulang"
       : isLaundry
       ? "Pengantaran Laundry"
+      : order.type === "Shop"
+      ? "Pengantaran Belanja Kanyaah Shop"
       : "Pengantaran Pesanan";
 
     return (
@@ -1732,6 +1736,28 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                     Alert.alert("Order Send Diterima!", `Pengiriman #${updated.orderCode} berhasil diambil.`);
                   } else {
                     Alert.alert("Gagal", res.message || "Pesanan gagal diambil.");
+                  }
+                } finally {
+                  homeActionLock.current.delete(order.id);
+                  setHomeActionOrderId(null);
+                }
+              } else if (order.type === "Shop") {
+                if (homeActionLock.current.has(order.id)) return;
+                homeActionLock.current.add(order.id);
+                setHomeActionOrderId(order.id);
+                try {
+                  const res = await acceptDriverShopOrder(order.id);
+                  if (res.success && res.data) {
+                    const now = new Date().toISOString();
+                    const updated: DriverOrder = {
+                      ...mapShopDriverOrder(res.data),
+                      acceptedAt: now,
+                      updatedAt: now,
+                    };
+                    setOrders((current) => sortDriverOrders([updated, ...current.filter((o) => o.id !== order.id)]));
+                    Alert.alert("Order Belanja Diterima!", `Pengantaran belanja #${updated.orderCode} berhasil diambil.`);
+                  } else {
+                    Alert.alert("Gagal", res.message || "Pesanan belanja gagal diambil.");
                   }
                 } finally {
                   homeActionLock.current.delete(order.id);

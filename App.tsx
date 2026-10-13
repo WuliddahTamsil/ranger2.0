@@ -408,7 +408,7 @@ export default function App() {
       case "pemilik_marketplace_home":
         return <PemilikMarketplaceHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "pemilik_shop_home":
-        return <PemilikShopHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
+        return <PemilikShopHomeScreen navigate={navigate} authAccount={currentAuthAccount} onUpdateAccount={handleUpdateAccount} />;
 
       // 5. Pemilik Laundry
       case "pemilik_laundry_home":

@@ -603,6 +603,101 @@ const submitRating = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/shop/orders/:id/simulate-payment
+ * Instant digital payment simulation for Shop Orders (Sandbox/Testing)
+ */
+const simulateShopPayment = async (req, res) => {
+  try {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return res.status(401).json({ success: false, message: "Autentikasi diperlukan." });
+    }
+
+    const { id } = req.params;
+    const order =
+      (mongoose.Types.ObjectId.isValid(id) ? await ShopOrder.findById(id) : null) ||
+      (await ShopOrder.findOne({ orderCode: id }));
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Pesanan Kanyaah Shop tidak ditemukan." });
+    }
+
+    const isAuthorized =
+      authUser.role === "admin" ||
+      String(order.customerId) === String(authUser._id);
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: "Anda tidak berhak mensimulasikan pembayaran pesanan ini.",
+      });
+    }
+
+    order.paymentStatus = "PAID";
+    if (order.orderStatus === "PAYMENT_PENDING" || order.orderStatus === "CREATED") {
+      order.orderStatus = "WAITING_STORE_CONFIRMATION";
+    }
+
+    order.statusHistory.push({
+      status: "WAITING_STORE_CONFIRMATION",
+      actorId: String(authUser._id),
+      actorRole: "customer",
+      note: "Pembayaran digital (QRIS/E-Wallet) berhasil diverifikasi (Simulasi Sandbox).",
+      timestamp: new Date(),
+    });
+    await order.save();
+
+    if (order.paymentId) {
+      await Payment.findOneAndUpdate(
+        { paymentId: order.paymentId },
+        { status: "PAID", paidAt: new Date() }
+      ).catch(() => undefined);
+    }
+
+    const store = await MarketplaceStore.findById(order.storeId);
+    const ownerId = store?.ownerId;
+
+    await Notification.create([
+      {
+        userId: order.customerId,
+        title: "Pembayaran Kanyaah Shop Berhasil!",
+        message: `Pembayaran pesanan #${order.orderCode} sebesar Rp ${order.totalAmount.toLocaleString("id-ID")} telah lunas. Toko segera menyiapkan pesananmu.`,
+        type: "order_status",
+        relatedId: order._id,
+      },
+      ...(ownerId
+        ? [
+            {
+              userId: ownerId,
+              title: "Pesanan Masuk (Sudah Dibayar)!",
+              message: `Pesanan baru #${order.orderCode} sebesar Rp ${order.totalAmount.toLocaleString("id-ID")} telah lunas dan siap diproses!`,
+              type: "order_new",
+              relatedId: order._id,
+            },
+          ]
+        : []),
+    ]).catch(() => undefined);
+
+    if (req.io) {
+      req.io.to(`shop:${String(order._id)}`).emit("shop:order_updated", order);
+      req.io.to(`user:${String(order.customerId)}`).emit("shop:order_updated", order);
+      if (ownerId) {
+        req.io.to(`user:${String(ownerId)}`).emit("shop:new_order", order);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: "Pembayaran berhasil diverifikasi (Simulasi Sandbox).",
+      data: order,
+    });
+  } catch (error) {
+    console.error("simulateShopPayment error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memproses simulasi pembayaran" });
+  }
+};
+
 // ==================== MERCHANT FLOW ====================
 
 const merchantOwnsOrder = async (order, authUser) => {
@@ -845,11 +940,14 @@ const getDriverOrders = async (req, res) => {
       .lean();
 
     const isValidDriverId = Boolean(driverId && mongoose.Types.ObjectId.isValid(driverId));
+    const driverQuery = isValidDriverId
+      ? { $in: [new mongoose.Types.ObjectId(driverId), driverId] }
+      : driverId;
 
     // Active order assigned to this driver
     const activeOrder = isValidDriverId
       ? await ShopOrder.findOne({
-          driverId,
+          driverId: driverQuery,
           orderStatus: { $in: ["DRIVER_ASSIGNED", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED"] },
         })
           .populate("storeId", "name logo address latitude longitude")
@@ -859,7 +957,7 @@ const getDriverOrders = async (req, res) => {
     // All orders assigned to this driver (active + completed)
     const driverOrders = isValidDriverId
       ? await ShopOrder.find({
-          driverId,
+          driverId: driverQuery,
         })
           .populate("storeId", "name logo address latitude longitude")
           .sort({ updatedAt: -1, createdAt: -1 })
@@ -888,6 +986,10 @@ const acceptDriverOrder = async (req, res) => {
     const { id } = req.params;
     const authUser = req.authUser;
 
+    if (!authUser) {
+      return res.status(401).json({ success: false, message: "Sesi driver tidak valid atau belum login" });
+    }
+
     const order = await ShopOrder.findById(id);
     if (!order) return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
 
@@ -899,6 +1001,7 @@ const acceptDriverOrder = async (req, res) => {
     order.driverName = authUser.name;
     order.driverPhone = authUser.phone || "";
     order.driverPhoto = authUser.profilePhoto || "";
+    order.driverPlateNumber = authUser.roleData?.plateNumber || authUser.plateNumber || "";
     order.orderStatus = "DRIVER_ASSIGNED";
     order.statusHistory.push({
       status: "DRIVER_ASSIGNED",
@@ -908,6 +1011,14 @@ const acceptDriverOrder = async (req, res) => {
       timestamp: new Date(),
     });
     await order.save();
+
+    await Notification.create({
+      userId: order.customerId,
+      title: "Driver Menuju Toko!",
+      message: `Driver ${authUser.name} telah menerima pesanan #${order.orderCode} dan sedang menuju toko.`,
+      type: "order_status",
+      relatedId: order._id,
+    }).catch(() => undefined);
 
     emitToRoom(req.io, `shop:${String(order._id)}`, "shop:order_updated", order);
     emitToUser(req.io, order.customerId, "shop:order_updated", order);
@@ -928,7 +1039,11 @@ const updateDriverStatus = async (req, res) => {
     const { status, note = "" } = req.body;
     const authUser = req.authUser;
 
-    const allowed = ["DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED", "COMPLETED"];
+    if (!authUser) {
+      return res.status(401).json({ success: false, message: "Sesi driver tidak valid atau belum login" });
+    }
+
+    const allowed = ["DRIVER_ASSIGNED", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED", "COMPLETED"];
     if (!allowed.includes(status)) {
       return res.status(400).json({ success: false, message: "Status tidak valid untuk driver" });
     }
@@ -943,6 +1058,16 @@ const updateDriverStatus = async (req, res) => {
     order.orderStatus = status;
     if (status === "COMPLETED") {
       order.completedAt = new Date();
+      if (order.paymentMethod === "CASH") {
+        order.paymentStatus = "PAID";
+      }
+      await Notification.create({
+        userId: order.customerId,
+        title: "Pesanan Selesai Diantar!",
+        message: `Pesanan #${order.orderCode} telah berhasil diantar oleh driver. Terima kasih telah berbelanja!`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => undefined);
     }
 
     order.statusHistory.push({
@@ -1205,6 +1330,7 @@ module.exports = {
   cancelOrder,
   submitComplaint,
   submitRating,
+  simulateShopPayment,
   getMerchantOrders,
   merchantAcceptOrder,
   merchantUpdateStatus,
