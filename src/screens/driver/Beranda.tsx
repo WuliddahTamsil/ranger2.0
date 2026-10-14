@@ -95,6 +95,7 @@ import {
   updateDriverShopStatus,
 } from "../../services/shopService";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
+import { isKedaiTerpaduDriver } from "../../services/pricingPolicy";
 
 // Import other screens
 import { Order, DriverOrder } from "./Order";
@@ -395,8 +396,11 @@ const mapWastePickupDriverOrder = (deposit: any): DriverOrder => {
   const bankAddress = deposit.bankSampahId?.address || "Bank Sampah";
   const bankPhone = deposit.bankSampahId?.phone || "";
 
-  const fare = 10000;
-  const driverShare = 9000;
+  const fare = Number(deposit.pickupFee || 11500);
+  const rawFare = Math.max(9500, fare - 2000);
+  const driverShare = deposit.driverEarnings != null && Number(deposit.driverEarnings) > 0
+    ? Number(deposit.driverEarnings)
+    : Math.round(rawFare * 0.8);
 
   let status: DriverOrder["status"] = "Menunggu";
   if (deposit.status === "ACCEPTED") {
@@ -683,7 +687,13 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             dist: "1.2 km",
             distanceKm: 1.2,
             pay: Number(lnd.totalAmount || 0),
-            driverShare: isPickupJob ? Number(lnd.deliveryFeePickup || 4000) : Number(lnd.deliveryFeeDrop || 4000),
+            driverShare: (() => {
+              if (isPickupJob && lnd.driverPickupEarnings) return Number(lnd.driverPickupEarnings);
+              if (!isPickupJob && lnd.driverDeliveryEarnings) return Number(lnd.driverDeliveryEarnings);
+              const isKedai = isKedaiTerpaduDriver(authAccount);
+              const rawDelivery = isPickupJob ? Number(lnd.deliveryFeePickup || 9500) : Number(lnd.deliveryFeeDrop || 9500);
+              return isKedai ? rawDelivery : Math.round(rawDelivery * 0.8);
+            })(),
             createdAt: lnd.createdAt,
             updatedAt: lnd.updatedAt,
             acceptedAt: extractOrderAcceptedAt(lnd),
@@ -2158,6 +2168,76 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             thumbColor={isOnline ? "#1B7A4E" : "#9CA3AF"}
           />
         </View>
+
+        {/* Partnership & Commission Scheme Badge */}
+        {(() => {
+          const isKedai = isKedaiTerpaduDriver(authAccount);
+          return (
+            <View
+              style={{
+                backgroundColor: isKedai ? "#ECFDF5" : "#F8FAFC",
+                borderRadius: 12,
+                padding: 12,
+                marginTop: 10,
+                marginBottom: 14,
+                borderWidth: 1,
+                borderColor: isKedai ? "#A7F3D0" : "#E2E8F0",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <View
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: isKedai ? "#D1FAE5" : "#DBEAFE",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <CheckCircle2 size={20} color={isKedai ? "#059669" : "#2563EB"} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: isKedai ? "#065F46" : "#1E293B",
+                    }}
+                  >
+                    {isKedai ? "Mitra Eksisting Kedai Terpadu" : "Driver Reguler Geoverse"}
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: isKedai ? "#10B98120" : "#3B82F620",
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: isKedai ? "#047857" : "#1D4ED8",
+                      }}
+                    >
+                      {isKedai ? "100% Hak Driver" : "80% Driver · 20% Admin"}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: isKedai ? "#047857" : "#64748B", marginTop: 2 }}>
+                  {isKedai
+                    ? "Integrasi khusus 5 mitra perintis Kedai Terpadu Kamojang (Bebas potongan komisi platform)."
+                    : "Skema bagi hasil 80% untuk driver dan 20% platform admin. Biaya layanan Rp2.000."}
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
 
         {/* Daily Summary Metrics Grid */}
         <Text style={styles.sectionTitle}>Performa Hari Ini</Text>

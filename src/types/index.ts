@@ -266,6 +266,7 @@ export interface SendFareBreakdown {
   estimatedDurationMinutes: number;
   baseFare: number;
   distanceFare: number;
+  deliveryFare?: number;
   weightFare: number;
   sizeFare: number;
   fragileFee: number;

@@ -333,23 +333,24 @@ export const SendFareEstimateScreen: React.FC<SendFareEstimateScreenProps> = ({
           {fareEstimate && !loading && (
             <View style={{ marginTop: 2 }}>
               <View style={styles.fareRow}>
-                <Text style={styles.fareLabel}>Biaya Dasar ({fareEstimate.distanceKm <= 2 ? "0-2 km" : "2 km pertama"})</Text>
-                <Text style={styles.fareVal}>{rp(fareEstimate.baseFare)}</Text>
+                <Text style={styles.fareLabel}>
+                  {fareEstimate.distanceKm < 4
+                    ? "Tarif Jarak (< 4 km · Minimal Rp9.500)"
+                    : `Tarif Jarak (${fareEstimate.distanceKm.toFixed(1)} km × Rp2.500)`}
+                </Text>
+                <Text style={styles.fareVal}>{rp(fareEstimate.distanceFare || 9500)}</Text>
               </View>
 
-              {fareEstimate.distanceFare > 0 && (
-                <View style={styles.fareRow}>
-                  <Text style={styles.fareLabel}>Biaya Jarak Tambahan</Text>
-                  <Text style={styles.fareVal}>{rp(fareEstimate.distanceFare)}</Text>
-                </View>
-              )}
-
-              {fareEstimate.weightFare > 0 && (
-                <View style={styles.fareRow}>
-                  <Text style={styles.fareLabel}>Biaya Berat ({packageData.weightKg} kg)</Text>
-                  <Text style={styles.fareVal}>{rp(fareEstimate.weightFare)}</Text>
-                </View>
-              )}
+              <View style={styles.fareRow}>
+                <Text style={styles.fareLabel}>
+                  {Number(packageData.weightKg) <= 20
+                    ? `Beban Berat (${packageData.weightKg} kg · Bebas s.d 20 kg)`
+                    : `Biaya Kiloan Tambahan (>20 kg: ${(Number(packageData.weightKg) - 20).toFixed(1)} kg × Rp3.000)`}
+                </Text>
+                <Text style={[styles.fareVal, Number(packageData.weightKg) <= 20 ? { color: "#059669", fontWeight: "600" } : null]}>
+                  {fareEstimate.weightFare > 0 ? rp(fareEstimate.weightFare) : "Rp 0 (Gratis)"}
+                </Text>
+              </View>
 
               {fareEstimate.fragileFee > 0 && (
                 <View style={styles.fareRow}>
@@ -367,7 +368,13 @@ export const SendFareEstimateScreen: React.FC<SendFareEstimateScreenProps> = ({
 
               <View style={styles.fareRow}>
                 <Text style={styles.fareLabel}>Biaya Layanan Aplikasi</Text>
-                <Text style={styles.fareVal}>{rp(fareEstimate.serviceFee)}</Text>
+                <Text style={styles.fareVal}>{rp(fareEstimate.serviceFee || 2000)}</Text>
+              </View>
+
+              <View style={{ backgroundColor: "#F0FDF4", borderRadius: 8, padding: 8, marginTop: 8, borderWidth: 1, borderColor: "#BBF7D0" }}>
+                <Text style={{ fontSize: 11, color: "#166534", lineHeight: 16 }}>
+                  💡 <Text style={{ fontWeight: "700" }}>Kebijakan Tarif Kanyaah Send:</Text> Beban 0-20 kg bebas biaya penjemputan dasar, kelipatan di atas 20 kg dikenakan Rp3.000/kg. Radius operasional maksimal 15 km dari wilayah Kamojang.
+                </Text>
               </View>
 
               <View style={styles.fareDivider} />

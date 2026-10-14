@@ -45,6 +45,7 @@ import {
   ShieldCheck,
   ArrowUpDown,
   Check,
+  Package,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -75,7 +76,7 @@ interface PesananProps {
   onOpenRideTracking?: () => void;
   onOpenCateringTracking?: (order?: OrderItem) => void;
   onOpenCateringQris?: () => void;
-  navigate?: (screen: any) => void;
+  navigate?: (screen: any, params?: any) => void;
 }
 
 interface ReviewMediaDraft {

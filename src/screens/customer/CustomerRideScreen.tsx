@@ -54,10 +54,10 @@ import { PaymentMethodType } from "../../services/paymentService";
 
 const DEFAULT_COORDS = {
   pickup: {
-    address: "Kota Bogor, Jawa Barat",
-    placeName: "Lokasi Saya",
-    latitude: -6.5962,
-    longitude: 106.8040,
+    address: "Pusat Kegiatan Rangers Kamojang, Samarang, Garut",
+    placeName: "Lokasi Saya (Kamojang)",
+    latitude: -7.1452,
+    longitude: 107.7891,
   },
   home: {
     address: "Perumahan Kamojang Asri Blok B No. 12",
@@ -1038,15 +1038,13 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                 <View style={styles.fareBreakdownBox}>
                   <Text style={styles.fareBreakdownHeader}>RINCIAN TARIF TRANSPARAN</Text>
                   <View style={styles.fareBreakdownRow}>
-                    <Text style={styles.fareBreakdownLabel}>Tarif Dasar (2 km awal)</Text>
-                    <Text style={styles.fareBreakdownVal}>{rp(fareBreakdown.baseFare)}</Text>
+                    <Text style={styles.fareBreakdownLabel}>
+                      {calculatedDistance < 4
+                        ? `Tarif Jarak (< 4 km · Minimal Rp9.500)`
+                        : `Tarif Jarak (${calculatedDistance.toFixed(1)} km × Rp2.500)`}
+                    </Text>
+                    <Text style={styles.fareBreakdownVal}>{rp(fareBreakdown.distanceFare || 9500)}</Text>
                   </View>
-                  {fareBreakdown.distanceFare > 0 && (
-                    <View style={styles.fareBreakdownRow}>
-                      <Text style={styles.fareBreakdownLabel}>Biaya Jarak ({calculatedDistance} km)</Text>
-                      <Text style={styles.fareBreakdownVal}>{rp(fareBreakdown.distanceFare)}</Text>
-                    </View>
-                  )}
                   {fareBreakdown.timeFare > 0 && (
                     <View style={styles.fareBreakdownRow}>
                       <Text style={styles.fareBreakdownLabel}>Estimasi Waktu ({estimatedDuration} mnt)</Text>
@@ -1055,7 +1053,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                   )}
                   <View style={styles.fareBreakdownRow}>
                     <Text style={styles.fareBreakdownLabel}>Biaya Layanan Platform</Text>
-                    <Text style={styles.fareBreakdownVal}>{rp(fareBreakdown.serviceFee)}</Text>
+                    <Text style={styles.fareBreakdownVal}>{rp(fareBreakdown.serviceFee || 2000)}</Text>
                   </View>
                   {fareBreakdown.discount > 0 && (
                     <View style={styles.fareBreakdownRow}>
@@ -1063,6 +1061,11 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                       <Text style={[styles.fareBreakdownVal, { color: "#15803D", fontWeight: "700" }]}>-{rp(fareBreakdown.discount)}</Text>
                     </View>
                   )}
+                  <View style={{ backgroundColor: "#F0FDF4", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                    <Text style={{ fontSize: 10, color: "#166534" }}>
+                      📍 Radius batas maksimal layanan operasional Kamojang: 15 km
+                    </Text>
+                  </View>
                 </View>
               )}
 

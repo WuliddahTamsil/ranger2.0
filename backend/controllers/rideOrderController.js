@@ -18,25 +18,15 @@ const emitToRideRoom = (io, orderId, event, payload) => {
   }
 };
 
-// Master Fare Pricing Engine Configuration
-const RIDE_FARE_CONFIG = {
-  MOTOR: {
-    baseFare: 8000,
-    baseKm: 2,
-    pricePerKm: 2500,
-    pricePerMinute: 500,
-    minimumFare: 10000,
-    serviceFee: 1000,
-  },
-  MOBIL: {
-    baseFare: 15000,
-    baseKm: 2,
-    pricePerKm: 4500,
-    pricePerMinute: 800,
-    minimumFare: 20000,
-    serviceFee: 2000,
-  },
-};
+const {
+  KAMOJANG_COORDINATES,
+  MAX_SERVICE_RADIUS_KM,
+  PRICING_POLICY,
+  validateServiceRoute,
+  calculateDistanceFare,
+  calculateDriverRevenueSplit,
+  computeRideFare,
+} = require("../services/pricingPolicyService");
 
 const isValidCoordinate = (value) => typeof value === "number" && Number.isFinite(value);
 
@@ -49,32 +39,15 @@ const hasValidRideLocation = (location) =>
   location.longitude <= 180;
 
 // Compute detailed fare breakdown according to platform formula
-const computeFareBreakdown = (distanceKm, durationMinutes, vehicleType = "MOTOR", discount = 0) => {
-  const safeType = vehicleType === "MOBIL" || vehicleType === "CAR" ? "MOBIL" : "MOTOR";
-  const cfg = RIDE_FARE_CONFIG[safeType];
-  const safeDist = Number(distanceKm);
-  const safeDuration = Number(durationMinutes);
-
-  const baseFare = cfg.baseFare;
-  const extraKm = Math.max(0, safeDist - cfg.baseKm);
-  const distanceFare = Math.round(extraKm * cfg.pricePerKm);
-  const timeFare = Math.round(safeDuration * cfg.pricePerMinute);
-  const serviceFee = cfg.serviceFee;
-  const rawFare = baseFare + distanceFare + timeFare + serviceFee - (Number(discount) || 0);
-  const estimatedFare = Math.max(cfg.minimumFare, Math.ceil(rawFare / 1000) * 1000);
-
-  return {
-    distanceKm: Math.round(safeDist * 10) / 10,
-    estimatedDurationMinutes: safeDuration,
-    baseFare,
-    distanceFare,
-    timeFare,
-    serviceFee,
-    discount: Number(discount) || 0,
-    minimumFare: cfg.minimumFare,
-    estimatedFare,
-    currency: "IDR",
-  };
+// Minimal (<4 km) Rp 9.500, Rp 2.500/km berikutnya, Biaya Layanan Rp 2.000
+const computeFareBreakdown = (distanceKm, durationMinutes, vehicleType = "MOTOR", discount = 0, driver = null) => {
+  return computeRideFare({
+    distanceKm,
+    durationMinutes,
+    vehicleType,
+    discount,
+    driver,
+  });
 };
 
 // 1. Calculate & Estimate Fare
@@ -109,6 +82,17 @@ const estimateRideFare = async (req, res) => {
         message: "Jarak dan durasi hasil routing wajib dikirim.",
       });
     }
+
+    // Validate Kamojang max radius (15 km)
+    const routeValidation = validateServiceRoute(pickup, destination, MAX_SERVICE_RADIUS_KM);
+    if (!routeValidation.allowed) {
+      return res.status(400).json({
+        success: false,
+        message: routeValidation.message,
+        radiusValidation: routeValidation,
+      });
+    }
+
     const breakdown = computeFareBreakdown(
       Math.round(distanceKm * 10) / 10,
       Math.max(1, Math.round(estimatedDuration)),
@@ -122,6 +106,8 @@ const estimateRideFare = async (req, res) => {
         estimatedDuration: breakdown.estimatedDurationMinutes,
         estimatedDistance: breakdown.distanceKm,
         formattedFare: `Rp ${breakdown.estimatedFare.toLocaleString("id-ID")}`,
+        withinServiceRadius: routeValidation.allowed,
+        radiusValidation: routeValidation,
       },
     });
   } catch (error) {
@@ -246,6 +232,17 @@ const createRideOrder = async (req, res) => {
         message: "Jarak dan durasi hasil routing wajib dikirim.",
       });
     }
+
+    // Validate Kamojang max radius (15 km)
+    const routeValidation = validateServiceRoute(pickup, destination, MAX_SERVICE_RADIUS_KM);
+    if (!routeValidation.allowed) {
+      return res.status(400).json({
+        success: false,
+        message: routeValidation.message,
+        radiusValidation: routeValidation,
+      });
+    }
+
     const breakdown = computeFareBreakdown(
       Math.round(distanceKm * 10) / 10,
       Math.max(1, Math.round(estimatedDuration)),
@@ -254,8 +251,8 @@ const createRideOrder = async (req, res) => {
     );
     const estimatedFare = breakdown.estimatedFare;
     const totalAmount = estimatedFare;
-    // Driver gets 80% of total fare
-    const driverEarnings = Math.round(totalAmount * 0.8);
+    // Driver gets earnings according to pricing policy (80% for new drivers, 100% for Kedai Terpadu)
+    const driverEarnings = breakdown.driverEarnings;
 
     let finalCustomerPhone = String(customerPhone || "").trim();
     if (!finalCustomerPhone && customerId) {
@@ -536,6 +533,12 @@ const acceptRideOrder = async (req, res) => {
         message: existing.driverId ? "Pesanan sudah diambil oleh driver lain." : "Pesanan sudah tidak tersedia.",
       });
     }
+
+    // Dynamic driver revenue split (100% Kedai Terpadu vs 80% Driver Baru)
+    const deliveryFare = order.distanceFare || Math.max(0, order.totalAmount - (order.serviceFee || 2000));
+    const revenueSplit = calculateDriverRevenueSplit(deliveryFare, driver);
+    order.driverEarnings = revenueSplit.driverEarnings;
+    await order.save();
 
     // Mark driver as BUSY
     await User.findByIdAndUpdate(driverId, { driverAvailability: "BUSY" }).catch(() => {});

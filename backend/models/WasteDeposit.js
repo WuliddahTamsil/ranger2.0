@@ -135,6 +135,22 @@ const wasteDepositSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    pickupFee: {
+      type: Number,
+      default: 0,
+    },
+    driverEarnings: {
+      type: Number,
+      default: 0,
+    },
+    distanceKm: {
+      type: Number,
+      default: 0,
+    },
+    weightFee: {
+      type: Number,
+      default: 0,
+    },
 
     // Photos & Proof
     customerPhotos: {

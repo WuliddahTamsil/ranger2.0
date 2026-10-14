@@ -7,6 +7,7 @@ const User = require("../models/User");
 const Notification = require("../models/Notification");
 const paymentGateway = require("../services/paymentGateway");
 const { syncConversationForOrder } = require("../services/conversationService");
+const { PRICING_POLICY } = require("../services/pricingPolicyService");
 
 const splitAmount = (amount, count, index) => Math.floor(amount / count) + (index < amount % count ? 1 : 0);
 
@@ -138,8 +139,8 @@ const createMarketplaceOrder = async (req, res) => {
     }
 
     const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const deliveryFee = splitAmount(8000, groupCount, groupIndex);
-    const serviceFee = splitAmount(2000, groupCount, groupIndex);
+    const deliveryFee = splitAmount(PRICING_POLICY.MIN_DISTANCE_FARE, groupCount, groupIndex);
+    const serviceFee = splitAmount(PRICING_POLICY.SERVICE_FEE, groupCount, groupIndex);
     const safeDriverTip = splitAmount(driverTip, groupCount, groupIndex);
     const discount = voucherId === "LOKAL20" ? splitAmount(5000, groupCount, groupIndex) : 0;
     const totalAmount = Math.max(0, subtotal + deliveryFee + serviceFee + safeDriverTip - discount);

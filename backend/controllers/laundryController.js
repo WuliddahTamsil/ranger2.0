@@ -4,6 +4,13 @@ const LaundryOrder = require("../models/LaundryOrder");
 const User = require("../models/User");
 const Notification = require("../models/Notification");
 const { syncConversationForOrder } = require("../services/conversationService");
+const {
+  PRICING_POLICY,
+  calculateDistanceFare,
+  calculateWeightFare,
+  calculateDriverRevenueSplit,
+  isKedaiTerpaduDriver,
+} = require("../services/pricingPolicyService");
 
 // 1. Ambil semua toko laundry (Explore Customer)
 exports.getStores = async (req, res) => {
@@ -277,9 +284,9 @@ exports.createOrder = async (req, res) => {
       bankAccountNumber: storeSnapshot?.bankAccountNumber || "",
       bankAccountHolder: storeSnapshot?.bankAccountHolder || "",
       qrisImageUrl: storeSnapshot?.qrisImageUrl || "",
-      deliveryFeePickup: 4000,
-      deliveryFeeDrop: 4000,
-      serviceFee: 1000,
+      deliveryFeePickup: PRICING_POLICY.MIN_DISTANCE_FARE,
+      deliveryFeeDrop: PRICING_POLICY.MIN_DISTANCE_FARE,
+      serviceFee: PRICING_POLICY.SERVICE_FEE,
       status: "MENUNGGU_KONFIRMASI_MITRA",
       paymentStatus: "menunggu_timbangan",
     });
@@ -363,6 +370,14 @@ exports.takePickupJob = async (req, res) => {
     order.driverPickupName = driverName || "Driver GEOVERSE";
     order.driverPickupPhone = driverPhone || "0812-3456-7890";
     order.status = "DRIVER_MENUJU_CUSTOMER";
+
+    let driverObj = null;
+    if (mongoose.Types.ObjectId.isValid(driverId)) {
+      driverObj = await User.findById(driverId).lean();
+    }
+    const split = calculateDriverRevenueSplit(order.deliveryFeePickup || PRICING_POLICY.MIN_DISTANCE_FARE, driverObj);
+    order.driverPickupEarnings = split.driverEarnings;
+
     await order.save();
 
     if (req.io) {
@@ -642,10 +657,20 @@ exports.weighAndBillOrder = async (req, res) => {
     if (weighingProofImage) {
       order.weighingProofImage = weighingProofImage;
     }
-    // Hitung biaya laundry
+    // Hitung biaya laundry dan kelebihan beban kiloan (>20 kg: Rp3.000/kg)
     const laundryCost = customLaundryCost ? Number(customLaundryCost) : Math.round(actualWeight * order.pricePerUnit);
     order.laundryCost = laundryCost;
-    order.totalAmount = laundryCost + (order.deliveryFeePickup || 4000) + (order.deliveryFeeDrop || 4000) + (order.serviceFee || 1000);
+    const overweightFare = calculateWeightFare(actualWeight);
+    order.weightFare = overweightFare;
+    order.deliveryFeePickup = order.deliveryFeePickup || PRICING_POLICY.MIN_DISTANCE_FARE;
+    order.deliveryFeeDrop = order.deliveryFeeDrop || PRICING_POLICY.MIN_DISTANCE_FARE;
+    order.serviceFee = PRICING_POLICY.SERVICE_FEE;
+    order.totalAmount =
+      laundryCost +
+      order.deliveryFeePickup +
+      order.deliveryFeeDrop +
+      overweightFare +
+      order.serviceFee;
     order.status = "MENUNGGU_PEMBAYARAN";
     order.paymentStatus = "menunggu_pembayaran";
 
@@ -905,6 +930,14 @@ exports.takeDeliveryJob = async (req, res) => {
     order.driverDeliveryName = driverName || "Driver GEOVERSE";
     order.driverDeliveryPhone = driverPhone || "0812-3456-7890";
     order.status = "DRIVER_MENGANTAR_BALIK";
+
+    let driverObj = null;
+    if (mongoose.Types.ObjectId.isValid(driverId)) {
+      driverObj = await User.findById(driverId).lean();
+    }
+    const split = calculateDriverRevenueSplit(order.deliveryFeeDrop || PRICING_POLICY.MIN_DISTANCE_FARE, driverObj);
+    order.driverDeliveryEarnings = split.driverEarnings;
+
     await order.save();
 
     if (req.io) {

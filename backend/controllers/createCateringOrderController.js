@@ -7,6 +7,7 @@ const Notification = require("../models/Notification");
 const { syncConversationForOrder } = require("../services/conversationService");
 const { getRoleDataValue } = require("../utils/roleData");
 const { getCateringDueAt, getPaymentPlan, getPaymentReminder } = require("../utils/cateringOrderLifecycle");
+const { PRICING_POLICY } = require("../services/pricingPolicyService");
 
 const cateringMonths = new Map([
   ["januari", 1], ["februari", 2], ["maret", 3], ["april", 4],
@@ -111,9 +112,8 @@ const createCateringOrder = async (req, res) => {
     if (!product) return res.status(409).json({ success: false, message: "Menu sudah tidak tersedia. Perbarui pilihan menu." });
     if (product.stock < portionCount) return res.status(409).json({ success: false, message: `Stok menu tidak mencukupi. Sisa ${product.stock} porsi.` });
 
-    // These fees match current MVP UI values; Product Decision Required before launch.
-    const deliveryFee = 15000;
-    const serviceFee = 5000;
+    const deliveryFee = PRICING_POLICY.MIN_DISTANCE_FARE;
+    const serviceFee = PRICING_POLICY.SERVICE_FEE;
     const subtotal = product.price * portionCount;
     const totalAmount = subtotal + deliveryFee + serviceFee;
     const paymentPlan = getPaymentPlan(totalAmount, paymentOption);

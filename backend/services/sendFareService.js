@@ -1,34 +1,28 @@
 const SendPricingConfig = require("../models/SendPricingConfig");
+const {
+  KAMOJANG_COORDINATES,
+  MAX_SERVICE_RADIUS_KM,
+  PRICING_POLICY,
+  calculateHaversineKm,
+  validateServiceRoute,
+  calculateDistanceFare,
+  calculateWeightFare,
+  calculateDriverRevenueSplit,
+} = require("./pricingPolicyService");
 
-// Earth's radius in km for Haversine
-const calculateHaversineKm = (lat1, lon1, lat2, lon2) => {
-  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 0;
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const dist = R * c;
-  return Math.round(dist * 10) / 10;
-};
-
-// Default fallback pricing if DB record is not yet seeded
+// Default fallback pricing matching client policy
 const DEFAULT_CONFIG = {
-  baseFare: 8000,
-  baseKm: 2,
-  pricePerKm: 2500,
-  pricePerKg: 1000,
-  baseKg: 1,
+  baseFare: PRICING_POLICY.MIN_DISTANCE_FARE, // Minimal (<4 km) Rp 9.500
+  baseKm: PRICING_POLICY.MIN_DISTANCE_KM, // 4 km
+  pricePerKm: PRICING_POLICY.RATE_PER_KM, // Rp 2.500 / km
+  pricePerKg: PRICING_POLICY.EXTRA_WEIGHT_RATE_PER_KG, // Rp 3.000 / kg (> 20 kg)
+  baseKg: PRICING_POLICY.BASE_WEIGHT_MAX_KG, // 0 - 20 kg disamakan dengan biaya penjemputan dasar
   sizeFarePer1000Cm3: 500,
   baseCm3: 6000,
-  serviceFee: 1500,
+  serviceFee: PRICING_POLICY.SERVICE_FEE, // Rp 2.000
   fragileFee: 3000,
-  minimumFare: 10000,
+  minimumFare: PRICING_POLICY.MIN_DISTANCE_FARE + PRICING_POLICY.SERVICE_FEE, // Rp 11.500
+  maxServiceRadiusKm: MAX_SERVICE_RADIUS_KM, // 15 km dari Kamojang
 };
 
 // List of prohibited item keywords to reject automatically on backend
@@ -76,13 +70,18 @@ const getPricingConfig = async () => {
 };
 
 /**
- * Compute send fare breakdown
+ * Compute send fare breakdown according to client policy:
+ * - Antar jemput paket: Minimal (<4 km) Rp 9.500, tarif dasar Rp 2.500/km berikutnya, biaya layanan Rp 2.000
+ * - Kiloan: 0 - 20 kg (Rp 0 / disamakan sama biaya dasar), lebih dari 20 kg Rp 3.000/kg
+ * - Batas maksimal radius Kamojang: 15 km
+ * - Bagi hasil: 80% Driver Baru / 100% Mitra Eksisting Kedai Terpadu
  */
 const computeSendFare = async ({
   pickup,
   destination,
   packageData = {},
   discount = 0,
+  driver = null,
 }) => {
   const config = await getPricingConfig();
 
@@ -108,70 +107,78 @@ const computeSendFare = async ({
   // 2. Duration estimate (approx 3.5 min/km + 8 min handling buffer)
   const estimatedDurationMinutes = Math.round(distanceKm * 3.5) + 8;
 
-  // 3. Distance Fare
-  const baseFare = config.baseFare;
-  const extraKm = Math.max(0, distanceKm - config.baseKm);
-  const distanceFare = Math.round(extraKm * config.pricePerKm);
+  // 3. Kamojang Radius Validation (Max 15 km)
+  const routeValidation = validateServiceRoute(pickup, destination, config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM);
 
-  // 4. Weight Fare
+  // 4. Distance Fare (< 4 km Rp 9.500, per km berikutnya Rp 2.500)
+  const distanceFare = calculateDistanceFare(distanceKm);
+  const baseFare = config.baseFare || PRICING_POLICY.MIN_DISTANCE_FARE;
+
+  // 5. Weight Fare (0 - 20 kg Rp 0, > 20 kg Rp 3.000 / kg)
   const weightKg = Math.max(0.1, Number(packageData.weightKg) || 1);
-  const extraKg = Math.max(0, weightKg - config.baseKg);
-  const weightFare = Math.round(extraKg * config.pricePerKg);
+  const weightFare = calculateWeightFare(weightKg);
+  const extraKg = Math.max(0, weightKg - (config.baseKg || PRICING_POLICY.BASE_WEIGHT_MAX_KG));
 
-  // 5. Size / Dimension Fare (Volume calculation: L x W x H in cm3)
+  // 6. Size / Dimension Fare (Volume calculation: L x W x H in cm3)
   const lengthCm = Math.max(1, Number(packageData.lengthCm) || 10);
   const widthCm = Math.max(1, Number(packageData.widthCm) || 10);
   const heightCm = Math.max(1, Number(packageData.heightCm) || 10);
   const volumeCm3 = lengthCm * widthCm * heightCm;
-  const extraCm3 = Math.max(0, volumeCm3 - config.baseCm3);
-  const sizeFare = Math.round((extraCm3 / 1000) * config.sizeFarePer1000Cm3);
+  const extraCm3 = Math.max(0, volumeCm3 - (config.baseCm3 || 6000));
+  const sizeFare = Math.round((extraCm3 / 1000) * (config.sizeFarePer1000Cm3 || 500));
 
-  // 6. Fragile Protection / Special Handling Fee
+  // 7. Fragile Protection / Special Handling Fee
   const isFragile = Boolean(packageData.fragile);
-  const fragileFee = isFragile ? config.fragileFee : 0;
+  const fragileFee = isFragile ? (config.fragileFee || 3000) : 0;
 
-  // 7. Insurance Fee (Protection for declared value, 0.2%, min Rp 1.000 if declared)
+  // 8. Insurance Fee (Protection for declared value, 0.2%, min Rp 1.000 if declared)
   const declaredValue = Math.max(0, Number(packageData.declaredValue) || 0);
   const insuranceFee = declaredValue > 0 ? Math.max(1000, Math.round(declaredValue * 0.002)) : 0;
 
-  // 8. Service Fee
-  const serviceFee = config.serviceFee;
+  // 9. Service Fee (Biaya Layanan Platform Rp 2.000)
+  const serviceFee = config.serviceFee || PRICING_POLICY.SERVICE_FEE;
 
-  // 9. Total Fare with discount and minimum fare clamp
+  // 10. Total Fare calculation
   const safeDiscount = Math.max(0, Number(discount) || 0);
-  const rawFare =
-    baseFare +
-    distanceFare +
-    weightFare +
-    sizeFare +
-    fragileFee +
-    insuranceFee +
-    serviceFee -
-    safeDiscount;
+  const deliverySubtotal = distanceFare + weightFare + sizeFare + fragileFee + insuranceFee;
+  const rawFare = deliverySubtotal + serviceFee - safeDiscount;
 
-  const estimatedFare = Math.max(config.minimumFare, Math.ceil(rawFare / 1000) * 1000);
+  const minFareRequirement = config.minimumFare || (PRICING_POLICY.MIN_DISTANCE_FARE + PRICING_POLICY.SERVICE_FEE);
+  const estimatedFare = Math.max(minFareRequirement, Math.ceil(rawFare / 500) * 500);
 
-  // Driver gets 80% of fare excluding platform service fee
-  const platformMargin = serviceFee;
-  const driverEarnings = Math.max(8000, Math.round((estimatedFare - platformMargin) * 0.8));
+  // 11. Driver Revenue Sharing (80% Driver Baru vs 100% Mitra Eksisting Kedai Terpadu)
+  const revenueSplit = calculateDriverRevenueSplit(deliverySubtotal, driver);
 
   return {
     distanceKm,
     estimatedDurationMinutes,
     baseFare,
     distanceFare,
+    weightKg,
+    extraWeightKg: extraKg,
     weightFare,
     sizeFare,
     fragileFee,
     insuranceFee,
     serviceFee,
     discount: safeDiscount,
-    minimumFare: config.minimumFare,
+    minimumFare: minFareRequirement,
     estimatedFare,
     finalFare: estimatedFare,
-    driverEarnings,
+    driverEarnings: revenueSplit.driverEarnings,
+    revenueSplit,
+    withinServiceRadius: routeValidation.allowed,
+    radiusValidation: routeValidation,
     currency: "IDR",
-    breakdownNote: "Tarif dihitung berdasarkan jarak rute, bobot, volume dimensi, dan proteksi barang.",
+    policySummary: {
+      under4KmFare: PRICING_POLICY.MIN_DISTANCE_FARE,
+      perKmAfter4Km: PRICING_POLICY.RATE_PER_KM,
+      serviceFee: PRICING_POLICY.SERVICE_FEE,
+      weightThresholdKg: PRICING_POLICY.BASE_WEIGHT_MAX_KG,
+      overweightPerKg: PRICING_POLICY.EXTRA_WEIGHT_RATE_PER_KG,
+      maxRadiusKm: config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM,
+    },
+    breakdownNote: "Tarif dihitung berdasarkan jarak (<4km Rp9.500, +Rp2.500/km), bobot (0-20kg Rp0, >20kg +Rp3.000/kg), dan biaya layanan Rp2.000.",
   };
 };
 

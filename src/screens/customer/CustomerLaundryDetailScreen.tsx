@@ -216,7 +216,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
         statusColor: "blue",
         date: "Hari ini",
         total: estimatedCost,
-        deliveryFee: 4000,
+        deliveryFee: 9500,
         paymentStatus: "Menunggu Penimbangan",
         paidAmount: 0,
         remainingAmount: estimatedCost,

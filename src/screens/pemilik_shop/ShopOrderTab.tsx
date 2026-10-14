@@ -35,6 +35,7 @@ import {
   CreditCard,
   ShieldCheck,
   Info,
+  Bike,
 } from "lucide-react-native";
 import { rp, normalizeImageUrl } from "../../utils/formatters";
 import { getApiUrl, getStoredAuthToken } from "../../services/api";
@@ -474,7 +475,7 @@ export const ShopOrderTab: React.FC<ShopOrderTabProps> = ({
             </Text>
             <TouchableOpacity
               style={styles.fullPageRefreshBtn}
-              onPress={loadMerchantData}
+              onPress={() => void loadMerchantData()}
               activeOpacity={0.7}
             >
               <RefreshCw size={14} color="#0D7A53" />
@@ -1052,7 +1053,7 @@ export const ShopOrderTab: React.FC<ShopOrderTabProps> = ({
         </View>
         <TouchableOpacity
           style={styles.refreshBtn}
-          onPress={loadMerchantData}
+          onPress={() => void loadMerchantData()}
           activeOpacity={0.7}
         >
           <RefreshCw size={16} color="#0D7A53" />

@@ -11,6 +11,9 @@ import {
   Modal,
   Switch,
   Alert,
+  AppState,
+  AppStateStatus,
+  Platform,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -266,24 +269,38 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
   };
 
   useEffect(() => {
+    let isMounted = true;
     loadDashboard();
 
-    // Auto refresh every 3 seconds to catch newly created customer tickets instantly
-    const interval = setInterval(() => {
-      loadDashboard(true);
-    }, 3000);
+    // AppState change listener for React Native
+    const appStateSub = AppState.addEventListener("change", (nextState: AppStateStatus) => {
+      if (nextState === "active" && isMounted) {
+        loadDashboard(true);
+      }
+    });
 
     const onWindowFocus = () => {
-      loadDashboard(true);
+      if (isMounted) {
+        loadDashboard(true);
+      }
     };
 
-    if (typeof window !== "undefined") {
+    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.addEventListener === "function") {
       window.addEventListener("focus", onWindowFocus);
     }
 
+    // Refresh every 10 seconds to catch tickets without overwhelming the phone
+    const interval = setInterval(() => {
+      if (isMounted) {
+        loadDashboard(true);
+      }
+    }, 10000);
+
     return () => {
+      isMounted = false;
       clearInterval(interval);
-      if (typeof window !== "undefined") {
+      appStateSub.remove();
+      if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.removeEventListener === "function") {
         window.removeEventListener("focus", onWindowFocus);
       }
     };

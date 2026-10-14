@@ -10,6 +10,9 @@ import {
   Image,
   Modal,
   TextInput,
+  AppState,
+  AppStateStatus,
+  Platform,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -46,6 +49,7 @@ import {
   getWasteBanks,
   getCustomerDeposits,
 } from "../../../services/recycleService";
+import { subscribeToUserRealtime } from "../../../services/userRealtime";
 import { WasteBankUI, WasteDepositUI } from "../../../types/recycleTypes";
 import { rp } from "../../../utils/formatters";
 
@@ -81,23 +85,27 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
 
   // Dynamically include any other registered bank addresses
   const allServiceLocations = [...baseLocations];
-  nearbyBanks.forEach((b) => {
-    if (b.address && !allServiceLocations.some((l) => l.address.toLowerCase().includes(b.address.toLowerCase()) || b.address.toLowerCase().includes(l.address.toLowerCase()))) {
+  (nearbyBanks || []).forEach((b) => {
+    if (!b || !b.address) return;
+    const bAddr = String(b.address);
+    const bName = String(b.name || "Bank Sampah");
+    if (!allServiceLocations.some((l) => (l.address || "").toLowerCase().includes(bAddr.toLowerCase()) || bAddr.toLowerCase().includes((l.address || "").toLowerCase()))) {
       allServiceLocations.push({
-        label: `${b.name} (${b.address.split(",")[0] || b.address})`,
-        address: b.address,
-        lat: b.latitude,
-        lng: b.longitude,
-        bankName: b.name,
+        label: `${bName} (${bAddr.split(",")[0] || bAddr})`,
+        address: bAddr,
+        lat: Number(b.latitude) || -7.145,
+        lng: Number(b.longitude) || 107.789,
+        bankName: bName,
       });
     }
   });
 
+  const queryLower = (searchLocationQuery || "").toLowerCase();
   const filteredPresetLocations = allServiceLocations.filter(
     (p) =>
-      p.label.toLowerCase().includes(searchLocationQuery.toLowerCase()) ||
-      p.address.toLowerCase().includes(searchLocationQuery.toLowerCase()) ||
-      (p.bankName && p.bankName.toLowerCase().includes(searchLocationQuery.toLowerCase()))
+      (p.label || "").toLowerCase().includes(queryLower) ||
+      (p.address || "").toLowerCase().includes(queryLower) ||
+      (p.bankName && p.bankName.toLowerCase().includes(queryLower))
   );
 
   const loadData = async (coords = userCoords) => {
@@ -107,10 +115,10 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
         authAccount?.id ? getCustomerDeposits(authAccount.id) : Promise.resolve({ success: false, data: [] }),
       ]);
 
-      if (banksRes.success && Array.isArray(banksRes.data)) {
+      if (banksRes && banksRes.success && Array.isArray(banksRes.data)) {
         setNearbyBanks(banksRes.data);
       }
-      if (depositsRes.success && Array.isArray(depositsRes.data)) {
+      if (depositsRes && depositsRes.success && Array.isArray(depositsRes.data)) {
         setRecentDeposits(depositsRes.data.slice(0, 5));
       }
     } catch (err) {
@@ -122,27 +130,67 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
   };
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Load initial data
     loadData(userCoords);
     refreshRecycleWallet().catch(() => {});
     refreshPointWallet().catch(() => {});
 
-    // Real-time sync on focus or every 3 seconds to catch bank operational updates instantly
-    const onFocus = () => {
-      loadData(userCoords);
+    // React Native AppState listener: refresh when user returns to foreground safely without crashing
+    const appStateSub = AppState.addEventListener("change", (nextState: AppStateStatus) => {
+      if (nextState === "active" && isMounted) {
+        loadData(userCoords);
+        refreshRecycleWallet().catch(() => {});
+        refreshPointWallet().catch(() => {});
+      }
+    });
+
+    // Web-only window focus listener (strictly guarded)
+    const onWebFocus = () => {
+      if (isMounted) {
+        loadData(userCoords);
+      }
     };
-
-    const interval = setInterval(() => {
-      loadData(userCoords);
-    }, 3000);
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("focus", onFocus);
+    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("focus", onWebFocus);
     }
 
+    // Subscribe to websocket events for instant updates (zero battery drain/cpu churn)
+    let unsubscribeSocket: (() => void) | undefined;
+    subscribeToUserRealtime(
+      () => {
+        if (isMounted) {
+          loadData(userCoords);
+          refreshRecycleWallet().catch(() => {});
+          refreshPointWallet().catch(() => {});
+        }
+      },
+      () => {
+        if (isMounted) {
+          loadData(userCoords);
+        }
+      }
+    ).then((unsub) => {
+      unsubscribeSocket = unsub;
+    }).catch(() => {});
+
+    // Light background sync interval (every 30s instead of aggressive 3s spam)
+    const interval = setInterval(() => {
+      if (isMounted) {
+        loadData(userCoords);
+      }
+    }, 30000);
+
     return () => {
+      isMounted = false;
       clearInterval(interval);
-      if (typeof window !== "undefined") {
-        window.removeEventListener("focus", onFocus);
+      appStateSub.remove();
+      if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+        window.removeEventListener("focus", onWebFocus);
+      }
+      if (unsubscribeSocket) {
+        unsubscribeSocket();
       }
     };
   }, [authAccount?.id, userCoords.lat, userCoords.lng]);
@@ -175,9 +223,9 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
     navigate("c_recycle_deposit_form");
   };
 
-  const balance = wallet?.balancePoint || 0;
-  const totalKg = wallet?.totalKgDeposited || 0;
-  const co2Kg = wallet?.totalCo2ReductionKg || (totalKg * 1.85);
+  const balance = Number(wallet?.balancePoint) || 0;
+  const totalKg = Number(wallet?.totalKgDeposited) || 0;
+  const co2Kg = Number(wallet?.totalCo2ReductionKg) || (totalKg * 1.85);
   const treesCount = Math.floor(co2Kg / 22);
 
   // Active deposit in progress (if any)
@@ -186,9 +234,10 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
   );
 
   const nearestBank = useMemo(() => {
-    if (nearbyBanks.length === 0) return null;
+    if (!nearbyBanks || nearbyBanks.length === 0) return null;
     const lower = (userAddress || "").toLowerCase();
     const exactMatch = nearbyBanks.find((b) => {
+      if (!b) return false;
       const bAddr = (b.address || "").toLowerCase();
       const bName = (b.name || "").toLowerCase();
       if (lower.includes("pakuan") || lower.includes("bogor")) {
@@ -280,7 +329,7 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
               {nearestBank.distanceKm != null && (
                 <View style={styles.distanceBadge}>
                   <Navigation size={11} color="#15803D" />
-                  <Text style={styles.distanceBadgeText}>{nearestBank.distanceKm.toFixed(1)} km</Text>
+                  <Text style={styles.distanceBadgeText}>{Number(nearestBank.distanceKm || 0).toFixed(1)} km</Text>
                 </View>
               )}
             </View>
@@ -550,18 +599,18 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
               }}
               activeOpacity={0.8}
             >
-              <View style={[styles.depositIconBg, { backgroundColor: item.finalPoint > 0 ? "#DCFCE7" : "#F3F4F6" }]}>
-                <Recycle size={18} color={item.finalPoint > 0 ? "#15803D" : "#6B7280"} />
+              <View style={[styles.depositIconBg, { backgroundColor: Number(item.finalPoint || 0) > 0 ? "#DCFCE7" : "#F3F4F6" }]}>
+                <Recycle size={18} color={Number(item.finalPoint || 0) > 0 ? "#15803D" : "#6B7280"} />
               </View>
               <View style={styles.depositCol}>
                 <Text style={styles.depositCode}>{item.depositCode}</Text>
                 <Text style={styles.depositMeta}>
-                  {item.method === "PICKUP" ? "Pickup" : "Antar Langsung"} • {new Date(item.createdAt).toLocaleDateString("id-ID")}
+                  {item.method === "PICKUP" ? "Pickup" : "Antar Langsung"} • {new Date(item.createdAt || Date.now()).toLocaleDateString("id-ID")}
                 </Text>
               </View>
               <View style={styles.depositRight}>
-                <Text style={[styles.depositPoint, { color: item.finalPoint > 0 ? "#15803D" : "#4B5563" }]}>
-                  {item.finalPoint > 0 ? `+${item.finalPoint.toLocaleString("id-ID")} Pts` : item.status}
+                <Text style={[styles.depositPoint, { color: Number(item.finalPoint || 0) > 0 ? "#15803D" : "#4B5563" }]}>
+                  {Number(item.finalPoint || 0) > 0 ? `+${Number(item.finalPoint).toLocaleString("id-ID")} Pts` : (item.status || "Proses")}
                 </Text>
                 <ChevronRight size={14} color="#9CA3AF" />
               </View>

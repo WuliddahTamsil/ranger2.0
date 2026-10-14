@@ -92,6 +92,7 @@ import { PemilikKosProfilScreen } from "./src/screens/pemilik_kos/PemilikKosProf
 import { VerifikasiDpScreen } from "./src/screens/pemilik_kos/VerifikasiDpScreen";
 import { KirimPengingatScreen } from "./src/screens/pemilik_kos/KirimPengingatScreen";
 import { AdminHomeScreen } from "./src/screens/admin/AdminHomeScreen";
+import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import {
   createAuthSession,
   restoreStoredAccount,
@@ -462,7 +463,9 @@ export default function App() {
               >
                 <View style={styles.container}>
                   <StatusBar style="auto" />
-                  {renderScreen()}
+                  <ErrorBoundary onReset={() => navigate("c_home")}>
+                    {renderScreen()}
+                  </ErrorBoundary>
                 </View>
               </KeyboardAvoidingView>
             </ShopCartProvider>

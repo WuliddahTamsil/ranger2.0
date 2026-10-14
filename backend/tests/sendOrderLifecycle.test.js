@@ -16,34 +16,34 @@ async function runUnitTests() {
   assert.strictEqual(dangerousCheck.keyword, "bensin", "Detected keyword must match");
   console.log("✔ Test 1 Passed: Hazardous cargo detection strictly enforced");
 
-  // 2. Minimum fare enforcement
+  // 2. Minimum fare enforcement (distance <= 1 km Rp 2.500 + service fee Rp 2.000 = Rp 4.500)
   const shortFare = await computeSendFare({
     pickup: { latitude: -6.9175, longitude: 107.6191 },
     destination: { latitude: -6.9180, longitude: 107.6195 }, // ~0.1 km
     packageData: { weightKg: 0.5, lengthCm: 10, widthCm: 10, heightCm: 5, fragile: false },
   });
-  assert.strictEqual(shortFare.estimatedFare, DEFAULT_CONFIG.minimumFare, "Must enforce minimum fare Rp 10.000");
+  assert.strictEqual(shortFare.estimatedFare, DEFAULT_CONFIG.minimumFare, "Must enforce minimum fare Rp 4.500");
+  assert.strictEqual(shortFare.distanceFare, 2500, "Base distance fare for <= 1km must be Rp 2.500");
+  assert.strictEqual(shortFare.serviceFee, 2000, "Platform service fee must be Rp 2.000");
+  assert.strictEqual(shortFare.weightFare, 0, "Weight <= 20kg must have 0 extra weight fare");
   assert.strictEqual(shortFare.fragileFee, 0, "Non-fragile has 0 fragile fee");
   console.log(`✔ Test 2 Passed: Minimum fare enforced (Rp ${shortFare.estimatedFare.toLocaleString("id-ID")})`);
 
-  // 3. Distance and Weight Fare calculation
-  // Jarak: 6 km (base 2 km + 4 km * 2500 = 10.000)
-  // Berat: 4 kg (base 1 kg + 3 kg * 1000 = 3.000)
-  // Dimensi: standard 10x10x10 = 1000 cm3 (< base 6000 cm3 = 0)
-  // Base fare: 8000
-  // Service fee: 1500
-  // Total raw = 8000 + 10000 + 3000 + 1500 = 22500 -> Ceil to 1000 = 23000
-  const midFare = await computeSendFare({
+  // 3. Distance and Weight Fare calculation (>4 km and >20 kg)
+  // Jarak: ~6 km (<4 km: 9500, extra 2 km * 2500 = 5000 -> distanceFare: 14500)
+  // Berat: 25 kg (base 20 kg Rp 0 + extra 5 kg * 3000 = 15000 -> weightFare: 15000)
+  // Service fee: 2000
+  // Total raw = 14500 + 15000 + 2000 = 31500 -> Ceil to 1000 = 32000
+  const heavyFare = await computeSendFare({
     pickup: { latitude: -6.9175, longitude: 107.6191 },
     destination: { latitude: -6.9715, longitude: 107.6191 }, // ~6.0 km
-    packageData: { weightKg: 4, lengthCm: 10, widthCm: 10, heightCm: 10, fragile: false },
+    packageData: { weightKg: 25, lengthCm: 10, widthCm: 10, heightCm: 10, fragile: false },
   });
-  assert.strictEqual(midFare.baseFare, 8000);
-  assert.strictEqual(midFare.distanceFare, 10000);
-  assert.strictEqual(midFare.weightFare, 3000);
-  assert.strictEqual(midFare.serviceFee, 1500);
-  assert.strictEqual(midFare.estimatedFare, 23000, "Estimated fare must be rounded to Rp 23.000");
-  console.log(`✔ Test 3 Passed: Distance & weight calculation verified (Rp ${midFare.estimatedFare.toLocaleString("id-ID")})`);
+  assert.strictEqual(heavyFare.distanceFare, 15000, "6km distance fare must be 15000");
+  assert.strictEqual(heavyFare.weightFare, 15000, "25kg weight fare (5kg extra * 3000) must be 15000");
+  assert.strictEqual(heavyFare.serviceFee, 2000, "Service fee must be 2000");
+  assert.strictEqual(heavyFare.estimatedFare, 32000, "Estimated fare must be Rp 32.000");
+  console.log(`✔ Test 3 Passed: Distance & overweight calculation (>20kg) verified (Rp ${heavyFare.estimatedFare.toLocaleString("id-ID")})`);
 
   // 4. Fragile Protection and Insurance fee
   const fragileFare = await computeSendFare({

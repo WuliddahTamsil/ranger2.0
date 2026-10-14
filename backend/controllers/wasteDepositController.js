@@ -7,6 +7,12 @@ const Notification = require("../models/Notification");
 const { computeEnvironmentalImpact, calculateCategoryPointAndRupiah } = require("../services/recycleFareService");
 const { creditPoints } = require("../services/pointWalletService");
 const { checkBankOperationalStatus } = require("../utils/bankOperationalUtils");
+const {
+  PRICING_POLICY,
+  calculateHaversineKm,
+  computeGoodsAndPickupFare,
+  calculateDriverRevenueSplit,
+} = require("../services/pricingPolicyService");
 
 /**
  * Helper to emit real-time socket updates
@@ -128,6 +134,27 @@ const createDeposit = async (req, res) => {
     const depositCode = `RNG-RCY-${Date.now().toString().slice(-8)}`;
     const environmentalImpact = computeEnvironmentalImpact(formattedCategories);
 
+    let pickupFee = 0;
+    let driverEarnings = 0;
+    let distanceKm = 0;
+    let weightFee = 0;
+
+    if (method === "PICKUP") {
+      if (pickupLatitude != null && pickupLongitude != null && bank.latitude != null && bank.longitude != null) {
+        distanceKm = calculateHaversineKm(pickupLatitude, pickupLongitude, bank.latitude, bank.longitude);
+      } else {
+        distanceKm = 2; // Default local Kamojang (< 4 km)
+      }
+      const pickupPricing = computeGoodsAndPickupFare({
+        serviceType: "RECYCLE",
+        distanceKm,
+        weightKg: estimatedTotalWeightKg,
+      });
+      pickupFee = pickupPricing.estimatedFare;
+      driverEarnings = pickupPricing.driverEarnings;
+      weightFee = pickupPricing.weightFare;
+    }
+
     const deposit = await WasteDeposit.create({
       depositCode,
       customerId,
@@ -142,6 +169,10 @@ const createDeposit = async (req, res) => {
       estimatedTotalWeightKg: Math.round(estimatedTotalWeightKg * 10) / 10,
       estimatedPoint: estimatedTotalRupiah, // 1 Point = Rp 1
       estimatedRupiah: estimatedTotalRupiah,
+      pickupFee,
+      driverEarnings,
+      distanceKm,
+      weightFee,
       customerPhotos: Array.isArray(customerPhotos) ? customerPhotos : [],
       status: "REQUESTED",
       statusHistory: [
@@ -347,6 +378,18 @@ const assignDriver = async (req, res) => {
 
     deposit.driverId = driverId;
     deposit.status = "DRIVER_ASSIGNED";
+
+    let driverObj = null;
+    if (mongoose.Types.ObjectId.isValid(driverId)) {
+      driverObj = await User.findById(driverId).lean();
+    }
+    const deliveryFare = Math.max(
+      PRICING_POLICY.MIN_DISTANCE_FARE,
+      (deposit.pickupFee || PRICING_POLICY.MIN_DISTANCE_FARE + PRICING_POLICY.SERVICE_FEE) - PRICING_POLICY.SERVICE_FEE
+    );
+    const split = calculateDriverRevenueSplit(deliveryFare, driverObj);
+    deposit.driverEarnings = split.driverEarnings;
+
     deposit.statusHistory.push({
       status: "DRIVER_ASSIGNED",
       actorId: driverId,

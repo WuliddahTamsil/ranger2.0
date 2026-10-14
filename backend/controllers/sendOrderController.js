@@ -6,6 +6,7 @@ const User = require("../models/User");
 const Payment = require("../models/Payment");
 const Notification = require("../models/Notification");
 const { computeSendFare, isProhibitedItem, getPricingConfig } = require("../services/sendFareService");
+const { calculateDriverRevenueSplit } = require("../services/pricingPolicyService");
 const { generateSixDigitCode, hashCode, verifyCode } = require("../utils/sendSecurity");
 const paymentGateway = require("../services/paymentGateway");
 
@@ -563,6 +564,19 @@ const acceptOrder = async (req, res) => {
         success: false,
         message: "Order sudah diambil oleh driver lain atau telah dibatalkan.",
       });
+    }
+
+    // Dynamic driver revenue split (100% Kedai Terpadu vs 80% Driver Baru)
+    try {
+      const deliveryFare = (order.pricing?.distanceFare || 0) + (order.pricing?.weightFare || 0);
+      const revenueSplit = calculateDriverRevenueSplit(deliveryFare || Math.max(0, (order.pricing?.estimatedFare || 10000) - 2000), driver);
+      if (order.pricing) {
+        order.pricing.driverEarnings = revenueSplit.driverEarnings;
+      }
+      order.driverEarnings = revenueSplit.driverEarnings;
+      await order.save();
+    } catch (splitErr) {
+      console.warn("sendOrder split update error:", splitErr);
     }
 
     // Notify customer
