@@ -845,6 +845,25 @@ const verifyDelivery = async (req, res) => {
       }).catch(() => {});
     }
 
+    // Award loyalty cashback points (1% of shipping cost, min 1 point)
+    const sendAmount = order.pricing?.totalPrice || order.totalAmount || 0;
+    if (sendAmount > 0 && order.customerId) {
+      try {
+        const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+        const rewardPoints = Math.max(1, Math.round(sendAmount * 0.01));
+        await pointWalletService.creditPoints({
+          userId: order.customerId,
+          points: rewardPoints,
+          sourceType: "KANYAAH_SEND",
+          sourceId: order.orderCode,
+          notes: `Cashback 1% pengiriman Kanyaah Send #${order.orderCode}`,
+          actorId: order.driverId || order.customerId,
+        });
+      } catch (pointErr) {
+        console.warn("[Kanyaah Point] Send cashback error:", pointErr.message);
+      }
+    }
+
     // Notify customer
     await Notification.create({
       userId: order.customerId,
@@ -969,6 +988,25 @@ const updateOrderStatus = async (req, res) => {
         type: "order_status",
         relatedId: order._id,
       }).catch(() => {});
+
+      // Award loyalty cashback points (1% of shipping cost, min 1 point)
+      const sendAmount = order.pricing?.totalPrice || order.totalAmount || 0;
+      if (sendAmount > 0 && order.customerId) {
+        try {
+          const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+          const rewardPoints = Math.max(1, Math.round(sendAmount * 0.01));
+          await pointWalletService.creditPoints({
+            userId: order.customerId,
+            points: rewardPoints,
+            sourceType: "KANYAAH_SEND",
+            sourceId: order.orderCode,
+            notes: `Cashback 1% pengiriman Kanyaah Send #${order.orderCode}`,
+            actorId: order.driverId || order.customerId,
+          });
+        } catch (pointErr) {
+          console.warn("[Kanyaah Point] Send cashback error:", pointErr.message);
+        }
+      }
     }
 
     order.statusHistory.push({

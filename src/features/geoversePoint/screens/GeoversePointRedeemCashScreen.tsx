@@ -43,7 +43,7 @@ export const GeoversePointRedeemCashScreen: React.FC<Nav> = ({ navigate }) => {
   } = useGeoversePoint();
 
   const balancePoints = wallet?.balancePoint || 0;
-  const minPoints = config.minCashRedemptionPoints || 5000;
+  const minPoints = config.minCashRedemptionPoints || 10000;
 
   const [pointsInput, setPointsInput] = useState<string>("10000");
   const [selectedChannel, setSelectedChannel] = useState<string>("CASH_AT_BANK");
@@ -54,7 +54,7 @@ export const GeoversePointRedeemCashScreen: React.FC<Nav> = ({ navigate }) => {
   const parsedPoints = parseInt(pointsInput.replace(/[^0-9]/g, ""), 10) || 0;
   const rupiahValue = pointToRupiah(parsedPoints);
 
-  const presetAmounts = [5000, 10000, 20000, 50000, 100000];
+  const presetAmounts = [10000, 25000, 50000, 100000, 200000];
 
   const currentChannelObj = WITHDRAWAL_CHANNELS.find((c) => c.id === selectedChannel);
   const isCashAtBank = selectedChannel === "CASH_AT_BANK";

@@ -51,12 +51,18 @@ import {
 } from "../../services/recycleService";
 import { WasteBankUI, WasteDepositUI, WasteCategoryPriceUI } from "../../types/recycleTypes";
 import { rp } from "../../utils/formatters";
+import {
+  fetchAdminRedemptions,
+  payRedemption,
+  rejectRedemption,
+} from "../../features/geoversePoint/services/geoversePointService";
+import { PointRedemptionUI } from "../../features/geoversePoint/types/pointTypes";
 
 interface Props extends Nav {
   authAccount?: AuthAccount | null;
 }
 
-type TabQueue = "WEIGHING" | "WAITING" | "COMPLETED";
+type TabQueue = "WEIGHING" | "WAITING" | "COMPLETED" | "REDEMPTIONS";
 
 const PRESET_HOURS = [
   "Senin - Sabtu, 08:00 - 16:00",
@@ -69,6 +75,8 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
   const { setSelectedDeposit, setSelectedBank } = useRecycle();
   const [bank, setBank] = useState<WasteBankUI | null>(null);
   const [deposits, setDeposits] = useState<WasteDepositUI[]>([]);
+  const [redemptions, setRedemptions] = useState<PointRedemptionUI[]>([]);
+  const [processingRedemptionId, setProcessingRedemptionId] = useState<string | null>(null);
   const [activeQueue, setActiveQueue] = useState<TabQueue>("WEIGHING");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -237,6 +245,16 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
         const depRes = await getBankDeposits(myBank._id);
         if (depRes.success && Array.isArray(depRes.data)) {
           setDeposits(depRes.data);
+        }
+
+        // Load point cashout redemptions for this Bank Sampah
+        try {
+          const rdmRes = await fetchAdminRedemptions({ status: "ALL", limit: 50 });
+          if (rdmRes.success && rdmRes.data?.redemptions) {
+            setRedemptions(rdmRes.data.redemptions);
+          }
+        } catch (rdmErr) {
+          console.warn("loadRedemptions error:", rdmErr);
         }
       }
     } catch (err) {
@@ -464,6 +482,67 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
       setSearchError(`Tiket "${query}" tidak ditemukan dalam antrean aktif unit ini.`);
     }
   };
+
+  const handlePayRedemption = (redemption: PointRedemptionUI) => {
+    Alert.alert(
+      "Konfirmasi Pencairan Kas",
+      `Apakah Anda yakin telah membayarkan dana penarikan sebesar Rp ${redemption.rupiahValue?.toLocaleString("id-ID")} kepada ${typeof redemption.userId === "object" ? (redemption.userId as any)?.name || "nasabah" : "nasabah"}?`,
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Ya, Sudah Dibayarkan",
+          onPress: async () => {
+            setProcessingRedemptionId(redemption._id);
+            try {
+              const res = await payRedemption(redemption._id);
+              if (res.success) {
+                Alert.alert("Sukses", "Pencairan kas berhasil dikonfirmasi dan status diperbarui menjadi PAID.");
+                loadDashboard(true);
+              } else {
+                Alert.alert("Gagal", res.message || "Gagal memproses pembayaran.");
+              }
+            } catch (err: any) {
+              Alert.alert("Kesalahan", err?.message || "Terjadi kesalahan pada jaringan.");
+            } finally {
+              setProcessingRedemptionId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRejectRedemption = (redemption: PointRedemptionUI) => {
+    Alert.alert(
+      "Tolak Pencairan Kas",
+      `Apakah Anda yakin ingin menolak permintaan penarikan poin ini? Saldo ${redemption.points?.toLocaleString("id-ID")} poin akan dikembalikan secara utuh ke dompet nasabah.`,
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Tolak & Kembalikan Poin",
+          style: "destructive",
+          onPress: async () => {
+            setProcessingRedemptionId(redemption._id);
+            try {
+              const res = await rejectRedemption(redemption._id, "Ditolak oleh petugas Bank Sampah.");
+              if (res.success) {
+                Alert.alert("Sukses", "Permintaan ditolak dan saldo poin nasabah telah dikembalikan utuh.");
+                loadDashboard(true);
+              } else {
+                Alert.alert("Gagal", res.message || "Gagal menolak permintaan.");
+              }
+            } catch (err: any) {
+              Alert.alert("Kesalahan", err?.message || "Terjadi kesalahan pada jaringan.");
+            } finally {
+              setProcessingRedemptionId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const pendingRedemptionsCount = redemptions.filter((r) => r.status === "REQUESTED").length;
 
   // Metrics
   const waitingWeighing = deposits.filter((d) =>
@@ -752,6 +831,35 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
               Selesai ({completedDeposits.length})
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.queueTab, activeQueue === "REDEMPTIONS" && styles.queueTabActive]}
+            onPress={() => setActiveQueue("REDEMPTIONS")}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <Text
+                style={[
+                  styles.queueTabText,
+                  activeQueue === "REDEMPTIONS" && styles.queueTabTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                Pencairan ({pendingRedemptionsCount})
+              </Text>
+              {pendingRedemptionsCount > 0 && (
+                <View
+                  style={[
+                    styles.tabDisputeDot,
+                    activeQueue === "REDEMPTIONS" && styles.tabDisputeDotActive,
+                    { backgroundColor: "#F59E0B" },
+                  ]}
+                >
+                  <Text style={styles.tabDisputeDotText}>{pendingRedemptionsCount}</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Dispute Notice Banner under Tabs if any */}
@@ -769,9 +877,158 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
           <View style={{ paddingVertical: 40, alignItems: "center" }}>
             <ActivityIndicator size="large" color="#15803D" />
             <Text style={{ marginTop: 10, color: "#64748B", fontSize: 12 }}>
-              Memuat antrean setoran...
+              Memuat antrean...
             </Text>
           </View>
+        ) : activeQueue === "REDEMPTIONS" ? (
+          redemptions.length === 0 ? (
+            <View style={styles.emptyQueueCard}>
+              <CheckCircle2 size={32} color="#9CA3AF" />
+              <Text style={styles.emptyQueueText}>
+                Belum ada permintaan pencairan poin / kas dari nasabah.
+              </Text>
+            </View>
+          ) : (
+            redemptions.map((rdm) => {
+              const isPending = rdm.status === "REQUESTED";
+              const isPaid = rdm.status === "PAID";
+              const isRejected = rdm.status === "REJECTED";
+              const isProcessing = processingRedemptionId === rdm._id;
+
+              return (
+                <View key={rdm._id} style={styles.depositCard}>
+                  <View style={styles.depositCardHeader}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <View style={styles.codeRow}>
+                        <Text style={styles.depositCode}>{rdm.redemptionCode}</Text>
+                        <View
+                          style={[
+                            styles.methodBadge,
+                            rdm.type === "CASH" ? styles.methodBadgeDropOff : styles.methodBadgePickup,
+                          ]}
+                        >
+                          <DollarSign size={10} color={rdm.type === "CASH" ? "#0284C7" : "#047857"} />
+                          <Text
+                            style={[
+                              styles.methodBadgeText,
+                              rdm.type === "CASH" ? styles.methodBadgeTextDropOff : styles.methodBadgeTextPickup,
+                            ]}
+                          >
+                            {rdm.type === "CASH"
+                              ? "Tunai Bank Sampah"
+                              : rdm.type === "BANK_TRANSFER"
+                              ? "Transfer Bank"
+                              : "E-Wallet"}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.customerRow}>
+                        <User size={11} color="#64748B" />
+                        <Text style={styles.customerName} numberOfLines={1}>
+                          {typeof rdm.userId === "object" ? (rdm.userId as any)?.name || "Nasabah" : "Nasabah"}
+                          {typeof rdm.userId === "object" && (rdm.userId as any)?.phone ? ` (${(rdm.userId as any).phone})` : ""}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.statusPill,
+                        isPaid
+                          ? styles.statusPillGreen
+                          : isRejected
+                          ? styles.statusPillRed
+                          : styles.statusPillAmber,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusPillText,
+                          isPaid
+                            ? styles.statusPillTextGreen
+                            : isRejected
+                            ? styles.statusPillTextRed
+                            : styles.statusPillTextAmber,
+                        ]}
+                      >
+                        {isPaid ? "Selesai / Dibayar" : isRejected ? "Ditolak" : "Menunggu Bayar"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: "#F1F5F9", marginTop: 6 }}>
+                    <Text style={{ fontSize: 11, color: "#64748B" }}>Tujuan Pencairan:</Text>
+                    <Text style={{ fontSize: 12.5, fontWeight: "700", color: "#1E293B", marginTop: 2 }}>
+                      {rdm.payoutDestination?.channel === "CASH_AT_BANK"
+                        ? "Pengambilan Uang Tunai di Lokasi Bank Sampah"
+                        : `${rdm.payoutDestination?.channel || "Transfer"} - ${rdm.payoutDestination?.accountNumber || "-"} a/n ${rdm.payoutDestination?.accountName || "-"}`}
+                    </Text>
+                    {rdm.rejectionReason ? (
+                      <Text style={{ fontSize: 11, color: "#DC2626", marginTop: 4 }}>
+                        Alasan penolakan: {rdm.rejectionReason} (Poin telah dikembalikan)
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.depositCardFooter}>
+                    <View>
+                      <Text style={styles.footerWeightLabel}>Nominal Penarikan:</Text>
+                      <Text style={[styles.footerWeightVal, { color: "#15803D" }]}>
+                        Rp {rdm.rupiahValue?.toLocaleString("id-ID")}
+                      </Text>
+                      <Text style={styles.footerPointVal}>
+                        {rdm.points?.toLocaleString("id-ID")} Poin
+                      </Text>
+                    </View>
+
+                    {isPending && (
+                      <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+                        <TouchableOpacity
+                          style={{
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: "#EF4444",
+                            backgroundColor: "#FEF2F2",
+                          }}
+                          onPress={() => handleRejectRedemption(rdm)}
+                          disabled={isProcessing}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={{ fontSize: 11.5, fontWeight: "700", color: "#DC2626" }}>Tolak</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={{
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 8,
+                            backgroundColor: "#15803D",
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                          onPress={() => handlePayRedemption(rdm)}
+                          disabled={isProcessing}
+                          activeOpacity={0.8}
+                        >
+                          {isProcessing ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <>
+                              <Check size={13} color="#FFFFFF" />
+                              <Text style={{ fontSize: 11.5, fontWeight: "800", color: "#FFFFFF" }}>Konfirmasi Bayar</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })
+          )
         ) : getFilteredQueue().length === 0 ? (
           <View style={styles.emptyQueueCard}>
             <CheckCircle2 size={32} color="#9CA3AF" />

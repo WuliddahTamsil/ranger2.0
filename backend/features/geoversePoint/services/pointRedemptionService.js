@@ -272,10 +272,52 @@ async function cancelRedemption(id, userId, reason = "Dibatalkan oleh pelanggan.
   return { redemption, wallet: reversalResult?.wallet };
 }
 
+/**
+ * Gets redemptions for Staff / Admin with pagination and filtering
+ */
+async function getAllRedemptions({ status, type, bankSampahId, limit = 50, page = 1 } = {}) {
+  const filter = {};
+  if (status && status !== "ALL") {
+    filter.status = status;
+  }
+  if (type && type !== "ALL") {
+    filter.type = type;
+  }
+  if (bankSampahId) {
+    filter.$or = [{ bankSampahId }, { bankSampahId: null }];
+  }
+
+  const safeLimit = Math.max(1, Math.min(100, Number(limit) || 50));
+  const safePage = Math.max(1, Number(page) || 1);
+  const skip = (safePage - 1) * safeLimit;
+
+  const [redemptions, total] = await Promise.all([
+    PointRedemption.find(filter)
+      .populate("userId", "name email phone photoUrl")
+      .populate("bankSampahId", "name address phone")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(safeLimit)
+      .lean(),
+    PointRedemption.countDocuments(filter),
+  ]);
+
+  return {
+    redemptions,
+    pagination: {
+      total,
+      page: safePage,
+      pages: Math.ceil(total / safeLimit) || 1,
+      limit: safeLimit,
+    },
+  };
+}
+
 module.exports = {
   createRedemption,
   getRedemptionsForUser,
   getRedemptionById,
+  getAllRedemptions,
   payRedemption,
   rejectRedemption,
   cancelRedemption,

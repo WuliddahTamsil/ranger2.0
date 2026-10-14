@@ -230,6 +230,7 @@ const createShopOrder = async (req, res) => {
     // Voucher validation
     let voucherDiscount = 0;
     let validatedVoucherCode = "";
+    let validatedVoucherDocId = null;
     if (voucherCode && voucherCode.trim()) {
       const v = await Voucher.findOne({
         voucherCode: voucherCode.trim().toUpperCase(),
@@ -238,6 +239,25 @@ const createShopOrder = async (req, res) => {
       });
       if (v) {
         if (calculatedSubtotal >= v.minTransaction) {
+          // If voucher requires points or has claims, verify customer ownership
+          if ((v.pointsCost && v.pointsCost > 0) || (v.claimedBy && v.claimedBy.length > 0)) {
+            const userClaim = (v.claimedBy || []).find(
+              (c) => String(c.userId?._id || c.userId) === String(customerId)
+            );
+            if (!userClaim) {
+              return res.status(403).json({
+                success: false,
+                message: "Voucher ini diperoleh dari penukaran Kanyaah Point. Anda belum menukarkannya.",
+              });
+            }
+            if (userClaim.used) {
+              return res.status(400).json({
+                success: false,
+                message: "Voucher ini sudah pernah Anda gunakan sebelumnya.",
+              });
+            }
+          }
+
           if (v.discountType === "PERCENTAGE") {
             const rawDiscount = (calculatedSubtotal * v.discountValue) / 100;
             voucherDiscount = v.maxDiscount ? Math.min(rawDiscount, v.maxDiscount) : rawDiscount;
@@ -245,6 +265,7 @@ const createShopOrder = async (req, res) => {
             voucherDiscount = v.discountValue;
           }
           validatedVoucherCode = v.voucherCode;
+          validatedVoucherDocId = v._id;
         }
       }
     }
@@ -403,6 +424,17 @@ const createShopOrder = async (req, res) => {
       await prescriptionDoc.save();
     }
 
+    // Mark voucher claim as used if applicable
+    if (validatedVoucherDocId) {
+      await Voucher.updateOne(
+        { _id: validatedVoucherDocId, "claimedBy.userId": customerId },
+        {
+          $set: { "claimedBy.$.used": true, "claimedBy.$.usedAt": new Date() },
+          $inc: { usedCount: 1 },
+        }
+      ).catch((err) => console.warn("Failed to mark voucher used:", err));
+    }
+
     // Send notification
     await Notification.create({
       userId: store.ownerId,
@@ -526,6 +558,17 @@ const cancelOrder = async (req, res) => {
         notes: `Pengembalian poin karena pembatalan pesanan #${order.orderCode}`,
         actorId: authUser?._id,
       });
+    }
+
+    // Restore voucher claim if voucher was used
+    if (order.voucherCode) {
+      await Voucher.updateOne(
+        { voucherCode: order.voucherCode, "claimedBy.userId": order.customerId },
+        {
+          $set: { "claimedBy.$.used": false, "claimedBy.$.usedAt": null },
+          $inc: { usedCount: -1 },
+        }
+      ).catch(() => {});
     }
 
     order.orderStatus = "CANCELLED";
@@ -1214,6 +1257,19 @@ const updateDriverStatus = async (req, res) => {
           relatedId: order._id,
         }).catch(() => undefined);
       }
+
+      // Award 1% loyalty point reward for completing shop order
+      if (order.subtotal > 0) {
+        const rewardPoints = Math.max(1, Math.round(order.subtotal * 0.01));
+        await pointWalletService.creditPoints({
+          userId: order.customerId,
+          points: rewardPoints,
+          sourceType: "KANYAAH_SHOP",
+          sourceId: order.orderCode,
+          notes: `Cashback 1% belanja Kanyaah Shop #${order.orderCode}`,
+          actorId: authUser?._id || order.customerId,
+        }).catch((err) => console.warn("[Kanyaah Point] Cashback error:", err.message));
+      }
     }
 
     order.statusHistory.push({
@@ -1293,6 +1349,19 @@ const uploadDeliveryProof = async (req, res) => {
       timestamp: new Date(),
     });
     await order.save();
+
+    // Award 1% loyalty point reward for completing shop order
+    if (order.subtotal > 0) {
+      const rewardPoints = Math.max(1, Math.round(order.subtotal * 0.01));
+      await pointWalletService.creditPoints({
+        userId: order.customerId,
+        points: rewardPoints,
+        sourceType: "KANYAAH_SHOP",
+        sourceId: order.orderCode,
+        notes: `Cashback 1% belanja Kanyaah Shop #${order.orderCode}`,
+        actorId: req.authUser?._id || order.customerId,
+      }).catch((err) => console.warn("[Kanyaah Point] Cashback error:", err.message));
+    }
 
     emitToRoom(req.io, `shop:${String(order._id)}`, "shop:order_updated", order);
     emitToUser(req.io, order.customerId, "shop:order_updated", order);

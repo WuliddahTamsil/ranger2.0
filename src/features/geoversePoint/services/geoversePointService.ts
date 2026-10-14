@@ -61,6 +61,9 @@ export const fetchPointWallet = async (): Promise<{
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Unauthenticated" };
+    }
     const res = await fetch(getApiUrl(`/geoverse-points/wallet?t=${Date.now()}`), {
       headers: authHeaders,
     });
@@ -83,12 +86,11 @@ export const fetchPointConfig = async (): Promise<{
     });
     return await readApiJson(res);
   } catch (err: any) {
-    console.error("fetchPointConfig error:", err);
     return {
       success: true,
       data: {
         pointToRupiahRate: 1,
-        minCashRedemptionPoints: 5000,
+        minCashRedemptionPoints: 10000,
         features: {
           allowCashRedemption: true,
           allowVoucherRedemption: true,
@@ -113,6 +115,9 @@ export const fetchPointLedger = async (
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Unauthenticated" };
+    }
     const query = new URLSearchParams();
     if (params?.type) query.append("type", params.type);
     if (params?.sourceType) query.append("sourceType", params.sourceType);
@@ -141,6 +146,9 @@ export const fetchAvailableVouchers = async (
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Unauthenticated" };
+    }
     const query = service ? `?service=${encodeURIComponent(service)}` : "";
     const res = await fetch(getApiUrl(`/geoverse-points/vouchers${query}`), {
       headers: authHeaders,
@@ -161,6 +169,9 @@ export const fetchMyRedemptions = async (): Promise<{
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Unauthenticated" };
+    }
     const res = await fetch(getApiUrl(`/geoverse-points/redemptions?t=${Date.now()}`), {
       headers: authHeaders,
     });
@@ -180,6 +191,9 @@ export const fetchRedemptionDetail = async (
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Unauthenticated" };
+    }
     const res = await fetch(getApiUrl(`/geoverse-points/redemptions/${id}`), {
       headers: authHeaders,
     });
@@ -200,6 +214,9 @@ export const createRedemption = async (
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Sesi login diperlukan untuk menukarkan poin." };
+    }
     const res = await fetch(getApiUrl("/geoverse-points/redemptions"), {
       method: "POST",
       headers: {
@@ -226,6 +243,9 @@ export const cancelRedemption = async (
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Unauthenticated" };
+    }
     const res = await fetch(getApiUrl(`/geoverse-points/redemptions/${id}/cancel`), {
       method: "POST",
       headers: {
@@ -238,5 +258,98 @@ export const cancelRedemption = async (
   } catch (err: any) {
     console.error("cancelRedemption error:", err);
     return { success: false, message: err?.message || "Gagal membatalkan penukaran" };
+  }
+};
+
+// ==================== STAFF / ADMIN REDEMPTION MANAGEMENT ====================
+
+export const fetchAdminRedemptions = async (params?: {
+  status?: string;
+  type?: string;
+  bankSampahId?: string;
+  limit?: number;
+  page?: number;
+}): Promise<{
+  success: boolean;
+  data?: {
+    redemptions: PointRedemptionUI[];
+    pagination: { total: number; page: number; pages: number; limit: number };
+  };
+  message?: string;
+}> => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Unauthenticated" };
+    }
+    const query = new URLSearchParams();
+    if (params?.status) query.append("status", params.status);
+    if (params?.type) query.append("type", params.type);
+    if (params?.bankSampahId) query.append("bankSampahId", params.bankSampahId);
+    if (params?.page) query.append("page", String(params.page));
+    if (params?.limit) query.append("limit", String(params.limit));
+
+    const res = await fetch(
+      getApiUrl(`/geoverse-points/admin/redemptions${query.toString() ? `?${query.toString()}` : ""}`),
+      { headers: authHeaders }
+    );
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("fetchAdminRedemptions error:", err);
+    return { success: false, message: err?.message || "Gagal memuat data penukaran nasabah" };
+  }
+};
+
+export const payRedemption = async (
+  id: string
+): Promise<{
+  success: boolean;
+  data?: PointRedemptionUI;
+  message?: string;
+}> => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Unauthenticated" };
+    }
+    const res = await fetch(getApiUrl(`/geoverse-points/redemptions/${id}/pay`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+      },
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("payRedemption error:", err);
+    return { success: false, message: err?.message || "Gagal mengonfirmasi pembayaran penukaran" };
+  }
+};
+
+export const rejectRedemption = async (
+  id: string,
+  reason: string = "Penukaran kas ditolak oleh petugas."
+): Promise<{
+  success: boolean;
+  data?: PointRedemptionUI;
+  message?: string;
+}> => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: false, message: "Unauthenticated" };
+    }
+    const res = await fetch(getApiUrl(`/geoverse-points/redemptions/${id}/reject`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+      },
+      body: JSON.stringify({ reason }),
+    });
+    return await readApiJson(res);
+  } catch (err: any) {
+    console.error("rejectRedemption error:", err);
+    return { success: false, message: err?.message || "Gagal menolak penukaran" };
   }
 };

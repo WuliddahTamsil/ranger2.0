@@ -659,6 +659,24 @@ const updateRideStatus = async (req, res) => {
       notifTitle = "Perjalanan Selesai";
       notifMessage = `Terima kasih telah menggunakan Kanyaah Ride. Total tarif: Rp ${current.totalAmount.toLocaleString("id-ID")}.`;
 
+      // Award loyalty cashback points (1% of fare, min 1 point)
+      if (current.totalAmount > 0 && isValidUserId(current.customerId)) {
+        try {
+          const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+          const rewardPoints = Math.max(1, Math.round(current.totalAmount * 0.01));
+          await pointWalletService.creditPoints({
+            userId: current.customerId,
+            points: rewardPoints,
+            sourceType: "KANYAAH_RIDE",
+            sourceId: current.orderCode,
+            notes: `Cashback 1% perjalanan Kanyaah Ride #${current.orderCode}`,
+            actorId: current.driverId || current.customerId,
+          });
+        } catch (pointErr) {
+          console.warn("[Kanyaah Point] Ride cashback error:", pointErr.message);
+        }
+      }
+
       // Record driver earnings
       try {
         if (isValidUserId(current.driverId)) {

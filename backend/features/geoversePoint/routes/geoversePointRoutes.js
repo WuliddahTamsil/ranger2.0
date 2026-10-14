@@ -18,6 +18,7 @@ const {
   rejectRedemption,
   adminAdjustment,
   getConfig,
+  getAdminRedemptions,
 } = require("../controllers/geoversePointController");
 const { enforceWalletOwner, enforceStaffOrAdmin } = require("../policies/pointAccessPolicy");
 const { validateCreateRedemption, validateAdminAdjustment } = require("../validators/geoversePointValidators");
@@ -47,6 +48,7 @@ router.get("/redemptions/customer/:customerId", requireAuth, (req, res) => {
 });
 
 // Staff / Admin Endpoints
+router.get("/admin/redemptions", requireAuth, enforceStaffOrAdmin, getAdminRedemptions);
 router.post("/redemptions/:id/pay", requireAuth, enforceStaffOrAdmin, payRedemption);
 router.post("/redemptions/:id/reject", requireAuth, enforceStaffOrAdmin, rejectRedemption);
 router.post("/admin/adjust", requireAuth, enforceStaffOrAdmin, validateAdminAdjustment, adminAdjustment);

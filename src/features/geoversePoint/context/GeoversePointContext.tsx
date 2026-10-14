@@ -42,7 +42,7 @@ interface GeoversePointContextType {
 
 const DEFAULT_CONFIG: PointConfigUI = {
   pointToRupiahRate: 1,
-  minCashRedemptionPoints: 5000,
+  minCashRedemptionPoints: 10000,
   features: {
     allowCashRedemption: true,
     allowVoucherRedemption: true,
@@ -84,11 +84,13 @@ export const GeoversePointProvider: React.FC<{ children: React.ReactNode }> = ({
       const res = await fetchPointWallet();
       if (res.success && res.data) {
         setWallet(res.data);
-      } else {
+      } else if (res.message !== "Unauthenticated") {
         setWalletError(res.message || "Gagal memuat saldo poin.");
       }
     } catch (err: any) {
-      setWalletError(err?.message || "Terjadi kesalahan pada jaringan.");
+      if (err?.message !== "Unauthenticated") {
+        setWalletError(err?.message || "Terjadi kesalahan pada jaringan.");
+      }
     } finally {
       setWalletLoading(false);
     }
@@ -101,8 +103,10 @@ export const GeoversePointProvider: React.FC<{ children: React.ReactNode }> = ({
       if (res.success && res.data?.ledger) {
         setLedger(res.data.ledger);
       }
-    } catch (err) {
-      console.error("refreshLedger error:", err);
+    } catch (err: any) {
+      if (err?.message !== "Unauthenticated") {
+        console.error("refreshLedger error:", err);
+      }
     } finally {
       setLedgerLoading(false);
     }
@@ -115,8 +119,10 @@ export const GeoversePointProvider: React.FC<{ children: React.ReactNode }> = ({
       if (res.success && res.data) {
         setAvailableVouchers(res.data);
       }
-    } catch (err) {
-      console.error("refreshVouchers error:", err);
+    } catch (err: any) {
+      if (err?.message !== "Unauthenticated") {
+        console.error("refreshVouchers error:", err);
+      }
     } finally {
       setVouchersLoading(false);
     }
@@ -129,8 +135,10 @@ export const GeoversePointProvider: React.FC<{ children: React.ReactNode }> = ({
       if (res.success && res.data) {
         setMyRedemptions(res.data);
       }
-    } catch (err) {
-      console.error("refreshRedemptions error:", err);
+    } catch (err: any) {
+      if (err?.message !== "Unauthenticated") {
+        console.error("refreshRedemptions error:", err);
+      }
     } finally {
       setRedemptionsLoading(false);
     }

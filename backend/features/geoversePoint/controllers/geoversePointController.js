@@ -314,6 +314,46 @@ async function getConfig(req, res) {
   });
 }
 
+/**
+ * 13. GET /api/geoverse-points/admin/redemptions
+ * Staff / Admin lists customer redemptions
+ */
+async function getAdminRedemptions(req, res) {
+  try {
+    const { status, type, page, limit } = req.query;
+    let bankSampahId = req.query.bankSampahId;
+
+    if (req.authUser.role === "bank_sampah" && !bankSampahId) {
+      const WasteBank = require("../../../models/WasteBank");
+      const bank = await WasteBank.findOne({
+        $or: [{ ownerId: req.authUser._id }, { officerIds: req.authUser._id }],
+      }).select("_id");
+      if (bank) {
+        bankSampahId = String(bank._id);
+      }
+    }
+
+    const result = await pointRedemptionService.getAllRedemptions({
+      status,
+      type,
+      bankSampahId,
+      page,
+      limit,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("geoversePoint getAdminRedemptions error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat data penukaran poin.",
+    });
+  }
+}
+
 module.exports = {
   getWallet,
   getLedger,
@@ -327,4 +367,5 @@ module.exports = {
   rejectRedemption,
   adminAdjustment,
   getConfig,
+  getAdminRedemptions,
 };
