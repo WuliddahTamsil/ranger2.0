@@ -880,9 +880,11 @@ export const getChatMessages = async (
       ? getApiUrl(`/chat/messages/${orderId}?${queryString}`)
       : getApiUrl(`/chat/messages/${orderId}`);
     const res = await fetch(url, { headers: authHeaders });
+    if (res.status === 404) {
+      return { success: false, data: [] };
+    }
     return await readApiJson(res);
   } catch (err) {
-    console.error("❌ getChatMessages error:", err);
     return { success: false, data: [] };
   }
 };

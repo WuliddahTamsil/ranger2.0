@@ -1,6 +1,6 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { ArrowLeft, Bike, Building2, ChevronRight, Coffee, Scale, ShieldCheck, ShoppingBag, Store, UserRound, WashingMachine } from "lucide-react-native";
 import * as Google from "expo-auth-session/providers/google";
 import { makeRedirectUri } from "expo-auth-session";
@@ -110,7 +110,28 @@ const GoogleConnectButton: React.FC<{ onConnect: (credential: GoogleCredential) 
 
 const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 24, paddingBottom: 32, justifyContent: "center" },
-  card: { width: "100%", maxWidth: 600, alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 20, borderWidth: 1, borderColor: "#E5E9EE", padding: 28, shadowColor: "#142238", shadowOpacity: 0.035, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  card: {
+    width: "100%",
+    maxWidth: 600,
+    alignSelf: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E5E9EE",
+    padding: 28,
+    ...Platform.select({
+      web: {
+        boxShadow: "0px 6px 16px rgba(20, 34, 56, 0.035)",
+      },
+      default: {
+        shadowColor: "#142238",
+        shadowOpacity: 0.035,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 2,
+      },
+    }),
+  },
   back: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4, marginBottom: 20 },
   backText: { color: authColors.primary, fontSize: 13, fontWeight: "800" },
   heading: { marginTop: 26 },

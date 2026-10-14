@@ -198,7 +198,14 @@ const mapCateringDriverOrder = (order: any): DriverOrder => ({
 
 const mapShopDriverStatus = (orderStatus: string): DriverOrder["status"] => {
   if (orderStatus === "READY_FOR_PICKUP") return "Menunggu";
-  if (orderStatus === "DRIVER_ASSIGNED") return "Siap";
+  if (
+    orderStatus === "DRIVER_ASSIGNED" ||
+    orderStatus === "DRIVER_HEADING_TO_STORE" ||
+    orderStatus === "DRIVER_ON_THE_WAY_TO_STORE" ||
+    orderStatus === "DRIVER_ON_THE_WAY"
+  ) {
+    return "Menuju Pickup";
+  }
   if (orderStatus === "DRIVER_AT_STORE") return "Sampai Pickup";
   if (["PICKED_UP", "DELIVERING", "ARRIVED"].includes(orderStatus)) return "Mengantar";
   if (orderStatus === "COMPLETED") return "Selesai";
@@ -1310,13 +1317,33 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 else if (status === "Mengantar") shopBackendStatus = "DELIVERING";
                 else if (status === "Selesai") shopBackendStatus = "COMPLETED";
 
-                const res = await updateDriverShopStatus(orderId, shopBackendStatus);
+                const res = await updateDriverShopStatus(
+                  orderId,
+                  shopBackendStatus,
+                  deliveryProofUrl ? `Pengantaran selesai. Bukti: ${deliveryProofUrl}` : "",
+                  deliveryProofUrl || ""
+                );
                 if (!res.success) {
+                  // Fallback for legacy / cloud backends before DRIVER_HEADING_TO_STORE is deployed:
+                  // The backend order is already DRIVER_ASSIGNED, so allow local transition to "Menuju Pickup"
+                  if (status === "Menuju Pickup") {
+                    const now = new Date().toISOString();
+                    const updated: DriverOrder = {
+                      ...(targetOrder as DriverOrder),
+                      status: "Menuju Pickup",
+                      updatedAt: now,
+                    };
+                    setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updated : order)));
+                    return updated;
+                  }
                   Alert.alert("Gagal", res.message || "Status pengantaran belanja gagal diperbarui");
                   return false;
                 }
                 if (res.data) {
                   const updated = mapShopDriverOrder(res.data);
+                  if (status === "Menuju Pickup" && updated.status !== "Menuju Pickup") {
+                    updated.status = "Menuju Pickup";
+                  }
                   setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updated : order)));
                   return updated;
                 }

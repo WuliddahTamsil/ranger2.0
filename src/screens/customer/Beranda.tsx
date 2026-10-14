@@ -78,6 +78,9 @@ import { Inbox, CustomerNotification, CustomerChatThread } from "./Inbox";
 import { Profile } from "./Profile";
 import { hydrateCustomerChatThreads, subscribeCustomerChatThreads } from "./customerInboxStore";
 import { getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer, getNotifications, markNotificationRead, getCustomerReviews } from "../../services/api";
+import { fetchCustomerShopOrders } from "../../services/shopService";
+import { fetchCustomerSendOrders } from "../../services/sendService";
+import { fetchCustomerLaundryOrders } from "../../services/laundryService";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 import { setPendingMarketplaceCart } from "./marketplaceCartStore";
 import { setActiveCateringTrackingOrderId } from "./customerCateringStore";
@@ -381,110 +384,128 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       if (loading) return;
       loading = true;
       try {
-        const [marketplaceResult, cateringResult, rideResult] = await Promise.all([
+        const [marketplaceResult, cateringResult, rideResult, shopResult, sendResult, laundryResult] = await Promise.allSettled([
           getMarketplaceOrdersForCustomer(authAccount.id),
           getCateringOrdersForCustomer(authAccount.id),
           fetchCustomerRides(authAccount.id),
+          fetchCustomerShopOrders(authAccount.id),
+          fetchCustomerSendOrders(authAccount.id),
+          fetchCustomerLaundryOrders(authAccount.id, authAccount.phone),
         ]);
         if (!activeOrderLoader) return;
-        const marketplaceLoadFailed = !marketplaceResult.success || !Array.isArray(marketplaceResult.data);
-        const cateringLoadFailed = !cateringResult.success || !Array.isArray(cateringResult.data);
-        // Marketplace status/proof must keep refreshing even if the separate Catering endpoint is unavailable.
-        setOrdersLoadError(
-          marketplaceLoadFailed
-            ? marketplaceResult.message || "Pesanan Marketplace belum berhasil diperbarui. Periksa koneksi lalu coba lagi."
-            : ""
-        );
-        if (cateringLoadFailed) {
-          console.warn("Customer Catering orders could not be refreshed:", cateringResult.message || "request failed");
-        }
-        const marketplaceOrders: OrderItem[] | null = marketplaceResult.success && Array.isArray(marketplaceResult.data) ? marketplaceResult.data.map((order: any) => ({
-        id: order._id,
-        type: "Marketplace",
-        iconName: "Store",
-        color: "#1B7A4E",
-        item: order.items?.[0]?.name || "Pesanan Marketplace",
-        detail: `${order.items?.length || 0} produk`,
-        status: order.status,
-        statusColor: "orange",
-        date: new Date(order.createdAt).toLocaleDateString("id-ID"),
-        total: order.totalAmount,
-        deliveryFee: order.deliveryFee,
-        serviceFee: order.serviceFee,
-        discount: order.discount,
-        paymentMethod: order.paymentMethod,
-        paymentStatus: order.paymentStatus,
-        paymentBankName: order.paymentBankName,
-        paymentAccountNumber: order.paymentAccountNumber,
-        paymentAccountHolder: order.paymentAccountHolder,
-        paymentQrisImageUrl: order.paymentQrisImageUrl,
-        paymentReminder: order.paymentReminder,
-        items: order.items,
-        notes: order.notes,
-        address: order.address,
-        addressSnapshot: order.addressSnapshot,
-        createdAt: order.createdAt,
-        customerPhone: order.customerPhone,
-        driverId: order.driverId,
-        driverName: order.driverName,
-        driverVehicle: order.driverVehicle || "",
-        driverPlate: order.driverPlateNumber || "",
-        deliveryProofUrl: order.deliveryProofUrl || "",
-        storeName: order.storeName || "Mitra Toko Marketplace",
-        storeAddress: order.storeAddress || "",
-      })) : null;
-        const cateringOrders: OrderItem[] | null = cateringResult.success && Array.isArray(cateringResult.data) ? cateringResult.data.map((order: any) => ({
-        id: order._id,
-        orderCode: order.orderCode || `#RNG-CAT-${String(order._id).slice(-8).toUpperCase()}`,
-        type: "Catering",
-        iconName: "Coffee",
-        color: "#EA580C",
-        item: order.menuName,
-        detail: `${order.storeName || "Dapur Catering"} • ${order.portions} porsi`,
-        status: order.status,
-        statusColor: order.status === "Selesai" ? "green" : order.status === "Dibatalkan" ? "red" : "orange",
-        date: new Date(order.createdAt).toLocaleDateString("id-ID"),
-        total: order.totalAmount,
-        deliveryFee: order.deliveryFee,
-        serviceFee: order.serviceFee,
-        discount: order.discount,
-        paymentMethod: order.paymentMethod,
-        paymentStatus: order.paymentStatus,
-        paymentOption: order.paymentOption,
-        paidAmount: order.paidAmount,
-        remainingAmount: order.remainingAmount,
-        paymentBankName: order.paymentBankName,
-        paymentAccountNumber: order.paymentAccountNumber,
-        paymentAccountHolder: order.paymentAccountHolder,
-        paymentQrisImageUrl: order.paymentQrisImageUrl,
-        paymentHistory: order.paymentHistory || [],
-        paymentReminder: order.paymentReminder,
-        paymentDueDate: order.paymentDueAt,
-        cateringDate: order.cateringDate,
-        cateringTime: order.cateringTime,
-        cateringPortions: order.portions,
-        notes: order.notes,
-        address: order.address,
-        addressSnapshot: order.addressSnapshot,
-        createdAt: order.createdAt,
-        customerPhone: order.customerPhone,
-        driverId: order.driverId,
-        driverName: order.driverName,
-        driverPhone: order.driverPhone,
-        driverVehicle: order.driverVehicle,
-        deliveryProofUrl: order.deliveryProofUrl || "",
-        deliveryProofTimestamp: order.deliveryProofTimestamp || "",
-        deliveredAt: order.deliveredAt || null,
-        storeName: order.storeName,
-        storeAddress: order.storeAddress,
-      })) : null;
 
-        const rideOrders: OrderItem[] | null = rideResult.success && Array.isArray(rideResult.data) ? rideResult.data.map((order: any) => ({
+        const marketplaceData = marketplaceResult.status === "fulfilled" ? marketplaceResult.value : null;
+        const cateringData = cateringResult.status === "fulfilled" ? cateringResult.value : null;
+        const rideData = rideResult.status === "fulfilled" ? rideResult.value : null;
+        const shopData = shopResult.status === "fulfilled" ? shopResult.value : null;
+        const sendData = sendResult.status === "fulfilled" ? sendResult.value : null;
+        const laundryData = laundryResult.status === "fulfilled" ? laundryResult.value : null;
+
+        const marketplaceLoadFailed = !marketplaceData?.success || !Array.isArray(marketplaceData.data);
+        const cateringLoadFailed = !cateringData?.success || !Array.isArray(cateringData.data);
+        const shopLoadFailed = !shopData?.success || !Array.isArray(shopData.data);
+
+        // Warning or error logging if primary endpoints are down
+        if (marketplaceLoadFailed && cateringLoadFailed && shopLoadFailed) {
+          setOrdersLoadError("Pesanan belum berhasil diperbarui. Periksa koneksi lalu coba lagi.");
+        } else {
+          setOrdersLoadError("");
+        }
+
+        // 1. Marketplace (Mart) Orders
+        const marketplaceOrders: OrderItem[] | null = marketplaceData?.success && Array.isArray(marketplaceData.data) ? marketplaceData.data.map((order: any) => ({
+          id: order._id,
+          orderCode: order.orderCode || `#RNG-MART-${order._id.slice(-8).toUpperCase()}`,
+          type: "Marketplace",
+          iconName: "Store",
+          color: "#1B7A4E",
+          item: order.items?.[0]?.name || "Pesanan Marketplace",
+          detail: `${order.items?.length || 0} produk`,
+          status: order.status,
+          statusColor: order.status === "Selesai" ? "green" : order.status.toLowerCase().includes("batal") ? "red" : "orange",
+          date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+          total: order.totalAmount,
+          deliveryFee: order.deliveryFee,
+          serviceFee: order.serviceFee,
+          discount: order.discount,
+          paymentMethod: order.paymentMethod,
+          paymentStatus: order.paymentStatus,
+          paymentBankName: order.paymentBankName,
+          paymentAccountNumber: order.paymentAccountNumber,
+          paymentAccountHolder: order.paymentAccountHolder,
+          paymentQrisImageUrl: order.paymentQrisImageUrl,
+          paymentReminder: order.paymentReminder,
+          items: order.items,
+          notes: order.notes,
+          address: order.address,
+          addressSnapshot: order.addressSnapshot,
+          createdAt: order.createdAt,
+          customerPhone: order.customerPhone,
+          driverId: order.driverId,
+          driverName: order.driverName,
+          driverVehicle: order.driverVehicle || "",
+          driverPlate: order.driverPlateNumber || "",
+          deliveryProofUrl: order.deliveryProofUrl || "",
+          storeName: order.storeName || "Mitra Toko Marketplace",
+          storeAddress: order.storeAddress || "",
+          rawOrder: order,
+        })) : null;
+
+        // 2. Catering Orders
+        const cateringOrders: OrderItem[] | null = cateringData?.success && Array.isArray(cateringData.data) ? cateringData.data.map((order: any) => ({
+          id: order._id,
+          orderCode: order.orderCode || `#RNG-CAT-${String(order._id).slice(-8).toUpperCase()}`,
+          type: "Catering",
+          iconName: "Coffee",
+          color: "#EA580C",
+          item: order.menuName,
+          detail: `${order.storeName || "Dapur Catering"} • ${order.portions} porsi`,
+          status: order.status,
+          statusColor: order.status === "Selesai" ? "green" : order.status === "Dibatalkan" ? "red" : "orange",
+          date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+          total: order.totalAmount,
+          deliveryFee: order.deliveryFee,
+          serviceFee: order.serviceFee,
+          discount: order.discount,
+          paymentMethod: order.paymentMethod,
+          paymentStatus: order.paymentStatus,
+          paymentOption: order.paymentOption,
+          paidAmount: order.paidAmount,
+          remainingAmount: order.remainingAmount,
+          paymentBankName: order.paymentBankName,
+          paymentAccountNumber: order.paymentAccountNumber,
+          paymentAccountHolder: order.paymentAccountHolder,
+          paymentQrisImageUrl: order.paymentQrisImageUrl,
+          paymentHistory: order.paymentHistory || [],
+          paymentReminder: order.paymentReminder,
+          paymentDueDate: order.paymentDueAt,
+          cateringDate: order.cateringDate,
+          cateringTime: order.cateringTime,
+          cateringPortions: order.portions,
+          notes: order.notes,
+          address: order.address,
+          addressSnapshot: order.addressSnapshot,
+          createdAt: order.createdAt,
+          customerPhone: order.customerPhone,
+          driverId: order.driverId,
+          driverName: order.driverName,
+          driverPhone: order.driverPhone,
+          driverVehicle: order.driverVehicle,
+          deliveryProofUrl: order.deliveryProofUrl || "",
+          deliveryProofTimestamp: order.deliveryProofTimestamp || "",
+          deliveredAt: order.deliveredAt || null,
+          storeName: order.storeName,
+          storeAddress: order.storeAddress,
+          rawOrder: order,
+        })) : null;
+
+        // 3. Ride Orders
+        const rideOrders: OrderItem[] | null = rideData?.success && Array.isArray(rideData.data) ? rideData.data.map((order: any) => ({
           id: order._id,
           orderCode: order.orderCode || `#RNG-RIDE-${order._id.slice(-8).toUpperCase()}`,
           type: "Kanyaah Ride",
           iconName: "Bike",
-          color: "#1B7A4E",
+          color: "#16A34A",
           item: "Kanyaah Ride",
           detail: `${order.pickup?.address || "Penjemputan"} → ${order.destination?.address || "Tujuan"}`,
           status: order.status === "SEARCHING_DRIVER" ? "Mencari Driver"
@@ -511,13 +532,156 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           estimatedDistance: order.estimatedDistance,
           estimatedDuration: order.estimatedDuration,
           estimatedFare: order.estimatedFare,
+          rawOrder: order,
         })) : null;
+
+        // 4. Kanyaah Shop Orders (Minimarket, Supermarket, Apotek)
+        const shopOrders: OrderItem[] | null = shopData?.success && Array.isArray(shopData.data) ? shopData.data.map((order: any) => {
+          const isCompleted = order.orderStatus === "COMPLETED";
+          const isCancelled = order.orderStatus === "CANCELLED";
+          const items = order.items || [];
+          const firstItemName = items[0]?.productNameSnapshot || items[0]?.name || "Belanja Kanyaah Shop";
+          const itemCount = items.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0);
+          const storeName = order.storeName || (typeof order.storeId === 'object' ? order.storeId?.name : "Kanyaah Shop");
+
+          const statusLabel = 
+            isCompleted ? "Selesai" :
+            isCancelled ? "Dibatalkan" :
+            order.orderStatus === "PAYMENT_PENDING" ? "Menunggu Pembayaran" :
+            order.orderStatus === "WAITING_STORE_CONFIRMATION" || order.orderStatus === "PAID" || order.orderStatus === "STORE_PENDING" || order.orderStatus === "CREATED" ? "Menunggu Konfirmasi" :
+            order.orderStatus === "STORE_ACCEPTED" ? "Diterima Toko" :
+            order.orderStatus === "PREPARING" || order.orderStatus === "PICKING" ? "Sedang Disiapkan" :
+            order.orderStatus === "READY_FOR_PICKUP" ? "Siap Diambil Kurir" :
+            order.orderStatus === "DRIVER_ASSIGNED" || order.orderStatus === "DRIVER_HEADING_TO_STORE" || order.orderStatus === "DRIVER_ON_THE_WAY_TO_STORE" ? "Kurir Menuju Toko" :
+            order.orderStatus === "DRIVER_AT_STORE" ? "Kurir di Toko" :
+            order.orderStatus === "DELIVERING" || order.orderStatus === "PICKED_UP" ? "Sedang Diantar" :
+            order.orderStatus || "Diproses";
+
+          return {
+            id: order._id,
+            orderCode: order.orderCode || `#RNG-SHOP-${order._id.slice(-8).toUpperCase()}`,
+            type: "Kanyaah Shop",
+            iconName: "ShoppingBag",
+            color: "#2563EB",
+            item: firstItemName,
+            detail: `${storeName} • ${itemCount} barang`,
+            status: statusLabel,
+            statusColor: isCompleted ? "green" : isCancelled ? "red" : "orange",
+            date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+            createdAt: order.createdAt || new Date().toISOString(),
+            total: order.totalAmount || 0,
+            deliveryFee: order.deliveryFee || 0,
+            serviceFee: order.serviceFee || 0,
+            discount: (order.discount || 0) + (order.voucherDiscount || 0) + (order.pointDiscount || 0),
+            paymentMethod: order.paymentMethod || "QRIS",
+            paymentStatus: order.paymentStatus === "PAID" ? "Lunas" : "Belum Bayar",
+            items: items.map((it: any) => ({
+              name: it.productNameSnapshot || it.name,
+              quantity: it.quantity || 1,
+              price: it.priceSnapshot || it.price || 0,
+              total: it.subtotal || ((it.priceSnapshot || it.price || 0) * (it.quantity || 1)),
+              image: it.productImageSnapshot || it.image,
+            })),
+            notes: order.deliveryNotes,
+            address: order.deliveryAddress,
+            customerPhone: order.customerPhone,
+            driverId: order.driverId?._id || order.driverId,
+            driverName: order.driverName || order.driverId?.name,
+            driverPhone: order.driverPhone || order.driverId?.phone,
+            driverVehicle: order.driverVehicle || "Motor",
+            driverPlate: order.driverPlateNumber || order.driverId?.roleData?.plateNumber,
+            deliveryProofUrl: order.deliveryProofUrl,
+            storeName,
+            storeAddress: order.storeAddress || (typeof order.storeId === 'object' ? order.storeId?.address : ""),
+            rawOrder: order,
+          };
+        }) : null;
+
+        // 5. Kanyaah Send Orders
+        const sendOrders: OrderItem[] | null = sendData?.success && Array.isArray(sendData.data) ? sendData.data.map((order: any) => {
+          const isCompleted = order.status === "DELIVERED" || order.status === "COMPLETED";
+          const isCancelled = order.status === "CANCELLED";
+
+          const statusLabel =
+            isCompleted ? "Selesai" :
+            isCancelled ? "Dibatalkan" :
+            order.status === "SEARCHING_DRIVER" ? "Mencari Kurir" :
+            order.status === "DRIVER_ASSIGNED" || order.status === "DRIVER_ON_THE_WAY_TO_PICKUP" ? "Kurir Menjemput" :
+            order.status === "DRIVER_ARRIVED_AT_PICKUP" ? "Kurir Sampai" :
+            order.status === "PICKED_UP" || order.status === "IN_TRANSIT" || order.status === "ARRIVED_AT_DESTINATION" ? "Sedang Diantar" :
+            order.status || "Diproses";
+
+          return {
+            id: order._id,
+            orderCode: order.orderCode || `#RNG-SEND-${order._id.slice(-8).toUpperCase()}`,
+            type: "Kanyaah Send",
+            iconName: "Truck",
+            color: "#0284C7",
+            item: order.package?.description || order.package?.itemCategory || "Paket Pengiriman",
+            detail: `${order.sender?.address || "Asal"} → ${order.recipient?.address || "Tujuan"}`,
+            status: statusLabel,
+            statusColor: isCompleted ? "green" : isCancelled ? "red" : "orange",
+            date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+            createdAt: order.createdAt || new Date().toISOString(),
+            total: order.pricing?.totalFare || order.totalAmount || 0,
+            paymentMethod: order.paymentMethod || "QRIS",
+            paymentStatus: order.paymentStatus,
+            driverId: order.driverId?._id || order.driverId,
+            driverName: order.driverId?.name || order.driverName,
+            driverPhone: order.driverId?.phone || order.driverPhone,
+            driverPlate: order.driverId?.roleData?.plateNumber || order.driverPlate,
+            driverVehicle: order.driverId?.roleData?.vehicleType || "Motor",
+            address: order.recipient?.address,
+            notes: order.package?.instructions,
+            rawOrder: order,
+          };
+        }) : null;
+
+        // 6. Kanyaah Laundry Orders
+        const laundryOrders: OrderItem[] | null = Array.isArray(laundryData) ? laundryData.map((order: any) => {
+          const isCompleted = order.status === "SELESAI" || order.status === "COMPLETED";
+          const isCancelled = order.status === "DIBATALKAN" || order.status === "CANCELLED";
+
+          const statusLabel =
+            isCompleted ? "Selesai" :
+            isCancelled ? "Dibatalkan" :
+            order.status === "SEDANG_DICUCI" ? "Sedang Dicuci" :
+            order.status === "SIAP_DIANTAR" || order.status === "DRIVER_MENGANTAR_BALIK" ? "Sedang Diantar" :
+            order.status === "MENUNGGU_KONFIRMASI_MITRA" ? "Menunggu Konfirmasi" :
+            order.status === "MENUNGGU_DRIVER_JEMPUT" || order.status === "DRIVER_MENUJU_CUSTOMER" ? "Kurir Menjemput" :
+            order.status || "Diproses";
+
+          return {
+            id: order._id || order.id,
+            orderCode: order.orderCode || `#RNG-LND-${String(order._id || order.id).slice(-8).toUpperCase()}`,
+            type: "Kanyaah Laundry",
+            iconName: "Wind",
+            color: "#0284C7",
+            item: order.serviceName || (order.services && order.services[0]?.name) || "Layanan Cuci Laundry",
+            detail: `${order.storeName || order.laundryName || "Mitra Laundry"} • ${order.totalWeight ? `${order.totalWeight} kg` : "Kiloan"}`,
+            status: statusLabel,
+            statusColor: isCompleted ? "green" : isCancelled ? "red" : "orange",
+            date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+            createdAt: order.createdAt || new Date().toISOString(),
+            total: order.totalPrice || order.totalAmount || 0,
+            paymentMethod: order.paymentMethod || "QRIS",
+            paymentStatus: order.paymentStatus,
+            driverName: order.driverName,
+            driverPhone: order.driverPhone,
+            storeName: order.storeName || order.laundryName || "Mitra Laundry",
+            address: order.customerAddress,
+            rawOrder: order,
+          };
+        }) : null;
 
         const currentOrders = ordersRef.current;
         const rawOrders = [
+          ...(shopOrders ?? currentOrders.filter((order) => order.type.toLowerCase().includes("shop"))),
           ...(marketplaceOrders ?? currentOrders.filter((order) => order.type === "Marketplace")),
           ...(cateringOrders ?? currentOrders.filter((order) => order.type === "Catering")),
           ...(rideOrders ?? currentOrders.filter((order) => order.type === "Kanyaah Ride")),
+          ...(sendOrders ?? currentOrders.filter((order) => order.type.toLowerCase().includes("send"))),
+          ...(laundryOrders ?? currentOrders.filter((order) => order.type.toLowerCase().includes("laund"))),
         ];
 
         const seenOrderIds = new Set<string>();

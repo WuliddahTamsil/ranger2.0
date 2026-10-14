@@ -274,6 +274,8 @@ const shopOrderSchema = new mongoose.Schema(
         "WAITING_SUBSTITUTION",
         "READY_FOR_PICKUP",
         "DRIVER_ASSIGNED",
+        "DRIVER_HEADING_TO_STORE",
+        "DRIVER_ON_THE_WAY_TO_STORE",
         "DRIVER_AT_STORE",
         "PICKED_UP",
         "DELIVERING",

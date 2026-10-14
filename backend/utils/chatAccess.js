@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const ShopOrder = require("../models/ShopOrder");
 const MarketplaceOrder = require("../models/MarketplaceOrder");
 const CateringOrder = require("../models/CateringOrder");
 const LaundryOrder = require("../models/LaundryOrder");
@@ -23,6 +24,7 @@ const findOrderByIdentifier = async (identifier) => {
   const cleanValue = value.replace(/^#/, "").trim();
 
   const models = [
+    [ShopOrder, "shop", "orderCode"],
     [MarketplaceOrder, "marketplace", "orderCode"],
     [CateringOrder, "catering", "orderCode"],
     [LaundryOrder, "laundry", "orderCode"],
@@ -139,12 +141,12 @@ const getOrderParticipants = (record) => {
 
   return {
     customerId: idToString(order.customerId),
-    ownerId: idToString(order.ownerId),
+    ownerId: idToString(order.ownerId || order.storeOwnerId || (typeof order.storeId === "object" ? order.storeId?.ownerId : "")),
     driverId: driverIds[0] || "",
     driverIds,
     storeId: idToString(order.storeId),
     orderCode: String(order.orderCode || order.bookingCode || ""),
-    status: String(order.status || order.paymentStatus || ""),
+    status: String(order.orderStatus || order.status || order.paymentStatus || ""),
   };
 };
 

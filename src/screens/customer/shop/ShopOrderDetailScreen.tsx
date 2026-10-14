@@ -76,9 +76,9 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
   const [ratingReview, setRatingReview] = useState("");
   const [submittingRating, setSubmittingRating] = useState(false);
 
-  const loadDetail = async () => {
+  const loadDetail = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await fetchShopOrderDetail(orderId);
       if (res.success && res.data) {
         setOrder(res.data);
@@ -86,13 +86,15 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
     } catch (e) {
       console.warn("Load shop order detail error:", e);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadDetail();
-    const interval = setInterval(loadDetail, 8000); // Polling status every 8s
+    loadDetail(false);
+    const interval = setInterval(() => {
+      loadDetail(true);
+    }, 4000); // Polling status every 4s silently
     return () => clearInterval(interval);
   }, [orderId]);
 
@@ -244,7 +246,7 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
         contentContainerStyle={[styles.scrollContent, isLarge && { maxWidth: 880, alignSelf: "center", width: "100%" }]}
       >
         {/* Map Section if in Delivery Stage */}
-        {["DRIVER_ASSIGNED", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED"].includes(order.orderStatus) && (
+        {["DRIVER_ASSIGNED", "DRIVER_HEADING_TO_STORE", "DRIVER_ON_THE_WAY_TO_STORE", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED"].includes(order.orderStatus) && (
           <View style={styles.mapCard}>
             <NativeMapComponent
               initialRegion={{

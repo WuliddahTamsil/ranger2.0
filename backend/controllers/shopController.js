@@ -62,18 +62,36 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
 };
 
 // Check if store is currently open
-const isStoreOpen = (openingHours) => {
-  if (!openingHours) return true;
-  if (openingHours.isOpenNow === false) return false;
+const isStoreOpen = (storeOrHours) => {
+  if (!storeOrHours) return true;
+
+  const store = typeof storeOrHours.isOpen === "boolean" ? storeOrHours : null;
+  const openingHours = store ? store.openingHours : storeOrHours;
+
+  // 1. If merchant explicitly set master toggle to closed, store is closed
+  if (store && store.isOpen === false) return false;
+
+  // 2. If openingHours.isOpenNow is explicitly set to false, store is closed
+  if (openingHours && openingHours.isOpenNow === false) return false;
+
+  // 3. If merchant explicitly set status to open, store is open and accepting orders
+  if (store?.isOpen === true || openingHours?.isOpenNow === true) {
+    return true;
+  }
+
+  // 4. Default / scheduled check: use Asia/Jakarta (WIB, UTC+7) time
   const now = new Date();
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
-  const currentTimeStr = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
+  const wibTimeStr = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
 
-  const openTime = openingHours.openTime || "07:00";
-  const closeTime = openingHours.closeTime || "22:00";
+  const openTime = openingHours?.openTime || "07:00";
+  const closeTime = openingHours?.closeTime || "22:00";
 
-  return currentTimeStr >= openTime && currentTimeStr <= closeTime;
+  return wibTimeStr >= openTime && wibTimeStr <= closeTime;
 };
 
 /**
@@ -129,7 +147,7 @@ const getStores = async (req, res) => {
     // Map distance and open status
     stores = stores.map((store) => {
       const distanceKm = calculateDistanceKm(userLat, userLon, store.latitude, store.longitude);
-      const open = isStoreOpen(store.openingHours);
+      const open = isStoreOpen(store);
       // delivery estimate: base 15 mins + 3 mins per km
       const estimatedDeliveryMinutes = Math.round(15 + distanceKm * 3);
       // delivery fee: base 8000 up to 3km, then +2000 per km
@@ -187,7 +205,7 @@ const getStoreById = async (req, res) => {
     }
 
     const distanceKm = calculateDistanceKm(userLat, userLon, store.latitude, store.longitude);
-    const open = isStoreOpen(store.openingHours);
+    const open = isStoreOpen(store);
     const estimatedDeliveryMinutes = Math.round(15 + distanceKm * 3);
     const deliveryFee = distanceKm <= 3 ? 8000 : Math.round(8000 + (distanceKm - 3) * 2000);
 
@@ -458,7 +476,12 @@ const updateMerchantStore = async (req, res) => {
     if (outletName) store.outletName = outletName;
     if (address) store.address = address;
     if (businessPhone) store.businessPhone = businessPhone;
-    if (openingHours) store.openingHours = { ...(store.openingHours || {}), ...openingHours };
+    if (openingHours) {
+      store.openingHours = { ...(store.openingHours || {}), ...openingHours };
+      if (typeof openingHours.isOpenNow === "boolean") {
+        store.isOpen = openingHours.isOpenNow;
+      }
+    }
     if (openingDays) store.openingDays = openingDays;
     if (brandType) store.brandType = brandType;
     if (businessCategory) store.businessCategory = businessCategory;

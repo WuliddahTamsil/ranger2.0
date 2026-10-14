@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet, Platform, Image } from "react-native";
 import { Nav } from "../../types";
 
 export const SplashScreen: React.FC<Nav> = ({ navigate }) => {
@@ -13,7 +13,11 @@ export const SplashScreen: React.FC<Nav> = ({ navigate }) => {
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
-        <Text style={styles.logoText}>G</Text>
+        <Image
+          source={require("../../../assets/geoverse-logo.png")}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
       </View>
       <View style={styles.textContainer}>
         <Text style={styles.title}>GEOVERSE</Text>
@@ -38,15 +42,16 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   logoContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
+    overflow: "hidden",
     ...(Platform.OS === "web"
-      ? ({ boxShadow: "0px 4px 8px rgba(0,0,0,0.2)" } as any)
+      ? ({ boxShadow: "0px 8px 20px rgba(0,0,0,0.2)" } as any)
       : {
           elevation: 8,
           shadowColor: "#000",
@@ -55,10 +60,9 @@ const styles = StyleSheet.create({
           shadowRadius: 8,
         }),
   },
-  logoText: {
-    fontSize: 48,
-    fontWeight: "900",
-    color: "#1B7A4E",
+  logoImage: {
+    width: 110,
+    height: 110,
   },
   textContainer: {
     alignItems: "center",

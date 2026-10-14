@@ -496,7 +496,7 @@ export const Order: React.FC<OrderProps> = ({
   };
 
   const handleDriverTransition = (order: DriverOrder, nextStatus: DriverOrder["status"]) => {
-    if ((order.type === "Marketplace" || order.type === "Catering") && nextStatus === "Selesai") {
+    if ((order.type === "Marketplace" || order.type === "Catering" || order.type === "Shop") && nextStatus === "Selesai") {
       setProofUploadError(null);
       setDeliveryProofOrder(order);
       return;
@@ -565,7 +565,7 @@ export const Order: React.FC<OrderProps> = ({
               <Camera size={22} color="#15803D" />
             </View>
             <Text style={styles.proofPickerTitle}>
-              {order.type === "Catering" ? "Bukti Serah Terima Catering" : "Foto Bukti Pengantaran"}
+              {order.type === "Catering" ? "Bukti Serah Terima Catering" : order.type === "Shop" ? "Bukti Pengantaran Kanyaah Shop" : "Foto Bukti Pengantaran"}
             </Text>
             <Text style={styles.proofPickerDescription}>
               Ambil foto pesanan langsung di hadapan customer sebagai bukti serah terima sah. Sistem akan merekam tanggal & jam aktual (WIB) yang akan ditampilkan di halaman customer.
@@ -1074,7 +1074,9 @@ export const Order: React.FC<OrderProps> = ({
             </TouchableOpacity>
 
           <View style={styles.fullPageHeaderRight}>
-            <Text style={styles.fullPageOrderCode}>#{selectedOrder.id.slice(-8)}</Text>
+            <Text style={styles.fullPageOrderCode}>
+              #{selectedOrder.orderCode ? selectedOrder.orderCode.replace(/^#/, "") : selectedOrder.id.slice(-8).toUpperCase()}
+            </Text>
             <View style={[styles.badge, { backgroundColor: getStatusBg(selectedOrder.status) }]}>
               <Text style={[styles.badgeText, { color: getStatusColor(selectedOrder.status) }]}>
                 {getStatusBadgeLabel(selectedOrder.status, selectedOrder)}
@@ -2134,7 +2136,7 @@ export const Order: React.FC<OrderProps> = ({
                         : selectedOrder?.type === "Setor Sampah"
                         ? "Menuju Bank Sampah"
                         : "Menuju Customer")
-                    : "Semua Rute"} • #{selectedOrder?.id.slice(-6)}
+                    : "Semua Rute"} • #{selectedOrder?.orderCode ? selectedOrder.orderCode.replace(/^#/, "") : selectedOrder?.id.slice(-8).toUpperCase()}
                 </Text>
               </View>
 
@@ -2245,7 +2247,7 @@ export const Order: React.FC<OrderProps> = ({
                         : `Chat Customer: ${selectedOrder.customer}`)}
                 </Text>
                 <Text style={styles.chatHeaderSubtitle}>
-                  Order #{selectedOrder.id.slice(-8)} • Saluran Langsung
+                  Order #{selectedOrder.orderCode ? selectedOrder.orderCode.replace(/^#/, "") : selectedOrder.id.slice(-8).toUpperCase()} • Saluran Langsung
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setChatModalVisible(false)} style={styles.closeBtn}>
@@ -2582,7 +2584,9 @@ export const Order: React.FC<OrderProps> = ({
                 {/* Header Card */}
                 <View style={styles.cardHeader}>
                   <View style={styles.headerLeftGroup}>
-                    <Text style={styles.orderId}>#{item.id.slice(-8)}</Text>
+                    <Text style={styles.orderId}>
+                      #{item.orderCode ? item.orderCode.replace(/^#/, "") : item.id.slice(-8).toUpperCase()}
+                    </Text>
                     <View
                       style={[
                         styles.serviceChip,

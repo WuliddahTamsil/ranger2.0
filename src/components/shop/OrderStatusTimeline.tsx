@@ -32,6 +32,8 @@ const getStageIndex = (currentStatus: string): number => {
       return 2;
     case "READY_FOR_PICKUP":
     case "DRIVER_ASSIGNED":
+    case "DRIVER_HEADING_TO_STORE":
+    case "DRIVER_ON_THE_WAY_TO_STORE":
     case "DRIVER_AT_STORE":
       return 3;
     case "PICKED_UP":

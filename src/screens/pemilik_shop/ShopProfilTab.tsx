@@ -241,6 +241,7 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
     try {
       setIsSavingHours(true);
       const res = await updateMerchantShopStore({
+        isOpen: isOpenStatus,
         openingDays,
         openingHours: {
           openTime: openingTime,

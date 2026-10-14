@@ -1,6 +1,6 @@
 const fetch = require("node-fetch");
 
-const BASE_URL = "http://127.0.0.1:5000/api";
+const BASE_URL = process.env.TEST_API_URL || "https://ranger20-production.up.railway.app/api";
 
 const CUSTOMER_CREDENTIALS = {
   email: "wuliddahtamsilbarokah19@gmail.com",
@@ -225,6 +225,25 @@ async function runE2ETest() {
   console.log(`   Driver Plate: ${driverAcceptData.data.driverPlateNumber}`);
   if (driverAcceptData.data.orderStatus !== "DRIVER_ASSIGNED") {
     throw new Error(`Expected DRIVER_ASSIGNED, got ${driverAcceptData.data.orderStatus}`);
+  }
+
+  // 9b. Driver starts journey to store -> DRIVER_HEADING_TO_STORE (OTW ke Toko)
+  console.log("\n🛵 [DRIVER] Updating status: On the way to store (DRIVER_HEADING_TO_STORE)...");
+  const headingToStoreRes = await fetch(`${BASE_URL}/shop/orders/${order._id}/driver-status`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${driverAuth.token}`,
+    },
+    body: JSON.stringify({ status: "DRIVER_HEADING_TO_STORE", note: "Driver sedang dalam perjalanan menuju toko (OTW ke toko)" }),
+  });
+  const headingData = await headingToStoreRes.json();
+  if (!headingToStoreRes.ok || !headingData.success) {
+    throw new Error(`Driver failed to update to DRIVER_HEADING_TO_STORE: ${headingData.message}`);
+  }
+  console.log(`✅ [DRIVER] Status updated to: ${headingData.data.orderStatus} (OTW ke Toko Berhasil!)`);
+  if (headingData.data.orderStatus !== "DRIVER_HEADING_TO_STORE") {
+    throw new Error(`Expected DRIVER_HEADING_TO_STORE, got ${headingData.data.orderStatus}`);
   }
 
   // 10. Driver arrives at store -> DRIVER_AT_STORE

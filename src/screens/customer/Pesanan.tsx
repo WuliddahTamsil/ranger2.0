@@ -43,6 +43,8 @@ import {
   Camera,
   ChevronRight,
   ShieldCheck,
+  ArrowUpDown,
+  Check,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -98,6 +100,22 @@ export const Pesanan: React.FC<PesananProps> = ({
   navigate,
 }) => {
   const [activeTab, setActiveTab] = useState<number>(0);
+  const [selectedCategory, setSelectedCategory] = useState<
+    "ALL" | "SHOP" | "MART" | "RIDE" | "SEND" | "LAUNDRY" | "CATERING"
+  >("ALL");
+  const [sortBy, setSortBy] = useState<"NEWEST" | "OLDEST" | "HIGHEST_PRICE" | "LOWEST_PRICE">("NEWEST");
+  const [sortModalVisible, setSortModalVisible] = useState(false);
+
+  const SERVICE_CATEGORIES = [
+    { key: "ALL", label: "Semua", icon: ShoppingBag, color: "#0D7A53" },
+    { key: "SHOP", label: "Shop", icon: ShoppingBag, color: "#2563EB" },
+    { key: "MART", label: "Mart", icon: Store, color: "#1B7A4E" },
+    { key: "RIDE", label: "Ride", icon: Bike, color: "#16A34A" },
+    { key: "SEND", label: "Send", icon: Truck, color: "#0284C7" },
+    { key: "LAUNDRY", label: "Laundry", icon: Wind, color: "#0284C7" },
+    { key: "CATERING", label: "Catering", icon: Coffee, color: "#EA580C" },
+  ] as const;
+
   const [trackModalVisible, setTrackModalVisible] = useState(false);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null);
@@ -278,24 +296,69 @@ export const Pesanan: React.FC<PesananProps> = ({
     }
   };
 
+  const currentStatusOrders = orders.filter((o) => {
+    if (activeTab === 0) return o.status !== "Selesai" && !o.status.toLowerCase().includes("batal");
+    if (activeTab === 1) return o.status === "Selesai";
+    return o.status.toLowerCase().includes("batal");
+  });
+
+  const getCategoryCount = (key: string) => {
+    if (key === "ALL") return currentStatusOrders.length;
+    return currentStatusOrders.filter((o) => {
+      const t = (o.type || "").toLowerCase();
+      switch (key) {
+        case "SHOP": return t.includes("shop");
+        case "MART": return t.includes("market") || t.includes("mart");
+        case "RIDE": return t.includes("ride");
+        case "SEND": return t.includes("send");
+        case "LAUNDRY": return t.includes("laund");
+        case "CATERING": return t.includes("cater");
+        default: return true;
+      }
+    }).length;
+  };
+
   const getFilteredOrders = () => {
-    switch (activeTab) {
-      case 0: // Aktif
-        return orders.filter(
-          (o) => o.status !== "Selesai" && !o.status.toLowerCase().includes("batal")
-        );
-      case 1: // Selesai
-        return orders.filter((o) => o.status === "Selesai");
-      case 2: // Dibatalkan
-        return orders.filter((o) => o.status.toLowerCase().includes("batal"));
-      default:
-        return orders;
+    let list = currentStatusOrders;
+
+    if (selectedCategory !== "ALL") {
+      list = list.filter((o) => {
+        const t = (o.type || "").toLowerCase();
+        switch (selectedCategory) {
+          case "SHOP": return t.includes("shop");
+          case "MART": return t.includes("market") || t.includes("mart");
+          case "RIDE": return t.includes("ride");
+          case "SEND": return t.includes("send");
+          case "LAUNDRY": return t.includes("laund");
+          case "CATERING": return t.includes("cater");
+          default: return true;
+        }
+      });
     }
+
+    return [...list].sort((a, b) => {
+      if (sortBy === "NEWEST") {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      } else if (sortBy === "OLDEST") {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeA - timeB;
+      } else if (sortBy === "HIGHEST_PRICE") {
+        return (Number(b.total) || 0) - (Number(a.total) || 0);
+      } else if (sortBy === "LOWEST_PRICE") {
+        return (Number(a.total) || 0) - (Number(b.total) || 0);
+      }
+      return 0;
+    });
   };
 
   const getServiceIcon = (type: string) => {
-    const normalized = type.toLowerCase();
-    if (normalized.includes("market")) {
+    const normalized = (type || "").toLowerCase();
+    if (normalized.includes("shop")) {
+      return { icon: ShoppingBag, fg: "#2563EB", bg: "#DBEAFE" };
+    } else if (normalized.includes("market") || normalized.includes("mart")) {
       return { icon: Store, fg: "#1B7A4E", bg: "#E8F5EE" };
     } else if (normalized.includes("cater")) {
       return { icon: Coffee, fg: "#EA580C", bg: "#FFEDD5" };
@@ -304,20 +367,24 @@ export const Pesanan: React.FC<PesananProps> = ({
     } else if (normalized.includes("kos")) {
       return { icon: Building, fg: "#9333EA", bg: "#F3E8FF" };
     } else if (normalized.includes("ride")) {
-      return { icon: Bike, fg: "#1B7A4E", bg: "#E8F5EE" };
+      return { icon: Bike, fg: "#16A34A", bg: "#DCFCE7" };
+    } else if (normalized.includes("send")) {
+      return { icon: Truck, fg: "#0284C7", bg: "#E0F2FE" };
     } else {
-      return { icon: Truck, fg: "#D97706", bg: "#FEF3C7" };
+      return { icon: Package, fg: "#D97706", bg: "#FEF3C7" };
     }
   };
 
   const getStatusColors = (status: string) => {
-    const s = status.toLowerCase();
-    if (s === "dikirim" || s.includes("menuju") || s.includes("perjalanan") || s.includes("mencari") || s.includes("sampai")) {
+    const s = (status || "").toLowerCase();
+    if (s === "dikirim" || s.includes("menuju") || s.includes("perjalanan") || s.includes("mencari") || s.includes("sampai") || s.includes("antar")) {
       return { fg: "#2563EB", bg: "#EFF6FF" };
     } else if (s.includes("batal")) {
       return { fg: "#B91C1C", bg: "#FEE2E2" };
-    } else if (s === "selesai" || s === "aktif") {
+    } else if (s === "selesai" || s === "aktif" || s === "lunas") {
       return { fg: "#1B7A4E", bg: "#E8F5EE" };
+    } else if (s.includes("siap") || s.includes("proses") || s.includes("kemas")) {
+      return { fg: "#0D7A53", bg: "#ECFDF5" };
     }
     return { fg: "#D97706", bg: "#FEF3C7" };
   };
@@ -532,6 +599,83 @@ export const Pesanan: React.FC<PesananProps> = ({
         })}
       </View>
 
+      {/* Category Filter Horizontal Scroll */}
+      <View style={styles.categoryScrollWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScrollContent}
+        >
+          {SERVICE_CATEGORIES.map((cat) => {
+            const isSelected = selectedCategory === cat.key;
+            const count = getCategoryCount(cat.key);
+            const CatIcon = cat.icon;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                style={[
+                  styles.categoryChip,
+                  isSelected && styles.categoryChipActive,
+                ]}
+                onPress={() => setSelectedCategory(cat.key as any)}
+                activeOpacity={0.7}
+              >
+                <CatIcon
+                  size={13}
+                  color={isSelected ? "#FFFFFF" : cat.color || "#475569"}
+                />
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    isSelected && styles.categoryChipTextActive,
+                  ]}
+                >
+                  {cat.label}
+                </Text>
+                <View
+                  style={[
+                    styles.categoryBadge,
+                    isSelected && styles.categoryBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.categoryBadgeText,
+                      isSelected && styles.categoryBadgeTextActive,
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Sub Filter & Sort Row */}
+      <View style={styles.subFilterBar}>
+        <Text style={styles.subFilterCountText}>
+          {currentList.length} pesanan ditemukan
+        </Text>
+        <TouchableOpacity
+          style={styles.sortBtn}
+          onPress={() => setSortModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <ArrowUpDown size={12} color="#0D7A53" />
+          <Text style={styles.sortBtnText}>
+            {sortBy === "NEWEST"
+              ? "Terbaru"
+              : sortBy === "OLDEST"
+              ? "Terlama"
+              : sortBy === "HIGHEST_PRICE"
+              ? "Nominal Terbesar"
+              : "Nominal Terkecil"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {ordersLoadError ? (
         <View style={{ marginHorizontal: 16, marginBottom: 10, padding: 12, borderRadius: 12, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" }}>
           <Text style={{ color: "#9A3412", fontSize: 12, lineHeight: 17 }}>{orders.length ? "Pesanan belum berhasil diperbarui. Data terakhir tetap ditampilkan." : ordersLoadError}</Text>
@@ -561,9 +705,16 @@ export const Pesanan: React.FC<PesananProps> = ({
               style={styles.orderCard}
               activeOpacity={0.92}
               onPress={() => {
-                if (item.type.toLowerCase().includes("ride") && !isCompleted && !item.status.toLowerCase().includes("batal") && onOpenRideTracking) {
+                const t = item.type.toLowerCase();
+                if (t.includes("shop")) {
+                  if (navigate) {
+                    navigate("c_shop_order_detail", { orderId: item.id });
+                  } else {
+                    handleOpenInvoice(item);
+                  }
+                } else if (t.includes("ride") && !isCompleted && !item.status.toLowerCase().includes("batal") && onOpenRideTracking) {
                   onOpenRideTracking();
-                } else if (item.type.toLowerCase().includes("cater")) {
+                } else if (t.includes("cater")) {
                   setActiveCateringTrackingOrderId(String(item.id));
                   if (onOpenCateringTracking) {
                     onOpenCateringTracking(item);
@@ -777,6 +928,24 @@ export const Pesanan: React.FC<PesananProps> = ({
                         <FileText size={13} color="#0D7A53" />
                         <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
                       </TouchableOpacity>
+
+                      {item.type.toLowerCase().includes("shop") && (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnProof]}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            if (navigate) {
+                              navigate("c_shop_order_detail", { orderId: item.id });
+                            } else {
+                              handleOpenInvoice(item);
+                            }
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <ShoppingBag size={13} color="#2563EB" />
+                          <Text style={[styles.actionBtnTextInvoice, { color: "#2563EB" }]}>Detail Order</Text>
+                        </TouchableOpacity>
+                      )}
 
                       {item.type.toLowerCase().includes("market") && (
                         <TouchableOpacity
@@ -997,9 +1166,19 @@ export const Pesanan: React.FC<PesananProps> = ({
                           )}
 
                           <TouchableOpacity
-                            style={[styles.actionBtn, styles.actionBtnSolid]}
+                            style={[
+                              styles.actionBtn,
+                              styles.actionBtnSolid,
+                              item.type.toLowerCase().includes("shop") && { backgroundColor: "#2563EB" },
+                            ]}
                             onPress={() => {
-                              if (item.type.toLowerCase().includes("cater")) {
+                              if (item.type.toLowerCase().includes("shop")) {
+                                if (navigate) {
+                                  navigate("c_shop_order_detail", { orderId: item.id });
+                                } else {
+                                  handleOpenInvoice(item);
+                                }
+                              } else if (item.type.toLowerCase().includes("cater")) {
                                 setActiveCateringTrackingOrderId(String(item.id));
                                 if (onOpenCateringTracking) {
                                   onOpenCateringTracking(item);
@@ -1017,7 +1196,11 @@ export const Pesanan: React.FC<PesananProps> = ({
                               <Navigation size={13} color="#FFFFFF" />
                             )}
                             <Text style={styles.actionBtnTextSolid}>
-                              {item.type.toLowerCase().includes("cater") && Number(item.remainingAmount || 0) > 0 ? "Lunasi & Lacak" : "Lacak"}
+                              {item.type.toLowerCase().includes("cater") && Number(item.remainingAmount || 0) > 0
+                                ? "Lunasi & Lacak"
+                                : item.type.toLowerCase().includes("shop")
+                                ? "Lacak Pesanan"
+                                : "Lacak"}
                             </Text>
                           </TouchableOpacity>
                         </>
@@ -1042,6 +1225,62 @@ export const Pesanan: React.FC<PesananProps> = ({
           </View>
         }
       />
+
+      {/* Modal Urutkan Pesanan (Sort Modal) */}
+      <Modal
+        visible={sortModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.sortModalOverlay}
+          activeOpacity={1}
+          onPress={() => setSortModalVisible(false)}
+        >
+          <View style={styles.sortModalContent}>
+            <View style={styles.sortModalHeader}>
+              <Text style={styles.sortModalTitle}>Urutkan Pesanan</Text>
+              <TouchableOpacity onPress={() => setSortModalVisible(false)}>
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {[
+              { key: "NEWEST", label: "Terbaru (Waktu Order)" },
+              { key: "OLDEST", label: "Terlama (Waktu Order)" },
+              { key: "HIGHEST_PRICE", label: "Nominal Tertinggi (Total Belanja)" },
+              { key: "LOWEST_PRICE", label: "Nominal Terendah (Total Belanja)" },
+            ].map((opt) => {
+              const isSelected = sortBy === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    styles.sortOptionItem,
+                    isSelected && styles.sortOptionItemActive,
+                  ]}
+                  onPress={() => {
+                    setSortBy(opt.key as any);
+                    setSortModalVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.sortOptionText,
+                      isSelected && styles.sortOptionTextActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                  {isSelected && <Check size={16} color="#0D7A53" />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* 1. Lacak Order Full Page */}
       {selectedOrder && (
@@ -2757,5 +2996,145 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+  },
+  categoryScrollWrap: {
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    paddingVertical: 10,
+  },
+  categoryScrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  categoryChipActive: {
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
+  },
+  categoryChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  categoryChipTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  categoryBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 10,
+    backgroundColor: "#E2E8F0",
+    minWidth: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  categoryBadgeActive: {
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+  categoryBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  categoryBadgeTextActive: {
+    color: "#FFFFFF",
+  },
+  subFilterBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#F8FAFC",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  subFilterCountText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  sortBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  sortBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  sortModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    justifyContent: "flex-end",
+  },
+  sortModalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  sortModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    marginBottom: 8,
+  },
+  sortModalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  sortOptionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginVertical: 2,
+  },
+  sortOptionItemActive: {
+    backgroundColor: "#F0FDF4",
+  },
+  sortOptionText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#334155",
+  },
+  sortOptionTextActive: {
+    fontWeight: "700",
+    color: "#0D7A53",
   },
 });

@@ -517,7 +517,8 @@ export const acceptDriverShopOrder = async (
 export const updateDriverShopStatus = async (
   orderId: string,
   status: string,
-  note = ""
+  note = "",
+  deliveryProofUrl = ""
 ): Promise<{ success: boolean; data?: any; message?: string }> => {
   try {
     const url = getApiUrl(`/shop/orders/${orderId}/driver-status`);
@@ -525,12 +526,45 @@ export const updateDriverShopStatus = async (
     const res = await fetch(url, {
       method: "PUT",
       headers,
-      body: JSON.stringify({ status, note }),
+      body: JSON.stringify({
+        status,
+        note,
+        deliveryProofUrl,
+        proofUrl: deliveryProofUrl,
+      }),
     });
     const json = await res.json();
     return json;
   } catch (error: any) {
     return { success: false, message: error.message || "Gagal memperbarui status pengantaran belanja" };
+  }
+};
+
+export const uploadShopPickupProof = async (orderId: string, proofUrl: string) => {
+  try {
+    const url = getApiUrl(`/shop/orders/${orderId}/pickup-proof`);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify({ proofUrl }),
+    });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
+};
+
+export const uploadShopDeliveryProof = async (orderId: string, proofUrl: string) => {
+  try {
+    const url = getApiUrl(`/shop/orders/${orderId}/delivery-proof`);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: await getHeaders(),
+      body: JSON.stringify({ proofUrl }),
+    });
+    return await res.json();
+  } catch (error: any) {
+    return { success: false, message: error.message };
   }
 };
 

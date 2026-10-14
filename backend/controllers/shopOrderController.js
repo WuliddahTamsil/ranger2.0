@@ -24,6 +24,18 @@ const emitToRoom = (io, room, event, payload) => {
   }
 };
 
+const emitToStoreOwner = async (io, storeId, event, payload) => {
+  if (!io || !storeId) return;
+  try {
+    const store = await MarketplaceStore.findById(storeId).select("ownerId");
+    if (store?.ownerId) {
+      emitToUser(io, store.ownerId, event, payload);
+    }
+  } catch (err) {
+    console.error("emitToStoreOwner error:", err);
+  }
+};
+
 /**
  * Hash checkout payload for idempotency verification
  */
@@ -533,6 +545,30 @@ const cancelOrder = async (req, res) => {
 
     emitToRoom(req.io, `shop:${String(order._id)}`, "shop:order_updated", order);
     emitToUser(req.io, order.customerId, "shop:order_updated", order);
+    await emitToStoreOwner(req.io, order.storeId, "shop:order_updated", order);
+
+    // Notify other party of cancellation
+    const isCustomerCancelling = authUser?.role === "customer" || String(authUser?._id) === String(order.customerId);
+    if (isCustomerCancelling) {
+      const store = await MarketplaceStore.findById(order.storeId).select("ownerId");
+      if (store?.ownerId) {
+        await Notification.create({
+          userId: store.ownerId,
+          title: "Pesanan Dibatalkan Pelanggan!",
+          message: `Pesanan #${order.orderCode} telah dibatalkan oleh pelanggan. Alasan: ${reason}`,
+          type: "order_status",
+          relatedId: order._id,
+        }).catch(() => undefined);
+      }
+    } else {
+      await Notification.create({
+        userId: order.customerId,
+        title: "Pesanan Dibatalkan Toko!",
+        message: `Pesanan #${order.orderCode} dibatalkan oleh pihak toko. Alasan: ${reason}`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => undefined);
+    }
 
     return res.json({ success: true, message: "Pesanan berhasil dibatalkan", data: order });
   } catch (error) {
@@ -752,6 +788,15 @@ const merchantAcceptOrder = async (req, res) => {
 
     emitToRoom(req.io, `shop:${String(order._id)}`, "shop:order_updated", order);
     emitToUser(req.io, order.customerId, "shop:order_updated", order);
+    await emitToStoreOwner(req.io, order.storeId, "shop:order_updated", order);
+
+    await Notification.create({
+      userId: order.customerId,
+      title: "Pesanan Diterima Toko!",
+      message: `Toko ${order.storeName} telah menerima pesanan #${order.orderCode} dan mulai menyiapkannya.`,
+      type: "order_status",
+      relatedId: order._id,
+    }).catch(() => undefined);
 
     return res.json({ success: true, message: "Pesanan telah diterima", data: order });
   } catch (error) {
@@ -790,6 +835,25 @@ const merchantUpdateStatus = async (req, res) => {
 
     emitToRoom(req.io, `shop:${String(order._id)}`, "shop:order_updated", order);
     emitToUser(req.io, order.customerId, "shop:order_updated", order);
+    await emitToStoreOwner(req.io, order.storeId, "shop:order_updated", order);
+
+    if (status === "PREPARING" || status === "PICKING") {
+      await Notification.create({
+        userId: order.customerId,
+        title: "Barang Sedang Disiapkan!",
+        message: `Staf toko ${order.storeName} sedang mengemas barang pesananmu #${order.orderCode}.`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => undefined);
+    } else if (status === "READY_FOR_PICKUP") {
+      await Notification.create({
+        userId: order.customerId,
+        title: "Pesanan Siap Diambil Kurir!",
+        message: `Pesanan #${order.orderCode} telah selesai dikemas rapi dan siap dijemput oleh kurir.`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => undefined);
+    }
 
     // If order is READY_FOR_PICKUP, broadcast to available drivers!
     if (status === "READY_FOR_PICKUP" && req.io) {
@@ -948,7 +1012,17 @@ const getDriverOrders = async (req, res) => {
     const activeOrder = isValidDriverId
       ? await ShopOrder.findOne({
           driverId: driverQuery,
-          orderStatus: { $in: ["DRIVER_ASSIGNED", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED"] },
+          orderStatus: {
+            $in: [
+              "DRIVER_ASSIGNED",
+              "DRIVER_HEADING_TO_STORE",
+              "DRIVER_ON_THE_WAY_TO_STORE",
+              "DRIVER_AT_STORE",
+              "PICKED_UP",
+              "DELIVERING",
+              "ARRIVED",
+            ],
+          },
         })
           .populate("storeId", "name logo address latitude longitude")
           .lean()
@@ -1020,8 +1094,20 @@ const acceptDriverOrder = async (req, res) => {
       relatedId: order._id,
     }).catch(() => undefined);
 
+    const storeDoc = await MarketplaceStore.findById(order.storeId).select("ownerId");
+    if (storeDoc?.ownerId) {
+      await Notification.create({
+        userId: storeDoc.ownerId,
+        title: "Kurir Ditugaskan!",
+        message: `Driver ${authUser.name} telah menerima pesanan #${order.orderCode} dan sedang menuju tokomu untuk mengambil paket.`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => undefined);
+    }
+
     emitToRoom(req.io, `shop:${String(order._id)}`, "shop:order_updated", order);
     emitToUser(req.io, order.customerId, "shop:order_updated", order);
+    await emitToStoreOwner(req.io, order.storeId, "shop:order_updated", order);
 
     return res.json({ success: true, message: "Pesanan berhasil diambil", data: order });
   } catch (error) {
@@ -1036,14 +1122,23 @@ const acceptDriverOrder = async (req, res) => {
 const updateDriverStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, note = "" } = req.body;
+    const { status, note = "", proofUrl = "", deliveryProofUrl = "" } = req.body;
     const authUser = req.authUser;
 
     if (!authUser) {
       return res.status(401).json({ success: false, message: "Sesi driver tidak valid atau belum login" });
     }
 
-    const allowed = ["DRIVER_ASSIGNED", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED", "COMPLETED"];
+    const allowed = [
+      "DRIVER_ASSIGNED",
+      "DRIVER_HEADING_TO_STORE",
+      "DRIVER_ON_THE_WAY_TO_STORE",
+      "DRIVER_AT_STORE",
+      "PICKED_UP",
+      "DELIVERING",
+      "ARRIVED",
+      "COMPLETED",
+    ];
     if (!allowed.includes(status)) {
       return res.status(400).json({ success: false, message: "Status tidak valid untuk driver" });
     }
@@ -1056,7 +1151,47 @@ const updateDriverStatus = async (req, res) => {
     }
 
     order.orderStatus = status;
-    if (status === "COMPLETED") {
+    const incomingProof = proofUrl || deliveryProofUrl;
+    if (incomingProof) {
+      order.deliveryProofUrl = incomingProof;
+    }
+
+    if (status === "DRIVER_HEADING_TO_STORE" || status === "DRIVER_ON_THE_WAY_TO_STORE") {
+      await Notification.create({
+        userId: order.customerId,
+        title: "Driver Menuju Toko!",
+        message: `Driver ${authUser.name} sedang dalam perjalanan menuju ${order.storeName} untuk mengambil pesananmu.`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => undefined);
+    } else if (status === "DRIVER_AT_STORE") {
+      await Notification.create({
+        userId: order.customerId,
+        title: "Driver Tiba di Toko!",
+        message: `Driver ${authUser.name} telah tiba di ${order.storeName} dan sedang mengambil pesananmu.`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => undefined);
+
+      const store = await MarketplaceStore.findById(order.storeId).select("ownerId");
+      if (store?.ownerId) {
+        await Notification.create({
+          userId: store.ownerId,
+          title: "Kurir Tiba di Toko!",
+          message: `Driver ${authUser.name} telah tiba di tokomu untuk mengambil pesanan #${order.orderCode}.`,
+          type: "order_status",
+          relatedId: order._id,
+        }).catch(() => undefined);
+      }
+    } else if (status === "PICKED_UP" || status === "DELIVERING") {
+      await Notification.create({
+        userId: order.customerId,
+        title: "Pesanan Sedang Diantar!",
+        message: `Driver ${authUser.name} telah mengambil belanjaanmu dan sedang menuju alamat tujuan.`,
+        type: "order_status",
+        relatedId: order._id,
+      }).catch(() => undefined);
+    } else if (status === "COMPLETED") {
       order.completedAt = new Date();
       if (order.paymentMethod === "CASH") {
         order.paymentStatus = "PAID";
@@ -1068,6 +1203,17 @@ const updateDriverStatus = async (req, res) => {
         type: "order_status",
         relatedId: order._id,
       }).catch(() => undefined);
+
+      const store = await MarketplaceStore.findById(order.storeId).select("ownerId");
+      if (store?.ownerId) {
+        await Notification.create({
+          userId: store.ownerId,
+          title: "Pesanan Selesai Diantar!",
+          message: `Pesanan #${order.orderCode} telah berhasil diantar dengan aman ke pelanggan oleh driver ${authUser.name}.`,
+          type: "order_status",
+          relatedId: order._id,
+        }).catch(() => undefined);
+      }
     }
 
     order.statusHistory.push({
@@ -1081,6 +1227,7 @@ const updateDriverStatus = async (req, res) => {
 
     emitToRoom(req.io, `shop:${String(order._id)}`, "shop:order_updated", order);
     emitToUser(req.io, order.customerId, "shop:order_updated", order);
+    await emitToStoreOwner(req.io, order.storeId, "shop:order_updated", order);
 
     return res.json({ success: true, message: "Status pengantaran diperbarui", data: order });
   } catch (error) {
@@ -1114,6 +1261,7 @@ const uploadPickupProof = async (req, res) => {
 
     emitToRoom(req.io, `shop:${String(order._id)}`, "shop:order_updated", order);
     emitToUser(req.io, order.customerId, "shop:order_updated", order);
+    await emitToStoreOwner(req.io, order.storeId, "shop:order_updated", order);
 
     return res.json({ success: true, message: "Bukti pickup berhasil disimpan", data: order });
   } catch (error) {
@@ -1148,6 +1296,7 @@ const uploadDeliveryProof = async (req, res) => {
 
     emitToRoom(req.io, `shop:${String(order._id)}`, "shop:order_updated", order);
     emitToUser(req.io, order.customerId, "shop:order_updated", order);
+    await emitToStoreOwner(req.io, order.storeId, "shop:order_updated", order);
 
     return res.json({ success: true, message: "Pesanan selesai diantar", data: order });
   } catch (error) {
