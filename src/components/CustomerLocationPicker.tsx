@@ -404,6 +404,7 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
               onPress={handleMapPress}
               pin={pin}
               onPinDragEnd={(coord: { latitude: number; longitude: number }) => movePin(coord.latitude, coord.longitude)}
+              style={styles.mapComponent}
             />
             <View style={styles.mapBadge}>
               <MapPin size={13} color="#1B7A4E" />
@@ -466,7 +467,8 @@ const styles = StyleSheet.create({
   distanceBadge: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   distanceText: { fontSize: 10, fontWeight: "800", color: "#15803D" },
   suggestionSubtitle: { color: "#64748B", fontSize: 10.5, lineHeight: 14 },
-  mapWrap: { flex: 1, minHeight: 260, position: "relative", backgroundColor: "#E2E8F0" },
+  mapWrap: { flex: 1, minHeight: 260, position: "relative", backgroundColor: "#E2E8F0", overflow: "hidden" },
+  mapComponent: { flex: 1, width: "100%", height: "100%" },
   mapBadge: { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.96)" },
   mapBadgeText: { color: "#166534", fontSize: 10, fontWeight: "800" },
   gpsButton: { position: "absolute", right: 12, bottom: 12, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12, backgroundColor: "#FFFFFF", shadowColor: "#0F172A", shadowOpacity: 0.16, shadowRadius: 7, elevation: 4 },

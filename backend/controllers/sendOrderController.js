@@ -214,8 +214,31 @@ const createOrder = async (req, res) => {
       paymentMethod === "TUNAI" ||
       String(paymentMethod).toLowerCase() === "cod";
 
+    const requestedPoints = Math.max(0, Math.round(Number(req.body.pointsUsed) || Number(req.body.pointDiscount) || 0));
+    let finalPointDiscount = 0;
+    const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+
+    if (requestedPoints > 0 && customerId) {
+      const wallet = await pointWalletService.getOrCreateWallet(customerId);
+      const usablePoints = Math.min(wallet.balancePoint || 0, breakdown.finalFare, requestedPoints);
+      if (usablePoints > 0) {
+        finalPointDiscount = usablePoints;
+        await pointWalletService.debitPoints({
+          userId: customerId,
+          points: finalPointDiscount,
+          type: "PAYMENT",
+          sourceType: "KANYAAH_SEND",
+          sourceId: orderCode,
+          notes: `Pembayaran Kanyaah Send #${orderCode} dengan ${finalPointDiscount} GEOVERSE Point`,
+          actorId: customerId,
+        });
+      }
+    }
+
+    const finalPayableFare = Math.max(0, breakdown.finalFare - finalPointDiscount);
+
     const initialStatus = "SEARCHING_DRIVER";
-    const initialPaymentStatus = isCash ? "CASH_PENDING" : "PENDING";
+    const initialPaymentStatus = finalPayableFare === 0 ? "PAID" : isCash ? "CASH_PENDING" : "PENDING";
 
     const newOrder = await SendOrder.create({
       orderCode,
@@ -266,10 +289,16 @@ const createOrder = async (req, res) => {
         serviceFee: breakdown.serviceFee,
         insuranceFee: breakdown.insuranceFee,
         discount: breakdown.discount,
+        pointDiscount: finalPointDiscount,
+        pointsUsed: finalPointDiscount,
         estimatedFare: breakdown.estimatedFare,
-        finalFare: breakdown.finalFare,
+        finalFare: finalPayableFare,
+        totalAmount: finalPayableFare,
         driverEarnings: breakdown.driverEarnings,
       },
+      totalAmount: finalPayableFare,
+      pointDiscount: finalPointDiscount,
+      pointsUsed: finalPointDiscount,
       distanceKm: breakdown.distanceKm,
       estimatedDurationMinutes: breakdown.estimatedDurationMinutes,
       paymentMethod,
@@ -293,8 +322,8 @@ const createOrder = async (req, res) => {
 
     let paymentData = null;
 
-    // If online payment (QRIS / VA), create Payment gateway intent
-    if (!isCash) {
+    // If online payment (QRIS / VA) and payable amount > 0, create Payment gateway intent
+    if (!isCash && finalPayableFare > 0) {
       try {
         const customer = await User.findById(customerId).lean();
         const gatewayResult = await paymentGateway.createPayment({
@@ -305,7 +334,7 @@ const createOrder = async (req, res) => {
           customerId: String(customerId),
           customerName: customer?.name || sender.name,
           customerPhone: customer?.phone || sender.phone,
-          amount: breakdown.finalFare,
+          amount: finalPayableFare,
           paymentMethod,
         });
 
@@ -318,7 +347,7 @@ const createOrder = async (req, res) => {
           customerId: String(customerId),
           customerName: customer?.name || sender.name,
           customerPhone: customer?.phone || sender.phone,
-          amount: breakdown.finalFare,
+          amount: finalPayableFare,
           paymentMethod: gatewayResult.paymentMethod,
           paymentCategory: gatewayResult.paymentCategory,
           status: gatewayResult.status,
@@ -347,7 +376,9 @@ const createOrder = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: isCash
+      message: finalPayableFare === 0
+        ? "Pesanan pengiriman lunas menggunakan GEOVERSE Point! Menghubungkan ke driver..."
+        : isCash
         ? "Pesanan pengiriman berhasil dibuat! Menghubungkan ke driver..."
         : "Pesanan pengiriman dibuat. Silakan selesaikan pembayaran.",
       data: sanitizedOrder,
@@ -1101,6 +1132,24 @@ const cancelOrder = async (req, res) => {
     });
 
     await order.save();
+
+    // Reversal of debited GEOVERSE Points if order was discounted with points
+    const refundedPoints = order.pricing?.pointDiscount || order.pricing?.pointsUsed || order.pointDiscount || 0;
+    if (refundedPoints > 0 && order.customerId) {
+      try {
+        const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+        await pointWalletService.reversePoints({
+          userId: order.customerId,
+          points: refundedPoints,
+          sourceType: "KANYAAH_SEND",
+          sourceId: order.orderCode,
+          notes: `Pengembalian ${refundedPoints} poin karena pembatalan Kanyaah Send #${order.orderCode}`,
+          actorId: requesterId,
+        });
+      } catch (revErr) {
+        console.error("Error reversing send points on cancel:", revErr);
+      }
+    }
 
     emitToSendRoom(req.io, order._id, "send:order_cancelled", order);
     emitToUser(req.io, order.customerId, "send:order_cancelled", order);

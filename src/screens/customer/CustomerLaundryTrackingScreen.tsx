@@ -12,6 +12,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Switch,
 } from "react-native";
 import { Nav } from "../../types";
 import {
@@ -39,6 +40,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
+import { useRecycle } from "../../context/RecycleContext";
 import { uploadFileToBackend } from "../../services/api";
 import {
   getActiveLaundryOrder,
@@ -67,6 +69,23 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"QRIS" | "Transfer Bank">("Transfer Bank");
   const [proofImageUri, setProofImageUri] = useState<string>("");
   const [isSubmittingProof, setIsSubmittingProof] = useState(false);
+
+  const { wallet } = useRecycle();
+  const [usePoints, setUsePoints] = useState(false);
+
+  const storeName = order?.storeName || "Ais Laundry";
+  const serviceName = order?.serviceName || "Cuci Komplit (Cuci + Setrika)";
+  const weight = order?.actualWeightOrQty ? `${order.actualWeightOrQty} ${order.unitType || "kg"}` : "Menunggu Ditimbang";
+  const laundryPrice = order?.laundryCost || (order?.actualWeightOrQty ? order.actualWeightOrQty * (order.pricePerUnit || 6000) : 0);
+  const deliveryPickup = order?.deliveryFeePickup || 4000;
+  const deliveryDrop = order?.deliveryFeeDrop || 4000;
+  const serviceFee = order?.serviceFee || 1000;
+  const totalBill = order?.totalAmount || (laundryPrice > 0 ? laundryPrice + deliveryPickup + deliveryDrop + serviceFee : 0);
+
+  const userPoints = wallet?.balancePoint || 0;
+  const maxPointsUsable = Math.min(userPoints, totalBill);
+  const pointDiscount = usePoints ? maxPointsUsable : 0;
+  const finalPayableTotal = Math.max(0, totalBill - pointDiscount);
 
   const loadData = async () => {
     const currentOrder = getActiveLaundryOrder();
@@ -222,8 +241,8 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
 
   const handleSendPaymentProof = async () => {
     if (!order) return;
-    if (!proofImageUri) {
-      Alert.alert("Bukti Transfer Wajib", "Harap unggah foto bukti transfer atau resi pembayaran QRIS sebelum melanjutkan.");
+    if (finalPayableTotal > 0 && !proofImageUri) {
+      Alert.alert("Bukti Transfer Wajib", "Harap unggah foto bukti transfer atau resi pembayaran QRIS untuk sisa tagihan.");
       return;
     }
 
@@ -231,7 +250,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
     try {
       let finalUrl = proofImageUri;
       // If uri is still blob:, attempt upload to avoid cross-browser ERR_FILE_NOT_FOUND
-      if (finalUrl.startsWith("blob:")) {
+      if (finalUrl && finalUrl.startsWith("blob:")) {
         try {
           const uploadRes = await uploadFileToBackend(finalUrl, `proof-${Date.now()}.jpg`, "image/jpeg");
           if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
@@ -243,9 +262,15 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
       }
 
       const orderId = order._id || order.id || "temp";
-      await payLaundryOrder(orderId, selectedPaymentMethod, finalUrl);
+      const resolvedMethod = finalPayableTotal === 0 ? "GEOVERSE_POINT" : selectedPaymentMethod;
+      await payLaundryOrder(orderId, resolvedMethod, finalUrl, pointDiscount);
       setIsPaymentModalOpen(false);
-      Alert.alert("Bukti Terkirim", "Bukti pembayaran berhasil diunggah dan masuk ke Pemilik Laundry untuk diverifikasi.");
+      Alert.alert(
+        finalPayableTotal === 0 ? "Lunas dengan Point" : "Bukti Terkirim",
+        finalPayableTotal === 0
+          ? "Tagihan laundry berhasil dilunasi 100% menggunakan GEOVERSE Point! Cucian segera diproses."
+          : "Bukti pembayaran berhasil diunggah dan masuk ke Pemilik Laundry untuk diverifikasi."
+      );
     } catch (err) {
       console.error("Payment error:", err);
       Alert.alert("Gagal Kirim Bukti", "Terjadi kesalahan saat mengunggah bukti pembayaran.");
@@ -296,15 +321,6 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
     const orderId = order._id || order.id || "temp";
     await updateLaundryOrderStatus(orderId, "MENUNGGU_KONFIRMASI_MITRA");
   };
-
-  const storeName = order?.storeName || "Ais Laundry";
-  const serviceName = order?.serviceName || "Cuci Komplit (Cuci + Setrika)";
-  const weight = order?.actualWeightOrQty ? `${order.actualWeightOrQty} ${order.unitType || "kg"}` : "Menunggu Ditimbang";
-  const laundryPrice = order?.laundryCost || (order?.actualWeightOrQty ? order.actualWeightOrQty * (order.pricePerUnit || 6000) : 0);
-  const deliveryPickup = order?.deliveryFeePickup || 4000;
-  const deliveryDrop = order?.deliveryFeeDrop || 4000;
-  const serviceFee = order?.serviceFee || 1000;
-  const totalBill = order?.totalAmount || (laundryPrice > 0 ? laundryPrice + deliveryPickup + deliveryDrop + serviceFee : 0);
 
   const isVerifying = order?.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN" || order?.paymentStatus === "menunggu_verifikasi";
   const isPaid = order?.paymentStatus === "lunas";
@@ -551,6 +567,17 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
               <Text style={styles.billValue}>Rp {serviceFee.toLocaleString("id-ID")}</Text>
             </View>
 
+            {order?.pointDiscount && order.pointDiscount > 0 ? (
+              <View style={styles.billRow}>
+                <Text style={[styles.billLabel, { color: "#166534", fontWeight: "600" }]}>
+                  Diskon GEOVERSE Point ({order.pointsUsed || order.pointDiscount} pts)
+                </Text>
+                <Text style={[styles.billValue, { color: "#166534", fontWeight: "700" }]}>
+                  - Rp {order.pointDiscount.toLocaleString("id-ID")}
+                </Text>
+              </View>
+            ) : null}
+
             <View style={styles.billDivider} />
 
             <View style={styles.billTotalRow}>
@@ -687,138 +714,225 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
               {/* Total Amount Box */}
               <View style={styles.modalTotalBox}>
-                <Text style={styles.modalTotalLabel}>Total yang Harus Dibayar</Text>
+                <Text style={styles.modalTotalLabel}>Total Tagihan Riil</Text>
                 <Text style={styles.modalTotalValue}>Rp {totalBill.toLocaleString("id-ID")}</Text>
                 <Text style={styles.modalWeightDetail}>Berat: {weight} • {serviceName}</Text>
               </View>
 
-              {/* 2 Payment Methods Only: QRIS & Transfer Bank */}
-              <Text style={styles.sectionMethodTitle}>Pilih Metode Pembayaran</Text>
-              <View style={styles.methodList}>
-                {/* Opsi 1: QRIS */}
-                <TouchableOpacity
-                  style={[styles.methodItem, selectedPaymentMethod === "QRIS" && styles.methodItemSelected]}
-                  onPress={() => setSelectedPaymentMethod("QRIS")}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.methodLeft}>
-                    <View style={[styles.methodIconBg, selectedPaymentMethod === "QRIS" && { backgroundColor: "#DCFCE7" }]}>
-                      <QrCode size={20} color="#0D7A53" />
-                    </View>
+              {/* GEOVERSE Point Card */}
+              <View
+                style={{
+                  backgroundColor: "#F0FDF4",
+                  borderRadius: 14,
+                  padding: 14,
+                  marginVertical: 12,
+                  borderWidth: 1.5,
+                  borderColor: usePoints ? "#0D7A53" : "#BBF7D0",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                    <Sparkles size={20} color="#0D7A53" />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.methodName}>QRIS All Payment</Text>
-                      <Text style={styles.methodSub}>BCA Mobile, GoPay, OVO, Dana, ShopeePay</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }}>Tukar GEOVERSE Point</Text>
+                      <Text style={{ fontSize: 11, color: "#4B5563" }}>
+                        Saldo: <Text style={{ fontWeight: "700", color: "#0D7A53" }}>{userPoints.toLocaleString("id-ID")} pts</Text> (1 pt = Rp 1)
+                      </Text>
                     </View>
                   </View>
-                  <View style={[styles.radioCircle, selectedPaymentMethod === "QRIS" && styles.radioCircleSelected]}>
-                    {selectedPaymentMethod === "QRIS" && <View style={styles.radioInnerDot} />}
+                  <Switch
+                    value={usePoints}
+                    onValueChange={(val) => {
+                      if (val && userPoints <= 0) {
+                        Alert.alert("Poin Tidak Mencukupi", "Anda belum memiliki GEOVERSE Point. Dapatkan poin dari setor Kanyaah Sampah!");
+                        return;
+                      }
+                      setUsePoints(val);
+                    }}
+                    thumbColor={usePoints ? "#0D7A53" : "#F3F4F6"}
+                    trackColor={{ false: "#D1D5DB", true: "#A7F3D0" }}
+                  />
+                </View>
+                {usePoints && (
+                  <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#DCFCE7", flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 12, color: "#166534", fontWeight: "600" }}>Potongan Poin</Text>
+                    <Text style={{ fontSize: 12, color: "#166534", fontWeight: "700" }}>- Rp {pointDiscount.toLocaleString("id-ID")}</Text>
                   </View>
-                </TouchableOpacity>
-
-                {/* Opsi 2: Transfer Bank */}
-                <TouchableOpacity
-                  style={[styles.methodItem, selectedPaymentMethod === "Transfer Bank" && styles.methodItemSelected]}
-                  onPress={() => setSelectedPaymentMethod("Transfer Bank")}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.methodLeft}>
-                    <View style={[styles.methodIconBg, selectedPaymentMethod === "Transfer Bank" && { backgroundColor: "#DCFCE7" }]}>
-                      <CreditCard size={20} color="#0D7A53" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.methodName}>Transfer Bank Manual</Text>
-                      <Text style={styles.methodSub}>BCA, Mandiri, BNI, BRI</Text>
-                    </View>
-                  </View>
-                  <View style={[styles.radioCircle, selectedPaymentMethod === "Transfer Bank" && styles.radioCircleSelected]}>
-                    {selectedPaymentMethod === "Transfer Bank" && <View style={styles.radioInnerDot} />}
-                  </View>
-                </TouchableOpacity>
+                )}
               </View>
 
-              {/* Payment Details Container */}
-              {selectedPaymentMethod === "QRIS" ? (
-                <View style={styles.qrisContainer}>
-                  <Text style={styles.qrisTitle}>Scan Barcode QRIS Toko {storeName}</Text>
-                  {effectiveQrisImage ? (
-                    <Image
-                      source={{ uri: effectiveQrisImage }}
-                      style={styles.qrisImage}
-                      resizeMode="contain"
-                    />
-                  ) : (
-                    <View style={styles.qrisPlaceholderCustomer}>
-                      <QrCode size={56} color="#9CA3AF" />
-                      <Text style={styles.qrisPlaceholderCustomerTitle}>QRIS Belum Diunggah Pemilik Toko</Text>
-                      <Text style={styles.qrisPlaceholderCustomerSub}>
-                        Silakan gunakan opsi Transfer Bank / E-Wallet Manual di bawah untuk menyelesaikan pembayaran.
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.btnSwitchToBank}
-                        onPress={() => setSelectedPaymentMethod("Transfer Bank")}
-                        activeOpacity={0.8}
-                      >
-                        <CreditCard size={14} color="#FFFFFF" />
-                        <Text style={styles.btnSwitchToBankText}>Pilih Transfer Bank / E-Wallet</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  <Text style={styles.qrisStoreName}>{storeName}</Text>
-                  <Text style={styles.qrisNote}>
-                    Simpan / screenshot QRIS di atas untuk membayar melalui BCA Mobile, Livin, BRImo, GoPay, OVO, Dana, ShopeePay.
+              {usePoints && (
+                <View
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 12,
+                    padding: 12,
+                    marginBottom: 12,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151" }}>Sisa Pembayaran Tunai/Transfer</Text>
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: "#0D7A53" }}>
+                    Rp {finalPayableTotal.toLocaleString("id-ID")}
                   </Text>
-                </View>
-              ) : (
-                <View style={styles.bankContainer}>
-                  <Text style={styles.bankTitle}>Nomor Rekening / Akun Tujuan Toko:</Text>
-                  <View style={styles.bankCard}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.bankName}>{effectiveBankName}</Text>
-                      <Text style={styles.bankAccountNum}>
-                        {effectiveAccountNum || "Belum diatur oleh pemilik toko"}
-                      </Text>
-                      <Text style={styles.bankHolder}>a.n. {effectiveAccountHolder}</Text>
-                    </View>
-                    {effectiveAccountNum ? (
-                      <TouchableOpacity
-                        style={styles.btnCopy}
-                        onPress={() => Alert.alert("Tersalin", `Nomor ${effectiveBankName} (${effectiveAccountNum}) berhasil disalin.`)}
-                      >
-                        <Copy size={16} color="#0D7A53" />
-                        <Text style={styles.btnCopyText}>Salin</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
                 </View>
               )}
 
-              {/* Upload Proof Section (MANDATORY) */}
-              <View style={styles.uploadSection}>
-                <Text style={styles.uploadTitle}>
-                  Upload Bukti Transfer / Resi <Text style={{ color: "#EF4444" }}>*</Text>
-                </Text>
-                <Text style={styles.uploadSub}>Wajib lampirkan screenshot struk transfer untuk diverifikasi pemilik laundry.</Text>
+              {finalPayableTotal === 0 ? (
+                <View
+                  style={{
+                    backgroundColor: "#DCFCE7",
+                    borderRadius: 14,
+                    padding: 16,
+                    alignItems: "center",
+                    marginVertical: 12,
+                    borderWidth: 1,
+                    borderColor: "#86EFAC",
+                  }}
+                >
+                  <CheckCircle2 size={36} color="#166534" />
+                  <Text style={{ fontSize: 15, fontWeight: "800", color: "#166534", marginTop: 8 }}>
+                    Lunas 100% dengan GEOVERSE Point!
+                  </Text>
+                  <Text style={{ fontSize: 12, color: "#15803D", textAlign: "center", marginTop: 4 }}>
+                    Seluruh tagihan cucian sebesar Rp {totalBill.toLocaleString("id-ID")} berhasil tercover oleh poin Anda ({pointDiscount.toLocaleString("id-ID")} pts). Anda tidak perlu melakukan transfer bank atau upload bukti bayar.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {/* 2 Payment Methods Only: QRIS & Transfer Bank */}
+                  <Text style={styles.sectionMethodTitle}>Pilih Metode Pembayaran</Text>
+                  <View style={styles.methodList}>
+                    {/* Opsi 1: QRIS */}
+                    <TouchableOpacity
+                      style={[styles.methodItem, selectedPaymentMethod === "QRIS" && styles.methodItemSelected]}
+                      onPress={() => setSelectedPaymentMethod("QRIS")}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.methodLeft}>
+                        <View style={[styles.methodIconBg, selectedPaymentMethod === "QRIS" && { backgroundColor: "#DCFCE7" }]}>
+                          <QrCode size={20} color="#0D7A53" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.methodName}>QRIS All Payment</Text>
+                          <Text style={styles.methodSub}>BCA Mobile, GoPay, OVO, Dana, ShopeePay</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.radioCircle, selectedPaymentMethod === "QRIS" && styles.radioCircleSelected]}>
+                        {selectedPaymentMethod === "QRIS" && <View style={styles.radioInnerDot} />}
+                      </View>
+                    </TouchableOpacity>
 
-                {proofImageUri ? (
-                  <View style={styles.proofPreviewCard}>
-                    <Image source={{ uri: proofImageUri }} style={styles.proofPreviewImg} />
-                    <View style={styles.proofPreviewInfo}>
-                      <Text style={styles.proofSuccessText}>✓ Foto Bukti Terpasang</Text>
-                      <TouchableOpacity style={styles.btnChangeProof} onPress={handlePickProofImage}>
-                        <Text style={styles.btnChangeProofText}>Ganti Foto</Text>
-                      </TouchableOpacity>
-                    </View>
+                    {/* Opsi 2: Transfer Bank */}
+                    <TouchableOpacity
+                      style={[styles.methodItem, selectedPaymentMethod === "Transfer Bank" && styles.methodItemSelected]}
+                      onPress={() => setSelectedPaymentMethod("Transfer Bank")}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.methodLeft}>
+                        <View style={[styles.methodIconBg, selectedPaymentMethod === "Transfer Bank" && { backgroundColor: "#DCFCE7" }]}>
+                          <CreditCard size={20} color="#0D7A53" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.methodName}>Transfer Bank Manual</Text>
+                          <Text style={styles.methodSub}>BCA, Mandiri, BNI, BRI</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.radioCircle, selectedPaymentMethod === "Transfer Bank" && styles.radioCircleSelected]}>
+                        {selectedPaymentMethod === "Transfer Bank" && <View style={styles.radioInnerDot} />}
+                      </View>
+                    </TouchableOpacity>
                   </View>
-                ) : (
-                  <TouchableOpacity style={styles.uploadPlaceholderBtn} onPress={handlePickProofImage} activeOpacity={0.8}>
-                    <View style={styles.uploadIconCircle}>
-                      <Upload size={22} color="#0D7A53" />
+
+                  {/* Payment Details Container */}
+                  {selectedPaymentMethod === "QRIS" ? (
+                    <View style={styles.qrisContainer}>
+                      <Text style={styles.qrisTitle}>Scan Barcode QRIS Toko {storeName}</Text>
+                      {effectiveQrisImage ? (
+                        <Image
+                          source={{ uri: effectiveQrisImage }}
+                          style={styles.qrisImage}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <View style={styles.qrisPlaceholderCustomer}>
+                          <QrCode size={56} color="#9CA3AF" />
+                          <Text style={styles.qrisPlaceholderCustomerTitle}>QRIS Belum Diunggah Pemilik Toko</Text>
+                          <Text style={styles.qrisPlaceholderCustomerSub}>
+                            Silakan gunakan opsi Transfer Bank / E-Wallet Manual di bawah untuk menyelesaikan pembayaran.
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.btnSwitchToBank}
+                            onPress={() => setSelectedPaymentMethod("Transfer Bank")}
+                            activeOpacity={0.8}
+                          >
+                            <CreditCard size={14} color="#FFFFFF" />
+                            <Text style={styles.btnSwitchToBankText}>Pilih Transfer Bank / E-Wallet</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                      <Text style={styles.qrisStoreName}>{storeName}</Text>
+                      <Text style={styles.qrisNote}>
+                        Simpan / screenshot QRIS di atas untuk membayar melalui BCA Mobile, Livin, BRImo, GoPay, OVO, Dana, ShopeePay.
+                      </Text>
                     </View>
-                    <Text style={styles.uploadPlaceholderTitle}>Pilih Foto Bukti Transfer</Text>
-                    <Text style={styles.uploadPlaceholderSub}>Format JPG, PNG (Maks 10MB)</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                  ) : (
+                    <View style={styles.bankContainer}>
+                      <Text style={styles.bankTitle}>Nomor Rekening / Akun Tujuan Toko:</Text>
+                      <View style={styles.bankCard}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.bankName}>{effectiveBankName}</Text>
+                          <Text style={styles.bankAccountNum}>
+                            {effectiveAccountNum || "Belum diatur oleh pemilik toko"}
+                          </Text>
+                          <Text style={styles.bankHolder}>a.n. {effectiveAccountHolder}</Text>
+                        </View>
+                        {effectiveAccountNum ? (
+                          <TouchableOpacity
+                            style={styles.btnCopy}
+                            onPress={() => Alert.alert("Tersalin", `Nomor ${effectiveBankName} (${effectiveAccountNum}) berhasil disalin.`)}
+                          >
+                            <Copy size={16} color="#0D7A53" />
+                            <Text style={styles.btnCopyText}>Salin</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Upload Proof Section (MANDATORY) */}
+                  <View style={styles.uploadSection}>
+                    <Text style={styles.uploadTitle}>
+                      Upload Bukti Transfer / Resi <Text style={{ color: "#EF4444" }}>*</Text>
+                    </Text>
+                    <Text style={styles.uploadSub}>Wajib lampirkan screenshot struk transfer untuk diverifikasi pemilik laundry.</Text>
+
+                    {proofImageUri ? (
+                      <View style={styles.proofPreviewCard}>
+                        <Image source={{ uri: proofImageUri }} style={styles.proofPreviewImg} />
+                        <View style={styles.proofPreviewInfo}>
+                          <Text style={styles.proofSuccessText}>✓ Foto Bukti Terpasang</Text>
+                          <TouchableOpacity style={styles.btnChangeProof} onPress={handlePickProofImage}>
+                            <Text style={styles.btnChangeProofText}>Ganti Foto</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={styles.uploadPlaceholderBtn} onPress={handlePickProofImage} activeOpacity={0.8}>
+                        <View style={styles.uploadIconCircle}>
+                          <Upload size={22} color="#0D7A53" />
+                        </View>
+                        <Text style={styles.uploadPlaceholderTitle}>Pilih Foto Bukti Transfer</Text>
+                        <Text style={styles.uploadPlaceholderSub}>Format JPG, PNG (Maks 10MB)</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </>
+              )}
             </ScrollView>
 
             <TouchableOpacity
@@ -831,7 +945,11 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <>
-                  <Text style={styles.btnSubmitPaymentText}>Kirim Bukti Pembayaran</Text>
+                  <Text style={styles.btnSubmitPaymentText}>
+                    {finalPayableTotal === 0
+                      ? `Konfirmasi Pelunasan Poin (${pointDiscount.toLocaleString("id-ID")} pts)`
+                      : "Kirim Bukti Pembayaran"}
+                  </Text>
                   <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
                 </>
               )}

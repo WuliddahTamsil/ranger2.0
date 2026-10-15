@@ -22,6 +22,8 @@ export interface CreateRideParams {
   vehicleType?: "MOTOR" | "MOBIL" | "CAR";
   paymentMethod?: string;
   discount?: number;
+  pointsUsed?: number;
+  pointDiscount?: number;
   estimatedDistance?: number;
   estimatedDuration?: number;
   routeDistanceKm: number;

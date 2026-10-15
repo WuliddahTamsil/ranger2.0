@@ -94,6 +94,8 @@ export interface LaundryOrder {
   deliveryFeeDrop?: number;
   serviceFee?: number;
   totalAmount?: number;
+  pointsUsed?: number;
+  pointDiscount?: number;
   paymentStatus: "menunggu_timbangan" | "menunggu_pembayaran" | "menunggu_verifikasi" | "lunas" | "ditolak" | "batal";
   paymentMethod?: string;
   paymentProofUrl?: string;
@@ -799,14 +801,15 @@ export const weighAndBillLaundryOrder = async (
 export const payLaundryOrder = async (
   orderId: string,
   paymentMethod: string = "QRIS",
-  paymentProofUrl: string = ""
+  paymentProofUrl: string = "",
+  pointsUsed: number = 0
 ): Promise<LaundryOrder | null> => {
   try {
     const url = getApiUrl(`/laundry/orders/${orderId}/pay`);
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentMethod, paymentProofUrl }),
+      body: JSON.stringify({ paymentMethod, paymentProofUrl, pointsUsed }),
     });
     const json = await res.json();
     if (json.success && json.data) {

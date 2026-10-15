@@ -714,34 +714,72 @@ exports.weighAndBillOrder = async (req, res) => {
   }
 };
 
-// 10. Customer Mengirim Bukti Pembayaran (Wajib QRIS / Transfer Bank + Bukti Upload)
+// 10. Customer Mengirim Bukti Pembayaran (Wajib QRIS / Transfer Bank + Bukti Upload, atau 100% Poin)
 exports.payOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const { paymentMethod, paymentProofUrl } = req.body;
+    const { paymentMethod, paymentProofUrl, pointsUsed } = req.body;
 
     const order = await LaundryOrder.findById(id);
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan laundry tidak ditemukan" });
     }
 
-    if (!paymentProofUrl) {
-      return res.status(400).json({ success: false, message: "Bukti transfer / pembayaran wajib diupload!" });
+    const requestedPoints = Math.max(0, Math.round(Number(pointsUsed) || 0));
+    let pointDeducted = 0;
+    if (requestedPoints > 0 && order.customerId) {
+      const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+      const wallet = await pointWalletService.getOrCreateWallet(order.customerId);
+      const usablePoints = Math.min(wallet.balancePoint || 0, order.totalAmount, requestedPoints);
+      if (usablePoints > 0) {
+        pointDeducted = usablePoints;
+        await pointWalletService.debitPoints({
+          userId: order.customerId,
+          points: pointDeducted,
+          type: "PAYMENT",
+          sourceType: "LAUNDRY",
+          sourceId: order.orderCode,
+          notes: `Pembayaran pesanan Laundry #${order.orderCode} dengan ${pointDeducted} GEOVERSE Point`,
+          actorId: order.customerId,
+        });
+        order.pointDiscount = (order.pointDiscount || 0) + pointDeducted;
+        order.pointsUsed = (order.pointsUsed || 0) + pointDeducted;
+        order.totalAmount = Math.max(0, order.totalAmount - pointDeducted);
+      }
     }
 
-    order.paymentMethod = paymentMethod === "Transfer Bank" ? "Transfer Bank" : "QRIS";
-    order.paymentProofUrl = paymentProofUrl;
-    order.paymentStatus = "menunggu_verifikasi";
-    order.status = "MENUNGGU_VERIFIKASI_PEMBAYARAN";
+    if (order.totalAmount === 0) {
+      order.paymentMethod = "GEOVERSE_POINT";
+      order.paymentStatus = "lunas";
+      order.status = "SEDANG_DICUCI";
+      order.paidAt = new Date();
+    } else {
+      if (!paymentProofUrl) {
+        return res.status(400).json({ success: false, message: "Bukti transfer / pembayaran wajib diupload untuk sisa tagihan!" });
+      }
+      order.paymentMethod = paymentMethod === "Transfer Bank" ? "Transfer Bank" : "QRIS";
+      order.paymentProofUrl = paymentProofUrl;
+      order.paymentStatus = "menunggu_verifikasi";
+      order.status = "MENUNGGU_VERIFIKASI_PEMBAYARAN";
+    }
 
     await order.save();
 
-    // Broadcast Realtime via Socket.io ke Pemilik Laundry
+    // Broadcast Realtime via Socket.io ke Pemilik Laundry & Customer
     if (req.io) {
       req.io.emit("laundry_order_updated", order);
       req.io.emit(`laundry_owner_${order.ownerId}`, {
-        type: "PAYMENT_PROOF_UPLOADED",
-        message: `Customer ${order.customerName} telah mengunggah bukti pembayaran untuk order ${order.orderCode}. Silakan verifikasi!`,
+        type: order.totalAmount === 0 ? "PAYMENT_COMPLETED_POINTS" : "PAYMENT_PROOF_UPLOADED",
+        message: order.totalAmount === 0
+          ? `Pesanan ${order.orderCode} telah lunas dibayar menggunakan GEOVERSE Point! Siap diproses cuci.`
+          : `Customer ${order.customerName} telah mengunggah bukti pembayaran untuk order ${order.orderCode}. Silakan verifikasi!`,
+        order,
+      });
+      req.io.emit(`laundry_customer_${order.customerId}`, {
+        type: order.totalAmount === 0 ? "PAYMENT_SUCCESS" : "PAYMENT_SUBMITTED",
+        message: order.totalAmount === 0
+          ? `Pembayaran berhasil menggunakan GEOVERSE Point! Pakaian sedang diproses cuci.`
+          : `Bukti transfer berhasil diunggah. Menunggu verifikasi mitra laundry.`,
         order,
       });
     }
@@ -749,7 +787,9 @@ exports.payOrder = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: order,
-      message: "Bukti pembayaran berhasil dikirim! Menunggu verifikasi dari pemilik laundry.",
+      message: order.totalAmount === 0
+        ? "Pembayaran lunas menggunakan GEOVERSE Point! Pakaian segera diproses."
+        : "Bukti pembayaran berhasil dikirim! Menunggu verifikasi dari pemilik laundry.",
     });
   } catch (error) {
     console.error("❌ payOrder Error:", error);
@@ -824,6 +864,22 @@ exports.updateOrderStatus = async (req, res) => {
         success: false,
         message: "Pakaian tidak dapat diantar ke customer sebelum pembayaran lunas!",
       });
+    }
+
+    if ((status === "BATAL" || status === "DIBATALKAN" || status === "CANCELLED") && order.pointDiscount > 0 && order.customerId) {
+      try {
+        const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+        await pointWalletService.reversePoints({
+          userId: order.customerId,
+          points: order.pointDiscount,
+          sourceType: "LAUNDRY",
+          sourceId: order.orderCode,
+          notes: `Pengembalian ${order.pointDiscount} poin karena pesanan laundry #${order.orderCode} dibatalkan`,
+          actorId: String(req.user?.id || order.ownerId || ""),
+        });
+      } catch (revErr) {
+        console.error("Error reversing laundry points on cancel:", revErr);
+      }
     }
 
     if (status) order.status = status;

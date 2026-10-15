@@ -581,6 +581,22 @@ const updateCateringOrderStatus = async (req, res) => {
         });
       }
     } else if (status === "Dibatalkan") {
+      // Reverse GEOVERSE Points if used
+      if (order.pointDiscount > 0 && mongoose.Types.ObjectId.isValid(order.customerId)) {
+        try {
+          const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+          await pointWalletService.reversePoints({
+            userId: order.customerId,
+            points: order.pointDiscount,
+            sourceType: "CATERING",
+            sourceId: order.orderCode,
+            notes: `Pengembalian ${order.pointDiscount} poin karena pesanan catering #${order.orderCode} dibatalkan`,
+            actorId: String(order.ownerId || ""),
+          });
+        } catch (revErr) {
+          console.error("Error reversing catering points on cancel:", revErr);
+        }
+      }
       if (mongoose.Types.ObjectId.isValid(order.customerId)) {
         await Notification.create({
           userId: order.customerId,

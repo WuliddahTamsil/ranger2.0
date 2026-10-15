@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Switch,
 } from "react-native";
 import {
   ArrowLeft,
@@ -30,11 +31,13 @@ import {
   AlertCircle,
   ChevronRight,
   ArrowRight,
+  Sparkles,
 } from "lucide-react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
+import { useRecycle } from "../../context/RecycleContext";
 import {
   createRideBooking,
   estimateRideFareBreakdown,
@@ -408,10 +411,17 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
 
   // Route metrics come only from the road-routing response.
   const calculatedDistance = useMemo(() => rideRoute?.distanceKm || 0, [rideRoute]);
-
   const estimatedDuration = useMemo(() => rideRoute?.durationMinutes || 0, [rideRoute]);
 
-  const estimatedFare = useMemo(() => fareBreakdown?.estimatedFare || 0, [fareBreakdown?.estimatedFare]);
+  const { wallet } = useRecycle();
+  const userPoints = wallet?.balancePoint || 0;
+  const [usePoints, setUsePoints] = useState(false);
+
+  const rawEstimatedFare = useMemo(() => fareBreakdown?.estimatedFare || 0, [fareBreakdown?.estimatedFare]);
+  const maxPointsUsable = Math.min(userPoints, rawEstimatedFare);
+  const pointDiscount = usePoints ? maxPointsUsable : 0;
+  const finalPayableFare = Math.max(0, rawEstimatedFare - pointDiscount);
+  const estimatedFare = finalPayableFare;
 
   const hasPickupCoordinates =
     typeof pickup.latitude === "number" &&
@@ -561,12 +571,14 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         destination,
         customerNote: customerNote.trim(),
         vehicleType: "MOTOR",
-        paymentMethod: selectedPaymentMethod,
+        paymentMethod: finalPayableFare === 0 ? "GEOVERSE_POINT" : selectedPaymentMethod,
+        pointsUsed: pointDiscount,
+        pointDiscount,
         estimatedDistance: calculatedDistance,
         estimatedDuration,
         routeDistanceKm: rideRoute.distanceKm,
         routeDurationMinutes: rideRoute.durationMinutes,
-        estimatedFare,
+        estimatedFare: rawEstimatedFare,
         idempotencyKey,
       });
 
@@ -579,7 +591,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       if (res.data._id) {
         await AsyncStorage.setItem("selected_ride_tracking_id", String(res.data._id));
       }
-      if (selectedPaymentMethod === "CASH") {
+      if (selectedPaymentMethod === "CASH" || finalPayableFare === 0) {
         navigate("c_ride_tracking");
       } else {
         setCreatedOrderForPayment(res.data);
@@ -933,6 +945,36 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
           </View>
         </View>
 
+        {/* Section: Tukar GEOVERSE Point */}
+        <View style={styles.card}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, marginRight: 8 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
+                <Sparkles size={18} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Tukar GEOVERSE Point</Text>
+                <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                  Saldo: {userPoints.toLocaleString("id-ID")} Pts {rawEstimatedFare > 0 ? `(Hemat ${rp(maxPointsUsable)})` : "(1 Poin = Rp 1)"}
+                </Text>
+              </View>
+            </View>
+
+            <Switch
+              value={usePoints}
+              onValueChange={(val) => {
+                if (val && userPoints <= 0) {
+                  Alert.alert("Point Kosong", "Setor sampah di Kanyaah Recycle untuk mengumpulkan Point!");
+                  return;
+                }
+                setUsePoints(val);
+              }}
+              trackColor={{ false: "#E2E8F0", true: "#DCFCE7" }}
+              thumbColor={usePoints ? "#16A34A" : "#94A3B8"}
+            />
+          </View>
+        </View>
+
         {/* Section: Metode Pembayaran */}
         <View style={styles.card}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
@@ -1024,7 +1066,9 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Metode Bayar</Text>
                 <Text style={styles.summaryVal}>
-                  {selectedPaymentMethod === "CASH"
+                  {finalPayableFare === 0
+                    ? "GEOVERSE Point (100%)"
+                    : selectedPaymentMethod === "CASH"
                     ? "Bayar Tunai"
                     : selectedPaymentMethod === "QRIS"
                     ? "QRIS Nasional"
@@ -1059,6 +1103,12 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                     <View style={styles.fareBreakdownRow}>
                       <Text style={[styles.fareBreakdownLabel, { color: "#15803D" }]}>Diskon Promo</Text>
                       <Text style={[styles.fareBreakdownVal, { color: "#15803D", fontWeight: "700" }]}>-{rp(fareBreakdown.discount)}</Text>
+                    </View>
+                  )}
+                  {pointDiscount > 0 && (
+                    <View style={styles.fareBreakdownRow}>
+                      <Text style={[styles.fareBreakdownLabel, { color: "#D97706", fontWeight: "700" }]}>Diskon GEOVERSE Point</Text>
+                      <Text style={[styles.fareBreakdownVal, { color: "#D97706", fontWeight: "800" }]}>-{rp(pointDiscount)}</Text>
                     </View>
                   )}
                   <View style={{ backgroundColor: "#F0FDF4", borderRadius: 6, padding: 6, marginTop: 4 }}>

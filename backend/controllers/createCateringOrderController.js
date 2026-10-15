@@ -115,10 +115,36 @@ const createCateringOrder = async (req, res) => {
     const deliveryFee = PRICING_POLICY.MIN_DISTANCE_FARE;
     const serviceFee = PRICING_POLICY.SERVICE_FEE;
     const subtotal = product.price * portionCount;
-    const totalAmount = subtotal + deliveryFee + serviceFee;
+    const grossTotal = subtotal + deliveryFee + serviceFee;
+
+    const requestedPoints = Math.max(0, Math.round(Number(body.pointsUsed) || Number(body.pointDiscount) || 0));
+    let finalPointDiscount = 0;
+    const orderCode = `RNG-CAT-${randomUUID().slice(0, 8).toUpperCase()}`;
+
+    if (requestedPoints > 0 && customerId) {
+      const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+      const wallet = await pointWalletService.getOrCreateWallet(customerId);
+      const usablePoints = Math.min(wallet.balancePoint || 0, grossTotal, requestedPoints);
+      if (usablePoints > 0) {
+        finalPointDiscount = usablePoints;
+        await pointWalletService.debitPoints({
+          userId: customerId,
+          points: finalPointDiscount,
+          type: "PAYMENT",
+          sourceType: "CATERING",
+          sourceId: orderCode,
+          notes: `Pembayaran pesanan Catering #${orderCode} dengan ${finalPointDiscount} GEOVERSE Point`,
+          actorId: customerId,
+        });
+      }
+    }
+
+    const totalAmount = Math.max(0, grossTotal - finalPointDiscount);
+    const isFullyPaid = totalAmount === 0;
     const paymentPlan = getPaymentPlan(totalAmount, paymentOption);
-    const paidAmount = 0;
-    const remainingAmount = totalAmount;
+    const paidAmount = isFullyPaid ? grossTotal : 0;
+    const remainingAmount = isFullyPaid ? 0 : totalAmount;
+    const paymentStatus = isFullyPaid ? "Lunas" : "Menunggu Pembayaran";
     const paymentDueAt = getCateringDueAt(cateringDate);
     const storeName = getRoleDataValue(owner, "businessName") || owner.name || "Mitra Catering";
     const storeAddress = getRoleDataValue(owner, "businessAddress") || getRoleDataValue(owner, "address") || owner.address || "";
@@ -144,77 +170,94 @@ const createCateringOrder = async (req, res) => {
     let order;
 
     session = await mongoose.startSession();
-    await session.withTransaction(async () => {
-      const stockUpdate = await CateringProduct.updateOne(
-        { _id: productId, ownerId, isActive: true, stock: { $gte: portionCount } },
-        { $inc: { stock: -portionCount } },
-        { session }
-      );
-      if (stockUpdate.modifiedCount !== 1) {
-        const error = new Error("Stok menu berubah saat checkout. Perbarui menu lalu coba lagi.");
-        error.statusCode = 409;
-        throw error;
-      }
+    try {
+      await session.withTransaction(async () => {
+        const stockUpdate = await CateringProduct.updateOne(
+          { _id: productId, ownerId, isActive: true, stock: { $gte: portionCount } },
+          { $inc: { stock: -portionCount } },
+          { session }
+        );
+        if (stockUpdate.modifiedCount !== 1) {
+          const error = new Error("Stok menu berubah saat checkout. Perbarui menu lalu coba lagi.");
+          error.statusCode = 409;
+          throw error;
+        }
 
-      const [created] = await CateringOrder.create([{
-        orderCode: `RNG-CAT-${randomUUID().slice(0, 8).toUpperCase()}`,
-        idempotencyKey,
-        requestHash,
-        customerId: String(customerId),
-        ownerId: String(ownerId),
-        customerName: customer.name,
-        customerPhone: customer.phone || "",
-        address: address.trim(),
-        addressSnapshot: addressSnapshot || null,
-        storeId: String(ownerId),
-        storeName,
-        storeAddress,
-        storeNotes,
-        pickup: storePickup,
-        destination,
-        productId: String(productId),
-        menuName: product.name,
-        portions: portionCount,
-        price: product.price,
-        totalAmount,
-        deliveryFee,
-        serviceFee,
-        paymentOption,
-        paymentMethod,
-        paymentBankName: paymentMethod === "bca_va"
-          ? "BCA Virtual Account"
-          : paymentMethod === "mandiri_va"
-          ? "Mandiri Virtual Account"
-          : paymentMethod === "gopay"
-          ? "GoPay / E-Wallet"
-          : paymentMethod === "cod"
-          ? "Bayar di Tempat (Tunai)"
-          : (bankName || "BCA Virtual Account"),
-        paymentAccountNumber: paymentMethod === "bca_va"
-          ? `827708${customer.phone ? customer.phone.slice(-6) : String(Date.now()).slice(-6)}`
-          : paymentMethod === "mandiri_va"
-          ? `88908${customer.phone ? customer.phone.slice(-6) : String(Date.now()).slice(-6)}`
-          : paymentMethod === "gopay"
-          ? (customer.phone || "08123456789")
-          : paymentMethod === "cod"
-          ? "-"
-          : (bankAccountNumber || `827708${String(Date.now()).slice(-6)}`),
-        paymentAccountHolder: paymentMethod === "cod"
-          ? "Kurir / Mitra Catering"
-          : (bankAccountHolder || "GEOVERSE Official Escrow"),
-        paymentQrisImageUrl: qrisImageUrl || "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=00020101021226670016ID.CO.GEOVERSE.WWW011893600998000001000102150000000000000005204581253033605802ID5917GEOVERSE_CATERING6005BOGOR61051614362070703A016304",
-        paymentStatus: "Menunggu Pembayaran",
-        paidAmount,
-        remainingAmount,
-        paymentDueAt,
-        paymentReminder: getPaymentReminder({ totalAmount, remainingAmount, paymentDueAt }),
-        cateringDate: cateringDate.trim(),
-        cateringTime: cateringTime.trim(),
-        status: "Menunggu",
-        notes: String(notes || "").trim().slice(0, 500),
-      }], { session });
-      order = created;
-    });
+        const [created] = await CateringOrder.create([{
+          orderCode,
+          idempotencyKey,
+          requestHash,
+          customerId: String(customerId),
+          ownerId: String(ownerId),
+          customerName: customer.name,
+          customerPhone: customer.phone || "",
+          address: address.trim(),
+          addressSnapshot: addressSnapshot || null,
+          storeId: String(ownerId),
+          storeName,
+          storeAddress,
+          storeNotes,
+          pickup: storePickup,
+          destination,
+          productId: String(productId),
+          menuName: product.name,
+          portions: portionCount,
+          price: product.price,
+          totalAmount,
+          deliveryFee,
+          serviceFee,
+          pointDiscount: finalPointDiscount,
+          pointsUsed: finalPointDiscount,
+          paymentOption,
+          paymentMethod,
+          paymentBankName: paymentMethod === "bca_va"
+            ? "BCA Virtual Account"
+            : paymentMethod === "mandiri_va"
+            ? "Mandiri Virtual Account"
+            : paymentMethod === "gopay"
+            ? "GoPay / E-Wallet"
+            : paymentMethod === "cod"
+            ? "Bayar di Tempat (Tunai)"
+            : (bankName || "BCA Virtual Account"),
+          paymentAccountNumber: paymentMethod === "bca_va"
+            ? `827708${customer.phone ? customer.phone.slice(-6) : String(Date.now()).slice(-6)}`
+            : paymentMethod === "mandiri_va"
+            ? `88908${customer.phone ? customer.phone.slice(-6) : String(Date.now()).slice(-6)}`
+            : paymentMethod === "gopay"
+            ? (customer.phone || "08123456789")
+            : paymentMethod === "cod"
+            ? "-"
+            : (bankAccountNumber || `827708${String(Date.now()).slice(-6)}`),
+          paymentAccountHolder: paymentMethod === "cod"
+            ? "Kurir / Mitra Catering"
+            : (bankAccountHolder || "GEOVERSE Official Escrow"),
+          paymentQrisImageUrl: qrisImageUrl || "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=00020101021226670016ID.CO.GEOVERSE.WWW011893600998000001000102150000000000000005204581253033605802ID5917GEOVERSE_CATERING6005BOGOR61051614362070703A016304",
+          paymentStatus,
+          paidAmount,
+          remainingAmount,
+          paymentDueAt,
+          paymentReminder: getPaymentReminder({ totalAmount, remainingAmount, paymentDueAt }),
+          cateringDate: cateringDate.trim(),
+          cateringTime: cateringTime.trim(),
+          status: "Menunggu",
+          notes: String(notes || "").trim().slice(0, 500),
+        }], { session });
+        order = created;
+      });
+    } catch (txError) {
+      if (finalPointDiscount > 0) {
+        const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+        await pointWalletService.reversePoints({
+          userId: customerId,
+          points: finalPointDiscount,
+          sourceType: "CATERING",
+          sourceId: orderCode,
+          notes: "Rollback poin karena checkout catering gagal",
+          actorId: customerId,
+        }).catch(() => {});
+      }
+      throw txError;
+    }
     await session.endSession();
     session = null;
 

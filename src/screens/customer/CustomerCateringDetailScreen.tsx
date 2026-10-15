@@ -13,9 +13,11 @@ import {
   Platform,
   Alert,
   TextInput,
+  Switch,
 } from "react-native";
 import { getSelectedCateringShop } from "./customerCateringStore";
 import { getCateringProducts, createCateringOrder } from "../../services/api";
+import { useRecycle } from "../../context/RecycleContext";
 import {
   Calendar,
   CalendarDays,
@@ -348,10 +350,17 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
   const paymentOptions = CATERING_PAYMENT_METHODS;
   const selectedPaymentObj = CATERING_PAYMENT_METHODS.find((method) => method.id === paymentMethod) || CATERING_PAYMENT_METHODS[0];
 
+  const { wallet } = useRecycle();
+  const userPoints = wallet?.balancePoint || 0;
+  const [usePoints, setUsePoints] = useState(false);
+
   const deliveryFee = 15000;
   const serviceFee = 5000;
   const subtotal = selectedMenu ? selectedMenu.price * portions : 0;
-  const total = subtotal + deliveryFee + serviceFee;
+  const rawTotal = subtotal + deliveryFee + serviceFee;
+  const maxPointsUsable = Math.min(userPoints, rawTotal);
+  const pointDiscount = usePoints ? maxPointsUsable : 0;
+  const total = Math.max(0, rawTotal - pointDiscount);
   const dpPercent = paymentOption === "dp30" ? 30 : paymentOption === "dp50" ? 50 : 100;
   const plannedDeposit = Math.round((total * dpPercent) / 100);
   const remainingAfterPlannedDeposit = total - plannedDeposit;
@@ -402,7 +411,9 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
         address: address.trim(),
         addressSnapshot: addressSnapshot || null,
         paymentOption,
-        paymentMethod,
+        paymentMethod: total === 0 ? "gopay" : paymentMethod,
+        pointsUsed: pointDiscount,
+        pointDiscount,
         cateringDate: poDate,
         cateringTime: deliveryTime,
         notes: orderNotes.trim() || "Pesanan catering terjadwal",
@@ -453,7 +464,9 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
 
       addCustomerOrder(order);
       idempotencyKey.current = null;
-      if (paymentMethod === "qris") {
+      if (total === 0) {
+        navigate("c_catering_tracking");
+      } else if (paymentMethod === "qris") {
         navigate("c_catering_qris");
       } else {
         navigate("c_catering_tracking");
@@ -513,6 +526,36 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
             ) : null}
           </View>
 
+          {/* Section: Tukar GEOVERSE Point */}
+          <View style={styles.card}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, marginRight: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
+                  <Sparkles size={18} color="#D97706" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Tukar GEOVERSE Point</Text>
+                  <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                    Saldo: {userPoints.toLocaleString("id-ID")} Pts {rawTotal > 0 ? `(Hemat ${formatRupiah(maxPointsUsable)})` : "(1 Poin = Rp 1)"}
+                  </Text>
+                </View>
+              </View>
+
+              <Switch
+                value={usePoints}
+                onValueChange={(val) => {
+                  if (val && userPoints <= 0) {
+                    Alert.alert("Point Kosong", "Setor sampah di Kanyaah Recycle untuk mengumpulkan Point!");
+                    return;
+                  }
+                  setUsePoints(val);
+                }}
+                trackColor={{ false: "#E2E8F0", true: "#DCFCE7" }}
+                thumbColor={usePoints ? "#16A34A" : "#94A3B8"}
+              />
+            </View>
+          </View>
+
           <Text style={styles.sectionTitle}>Rincian Pembayaran</Text>
           <View style={styles.card}>
             <View style={styles.paymentSummaryRow}>
@@ -529,6 +572,12 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
               <Text style={styles.mutedText}>Biaya Layanan & Kemasan</Text>
               <Text style={styles.totalText}>{formatRupiah(serviceFee)}</Text>
             </View>
+            {pointDiscount > 0 && (
+              <View style={styles.paymentSummaryRow}>
+                <Text style={[styles.mutedText, { color: "#D97706", fontWeight: "700" }]}>Diskon GEOVERSE Point</Text>
+                <Text style={[styles.totalText, { color: "#D97706", fontWeight: "800" }]}>-{formatRupiah(pointDiscount)}</Text>
+              </View>
+            )}
             <View style={styles.financialDivider} />
             <View style={styles.paymentSummaryRow}>
               <Text style={styles.financialTotalLabel}>Total Nilai Pesanan</Text>

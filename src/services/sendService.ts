@@ -89,6 +89,8 @@ export const createSendOrder = async (
     package: SendPackageData;
     paymentMethod: string;
     discount?: number;
+    pointsUsed?: number;
+    pointDiscount?: number;
     idempotencyKey?: string;
     customerId?: string;
   },

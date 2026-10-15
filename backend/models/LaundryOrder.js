@@ -128,6 +128,14 @@ const laundryOrderSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    pointDiscount: {
+      type: Number,
+      default: 0,
+    },
+    pointsUsed: {
+      type: Number,
+      default: 0,
+    },
 
     // Store Payment Snapshot (Bank & QRIS for customer)
     bankName: {
@@ -155,7 +163,7 @@ const laundryOrderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ["QRIS", "Transfer Bank", "QRIS / Transfer Bank", ""],
+      enum: ["QRIS", "Transfer Bank", "QRIS / Transfer Bank", "GEOVERSE_POINT", "Poin", ""],
       default: "QRIS",
     },
     paymentProofUrl: {

@@ -276,6 +276,8 @@ export interface SendFareBreakdown {
   minimumFare: number;
   estimatedFare: number;
   finalFare?: number;
+  pointsUsed?: number;
+  pointDiscount?: number;
   driverEarnings?: number;
   currency?: string;
   breakdownNote?: string;
@@ -291,6 +293,9 @@ export interface SendOrderUI {
   recipient: SendPartyData;
   package: SendPackageData;
   pricing: SendFareBreakdown;
+  totalAmount?: number;
+  pointsUsed?: number;
+  pointDiscount?: number;
   distanceKm: number;
   estimatedDurationMinutes: number;
   paymentMethod: string;

@@ -87,8 +87,11 @@ const sendOrderSchema = new mongoose.Schema(
       serviceFee: { type: Number, default: 1500 },
       insuranceFee: { type: Number, default: 0 },
       discount: { type: Number, default: 0 },
+      pointDiscount: { type: Number, default: 0 },
+      pointsUsed: { type: Number, default: 0 },
       estimatedFare: { type: Number, required: true },
       finalFare: { type: Number, default: null },
+      totalAmount: { type: Number, default: 0 },
       driverEarnings: { type: Number, default: 0 },
     },
 
@@ -163,6 +166,10 @@ const sendOrderSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+
+    totalAmount: { type: Number, default: 0 },
+    pointDiscount: { type: Number, default: 0 },
+    pointsUsed: { type: Number, default: 0 },
 
     cancellation: {
       cancelledBy: { type: String, enum: ["customer", "driver", "system", "admin", null], default: null },

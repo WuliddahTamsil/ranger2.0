@@ -10,6 +10,7 @@ import {
   Image,
   Modal,
   Alert,
+  Switch,
 } from "react-native";
 import {
   ArrowLeft,
@@ -33,6 +34,7 @@ import * as Clipboard from "expo-clipboard";
 import { Nav } from "../../../types";
 import { AuthAccount } from "../../auth/authTypes";
 import { useSendContext } from "../../../context/SendContext";
+import { useRecycle } from "../../../context/RecycleContext";
 import { fetchSendOrderById, createSendOrder } from "../../../services/sendService";
 import { rp } from "../../../utils/formatters";
 import { API_BASE_URL, getApiUrl } from "../../../services/api";
@@ -104,13 +106,21 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
   const selectedPaymentObj =
     paymentMethods.find((m) => m.id === selectedMethod) || paymentMethods[1];
 
-  const totalAmount =
+  const { wallet } = useRecycle();
+  const userPoints = wallet?.balancePoint || 0;
+  const [usePoints, setUsePoints] = useState(false);
+
+  const rawTotalAmount =
     activeOrder?.pricing?.finalFare ||
     (activeOrder as any)?.totalAmount ||
     fareEstimate?.finalFare ||
     10000;
 
   const isOrderActive = Boolean(activeOrder?._id);
+  const maxPointsUsable = Math.min(userPoints, rawTotalAmount);
+  const pointDiscount = !isOrderActive && usePoints ? maxPointsUsable : (activeOrder?.pricing?.pointDiscount || 0);
+  const finalPayableAmount = Math.max(0, rawTotalAmount - pointDiscount);
+  const totalAmount = isOrderActive ? (activeOrder?.pricing?.finalFare ?? rawTotalAmount) : finalPayableAmount;
   const activeMethod = String(activeOrder?.paymentMethod || selectedMethod).toUpperCase();
   const isVA = activeMethod.includes("VA");
   const isCash = activeMethod === "CASH" || activeMethod === "BAYAR TUNAI" || activeMethod === "COD";
@@ -225,8 +235,10 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
         sender,
         recipient,
         package: packageData,
-        paymentMethod: selectedMethod,
+        paymentMethod: finalPayableAmount === 0 ? "GEOVERSE_POINT" : selectedMethod,
         discount: fareEstimate?.discount || 0,
+        pointsUsed: pointDiscount,
+        pointDiscount,
         idempotencyKey,
         customerId: authAccount?.id,
       };
@@ -234,7 +246,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
       const res = await createSendOrder(payload, authAccount?.id);
       if (res.success && res.data) {
         setActiveOrder(res.data);
-        if (selectedMethod === "CASH") {
+        if (selectedMethod === "CASH" || finalPayableAmount === 0) {
           navigate("c_send_searching");
         } else {
           showToast("Sesi pembayaran berhasil dibuat.");
@@ -396,6 +408,36 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
               <ChevronRight size={18} color="#6B7280" />
             </TouchableOpacity>
 
+            {/* Section: Tukar GEOVERSE Point */}
+            <View style={{ backgroundColor: "#FFFFFF", borderRadius: 12, padding: 14, marginVertical: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, marginRight: 8 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
+                    <Sparkles size={18} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Tukar GEOVERSE Point</Text>
+                    <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                      Saldo: {userPoints.toLocaleString("id-ID")} Pts {rawTotalAmount > 0 ? `(Hemat ${rp(maxPointsUsable)})` : "(1 Poin = Rp 1)"}
+                    </Text>
+                  </View>
+                </View>
+
+                <Switch
+                  value={usePoints}
+                  onValueChange={(val) => {
+                    if (val && userPoints <= 0) {
+                      Alert.alert("Point Kosong", "Setor sampah di Kanyaah Recycle untuk mengumpulkan Point!");
+                      return;
+                    }
+                    setUsePoints(val);
+                  }}
+                  trackColor={{ false: "#E2E8F0", true: "#DCFCE7" }}
+                  thumbColor={usePoints ? "#16A34A" : "#94A3B8"}
+                />
+              </View>
+            </View>
+
             {/* Section 2: Ringkasan Pembayaran */}
             <View style={styles.checkoutSectionHeader}>
               <View style={styles.sectionNumber}>
@@ -411,7 +453,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
               <Text style={styles.summaryTitle}>Ringkasan pembayaran</Text>
               <SummaryRow
                 label="Tarif Pengiriman"
-                value={rp(fareEstimate?.baseFare || totalAmount)}
+                value={rp(fareEstimate?.baseFare || rawTotalAmount)}
               />
               <SummaryRow
                 label="Biaya Layanan"
@@ -421,6 +463,13 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
                 <SummaryRow
                   label="Diskon Promo"
                   value={`- ${rp(fareEstimate?.discount || 0)}`}
+                  green
+                />
+              )}
+              {pointDiscount > 0 && (
+                <SummaryRow
+                  label="Diskon GEOVERSE Point"
+                  value={`- ${rp(pointDiscount)}`}
                   green
                 />
               )}
@@ -696,6 +745,8 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
             <Text style={styles.footerPayText}>
               {creatingOrder
                 ? "Memproses…"
+                : totalAmount === 0
+                ? "Bayar Poin & Pesan Sekarang · Rp 0"
                 : selectedMethod === "CASH"
                 ? `Buat Pesanan COD · ${rp(totalAmount)}`
                 : `Lanjut Pembayaran · ${rp(totalAmount)}`}

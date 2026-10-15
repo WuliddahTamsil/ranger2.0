@@ -72,6 +72,8 @@ const cateringOrderSchema = new mongoose.Schema(
     driverTip: { type: Number, default: 0, min: 0 },
     voucherId: { type: String, default: "" },
     discount: { type: Number, default: 0, min: 0 },
+    pointDiscount: { type: Number, default: 0, min: 0 },
+    pointsUsed: { type: Number, default: 0, min: 0 },
     paymentOption: {
       type: String,
       enum: ["dp30", "dp50", "lunas"],

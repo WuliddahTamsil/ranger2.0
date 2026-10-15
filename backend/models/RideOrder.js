@@ -161,6 +161,14 @@ const rideOrderSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
+    pointDiscount: {
+      type: Number,
+      default: 0,
+    },
+    pointsUsed: {
+      type: Number,
+      default: 0,
+    },
     totalAmount: {
       type: Number,
       required: true,

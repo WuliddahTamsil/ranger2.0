@@ -5,6 +5,7 @@ const User = require("../models/User");
 const Notification = require("../models/Notification");
 const Transaction = require("../models/Transaction");
 const { syncConversationForOrder } = require("../services/conversationService");
+const pointWalletService = require("../services/pointWalletService");
 
 const isValidUserId = (id) => mongoose.Types.ObjectId.isValid(String(id || ""));
 
@@ -134,6 +135,8 @@ const createRideOrder = async (req, res) => {
       vehicleType = "MOTOR",
       paymentMethod = "Bayar Tunai",
       discount = 0,
+      pointsUsed = 0,
+      pointDiscount = 0,
       routeDistanceKm,
       routeDurationMinutes,
       idempotencyKey,
@@ -250,7 +253,29 @@ const createRideOrder = async (req, res) => {
       discount
     );
     const estimatedFare = breakdown.estimatedFare;
-    const totalAmount = estimatedFare;
+    const requestedPoints = Math.max(0, Math.round(Number(pointsUsed) || Number(pointDiscount) || 0));
+    let finalPointDiscount = 0;
+
+    const orderCode = `RNG-RIDE-${Date.now().toString().slice(-8)}`;
+
+    if (requestedPoints > 0 && customerId) {
+      const wallet = await pointWalletService.getOrCreateWallet(customerId);
+      const usablePoints = Math.min(wallet.balancePoint || 0, estimatedFare, requestedPoints);
+      if (usablePoints > 0) {
+        finalPointDiscount = usablePoints;
+        await pointWalletService.debitPoints({
+          userId: customerId,
+          points: finalPointDiscount,
+          type: "PAYMENT",
+          sourceType: "KANYAAH_RIDE",
+          sourceId: orderCode,
+          notes: `Pembayaran Kanyaah Ride #${orderCode} dengan ${finalPointDiscount} GEOVERSE Point`,
+          actorId: customerId,
+        });
+      }
+    }
+
+    const totalAmount = Math.max(0, estimatedFare - finalPointDiscount);
     // Driver gets earnings according to pricing policy (80% for new drivers, 100% for Kedai Terpadu)
     const driverEarnings = breakdown.driverEarnings;
 
@@ -259,8 +284,6 @@ const createRideOrder = async (req, res) => {
       const custUser = await User.findById(customerId).select("phone").lean().catch(() => null);
       if (custUser?.phone) finalCustomerPhone = String(custUser.phone).trim();
     }
-
-    const orderCode = `RNG-RIDE-${Date.now().toString().slice(-8)}`;
 
     const rideOrder = await RideOrder.create({
       orderCode,
@@ -296,10 +319,12 @@ const createRideOrder = async (req, res) => {
       serviceFee: breakdown.serviceFee,
       discount: breakdown.discount,
       estimatedFare,
+      pointDiscount: finalPointDiscount,
+      pointsUsed: finalPointDiscount,
       totalAmount,
       driverEarnings,
-      paymentMethod,
-      paymentStatus: "Menunggu Pembayaran",
+      paymentMethod: totalAmount === 0 ? "GEOVERSE Point" : paymentMethod,
+      paymentStatus: totalAmount === 0 ? "Lunas" : "Menunggu Pembayaran",
       status: "SEARCHING_DRIVER",
       statusHistory: [
         {
@@ -842,6 +867,18 @@ const cancelRideOrder = async (req, res) => {
     });
 
     await order.save();
+
+    // Reversal of debited GEOVERSE Points if order was discounted with points
+    if (order.pointDiscount > 0 && order.customerId) {
+      await pointWalletService.reversePoints({
+        userId: order.customerId,
+        points: order.pointDiscount,
+        sourceType: "KANYAAH_RIDE",
+        sourceId: order.orderCode,
+        notes: `Pengembalian ${order.pointDiscount} poin karena pembatalan Kanyaah Ride #${order.orderCode}`,
+        actorId: String(authUser?._id || ""),
+      }).catch((err) => console.error("Error reversing ride points:", err));
+    }
 
     // Release driver if assigned
     if (order.driverId && isValidUserId(order.driverId)) {

@@ -293,8 +293,17 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
 
         var googleRoadmap = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
           maxZoom: 20,
-          subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+          subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+          crossOrigin: true
         });
+
+        googleRoadmap.on('tileerror', function(error, tile) {
+          if (tile && !tile.__hasFallback) {
+            tile.__hasFallback = true;
+            tile.src = 'https://tile.openstreetmap.org/' + error.coords.z + '/' + error.coords.x + '/' + error.coords.y + '.png';
+          }
+        });
+
         googleRoadmap.addTo(map);
 
         var markersData = ${markersJson};
