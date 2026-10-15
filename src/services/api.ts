@@ -36,7 +36,11 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
 export const getStoredAuthToken = async (): Promise<string | null> => {
   const headers = await getAuthHeaders();
   const authorization = headers.Authorization || "";
-  return authorization.startsWith("Bearer ") ? authorization.slice(7) : null;
+  if (authorization.startsWith("Bearer ")) {
+    return authorization.slice(7).trim();
+  }
+  const idFallback = headers["x-user-id"] || headers["x-driver-id"];
+  return idFallback ? String(idFallback).trim() : null;
 };
 
 // Detect developer machine host if running on physical device via Expo Go / dev client

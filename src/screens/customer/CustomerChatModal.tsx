@@ -343,7 +343,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     const nowTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
     const message: CustomerChatMessage = {
       id: `${threadId}_${Date.now()}`,
-      sender: (isOwnerView || isDriverUser) ? "other" : "customer",
+      sender: "customer",
       text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : selectedAttachment?.type === "video" ? "🎥 Video terkirim" : "📎 File terlampir"),
       time: nowTime,
       attachment: attachmentToSend ? { ...attachmentToSend } : undefined,

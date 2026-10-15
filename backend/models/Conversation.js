@@ -3,7 +3,11 @@ const mongoose = require("mongoose");
 const conversationSchema = new mongoose.Schema(
   {
     orderId: { type: String, required: true, unique: true, index: true },
-    orderType: { type: String, enum: ["marketplace", "catering", "laundry", "kos", "ride", "send"], required: true },
+    orderType: {
+      type: String,
+      enum: ["marketplace", "catering", "laundry", "kos", "ride", "send", "shop", "waste", "general", "inquiry"],
+      required: true,
+    },
     orderCode: { type: String, default: "" },
     customerId: { type: String, default: "", index: true },
     ownerId: { type: String, default: "", index: true },

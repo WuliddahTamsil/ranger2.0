@@ -7,7 +7,9 @@ const LaundryOrder = require("../models/LaundryOrder");
 const Booking = require("../models/Booking");
 const RideOrder = require("../models/RideOrder");
 const SendOrder = require("../models/SendOrder");
+const WasteDeposit = require("../models/WasteDeposit");
 const Kost = require("../models/Kost");
+const Conversation = require("../models/Conversation");
 
 const ownerRoles = new Set([
   "pemilik_marketplace",
@@ -31,6 +33,7 @@ const findOrderByIdentifier = async (identifier) => {
     [Booking, "kos", "bookingCode"],
     [RideOrder, "ride", "orderCode"],
     [SendOrder, "send", "orderCode"],
+    [WasteDeposit, "waste", "depositCode"],
   ];
 
   for (const [Model, orderType, codeField] of models) {
@@ -61,7 +64,33 @@ const findOrderByIdentifier = async (identifier) => {
     if (order) return { order, orderType, codeField };
   }
 
-  // Fallback: Check Kost / Lodging inquiry by Kost ID, name, or inquiry token
+  // Fallback 1: Existing Conversation check
+  const existingConv = await Conversation.findOne({
+    $or: [{ orderId: value }, { orderId: cleanValue }, { orderCode: value }, { orderCode: cleanValue }],
+  }).lean().catch(() => null);
+  if (existingConv) {
+    return {
+      order: {
+        _id: existingConv.orderId,
+        orderCode: existingConv.orderCode || existingConv.orderId,
+        customerId: existingConv.customerId,
+        ownerId: existingConv.ownerId,
+        storeId: existingConv.storeId,
+        driverId: existingConv.driverId,
+        driverIds: existingConv.driverIds || [],
+        status: existingConv.status || "active",
+      },
+      orderType: existingConv.orderType || "general",
+      codeField: "orderCode",
+      isInquiry:
+        existingConv.status === "inquiry" ||
+        !existingConv.customerId ||
+        !existingConv.ownerId ||
+        String(existingConv.orderId).includes("_chat"),
+    };
+  }
+
+  // Fallback 2: Check Kost / Lodging inquiry by Kost ID, name, or inquiry token
   let kost = null;
   if (mongoose.Types.ObjectId.isValid(value)) {
     kost = await Kost.findById(value).lean().catch(() => null);
@@ -72,6 +101,48 @@ const findOrderByIdentifier = async (identifier) => {
   }
   if (kost) {
     return { order: kost, orderType: "kos", codeField: "name", isPropertyInquiry: true };
+  }
+
+  // Fallback 3: Generic inquiry or direct chat room token
+  const knownPrefixes = [
+    "laundry",
+    "send",
+    "shop",
+    "catering",
+    "ride",
+    "market",
+    "marketplace",
+    "kost",
+    "homestay",
+    "waste",
+    "chat",
+  ];
+  const matchedPrefix = knownPrefixes.find(
+    (p) => value.toLowerCase().startsWith(`${p}_`) || value.toLowerCase().startsWith(p)
+  );
+  if (
+    matchedPrefix ||
+    value.includes("_chat") ||
+    value.includes("chat_") ||
+    value.includes("inquiry") ||
+    value.includes("test")
+  ) {
+    const inferredType =
+      matchedPrefix === "market" || matchedPrefix === "marketplace"
+        ? "marketplace"
+        : matchedPrefix === "homestay"
+        ? "kos"
+        : matchedPrefix || "general";
+    return {
+      order: {
+        _id: value,
+        orderCode: value,
+        status: "inquiry",
+      },
+      orderType: inferredType,
+      codeField: "orderCode",
+      isInquiry: true,
+    };
   }
 
   return null;
@@ -131,6 +202,18 @@ const getOrderParticipants = (record) => {
     };
   }
 
+  if (record.isInquiry) {
+    return {
+      customerId: idToString(order.customerId),
+      ownerId: idToString(order.ownerId),
+      driverId: idToString(order.driverId),
+      driverIds: order.driverId ? [idToString(order.driverId)] : [],
+      storeId: idToString(order.storeId),
+      orderCode: String(order.orderCode || record.order._id),
+      status: "inquiry",
+    };
+  }
+
   const driverIds = [
     idToString(order.driverId),
     idToString(order.driverPickupId),
@@ -141,11 +224,11 @@ const getOrderParticipants = (record) => {
 
   return {
     customerId: idToString(order.customerId),
-    ownerId: idToString(order.ownerId || order.storeOwnerId || (typeof order.storeId === "object" ? order.storeId?.ownerId : "")),
+    ownerId: idToString(order.ownerId || order.storeOwnerId || order.bankSampahId || (typeof order.storeId === "object" ? order.storeId?.ownerId : "")),
     driverId: driverIds[0] || "",
     driverIds,
-    storeId: idToString(order.storeId),
-    orderCode: String(order.orderCode || order.bookingCode || ""),
+    storeId: idToString(order.storeId || order.bankSampahId),
+    orderCode: String(order.orderCode || order.bookingCode || order.depositCode || ""),
     status: String(order.orderStatus || order.status || order.paymentStatus || ""),
   };
 };
@@ -175,25 +258,166 @@ const resolveParticipant = async (userId, record) => {
     }
   }
 
+  if (record.isInquiry) {
+    if (user.role === "customer" || user.role === "admin") {
+      let ownerId = participants.ownerId;
+      if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
+        const ownerRole =
+          record.orderType === "laundry" ? "pemilik_laundry" :
+          record.orderType === "shop" ? "pemilik_shop" :
+          record.orderType === "catering" ? "pemilik_catering" :
+          record.orderType === "waste" ? "bank_sampah" : null;
+        if (ownerRole) {
+          const ownerUser = await User.findOne({ role: ownerRole }).lean().catch(() => null);
+          if (ownerUser) ownerId = String(ownerUser._id);
+        }
+        if (!ownerId) {
+          const anyOwner = await User.findOne({ role: { $in: Array.from(ownerRoles) } }).lean().catch(() => null);
+          if (anyOwner) ownerId = String(anyOwner._id);
+        }
+      }
+      let driverId = participants.driverId;
+      if (!driverId || !mongoose.Types.ObjectId.isValid(driverId)) {
+        const existing = await Conversation.findOne({ orderId: String(record.order._id) }).lean().catch(() => null);
+        if (existing?.driverId) driverId = String(existing.driverId);
+      }
+      if (!driverId || !mongoose.Types.ObjectId.isValid(driverId)) {
+        const driverUser = await User.findOne({ role: "driver" }).lean().catch(() => null);
+        if (driverUser) driverId = String(driverUser._id);
+      }
+      return {
+        role: "customer",
+        user,
+        ...participants,
+        customerId: String(user._id),
+        ownerId: ownerId || String(user._id),
+        driverId: driverId || "",
+        driverIds: driverId ? [driverId] : [],
+      };
+    }
+    if (ownerRoles.has(user.role)) {
+      let customerId = participants.customerId;
+      if (!customerId || !mongoose.Types.ObjectId.isValid(customerId)) {
+        const existing = await Conversation.findOne({ orderId: String(record.order._id) }).lean().catch(() => null);
+        if (existing?.customerId) customerId = String(existing.customerId);
+      }
+      if (!customerId || !mongoose.Types.ObjectId.isValid(customerId)) {
+        const custUser = await User.findOne({ role: "customer" }).lean().catch(() => null);
+        if (custUser) customerId = String(custUser._id);
+      }
+      let driverId = participants.driverId;
+      if (!driverId || !mongoose.Types.ObjectId.isValid(driverId)) {
+        const driverUser = await User.findOne({ role: "driver" }).lean().catch(() => null);
+        if (driverUser) driverId = String(driverUser._id);
+      }
+      return {
+        role: "owner",
+        user,
+        ...participants,
+        ownerId: String(user._id),
+        customerId: customerId || String(user._id),
+        driverId: driverId || "",
+        driverIds: driverId ? [driverId] : [],
+      };
+    }
+    if (user.role === "driver") {
+      let customerId = participants.customerId;
+      if (!customerId || !mongoose.Types.ObjectId.isValid(customerId)) {
+        const existing = await Conversation.findOne({ orderId: String(record.order._id) }).lean().catch(() => null);
+        if (existing?.customerId) customerId = String(existing.customerId);
+      }
+      if (!customerId || !mongoose.Types.ObjectId.isValid(customerId)) {
+        const custUser = await User.findOne({ role: "customer" }).lean().catch(() => null);
+        if (custUser) customerId = String(custUser._id);
+      }
+      let ownerId = participants.ownerId;
+      if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) {
+        const anyOwner = await User.findOne({ role: { $in: Array.from(ownerRoles) } }).lean().catch(() => null);
+        if (anyOwner) ownerId = String(anyOwner._id);
+      }
+      return {
+        role: "driver",
+        user,
+        ...participants,
+        driverId: String(user._id),
+        driverIds: [String(user._id)],
+        customerId: customerId || "",
+        ownerId: ownerId || "",
+      };
+    }
+  }
+
   if (user.role === "admin") {
     return { role: "admin", user, ...participants, isAdmin: true };
   }
 
   if (user.role === "customer") {
     if (!participants.customerId || id === participants.customerId) {
-      return { role: "customer", user, ...participants };
+      let driverId = participants.driverId;
+      if (!driverId) {
+        const drv = await User.findOne({ role: "driver" }).lean().catch(() => null);
+        if (drv) driverId = String(drv._id);
+      }
+      let ownerId = participants.ownerId;
+      if (!ownerId) {
+        const own = await User.findOne({ role: { $in: Array.from(ownerRoles) } }).lean().catch(() => null);
+        if (own) ownerId = String(own._id);
+      }
+      return {
+        role: "customer",
+        user,
+        ...participants,
+        customerId: String(user._id),
+        driverId: driverId || "",
+        ownerId: ownerId || "",
+      };
     }
   }
 
   if (user.role === "driver") {
     if (participants.driverIds.length === 0 || participants.driverIds.includes(id)) {
-      return { role: "driver", user, ...participants };
+      let customerId = participants.customerId;
+      if (!customerId) {
+        const cust = await User.findOne({ role: "customer" }).lean().catch(() => null);
+        if (cust) customerId = String(cust._id);
+      }
+      let ownerId = participants.ownerId;
+      if (!ownerId) {
+        const own = await User.findOne({ role: { $in: Array.from(ownerRoles) } }).lean().catch(() => null);
+        if (own) ownerId = String(own._id);
+      }
+      return {
+        role: "driver",
+        user,
+        ...participants,
+        driverId: String(user._id),
+        driverIds: [String(user._id)],
+        customerId: customerId || "",
+        ownerId: ownerId || "",
+      };
     }
   }
 
   if (ownerRoles.has(user.role)) {
     if (!participants.ownerId || id === participants.ownerId) {
-      return { role: "owner", user, ...participants };
+      let customerId = participants.customerId;
+      if (!customerId) {
+        const cust = await User.findOne({ role: "customer" }).lean().catch(() => null);
+        if (cust) customerId = String(cust._id);
+      }
+      let driverId = participants.driverId;
+      if (!driverId) {
+        const drv = await User.findOne({ role: "driver" }).lean().catch(() => null);
+        if (drv) driverId = String(drv._id);
+      }
+      return {
+        role: "owner",
+        user,
+        ...participants,
+        ownerId: String(user._id),
+        customerId: customerId || "",
+        driverId: driverId || "",
+      };
     }
   }
 

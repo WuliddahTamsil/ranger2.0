@@ -105,10 +105,17 @@ io.on("connection", (socket) => {
       socket.emit("chat:join_denied", { orderId, message: "Akses percakapan ditolak." });
       return;
     }
-    const roomName = `conversation:${String(record.order._id)}`;
-    socket.join(roomName);
-    socket.emit("chat:joined", { orderId: String(record.order._id), roomName });
-    console.log(`Socket ${socket.id} joined authorized chat room: ${roomName}`);
+    const orderRoomId = String(record.order._id);
+    const roomsToJoin = new Set([
+      `conversation:${orderRoomId}`,
+      `conversation:${String(orderId)}`,
+    ]);
+    if (participant.orderCode) {
+      roomsToJoin.add(`conversation:${String(participant.orderCode)}`);
+    }
+    roomsToJoin.forEach((r) => socket.join(r));
+    socket.emit("chat:joined", { orderId: orderRoomId, roomName: `conversation:${orderRoomId}` });
+    console.log(`Socket ${socket.id} joined authorized chat room(s): ${Array.from(roomsToJoin).join(", ")}`);
   });
 
   socket.on("join_user_room", async ({ token } = {}) => {

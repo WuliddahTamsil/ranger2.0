@@ -27,11 +27,11 @@ const getAuthorizedConversation = async (req, orderId) => {
       $set: {
         orderType: record.orderType,
         orderCode: participants.orderCode,
-        customerId: participants.customerId,
-        ownerId: participants.ownerId,
+        customerId: participant.customerId || participants.customerId,
+        ownerId: participant.ownerId || participants.ownerId,
         storeId: participants.storeId,
-        driverId: participants.driverId,
-        driverIds: participants.driverIds,
+        driverId: participant.driverId || participants.driverId,
+        driverIds: (participant.driverIds && participant.driverIds.length > 0) ? participant.driverIds : participants.driverIds,
         status: participants.status,
         archived: isArchivedStatus(participants.status),
       },
@@ -111,6 +111,22 @@ const sendChatMessage = async (req, res) => {
     if (req.io) {
       req.io.to(roomForOrder(record.order._id)).emit("chat:message", message);
       req.io.to(`${roomForOrder(record.order._id)}:${channel}`).emit("chat:message", message);
+      if (orderId && String(orderId) !== String(record.order._id)) {
+        req.io.to(roomForOrder(orderId)).emit("chat:message", message);
+        req.io.to(`${roomForOrder(orderId)}:${channel}`).emit("chat:message", message);
+      }
+      if (participant.orderCode && participant.orderCode !== String(record.order._id)) {
+        req.io.to(roomForOrder(participant.orderCode)).emit("chat:message", message);
+        req.io.to(`${roomForOrder(participant.orderCode)}:${channel}`).emit("chat:message", message);
+      }
+      if (receiverId) {
+        req.io.to(`user:${String(receiverId)}`).emit("chat:message", message);
+        req.io.to(`user:${String(receiverId)}`).emit("chat:notification", {
+          orderId: String(record.order._id),
+          orderCode: participant.orderCode,
+          message,
+        });
+      }
     }
     return res.status(201).json({ success: true, data: message, conversationId: conversation._id });
   } catch (error) {
