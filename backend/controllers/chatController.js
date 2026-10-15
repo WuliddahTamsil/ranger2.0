@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const ChatMessage = require("../models/ChatMessage");
 const Conversation = require("../models/Conversation");
 const Notification = require("../models/Notification");
+const User = require("../models/User");
 const {
   findOrderByIdentifier,
   getOrderParticipants,
@@ -10,6 +11,7 @@ const {
   resolveChatChannel,
   normalizeRole,
   isArchivedStatus,
+  ownerRoles,
 } = require("../utils/chatAccess");
 
 const roomForOrder = (orderId) => `conversation:${String(orderId)}`;
@@ -209,4 +211,89 @@ const getChatMessages = async (req, res) => {
   }
 };
 
-module.exports = { getConversation, sendChatMessage, getChatMessages, roomForOrder };
+const getConversations = async (req, res) => {
+  try {
+    const userId = String(req.authUser._id);
+    const userRole = req.authUser.role;
+
+    const baseOr = [
+      { ownerId: userId },
+      { customerId: userId },
+      { driverId: userId },
+      { driverIds: userId },
+    ];
+
+    if (ownerRoles.has(userRole) || userRole === "admin") {
+      const roleServiceMap = {
+        pemilik_kos: "kos",
+        pemilik_laundry: "laundry",
+        pemilik_catering: "catering",
+        pemilik_marketplace: "marketplace",
+        pemilik_shop: "shop",
+        bank_sampah: "waste",
+      };
+      const serviceType = roleServiceMap[userRole];
+      if (serviceType) {
+        baseOr.push({ orderType: serviceType });
+        baseOr.push({ orderType: "inquiry" });
+        baseOr.push({ orderType: "general" });
+      }
+    }
+
+    const conversations = await Conversation.find({ $or: baseOr })
+      .sort({ updatedAt: -1, lastMessageAt: -1 })
+      .limit(60)
+      .lean();
+
+    const result = await Promise.all(
+      conversations.map(async (conv) => {
+        const lastMsg = await ChatMessage.findOne({
+          $or: [{ conversationId: conv._id }, { orderId: conv.orderId }],
+        })
+          .sort({ createdAt: -1 })
+          .lean();
+
+        let customerName = "Pelanggan";
+        let driverName = "Driver Rangers";
+
+        if (conv.customerId && mongoose.Types.ObjectId.isValid(conv.customerId)) {
+          const custUser = await User.findById(conv.customerId).select("name email phone").lean();
+          if (custUser?.name) customerName = custUser.name;
+        }
+
+        if (conv.driverId && mongoose.Types.ObjectId.isValid(conv.driverId)) {
+          const drvUser = await User.findById(conv.driverId).select("name email phone").lean();
+          if (drvUser?.name) driverName = drvUser.name;
+        }
+
+        return {
+          id: String(conv._id),
+          orderId: conv.orderId,
+          orderCode: conv.orderCode || conv.orderId,
+          orderType: conv.orderType || "general",
+          customerId: conv.customerId,
+          customerName,
+          driverId: conv.driverId,
+          driverName,
+          ownerId: conv.ownerId,
+          status: conv.status || "active",
+          lastMessage: lastMsg?.text || (lastMsg?.attachment ? "📷 Lampiran dikirim" : "Mulai percakapan"),
+          lastMessageTime: lastMsg?.createdAt
+            ? new Date(lastMsg.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+            : "",
+          lastMessageDate: lastMsg?.createdAt || conv.updatedAt || new Date(),
+          unreadCount: 0,
+        };
+      })
+    );
+
+    result.sort((a, b) => new Date(b.lastMessageDate).getTime() - new Date(a.lastMessageDate).getTime());
+
+    return res.json({ success: true, count: result.length, data: result });
+  } catch (error) {
+    console.error("Get conversations error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memuat daftar percakapan" });
+  }
+};
+
+module.exports = { getConversation, sendChatMessage, getChatMessages, getConversations, roomForOrder };

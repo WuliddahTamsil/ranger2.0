@@ -53,7 +53,7 @@ import {
 } from "lucide-react-native";
 import { rp } from "../../utils/formatters";
 import { LodgingCategoryType } from "../customer/customerKosStore";
-import { CustomerChatModal } from "../customer/CustomerChatModal";
+import { OwnerChatInboxModal } from "../../components/OwnerChatInboxModal";
 
 interface PemilikKosHomeProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -315,12 +315,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
               {/* Chat Pelanggan Button */}
               <TouchableOpacity
                 style={styles.notifBtn}
-                onPress={() => {
-                  const targetId = kostProperty?._id || "kost_chat_inquiry";
-                  setChatTargetOrder(String(targetId));
-                  setChatCustomerName("Pelanggan (Customer)");
-                  setIsChatOpen(true);
-                }}
+                onPress={() => setIsChatOpen(true)}
                 activeOpacity={0.7}
               >
                 <MessageSquare size={18} color="#FFFFFF" />
@@ -1146,14 +1141,12 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
         </TouchableOpacity>
       </Modal>
 
-      {/* In-App Customer Live Chat Modal for Owner */}
-      <CustomerChatModal
+      {/* In-App Owner Chat Inbox with Conversation List & Direct Room */}
+      <OwnerChatInboxModal
         visible={isChatOpen}
         onClose={() => setIsChatOpen(false)}
-        orderId={chatTargetOrder}
-        participantName={chatCustomerName}
-        participantType="customer"
-        initialMessage="Halo kak, ada yang bisa kami bantu mengenai ketersediaan kamar / unit kami?"
+        serviceType="kos"
+        businessName={kostProperty?.name || "Homestay & Kos"}
       />
     </ResponsiveSafeAreaView>
   );

@@ -63,6 +63,7 @@ interface CustomerChatModalProps {
   orderType?: string;
   serviceType?: string;
   currentUserRole?: "customer" | "driver" | "merchant" | "owner";
+  onBack?: () => void;
 }
 
 interface AttachmentItem {
@@ -83,6 +84,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   orderType,
   serviceType,
   currentUserRole = "customer",
+  onBack,
 }) => {
   const isDriverUser = currentUserRole === "driver";
   const isOwnerView = !isDriverUser && participantType === "customer";
@@ -426,7 +428,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.backButton} activeOpacity={0.7}>
+            <TouchableOpacity onPress={onBack || onClose} style={styles.backButton} activeOpacity={0.7}>
               <ArrowLeft size={20} color="#1E293B" />
             </TouchableOpacity>
 

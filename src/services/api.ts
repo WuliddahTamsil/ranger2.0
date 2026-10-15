@@ -892,3 +892,14 @@ export const getChatMessages = async (
     return { success: false, data: [] };
   }
 };
+
+export const getChatConversations = async (): Promise<{ success: boolean; data: any[] }> => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl("/chat/conversations"), { headers: authHeaders });
+    if (!res.ok) return { success: false, data: [] };
+    return await readApiJson(res);
+  } catch (err) {
+    return { success: false, data: [] };
+  }
+};
