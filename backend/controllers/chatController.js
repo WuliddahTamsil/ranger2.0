@@ -245,6 +245,22 @@ const getConversations = async (req, res) => {
       .limit(60)
       .lean();
 
+    // Also look for distinct orders in ChatMessage where user is owner or receiver
+    const existingOrderIds = new Set(conversations.map((c) => String(c.orderId || c._id)));
+    const msgOrderIds = await ChatMessage.distinct("orderId", {
+      $or: [{ ownerId: userId }, { receiverId: userId }],
+    });
+
+    for (const ordId of msgOrderIds) {
+      if (ordId && !existingOrderIds.has(String(ordId))) {
+        const extraConv = await Conversation.findOne({ orderId: ordId }).lean();
+        if (extraConv) {
+          conversations.push(extraConv);
+          existingOrderIds.add(String(ordId));
+        }
+      }
+    }
+
     const result = await Promise.all(
       conversations.map(async (conv) => {
         const lastMsg = await ChatMessage.findOne({
@@ -256,8 +272,16 @@ const getConversations = async (req, res) => {
         let customerName = "Pelanggan";
         let driverName = "Driver Rangers";
 
-        if (conv.customerId && mongoose.Types.ObjectId.isValid(conv.customerId)) {
-          const custUser = await User.findById(conv.customerId).select("name email phone").lean();
+        let effectiveCustId = conv.customerId;
+        if (!effectiveCustId && lastMsg?.customerId) {
+          effectiveCustId = String(lastMsg.customerId);
+        }
+        if (!effectiveCustId && lastMsg?.sender === "customer" && lastMsg?.senderId) {
+          effectiveCustId = String(lastMsg.senderId);
+        }
+
+        if (effectiveCustId && mongoose.Types.ObjectId.isValid(effectiveCustId)) {
+          const custUser = await User.findById(effectiveCustId).select("name email phone").lean();
           if (custUser?.name) customerName = custUser.name;
         }
 
@@ -271,7 +295,7 @@ const getConversations = async (req, res) => {
           orderId: conv.orderId,
           orderCode: conv.orderCode || conv.orderId,
           orderType: conv.orderType || "general",
-          customerId: conv.customerId,
+          customerId: conv.customerId || effectiveCustId,
           customerName,
           driverId: conv.driverId,
           driverName,

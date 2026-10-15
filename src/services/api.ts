@@ -893,13 +893,76 @@ export const getChatMessages = async (
   }
 };
 
-export const getChatConversations = async (): Promise<{ success: boolean; data: any[] }> => {
+export const getChatConversations = async (
+  fallbackOrderIds?: string[]
+): Promise<{ success: boolean; data: any[] }> => {
   try {
     const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl("/chat/conversations"), { headers: authHeaders });
-    if (!res.ok) return { success: false, data: [] };
-    return await readApiJson(res);
-  } catch (err) {
-    return { success: false, data: [] };
+    if (res.ok) {
+      const json = await readApiJson(res);
+      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+        return json;
+      }
+    }
+  } catch {
+    // Continue to fallback
   }
+
+  // Resilient fallback: If /chat/conversations is 404 or empty, query known orders
+  if (fallbackOrderIds && fallbackOrderIds.length > 0) {
+    try {
+      const items = await Promise.all(
+        fallbackOrderIds.map(async (orderId) => {
+          try {
+            const [convRes, msgRes] = await Promise.all([
+              getChatConversation(orderId),
+              getChatMessages(orderId),
+            ]);
+            if (convRes?.success && convRes.data) {
+              const messages = Array.isArray(msgRes?.data) ? msgRes.data : [];
+              if (messages.length === 0) return null;
+              const lastMsg = messages[messages.length - 1];
+              return {
+                id: convRes.data._id || orderId,
+                orderId: String(orderId),
+                orderCode: convRes.data.orderCode || orderId,
+                orderType: convRes.data.orderType || "kos",
+                customerId: convRes.data.customerId,
+                customerName:
+                  lastMsg?.sender === "customer"
+                    ? lastMsg.senderName || "Wuwu Customer"
+                    : "Pelanggan",
+                driverId: convRes.data.driverId,
+                driverName: "Driver Rangers",
+                ownerId: convRes.data.ownerId,
+                status: convRes.data.status || "inquiry",
+                lastMessage:
+                  lastMsg?.text || (lastMsg?.attachment ? "📷 Lampiran dikirim" : "Mulai percakapan"),
+                lastMessageTime: lastMsg?.createdAt
+                  ? new Date(lastMsg.createdAt).toLocaleTimeString("id-ID", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "",
+                lastMessageDate: lastMsg?.createdAt || new Date(),
+                unreadCount: 0,
+              };
+            }
+          } catch {
+            return null;
+          }
+          return null;
+        })
+      );
+      const valid = items.filter(Boolean);
+      if (valid.length > 0) {
+        return { success: true, data: valid };
+      }
+    } catch {
+      // Handled silently
+    }
+  }
+
+  return { success: false, data: [] };
 };

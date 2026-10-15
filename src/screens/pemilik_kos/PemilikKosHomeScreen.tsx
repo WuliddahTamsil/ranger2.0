@@ -1146,7 +1146,14 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
         visible={isChatOpen}
         onClose={() => setIsChatOpen(false)}
         serviceType="kos"
-        businessName={kostProperty?.name || "Homestay & Kos"}
+        businessName={kostProperty?.name || selectedUnit?.name || "Homestay & Kos"}
+        initialOrderId={chatTargetOrder && chatTargetOrder !== "kost_chat_inquiry" ? chatTargetOrder : undefined}
+        initialCustomerName={chatCustomerName}
+        knownOrderIds={[
+          ...(kostProperty?._id ? [String(kostProperty._id)] : []),
+          ...(selectedUnit?.id ? [String(selectedUnit.id)] : []),
+          ...(allBookings || []).map((b: any) => String(b._id || b.orderId || b.id || "")).filter(Boolean),
+        ]}
       />
     </ResponsiveSafeAreaView>
   );

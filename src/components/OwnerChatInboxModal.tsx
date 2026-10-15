@@ -50,6 +50,7 @@ interface OwnerChatInboxModalProps {
   businessName?: string;
   initialOrderId?: string;
   initialCustomerName?: string;
+  knownOrderIds?: string[];
 }
 
 export const OwnerChatInboxModal: React.FC<OwnerChatInboxModalProps> = ({
@@ -59,6 +60,7 @@ export const OwnerChatInboxModal: React.FC<OwnerChatInboxModalProps> = ({
   businessName = "Dashboard Usaha",
   initialOrderId,
   initialCustomerName,
+  knownOrderIds = [],
 }) => {
   const [conversations, setConversations] = useState<OwnerConversationItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,10 +68,14 @@ export const OwnerChatInboxModal: React.FC<OwnerChatInboxModalProps> = ({
   const [filterTab, setFilterTab] = useState<"Semua" | "Pelanggan" | "Driver">("Semua");
   const [selectedChat, setSelectedChat] = useState<OwnerConversationItem | null>(null);
 
+  const effectiveOrderIds = useMemo(() => {
+    return Array.from(new Set([initialOrderId, ...knownOrderIds].filter(Boolean))) as string[];
+  }, [initialOrderId, knownOrderIds]);
+
   const fetchList = async () => {
     try {
       setLoading(true);
-      const res = await getChatConversations();
+      const res = await getChatConversations(effectiveOrderIds);
       if (res.success && Array.isArray(res.data)) {
         setConversations(res.data);
       }
@@ -84,7 +90,7 @@ export const OwnerChatInboxModal: React.FC<OwnerChatInboxModalProps> = ({
     if (visible) {
       void fetchList();
       const interval = setInterval(() => {
-        void getChatConversations().then((res) => {
+        void getChatConversations(effectiveOrderIds).then((res) => {
           if (res.success && Array.isArray(res.data)) {
             setConversations(res.data);
           }
@@ -95,7 +101,7 @@ export const OwnerChatInboxModal: React.FC<OwnerChatInboxModalProps> = ({
       setSelectedChat(null);
       setSearchQuery("");
     }
-  }, [visible]);
+  }, [visible, effectiveOrderIds]);
 
   const filteredConversations = useMemo(() => {
     let list = [...conversations];
