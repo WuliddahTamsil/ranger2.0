@@ -10,8 +10,12 @@ const { requireAuth } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// Public webhook endpoint from payment gateway provider
+// Public webhook endpoint from payment gateway provider (supports POST notification, GET ping, and HEAD check)
 router.post("/webhook", handlePaymentWebhook);
+router.get("/webhook", (req, res) => {
+  return res.status(200).json({ status: "OK", message: "Midtrans Webhook endpoint is active and listening." });
+});
+router.head("/webhook", (req, res) => res.status(200).end());
 
 // Payment endpoints (support both REST and legacy style routes)
 router.post("/", createPayment);
