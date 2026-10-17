@@ -82,6 +82,7 @@ import {
 import { rp } from "../../utils/formatters";
 import { useTimeGreeting } from "../../utils/timeGreeting";
 import { getApiUrl } from "../../services/api";
+import { AdminHomeHeroSection } from "../../components/AdminHomeHeroSection";
 
 interface AdminHomeProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -110,9 +111,15 @@ const getRoleMeta = (role: string) => {
 };
 
 export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccount }) => {
-  // Navigation Tabs (5 tabs as requested)
-  // 0: verifikasi, 1: monitoring, 2: transaksi, 3: mitra, 4: pengaturan
-  const [currentTab, setCurrentTab] = useState<number>(0);
+  // Navigation Tabs (6 tabs):
+  // 0: verifikasi, 1: monitoring, 2: transaksi, 3: mitra, 4: konten beranda, 5: akun
+  const [currentTab, setCurrentTab] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const search = window.location.search;
+      if (search.includes("tab=content") || search.includes("tab=hero") || search.includes("tab=4")) return 4;
+    }
+    return 0;
+  });
 
   // State Data
   const [mitraAccounts, setMitraAccounts] = useState<AuthAccount[]>([]);
@@ -438,6 +445,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     { label: "Monitoring", icon: TrendingUp },
     { label: "Transaksi", icon: Receipt },
     { label: "Mitra", icon: Store },
+    { label: "Konten Beranda", icon: Sparkles },
     { label: "Akun", icon: User },
   ];
 
@@ -1374,6 +1382,22 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               <Text style={styles.txTitleText}>{tx.title || "Pesanan Layanan GEOVERSE"}</Text>
               <Text style={styles.txCustomerText}>Customer: {tx.customer || "Warga PGE Kamojang"}</Text>
 
+              {tx.revenueSplitSnapshot ? (
+                <View style={{ backgroundColor: "#F8FAFC", borderRadius: 8, padding: 8, marginVertical: 6, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
+                    <Text style={{ fontSize: 11, color: "#64748B" }}>Pendapatan Driver ({tx.revenueSplitSnapshot.driverSharePercent}%):</Text>
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: "#0D7A53" }}>{rp(tx.revenueSplitSnapshot.driverEarnings || 0)}</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 11, color: "#64748B" }}>Komisi Platform ({tx.revenueSplitSnapshot.platformCommissionRate || 0}%):</Text>
+                    <Text style={{ fontSize: 11, fontWeight: "600", color: "#334155" }}>{rp(tx.revenueSplitSnapshot.platformCommission || 0)}</Text>
+                  </View>
+                  <Text style={{ fontSize: 10, color: "#94A3B8", marginTop: 3 }}>
+                    Tier: {tx.revenueSplitSnapshot.driverTier || "REGULAR"} {tx.revenueSplitSnapshot.isExistingPartnerDriver ? "(Kedai Terpadu)" : ""}
+                  </Text>
+                </View>
+              ) : null}
+
               <View style={styles.txCardBottom}>
                 <Text style={styles.txDateText}>
                   {tx.date
@@ -2109,6 +2133,8 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
       case 3:
         return renderMitraDirectoryTab();
       case 4:
+        return <AdminHomeHeroSection onPreviewCustomer={() => navigate("c_home")} />;
+      case 5:
         return renderPengaturanTab();
       default:
         return renderVerifikasiTab();
@@ -2195,7 +2221,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                     </View>
                   )}
                 </View>
-                <Text style={[styles.navLabel, active ? styles.navLabelActive : null]}>
+                <Text style={[styles.navLabel, active ? styles.navLabelActive : null]} numberOfLines={1}>
                   {item.label}
                 </Text>
               </TouchableOpacity>
@@ -2358,70 +2384,158 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                           <Text style={styles.detailVal}>{roleData.plateNumber}</Text>
                         </View>
                       ) : null}
+                      {selectedMitraForDetail.role === "driver" && (
+                        <>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Program Kemitraan:</Text>
+                            <Text style={[styles.detailVal, { fontWeight: "700", color: roleData.partnerProgram === "KEDAI_TERPADU" ? "#D97706" : "#0D7A53" }]}>
+                              {roleData.partnerProgram === "KEDAI_TERPADU" ? "Mitra Eksisting Kedai Terpadu" : "Mitra Reguler GEOVERSE"}
+                            </Text>
+                          </View>
+                          <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Tier Bagi Hasil Ongkir:</Text>
+                            <Text style={styles.detailVal}>
+                              {roleData.partnerProgram === "KEDAI_TERPADU" ? "Driver 100% / Platform 0%" : "Driver 80% / Platform 20%"}
+                            </Text>
+                          </View>
+                        </>
+                      )}
                     </View>
 
                     {/* Section 3: Berkas Dokumen Terunggah */}
-                    <Text style={styles.formSectionHeader}>3. Berkas Dokumen Terunggah</Text>
+                    <Text style={styles.formSectionHeader}>3. Berkas Dokumen & Verifikasi Legal Mitra</Text>
                     {(() => {
                       const docRequirements = getDocumentRequirements(selectedMitraForDetail.role as any, roleData) || [];
-                      const renderedDocs: { key: string; label: string; uri: string }[] = [];
+                      
+                      return (
+                        <View style={{ gap: 10 }}>
+                          {docRequirements.map((req, idx) => {
+                            const docData = (docs as any)[req.key];
+                            const uri =
+                              docData?.uri ||
+                              (typeof docData === "string" ? docData : "") ||
+                              (roleData as any)[req.key] ||
+                              "";
+                            const status = docData?.status || (uri ? "pending" : "missing");
+                            const isPendingClient = Boolean((req as any).isPendingConfirmation);
 
-                      // From documents object
-                      Object.keys(docs).forEach((k) => {
-                        const d = (docs as any)[k];
-                        if (d && (d.uri || typeof d === "string")) {
-                          renderedDocs.push({
-                            key: k,
-                            label: d.label || k.toUpperCase(),
-                            uri: typeof d === "string" ? d : d.uri,
-                          });
-                        }
-                      });
+                            return (
+                              <View key={req.key || idx} style={styles.docCardRow}>
+                                {uri ? (
+                                  <Image
+                                    source={{ uri }}
+                                    style={styles.docThumbnail}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <View style={[styles.docThumbnail, { alignItems: "center", justifyContent: "center" }]}>
+                                    <AlertCircle size={22} color={req.required ? "#DC2626" : "#94A3B8"} />
+                                  </View>
+                                )}
 
-                      // Fallback requirement keys
-                      if (renderedDocs.length === 0) {
-                        docRequirements.forEach((req) => {
-                          const fallbackUri = (roleData as any)[req.key];
-                          if (fallbackUri) {
-                            renderedDocs.push({ key: req.key, label: req.label, uri: fallbackUri });
-                          }
-                        });
-                      }
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                  <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: 4 }}>
+                                    <Text style={[styles.docTitleText, { flexShrink: 1 }]}>{req.label}</Text>
+                                    <View
+                                      style={{
+                                        backgroundColor: req.required ? "#FEE2E2" : "#F1F5F9",
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2,
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      <Text
+                                        style={{
+                                          fontSize: 10,
+                                          fontWeight: "700",
+                                          color: req.required ? "#B91C1C" : "#64748B",
+                                        }}
+                                      >
+                                        {req.required ? "Wajib" : "Opsional"}
+                                      </Text>
+                                    </View>
+                                    {isPendingClient && (
+                                      <View
+                                        style={{
+                                          backgroundColor: "#FEF3C7",
+                                          paddingHorizontal: 6,
+                                          paddingVertical: 2,
+                                          borderRadius: 4,
+                                        }}
+                                      >
+                                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#B45309" }}>
+                                          Konfirmasi Client
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
 
-                      if (renderedDocs.length === 0) {
-                        return (
-                          <View style={styles.noDocsBox}>
-                            <Text style={styles.noDocsText}>Tidak ada berkas gambar yang terunggah.</Text>
-                          </View>
-                        );
-                      }
+                                  {req.description ? (
+                                    <Text style={{ fontSize: 11, color: "#64748B", marginBottom: 6 }} numberOfLines={2}>
+                                      {req.description}
+                                    </Text>
+                                  ) : null}
 
-                      return renderedDocs.map((docItem, i) => (
-                        <View key={i} style={styles.docCardRow}>
-                          <Image
-                            source={{ uri: docItem.uri }}
-                            style={styles.docThumbnail}
-                            resizeMode="cover"
-                          />
-                          <View style={{ flex: 1, marginLeft: 12 }}>
-                            <Text style={styles.docTitleText}>{docItem.label}</Text>
-                            <TouchableOpacity
-                              style={styles.docPreviewBtn}
-                              onPress={() =>
-                                setPreviewImageModal({
-                                  visible: true,
-                                  url: docItem.uri,
-                                  title: docItem.label,
-                                })
-                              }
-                              activeOpacity={0.7}
-                            >
-                              <Eye size={12} color="#1B7A4E" />
-                              <Text style={styles.docPreviewBtnText}>Lihat Gambar Penuh</Text>
-                            </TouchableOpacity>
-                          </View>
+                                  {uri ? (
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                                      <TouchableOpacity
+                                        style={styles.docPreviewBtn}
+                                        onPress={() =>
+                                          setPreviewImageModal({
+                                            visible: true,
+                                            url: uri,
+                                            title: req.label,
+                                          })
+                                        }
+                                        activeOpacity={0.7}
+                                      >
+                                        <Eye size={12} color="#1B7A4E" />
+                                        <Text style={styles.docPreviewBtnText}>Lihat Berkas</Text>
+                                      </TouchableOpacity>
+                                      <View
+                                        style={{
+                                          backgroundColor:
+                                            status === "verified"
+                                              ? "#DCFCE7"
+                                              : status === "rejected"
+                                              ? "#FEE2E2"
+                                              : "#FEF3C7",
+                                          paddingHorizontal: 8,
+                                          paddingVertical: 3,
+                                          borderRadius: 6,
+                                        }}
+                                      >
+                                        <Text
+                                          style={{
+                                            fontSize: 10,
+                                            fontWeight: "700",
+                                            color:
+                                              status === "verified"
+                                                ? "#15803D"
+                                                : status === "rejected"
+                                                ? "#B91C1C"
+                                                : "#B45309",
+                                          }}
+                                        >
+                                          {status === "verified"
+                                            ? "Disetujui"
+                                            : status === "rejected"
+                                            ? "Ditolak"
+                                            : "Perlu Verifikasi"}
+                                        </Text>
+                                      </View>
+                                    </View>
+                                  ) : (
+                                    <Text style={{ fontSize: 11, color: req.required ? "#DC2626" : "#94A3B8", fontStyle: "italic" }}>
+                                      {req.required ? "⚠️ Belum diunggah oleh mitra" : "Belum diunggah (tidak wajib)"}
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+                            );
+                          })}
                         </View>
-                      ));
+                      );
                     })()}
                   </>
                 );

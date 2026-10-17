@@ -581,16 +581,21 @@ const updateCateringOrderStatus = async (req, res) => {
         });
       }
     } else if (status === "Dibatalkan") {
-      // Reverse GEOVERSE Points if used
-      if (order.pointDiscount > 0 && mongoose.Types.ObjectId.isValid(order.customerId)) {
+      // Reverse GEOVERSE Points if used (idempotent, max 1 time, never if already completed)
+      const pointsToRefund = order.pointsUsed || order.pointDiscount || 0;
+      if (pointsToRefund > 0 && mongoose.Types.ObjectId.isValid(order.customerId) && !order.pointRefunded && order.status !== "Selesai") {
+        order.pointRefunded = true;
+        order.reversalIdempotencyKey = `REV-CAT-${order.orderCode}`;
+        await order.save();
         try {
           const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
           await pointWalletService.reversePoints({
             userId: order.customerId,
-            points: order.pointDiscount,
+            points: pointsToRefund,
             sourceType: "CATERING",
             sourceId: order.orderCode,
-            notes: `Pengembalian ${order.pointDiscount} poin karena pesanan catering #${order.orderCode} dibatalkan`,
+            reversalKey: `REV-CAT-${order.orderCode}`,
+            notes: `Pengembalian ${pointsToRefund} poin karena pesanan catering #${order.orderCode} dibatalkan`,
             actorId: String(order.ownerId || ""),
           });
         } catch (revErr) {

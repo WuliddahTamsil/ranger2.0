@@ -26,29 +26,45 @@ export const getDocumentRequirements = (
 ): AuthDocumentRequirement[] => {
   if (role === "driver") {
     return [
-      { key: "ktp", label: "KTP", description: "Foto KTP yang jelas dan tidak terpotong.", required: true },
-      { key: "sim", label: "SIM", description: "SIM aktif sesuai jenis kendaraan.", required: true },
-      { key: "stnk", label: "STNK", description: "STNK kendaraan yang digunakan.", required: true },
+      { key: "ktp", label: "KTP", description: "Foto KTP asli yang jelas dan tidak terpotong.", required: true },
+      { key: "sim", label: "SIM C/A Aktif", description: "SIM C atau A aktif sesuai jenis kendaraan yang digunakan.", required: true },
+      { key: "stnk", label: "STNK Kendaraan", description: "Foto STNK kendaraan operasional yang masih berlaku.", required: true },
+      { key: "vehicle_photo", label: "Foto Kendaraan", description: "Foto fisik kendaraan tampak depan lengkap dengan plat nomor.", required: true },
+      {
+        key: "skck",
+        label: "SKCK (Opsional)",
+        description: "Surat Keterangan Catatan Kepolisian (opsional, menunggu konfirmasi final client).",
+        required: false,
+        isPendingConfirmation: true,
+        pendingConfirmationNote: "Kewajiban dokumen SKCK sedang menunggu konfirmasi bisnis final dari client.",
+      },
     ];
   }
 
   if (role === "pemilik_marketplace") {
     return [
-      { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik usaha.", required: true },
-      { key: "store_photo", label: "Foto produk atau toko", description: "Satu foto yang mewakili usaha kamu.", required: true },
+      { key: "ktp", label: "KTP Pemilik", description: "Identitas KTP pemilik usaha UMKM.", required: true },
+      { key: "store_photo", label: "Foto Produk / Toko", description: "Foto produk unggulan atau tempat usaha.", required: true },
     ];
   }
 
   if (role === "pemilik_shop") {
-    const requirements: AuthDocumentRequirement[] = [
-      { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik atau penanggung jawab usaha.", required: true },
-      { key: "business_license", label: "NIB / SIUP / Izin Usaha", description: "Dokumen legalitas usaha atau surat izin operasional.", required: true },
-      { key: "store_photo", label: "Foto Outlet", description: "Foto tampak depan outlet lengkap dengan papan nama toko.", required: true },
-    ];
-
     const category = String(roleData?.businessCategory || roleData?.storeType || "").toUpperCase();
     const brandType = String(roleData?.brandType || "").toUpperCase();
     const isOfficialPartnerRequested = roleData?.isOfficialPartnerRequested === "true" || roleData?.isOfficialBrandPartner === "true";
+
+    const requirements: AuthDocumentRequirement[] = [
+      { key: "ktp", label: "KTP Pemilik", description: "Identitas KTP pemilik atau penanggung jawab usaha.", required: true },
+      { key: "store_photo", label: "Foto Toko / Outlet", description: "Foto tampak depan outlet lengkap dengan papan nama toko.", required: true },
+      {
+        key: "business_license",
+        label: "NIB / Izin Usaha (Opsional)",
+        description: "Nomor Induk Berusaha (NIB) atau surat izin operasional perdagangan.",
+        required: false,
+        isPendingConfirmation: true,
+        pendingConfirmationNote: "Menunggu konfirmasi kewajiban NIB retail dari client.",
+      },
+    ];
 
     // Alfamart / Indomaret / Circle K / Official Partner authorization
     if (["ALFAMART", "INDOMARET", "CIRCLE_K"].includes(brandType) || isOfficialPartnerRequested) {
@@ -60,19 +76,19 @@ export const getDocumentRequirements = (
       });
     }
 
-    // Apotek specific documents
+    // Apotek specific documents (SIPA wajib sesuai requirement client, SIA & STRA dipertahankan)
     if (category === "PHARMACY") {
       requirements.push(
+        {
+          key: "pharmacist_sipa",
+          label: "SIPA / SIPTTK Apoteker",
+          description: "Surat Izin Praktik Apoteker penanggung jawab yang aktif (Wajib).",
+          required: true,
+        },
         {
           key: "pharmacy_license",
           label: "Surat Izin Apotek (SIA)",
           description: "Surat Izin Operasional Apotek (SIA) yang masih berlaku.",
-          required: true,
-        },
-        {
-          key: "pharmacist_sipa",
-          label: "SIPA / SIPTTK Apoteker",
-          description: "Surat Izin Praktik Apoteker penanggung jawab yang aktif.",
           required: true,
         },
         {
@@ -99,28 +115,70 @@ export const getDocumentRequirements = (
 
   if (role === "pemilik_catering") {
     return [
-      { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik catering.", required: true },
-      { key: "kitchen_photo", label: "Foto dapur atau menu", description: "Satu foto yang menunjukkan usaha catering kamu.", required: true },
+      { key: "ktp", label: "KTP Pemilik", description: "Identitas KTP pemilik usaha catering.", required: true },
+      { key: "kitchen_photo", label: "Foto Tempat Usaha / Dapur", description: "Foto area dapur atau fasilitas memasak yang representatif.", required: true },
+      {
+        key: "business_license",
+        label: "NIB / Izin Usaha (Opsional)",
+        description: "Nomor Induk Berusaha (opsional, menunggu konfirmasi final client).",
+        required: false,
+        isPendingConfirmation: true,
+        pendingConfirmationNote: "Menunggu konfirmasi kewajiban NIB catering dari client.",
+      },
+      {
+        key: "halal_cert",
+        label: "Sertifikat Halal (Opsional)",
+        description: "Sertifikat halal dari BPJPH/MUI (opsional, menunggu konfirmasi final client).",
+        required: false,
+        isPendingConfirmation: true,
+        pendingConfirmationNote: "Menunggu konfirmasi kewajiban Sertifikat Halal dari client.",
+      },
     ];
   }
 
   if (role === "pemilik_laundry") {
     return [
-      { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik laundry.", required: true },
-      { key: "store_photo", label: "Foto outlet laundry", description: "Satu foto yang menunjukkan lokasi usaha.", required: true },
+      { key: "ktp", label: "KTP Pemilik", description: "Identitas KTP pemilik usaha laundry.", required: true },
+      { key: "store_photo", label: "Foto Tempat Usaha / Outlet", description: "Foto tampak depan outlet laundry dan area mesin cuci.", required: true },
+      {
+        key: "business_license",
+        label: "NIB / Izin Usaha (Opsional)",
+        description: "Nomor Induk Berusaha (opsional, menunggu konfirmasi final client).",
+        required: false,
+        isPendingConfirmation: true,
+        pendingConfirmationNote: "Menunggu konfirmasi kewajiban NIB laundry dari client.",
+      },
+      {
+        key: "halal_cert",
+        label: "Sertifikat Halal Deterjen / Laundry (Opsional)",
+        description: "Sertifikasi halal operasional (opsional, menunggu konfirmasi final client).",
+        required: false,
+        isPendingConfirmation: true,
+        pendingConfirmationNote: "Menunggu konfirmasi kewajiban sertifikasi halal laundry dari client.",
+      },
     ];
   }
 
   if (role === "pemilik_kos") {
+    // Note: Wisata dan Homestay menggunakan requirement kepemilikan/pengelolaan properti yang sama (Client Assumption).
+    const isWisata = String(roleData?.propertyCategory || roleData?.businessCategories || "").toLowerCase().includes("wisata");
     return [
-      { key: "ktp", label: "KTP Pemilik", description: "Identitas pemilik kos/homestay yang jelas.", required: true },
-      { key: "property_photo", label: "Foto properti", description: "Satu foto tampak depan properti / unit usaha.", required: true },
+      { key: "ktp", label: "KTP Pemilik / Pengelola", description: "Identitas KTP pemilik atau pengelola sah properti.", required: true },
+      {
+        key: "property_proof",
+        label: isWisata ? "Bukti Kepemilikan / Pengelolaan Wisata" : "Bukti Kepemilikan / Pengelolaan Properti",
+        description: "Sertifikat, AJB, PBB, atau surat kuasa pengelolaan properti yang sah.",
+        required: true,
+      },
+      { key: "property_photo", label: "Foto Properti / Outlet", description: "Foto tampak depan gerbang atau bangunan properti.", required: true },
+      { key: "room_photo", label: isWisata ? "Foto Wahana / Area Utama" : "Foto Kamar / Unit", description: "Foto interior kamar atau area utama yang disewakan.", required: true },
+      { key: "facility_photo", label: "Foto Fasilitas", description: "Foto fasilitas pendukung (kamar mandi, parkir, gazebo, dll).", required: true },
     ];
   }
 
   if (role === "bank_sampah") {
     return [
-      { key: "ktp", label: "KTP Pengelola", description: "Identitas pengelola bank sampah yang sah.", required: true },
+      { key: "ktp", label: "KTP Pengelola", description: "Identitas KTP pengelola bank sampah yang sah.", required: true },
       { key: "unit_photo", label: "Foto Unit Bank Sampah", description: "Foto tampak depan unit atau plang nama bank sampah.", required: true },
     ];
   }

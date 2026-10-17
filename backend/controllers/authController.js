@@ -63,6 +63,33 @@ const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
   };
 };
 
+const normalizeDocumentsInput = (docs = {}) => {
+  const result = {};
+  if (!docs || typeof docs !== "object") return result;
+  Object.keys(docs).forEach((key) => {
+    const d = docs[key];
+    if (d && (d.uri || d.name)) {
+      result[key] = {
+        key: d.key || key,
+        label: d.label || key,
+        description: d.description || "",
+        required: d.required !== false,
+        uri: d.uri || "",
+        fileId: d.fileId || "",
+        name: d.name || "",
+        mimeType: d.mimeType || "",
+        size: Number(d.size) || 0,
+        status: d.status || "pending",
+        progress: d.progress ?? 100,
+        uploadedAt: d.uploadedAt ? new Date(d.uploadedAt) : new Date(),
+        reviewedAt: d.reviewedAt ? new Date(d.reviewedAt) : null,
+        rejectionReason: d.rejectionReason || "",
+      };
+    }
+  });
+  return result;
+};
+
 // Register
 const registerUser = async (req, res) => {
   try {
@@ -118,7 +145,7 @@ const registerUser = async (req, res) => {
           finalRoleData.isDapurOpen = "true";
         }
         user.roleData = finalRoleData;
-        user.documents = documents || {};
+        user.documents = normalizeDocumentsInput(documents);
 
         await user.save();
 
@@ -238,7 +265,7 @@ const registerUser = async (req, res) => {
       googleId: verifiedGoogleProfile?.id,
       status: role === "customer" || role === "admin" ? "verified" : "pending",
       roleData: finalRoleData,
-      documents: documents || {},
+      documents: normalizeDocumentsInput(documents),
     });
 
     if (role === "pemilik_laundry") {
@@ -559,7 +586,7 @@ const getAllUsers = async (req, res) => {
 const updateMitraStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, rejectionReason } = req.body;
+    const { status, rejectionReason, documentReviews } = req.body;
 
     const user = await User.findById(id);
     if (!user) {
@@ -571,6 +598,41 @@ const updateMitraStatus = async (req, res) => {
       user.rejectionReason = rejectionReason || "Dokumen belum memenuhi persyaratan verifikasi.";
     } else {
       user.rejectionReason = undefined;
+    }
+
+    // Granular document-level review updates
+    if (user.documents) {
+      if (documentReviews && typeof documentReviews === "object") {
+        Object.keys(documentReviews).forEach((docKey) => {
+          const rev = documentReviews[docKey];
+          if (user.documents.has(docKey)) {
+            const existingDoc = user.documents.get(docKey);
+            if (existingDoc) {
+              if (rev.status) existingDoc.status = rev.status;
+              if (rev.rejectionReason !== undefined) existingDoc.rejectionReason = rev.rejectionReason;
+              existingDoc.reviewedAt = new Date();
+              user.documents.set(docKey, existingDoc);
+            }
+          }
+        });
+      } else if (status === "verified") {
+        for (const [docKey, docVal] of user.documents.entries()) {
+          if (docVal && docVal.status === "pending") {
+            docVal.status = "verified";
+            docVal.reviewedAt = new Date();
+            user.documents.set(docKey, docVal);
+          }
+        }
+      } else if (status === "rejected") {
+        for (const [docKey, docVal] of user.documents.entries()) {
+          if (docVal && docVal.status === "pending") {
+            docVal.status = "rejected";
+            docVal.reviewedAt = new Date();
+            docVal.rejectionReason = user.rejectionReason || "Ditolak saat peninjauan berkas.";
+            user.documents.set(docKey, docVal);
+          }
+        }
+      }
     }
 
     await user.save();
@@ -669,6 +731,20 @@ const updateUserProfile = async (req, res) => {
     }
 
     const { name, phone, address, profilePhoto, roleData, isOnline, driverAvailability } = req.body;
+
+    // Strict Operational Driver Dispatch Check (UU LLAJ & Safety Policy)
+    if (user.role === "driver" && (isOnline === true || driverAvailability === "AVAILABLE")) {
+      const { validateDriverOperationalStatus } = require("../services/documentMatrixService");
+      const opCheck = validateDriverOperationalStatus(user);
+      if (!opCheck.isOperational) {
+        return res.status(403).json({
+          success: false,
+          message: opCheck.reason,
+          isTrainee: opCheck.isTrainee,
+          missingOrPending: opCheck.missingOrPending,
+        });
+      }
+    }
 
     if (name !== undefined) user.name = name.trim();
     if (phone !== undefined) user.phone = phone.trim();
@@ -993,6 +1069,73 @@ const getAllPlatformTransactions = async (req, res) => {
   }
 };
 
+/**
+ * Get required documents for a role
+ * GET /api/auth/document-requirements?role=driver
+ */
+const getDocumentRequirements = async (req, res) => {
+  try {
+    const { getDocumentRequirementsForRole, DOCUMENT_MATRIX } = require("../services/documentMatrixService");
+    const role = req.query.role || req.user?.role || "driver";
+    const requirements = getDocumentRequirementsForRole(role);
+
+    return res.status(200).json({
+      success: true,
+      role,
+      data: requirements,
+      matrix: DOCUMENT_MATRIX,
+    });
+  } catch (error) {
+    console.error("getDocumentRequirements error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memuat matriks dokumen." });
+  }
+};
+
+/**
+ * Admin: Verify or reject specific user document
+ * PUT /api/auth/admin/verify-document
+ */
+const adminVerifyDocument = async (req, res) => {
+  try {
+    const { userId, documentKey, status, rejectionReason, expiryDate, documentNumber } = req.body;
+    if (!userId || !documentKey) {
+      return res.status(400).json({ success: false, message: "userId dan documentKey wajib diisi." });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User tidak ditemukan." });
+    }
+
+    const { verifyUserDocument } = require("../services/documentMatrixService");
+    verifyUserDocument({
+      user,
+      documentKey,
+      status: status || "verified",
+      rejectionReason: rejectionReason || "",
+      expiryDate,
+      documentNumber,
+      reviewerId: req.authUser?._id || req.user?._id || null,
+    });
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Dokumen ${documentKey} berhasil diperbarui menjadi ${status}.`,
+      data: {
+        userId: user._id,
+        userStatus: user.status,
+        documents: user.documents,
+        roleData: user.roleData,
+      },
+    });
+  } catch (error) {
+    console.error("adminVerifyDocument error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memperbarui verifikasi dokumen.", error: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -1003,4 +1146,7 @@ module.exports = {
   updateUserProfile,
   getSystemStats,
   getAllPlatformTransactions,
+  getDocumentRequirements,
+  adminVerifyDocument,
 };
+

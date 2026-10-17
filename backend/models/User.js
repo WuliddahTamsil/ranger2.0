@@ -4,6 +4,8 @@ const bcrypt = require("bcryptjs");
 const documentSchema = new mongoose.Schema({
   key: { type: String, required: true },
   label: { type: String, required: true },
+  description: { type: String, default: "" },
+  required: { type: Boolean, default: true },
   uri: { type: String, required: true }, // Google Drive URL / local URL
   fileId: { type: String }, // Google Drive file ID
   name: { type: String },
@@ -11,6 +13,12 @@ const documentSchema = new mongoose.Schema({
   size: { type: Number },
   status: { type: String, enum: ["pending", "verified", "rejected"], default: "pending" },
   progress: { type: Number, default: 100 },
+  uploadedAt: { type: Date, default: Date.now },
+  reviewedAt: { type: Date, default: null },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  expiryDate: { type: Date, default: null },
+  documentNumber: { type: String, default: "" },
+  rejectionReason: { type: String, default: "" },
 }, { _id: false });
 
 const userSchema = new mongoose.Schema(

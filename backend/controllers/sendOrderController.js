@@ -91,6 +91,14 @@ const estimateFare = async (req, res) => {
       discount,
     });
 
+    if (!breakdown.withinServiceRadius) {
+      return res.status(400).json({
+        success: false,
+        message: breakdown.radiusValidation?.message || "Rute pengiriman melebihi batas radius maksimal 15 km.",
+        radiusValidation: breakdown.radiusValidation,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       data: breakdown,
@@ -186,6 +194,14 @@ const createOrder = async (req, res) => {
       discount,
     });
 
+    if (!breakdown.withinServiceRadius) {
+      return res.status(400).json({
+        success: false,
+        message: breakdown.radiusValidation?.message || "Rute pengiriman melebihi batas radius maksimal 15 km.",
+        radiusValidation: breakdown.radiusValidation,
+      });
+    }
+
     // Generate cryptographically secure Pickup Code and Delivery OTP
     const pickupRaw = generateSixDigitCode();
     const deliveryRaw = generateSixDigitCode();
@@ -215,175 +231,208 @@ const createOrder = async (req, res) => {
       String(paymentMethod).toLowerCase() === "cod";
 
     const requestedPoints = Math.max(0, Math.round(Number(req.body.pointsUsed) || Number(req.body.pointDiscount) || 0));
-    let finalPointDiscount = 0;
     const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
 
-    if (requestedPoints > 0 && customerId) {
-      const wallet = await pointWalletService.getOrCreateWallet(customerId);
-      const usablePoints = Math.min(wallet.balancePoint || 0, breakdown.finalFare, requestedPoints);
-      if (usablePoints > 0) {
-        finalPointDiscount = usablePoints;
-        await pointWalletService.debitPoints({
+    const quote = await pointWalletService.calculatePaymentQuote({
+      service: "KANYAAH_SEND",
+      grossAmount: breakdown.finalFare,
+      voucherDiscount: 0,
+      requestedPoints,
+      userId: customerId,
+    });
+
+    let debitedPoints = 0;
+    if (quote.approvedPoints > 0 && customerId) {
+      await pointWalletService.debitPoints({
+        userId: customerId,
+        points: quote.approvedPoints,
+        type: "PAYMENT",
+        sourceType: "KANYAAH_SEND",
+        sourceId: orderCode,
+        operationKey: `DEBIT-SEND-${orderCode}`,
+        notes: `Pembayaran Kanyaah Send #${orderCode} dengan ${quote.approvedPoints} GEOVERSE Point`,
+        actorId: customerId,
+      });
+      debitedPoints = quote.approvedPoints;
+    }
+
+    try {
+      const finalPayableFare = quote.finalAmount;
+
+      const initialStatus = "SEARCHING_DRIVER";
+      const initialPaymentStatus = finalPayableFare === 0 ? "PAID" : isCash ? "CASH_PENDING" : "PENDING";
+      const resolvedPaymentMethod =
+        finalPayableFare === 0
+          ? "GEOVERSE_POINT"
+          : quote.approvedPoints > 0
+          ? isCash
+            ? "GEOVERSE_POINT_PLUS_CASH"
+            : "GEOVERSE_POINT_PLUS_QRIS"
+          : paymentMethod;
+
+      const newOrder = await SendOrder.create({
+        orderCode,
+        serviceType: "KANYAAH_SEND",
+        orderType: "KANYAAH_SEND",
+        customerId,
+        sender: {
+          name: sender.name,
+          phone: sender.phone,
+          address: sender.address,
+          latitude: sender.latitude,
+          longitude: sender.longitude,
+          notes: sender.notes || "",
+          locationInstruction: sender.locationInstruction || "",
+        },
+        recipient: {
+          name: recipient.name,
+          phone: recipient.phone,
+          address: recipient.address,
+          latitude: recipient.latitude,
+          longitude: recipient.longitude,
+          notes: recipient.notes || "",
+          preferredDeliveryTime: recipient.preferredDeliveryTime || "",
+        },
+        package: {
+          name: pkg.name,
+          category: safeCategory,
+          quantity: Math.max(1, Number(pkg.quantity) || 1),
+          weightKg: Math.max(0.1, Number(pkg.weightKg) || 1),
+          lengthCm: Math.max(1, Number(pkg.lengthCm) || 10),
+          widthCm: Math.max(1, Number(pkg.widthCm) || 10),
+          heightCm: Math.max(1, Number(pkg.heightCm) || 10),
+          fragile: Boolean(pkg.fragile),
+          specialHandling: Boolean(pkg.specialHandling),
+          declaredValue: Math.max(0, Number(pkg.declaredValue) || 0),
+          photoUrls: Array.isArray(pkg.photoUrls)
+            ? pkg.photoUrls
+                .map((p) => (typeof p === "string" ? p : p?.data?.url || p?.url || p?.viewUrl || ""))
+                .filter(Boolean)
+            : [],
+          notes: pkg.notes || "",
+        },
+        pricing: {
+          baseFare: breakdown.baseFare,
+          distanceFare: breakdown.distanceFare,
+          weightFare: breakdown.weightFare,
+          sizeFare: breakdown.sizeFare,
+          serviceFee: breakdown.serviceFee,
+          insuranceFee: breakdown.insuranceFee,
+          discount: breakdown.discount,
+          pointDiscount: quote.pointDiscount,
+          pointsUsed: quote.approvedPoints,
+          pointRate: quote.pointRate,
+          estimatedFare: breakdown.estimatedFare,
+          finalFare: finalPayableFare,
+          totalAmount: finalPayableFare,
+          driverEarnings: breakdown.driverEarnings,
+        },
+        totalAmount: finalPayableFare,
+        pointDiscount: quote.pointDiscount,
+        pointsUsed: quote.approvedPoints,
+        pointRate: quote.pointRate,
+        grossAmount: breakdown.finalFare,
+        finalAmount: finalPayableFare,
+        distanceKm: breakdown.distanceKm,
+        estimatedDurationMinutes: breakdown.estimatedDurationMinutes,
+        paymentMethod: resolvedPaymentMethod,
+        paymentStatus: initialPaymentStatus,
+        pickupCodeHash,
+        pickupCodeSalt,
+        deliveryOtpHash,
+        deliveryOtpSalt,
+        status: initialStatus,
+        idempotencyKey: idempotencyKey || undefined,
+        statusHistory: [
+          {
+            status: "CREATED",
+            actorId: customerId,
+            actorRole: "customer",
+            note: "Pesanan pengiriman barang berhasil dibuat oleh customer.",
+            createdAt: new Date(),
+          },
+        ],
+      });
+
+      let paymentData = null;
+
+      // If online payment (QRIS / VA) and payable amount > 0, create Payment gateway intent
+      if (!isCash && finalPayableFare > 0) {
+        try {
+          const customer = await User.findById(customerId).lean();
+          const gatewayResult = await paymentGateway.createPayment({
+            orderId: String(newOrder._id),
+            orderCode: newOrder.orderCode,
+            orderType: "KANYAAH_SEND",
+            orderCategory: "DELIVERY",
+            customerId: String(customerId),
+            customerName: customer?.name || sender.name,
+            customerPhone: customer?.phone || sender.phone,
+            amount: finalPayableFare,
+            paymentMethod: resolvedPaymentMethod,
+          });
+
+          const paymentRecord = await Payment.create({
+            paymentId: gatewayResult.paymentId,
+            orderId: String(newOrder._id),
+            orderCode: newOrder.orderCode,
+            orderType: "KANYAAH_SEND",
+            orderCategory: "DELIVERY",
+            customerId: String(customerId),
+            customerName: customer?.name || sender.name,
+            customerPhone: customer?.phone || sender.phone,
+            amount: finalPayableFare,
+            paymentMethod: gatewayResult.paymentMethod,
+            paymentCategory: gatewayResult.paymentCategory,
+            status: gatewayResult.status,
+            gateway: gatewayResult.gateway,
+            qrString: gatewayResult.qrString,
+            qrCodeUrl: gatewayResult.qrCodeUrl,
+            deepLinkUrl: gatewayResult.deepLinkUrl,
+            virtualAccount: gatewayResult.virtualAccount,
+            expiredAt: gatewayResult.expiryTime,
+          });
+
+          paymentData = paymentRecord;
+        } catch (payErr) {
+          console.warn("⚠️ Failed to auto-generate payment session:", payErr.message);
+        }
+      }
+
+      // Immediately broadcast to all active drivers in real time
+      if (req.io) {
+        req.io.emit("send:order_available", newOrder);
+      }
+
+      const sanitizedOrder = newOrder.toObject();
+      // Provide pickupCode to the customer on order creation
+      sanitizedOrder.pickupCode = pickupRaw;
+
+      return res.status(201).json({
+        success: true,
+        message:
+          finalPayableFare === 0
+            ? "Pesanan pengiriman lunas menggunakan GEOVERSE Point! Menghubungkan ke driver..."
+            : isCash
+            ? "Pesanan pengiriman berhasil dibuat! Menghubungkan ke driver..."
+            : "Pesanan pengiriman dibuat. Silakan selesaikan pembayaran.",
+        data: sanitizedOrder,
+        payment: paymentData,
+      });
+    } catch (orderCreateError) {
+      if (debitedPoints > 0) {
+        await pointWalletService.reversePoints({
           userId: customerId,
-          points: finalPointDiscount,
-          type: "PAYMENT",
+          points: debitedPoints,
           sourceType: "KANYAAH_SEND",
           sourceId: orderCode,
-          notes: `Pembayaran Kanyaah Send #${orderCode} dengan ${finalPointDiscount} GEOVERSE Point`,
+          reversalKey: `ROLLBACK-SEND-${orderCode}`,
+          notes: `Rollback pembuatan order Send #${orderCode}`,
           actorId: customerId,
-        });
+        }).catch((rbErr) => console.error("Failed to rollback send points:", rbErr));
       }
+      throw orderCreateError;
     }
-
-    const finalPayableFare = Math.max(0, breakdown.finalFare - finalPointDiscount);
-
-    const initialStatus = "SEARCHING_DRIVER";
-    const initialPaymentStatus = finalPayableFare === 0 ? "PAID" : isCash ? "CASH_PENDING" : "PENDING";
-
-    const newOrder = await SendOrder.create({
-      orderCode,
-      serviceType: "KANYAAH_SEND",
-      orderType: "KANYAAH_SEND",
-      customerId,
-      sender: {
-        name: sender.name,
-        phone: sender.phone,
-        address: sender.address,
-        latitude: sender.latitude,
-        longitude: sender.longitude,
-        notes: sender.notes || "",
-        locationInstruction: sender.locationInstruction || "",
-      },
-      recipient: {
-        name: recipient.name,
-        phone: recipient.phone,
-        address: recipient.address,
-        latitude: recipient.latitude,
-        longitude: recipient.longitude,
-        notes: recipient.notes || "",
-        preferredDeliveryTime: recipient.preferredDeliveryTime || "",
-      },
-      package: {
-        name: pkg.name,
-        category: safeCategory,
-        quantity: Math.max(1, Number(pkg.quantity) || 1),
-        weightKg: Math.max(0.1, Number(pkg.weightKg) || 1),
-        lengthCm: Math.max(1, Number(pkg.lengthCm) || 10),
-        widthCm: Math.max(1, Number(pkg.widthCm) || 10),
-        heightCm: Math.max(1, Number(pkg.heightCm) || 10),
-        fragile: Boolean(pkg.fragile),
-        specialHandling: Boolean(pkg.specialHandling),
-        declaredValue: Math.max(0, Number(pkg.declaredValue) || 0),
-        photoUrls: Array.isArray(pkg.photoUrls)
-          ? pkg.photoUrls
-              .map((p) => (typeof p === "string" ? p : p?.data?.url || p?.url || p?.viewUrl || ""))
-              .filter(Boolean)
-          : [],
-        notes: pkg.notes || "",
-      },
-      pricing: {
-        baseFare: breakdown.baseFare,
-        distanceFare: breakdown.distanceFare,
-        weightFare: breakdown.weightFare,
-        sizeFare: breakdown.sizeFare,
-        serviceFee: breakdown.serviceFee,
-        insuranceFee: breakdown.insuranceFee,
-        discount: breakdown.discount,
-        pointDiscount: finalPointDiscount,
-        pointsUsed: finalPointDiscount,
-        estimatedFare: breakdown.estimatedFare,
-        finalFare: finalPayableFare,
-        totalAmount: finalPayableFare,
-        driverEarnings: breakdown.driverEarnings,
-      },
-      totalAmount: finalPayableFare,
-      pointDiscount: finalPointDiscount,
-      pointsUsed: finalPointDiscount,
-      distanceKm: breakdown.distanceKm,
-      estimatedDurationMinutes: breakdown.estimatedDurationMinutes,
-      paymentMethod,
-      paymentStatus: initialPaymentStatus,
-      pickupCodeHash,
-      pickupCodeSalt,
-      deliveryOtpHash,
-      deliveryOtpSalt,
-      status: initialStatus,
-      idempotencyKey: idempotencyKey || undefined,
-      statusHistory: [
-        {
-          status: "CREATED",
-          actorId: customerId,
-          actorRole: "customer",
-          note: "Pesanan pengiriman barang berhasil dibuat oleh customer.",
-          createdAt: new Date(),
-        },
-      ],
-    });
-
-    let paymentData = null;
-
-    // If online payment (QRIS / VA) and payable amount > 0, create Payment gateway intent
-    if (!isCash && finalPayableFare > 0) {
-      try {
-        const customer = await User.findById(customerId).lean();
-        const gatewayResult = await paymentGateway.createPayment({
-          orderId: String(newOrder._id),
-          orderCode: newOrder.orderCode,
-          orderType: "KANYAAH_SEND",
-          orderCategory: "DELIVERY",
-          customerId: String(customerId),
-          customerName: customer?.name || sender.name,
-          customerPhone: customer?.phone || sender.phone,
-          amount: finalPayableFare,
-          paymentMethod,
-        });
-
-        const paymentRecord = await Payment.create({
-          paymentId: gatewayResult.paymentId,
-          orderId: String(newOrder._id),
-          orderCode: newOrder.orderCode,
-          orderType: "KANYAAH_SEND",
-          orderCategory: "DELIVERY",
-          customerId: String(customerId),
-          customerName: customer?.name || sender.name,
-          customerPhone: customer?.phone || sender.phone,
-          amount: finalPayableFare,
-          paymentMethod: gatewayResult.paymentMethod,
-          paymentCategory: gatewayResult.paymentCategory,
-          status: gatewayResult.status,
-          gateway: gatewayResult.gateway,
-          qrString: gatewayResult.qrString,
-          qrCodeUrl: gatewayResult.qrCodeUrl,
-          deepLinkUrl: gatewayResult.deepLinkUrl,
-          virtualAccount: gatewayResult.virtualAccount,
-          expiredAt: gatewayResult.expiryTime,
-        });
-
-        paymentData = paymentRecord;
-      } catch (payErr) {
-        console.warn("⚠️ Failed to auto-generate payment session:", payErr.message);
-      }
-    }
-
-    // Immediately broadcast to all active drivers in real time
-    if (req.io) {
-      req.io.emit("send:order_available", newOrder);
-    }
-
-    const sanitizedOrder = newOrder.toObject();
-    // Provide pickupCode to the customer on order creation
-    sanitizedOrder.pickupCode = pickupRaw;
-
-    return res.status(201).json({
-      success: true,
-      message: finalPayableFare === 0
-        ? "Pesanan pengiriman lunas menggunakan GEOVERSE Point! Menghubungkan ke driver..."
-        : isCash
-        ? "Pesanan pengiriman berhasil dibuat! Menghubungkan ke driver..."
-        : "Pesanan pengiriman dibuat. Silakan selesaikan pembayaran.",
-      data: sanitizedOrder,
-      payment: paymentData,
-    });
   } catch (error) {
     console.error("createOrder error:", error);
     return res.status(500).json({
@@ -561,6 +610,18 @@ const acceptOrder = async (req, res) => {
     const driver = req.authUser || await User.findById(driverId);
     if (!driver) {
       return res.status(404).json({ success: false, message: "Data driver tidak ditemukan." });
+    }
+
+    // Operational Driver Compliance Check (UU LLAJ & Safety Verification)
+    const { validateDriverOperationalStatus } = require("../services/documentMatrixService");
+    const opStatus = validateDriverOperationalStatus(driver);
+    if (!opStatus.isOperational) {
+      return res.status(403).json({
+        success: false,
+        message: opStatus.reason,
+        isTrainee: opStatus.isTrainee,
+        missingOrPending: opStatus.missingOrPending,
+      });
     }
 
     // Atomic find and update: only wins if status is SEARCHING_DRIVER and driverId is null
@@ -881,6 +942,28 @@ const verifyDelivery = async (req, res) => {
       createdAt: new Date(),
     });
 
+    // Calculate and save revenue split snapshot
+    try {
+      const { createRevenueSplitSnapshot } = require("../services/pricingPolicyService");
+      let driverObj = null;
+      if (order.driverId) {
+        driverObj = await User.findById(order.driverId).lean();
+      }
+      const deliveryFare = (order.pricing?.distanceFare || 0) + (order.pricing?.weightFare || 0);
+      const splitSnapshot = createRevenueSplitSnapshot(
+        deliveryFare || Math.max(0, (order.pricing?.estimatedFare || 10000) - 2000),
+        driverObj
+      );
+      if (order.pricing) {
+        order.pricing.revenueSplitSnapshot = splitSnapshot;
+        order.pricing.driverEarnings = splitSnapshot.driverEarnings;
+      }
+      order.revenueSplitSnapshot = splitSnapshot;
+      order.driverEarnings = splitSnapshot.driverEarnings;
+    } catch (splitSnapErr) {
+      console.warn("sendOrder split snapshot error:", splitSnapErr.message);
+    }
+
     await order.save();
 
     // Credit driver earnings once
@@ -890,9 +973,9 @@ const verifyDelivery = async (req, res) => {
       }).catch(() => {});
     }
 
-    // Award loyalty cashback points (1% of shipping cost, min 1 point)
+    // Award loyalty cashback points (1% of shipping cost, min 1 point) - exactly once
     const sendAmount = order.pricing?.totalPrice || order.totalAmount || 0;
-    if (sendAmount > 0 && order.customerId) {
+    if (sendAmount > 0 && order.customerId && !order.cashbackIssued) {
       try {
         const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
         const rewardPoints = Math.max(1, Math.round(sendAmount * 0.01));
@@ -901,9 +984,12 @@ const verifyDelivery = async (req, res) => {
           points: rewardPoints,
           sourceType: "KANYAAH_SEND",
           sourceId: order.orderCode,
+          operationKey: `EARN-CASHBACK-SEND-${order.orderCode}`,
           notes: `Cashback 1% pengiriman Kanyaah Send #${order.orderCode}`,
           actorId: order.driverId || order.customerId,
         });
+        order.cashbackIssued = true;
+        await order.save();
       } catch (pointErr) {
         console.warn("[Kanyaah Point] Send cashback error:", pointErr.message);
       }
@@ -1034,9 +1120,9 @@ const updateOrderStatus = async (req, res) => {
         relatedId: order._id,
       }).catch(() => {});
 
-      // Award loyalty cashback points (1% of shipping cost, min 1 point)
+      // Award loyalty cashback points (1% of shipping cost, min 1 point) - exactly once
       const sendAmount = order.pricing?.totalPrice || order.totalAmount || 0;
-      if (sendAmount > 0 && order.customerId) {
+      if (sendAmount > 0 && order.customerId && !order.cashbackIssued) {
         try {
           const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
           const rewardPoints = Math.max(1, Math.round(sendAmount * 0.01));
@@ -1045,9 +1131,12 @@ const updateOrderStatus = async (req, res) => {
             points: rewardPoints,
             sourceType: "KANYAAH_SEND",
             sourceId: order.orderCode,
+            operationKey: `EARN-CASHBACK-SEND-${order.orderCode}`,
             notes: `Cashback 1% pengiriman Kanyaah Send #${order.orderCode}`,
             actorId: order.driverId || order.customerId,
           });
+          order.cashbackIssued = true;
+          await order.save();
         } catch (pointErr) {
           console.warn("[Kanyaah Point] Send cashback error:", pointErr.message);
         }
@@ -1112,6 +1201,13 @@ const cancelOrder = async (req, res) => {
       return res.status(403).json({ success: false, message: "Anda tidak berwenang membatalkan pesanan ini." });
     }
 
+    if (order.status === "CANCELLED") {
+      return res.status(400).json({ success: false, message: "Pesanan pengiriman sudah dibatalkan sebelumnya." });
+    }
+    if (order.status === "COMPLETED") {
+      return res.status(400).json({ success: false, message: "Pesanan yang sudah selesai tidak dapat dibatalkan." });
+    }
+
     // Customer can only cancel if not picked up
     if (isCustomer && !isAdmin && ["PICKED_UP", "IN_TRANSIT", "ARRIVED_AT_DESTINATION", "DELIVERED", "COMPLETED"].includes(order.status)) {
       return res.status(400).json({
@@ -1133,9 +1229,12 @@ const cancelOrder = async (req, res) => {
 
     await order.save();
 
-    // Reversal of debited GEOVERSE Points if order was discounted with points
-    const refundedPoints = order.pricing?.pointDiscount || order.pricing?.pointsUsed || order.pointDiscount || 0;
-    if (refundedPoints > 0 && order.customerId) {
+    // Reversal of debited GEOVERSE Points if order was discounted with points (idempotent, max 1 time)
+    const refundedPoints = order.pricing?.pointsUsed || order.pricing?.pointDiscount || order.pointsUsed || order.pointDiscount || 0;
+    if (refundedPoints > 0 && order.customerId && !order.pointRefunded) {
+      order.pointRefunded = true;
+      order.reversalIdempotencyKey = `REV-SEND-${order.orderCode}`;
+      await order.save();
       try {
         const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
         await pointWalletService.reversePoints({
@@ -1143,6 +1242,7 @@ const cancelOrder = async (req, res) => {
           points: refundedPoints,
           sourceType: "KANYAAH_SEND",
           sourceId: order.orderCode,
+          reversalKey: `REV-SEND-${order.orderCode}`,
           notes: `Pengembalian ${refundedPoints} poin karena pembatalan Kanyaah Send #${order.orderCode}`,
           actorId: requesterId,
         });

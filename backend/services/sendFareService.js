@@ -4,9 +4,11 @@ const {
   MAX_SERVICE_RADIUS_KM,
   PRICING_POLICY,
   calculateHaversineKm,
+  validateKamojangRadius,
   validateServiceRoute,
   calculateDistanceFare,
   calculateWeightFare,
+  validateWeightAllowed,
   calculateDriverRevenueSplit,
 } = require("./pricingPolicyService");
 
@@ -17,6 +19,8 @@ const DEFAULT_CONFIG = {
   pricePerKm: PRICING_POLICY.RATE_PER_KM, // Rp 2.500 / km
   pricePerKg: PRICING_POLICY.EXTRA_WEIGHT_RATE_PER_KG, // Rp 3.000 / kg (> 20 kg)
   baseKg: PRICING_POLICY.BASE_WEIGHT_MAX_KG, // 0 - 20 kg disamakan dengan biaya penjemputan dasar
+  weightEnforcementMode: PRICING_POLICY.weightEnforcementMode,
+  maxAllowedWeightKg: PRICING_POLICY.maxAllowedWeightKg,
   sizeFarePer1000Cm3: 500,
   baseCm3: 6000,
   serviceFee: PRICING_POLICY.SERVICE_FEE, // Rp 2.000
@@ -108,7 +112,24 @@ const computeSendFare = async ({
   const estimatedDurationMinutes = Math.round(distanceKm * 3.5) + 8;
 
   // 3. Kamojang Radius Validation (Max 15 km)
+  const pickupRadiusCheck = validateKamojangRadius(pickup, config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM);
+  const destRadiusCheck = validateKamojangRadius(destination, config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM);
   const routeValidation = validateServiceRoute(pickup, destination, config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM);
+
+  const isAllowedRadius = pickupRadiusCheck.valid && destRadiusCheck.valid && routeValidation.allowed;
+  let radiusErrorMessage = "Rute dalam jangkauan layanan resmi Kamojang.";
+  if (!pickupRadiusCheck.valid) radiusErrorMessage = `Titik penjemputan: ${pickupRadiusCheck.message}`;
+  else if (!destRadiusCheck.valid) radiusErrorMessage = `Titik tujuan: ${destRadiusCheck.message}`;
+  else if (!routeValidation.allowed) radiusErrorMessage = routeValidation.message;
+
+  const combinedRadiusValidation = {
+    allowed: isAllowedRadius,
+    pickupRadius: pickupRadiusCheck,
+    destinationRadius: destRadiusCheck,
+    routeDistanceKm: routeValidation.routeDistanceKm,
+    maxRadiusKm: config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM,
+    message: radiusErrorMessage,
+  };
 
   // 4. Distance Fare (< 4 km Rp 9.500, per km berikutnya Rp 2.500)
   const distanceFare = calculateDistanceFare(distanceKm);
@@ -116,6 +137,11 @@ const computeSendFare = async ({
 
   // 5. Weight Fare (0 - 20 kg Rp 0, > 20 kg Rp 3.000 / kg)
   const weightKg = Math.max(0.1, Number(packageData.weightKg) || 1);
+  const weightValidation = validateWeightAllowed(
+    weightKg,
+    config.weightEnforcementMode || PRICING_POLICY.weightEnforcementMode,
+    config.maxAllowedWeightKg || PRICING_POLICY.maxAllowedWeightKg
+  );
   const weightFare = calculateWeightFare(weightKg);
   const extraKg = Math.max(0, weightKg - (config.baseKg || PRICING_POLICY.BASE_WEIGHT_MAX_KG));
 
@@ -157,6 +183,9 @@ const computeSendFare = async ({
     weightKg,
     extraWeightKg: extraKg,
     weightFare,
+    weightValidation,
+    isOverweightAllowed: weightValidation.allowed,
+    isAllowedOrder: isAllowedRadius && weightValidation.allowed,
     sizeFare,
     fragileFee,
     insuranceFee,
@@ -167,8 +196,8 @@ const computeSendFare = async ({
     finalFare: estimatedFare,
     driverEarnings: revenueSplit.driverEarnings,
     revenueSplit,
-    withinServiceRadius: routeValidation.allowed,
-    radiusValidation: routeValidation,
+    withinServiceRadius: isAllowedRadius,
+    radiusValidation: combinedRadiusValidation,
     currency: "IDR",
     policySummary: {
       under4KmFare: PRICING_POLICY.MIN_DISTANCE_FARE,
@@ -177,6 +206,8 @@ const computeSendFare = async ({
       weightThresholdKg: PRICING_POLICY.BASE_WEIGHT_MAX_KG,
       overweightPerKg: PRICING_POLICY.EXTRA_WEIGHT_RATE_PER_KG,
       maxRadiusKm: config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM,
+      weightEnforcementMode: config.weightEnforcementMode || PRICING_POLICY.weightEnforcementMode,
+      maxAllowedWeightKg: config.maxAllowedWeightKg || PRICING_POLICY.maxAllowedWeightKg,
     },
     breakdownNote: "Tarif dihitung berdasarkan jarak (<4km Rp9.500, +Rp2.500/km), bobot (0-20kg Rp0, >20kg +Rp3.000/kg), dan biaya layanan Rp2.000.",
   };

@@ -372,9 +372,9 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
       <table class="header-table">
         <tr>
           <td>
-            <div class="brand-title">GEOVERSE 2.0</div>
-            <div class="brand-tagline">Platform Layanan & Mitra Resmi Kampus UTM</div>
-            <div class="brand-address">Bangkalan, Jawa Timur • cs@geoverse.id</div>
+            <div class="brand-title">GEOVERSE - PGE KAMOJANG</div>
+            <div class="brand-tagline">Ekosistem Digital Geotermal & Pemberdayaan Masyarakat</div>
+            <div class="brand-address">Area Geothermal Kamojang, Samarang, Garut • cs@geoverse.id</div>
           </td>
           <td class="inv-header-right">
             <div class="inv-title-badge ${isCanceled ? "canceled" : ""}">RINGKASAN PESANAN</div>
@@ -569,10 +569,10 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
                 <View style={{ flex: 1 }}>
                   <View style={styles.brandRow}>
                     <ShieldCheck size={20} color="#0D7A53" />
-                    <Text style={styles.brandName}>GEOVERSE 2.0</Text>
+                    <Text style={styles.brandName}>GEOVERSE - PGE KAMOJANG</Text>
                   </View>
-                  <Text style={styles.brandSubtitle}>Platform Layanan & Mitra Resmi Kampus UTM</Text>
-                  <Text style={styles.brandAddress}>Bangkalan, Jawa Timur • cs@geoverse.id</Text>
+                  <Text style={styles.brandSubtitle}>Ekosistem Digital Geotermal & Pemberdayaan Masyarakat</Text>
+                  <Text style={styles.brandAddress}>Area Geothermal Kamojang, Samarang, Garut • cs@geoverse.id</Text>
                 </View>
 
                 <View style={styles.invoiceCodeBlock}>

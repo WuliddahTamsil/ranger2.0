@@ -3,7 +3,7 @@
  * Controller for all canonical GEOVERSE Point endpoints
  */
 
-const { getOrCreateWallet, getWalletConfig, adjustPoints } = require("../services/pointWalletService");
+const { getOrCreateWallet, getWalletConfig, adjustPoints, calculatePaymentQuote } = require("../services/pointWalletService");
 const { getLedgerForUser, getRecentActivities } = require("../services/pointLedgerService");
 const pointRedemptionService = require("../services/pointRedemptionService");
 const Voucher = require("../../../models/Voucher");
@@ -183,7 +183,19 @@ async function getRedemptionDetail(req, res) {
   try {
     const userId = req.authUser._id;
     const role = req.authUser.role;
-    const redemption = await pointRedemptionService.getRedemptionById(req.params.id, userId, role);
+    let authorizedBankId = null;
+    if (role === "bank_sampah") {
+      const WasteBank = require("../../../models/WasteBank");
+      const bank = await WasteBank.findOne({
+        $or: [{ ownerId: userId }, { officerIds: userId }],
+      }).select("_id");
+      if (!bank) {
+        return res.status(403).json({ success: false, message: "Akses ditolak: akun bank sampah tidak terdaftar." });
+      }
+      authorizedBankId = String(bank._id);
+    }
+
+    const redemption = await pointRedemptionService.getRedemptionById(req.params.id, userId, role, authorizedBankId);
 
     return res.status(200).json({
       success: true,
@@ -230,7 +242,19 @@ async function cancelRedemption(req, res) {
 async function payRedemption(req, res) {
   try {
     const reviewerId = req.authUser._id;
-    const redemption = await pointRedemptionService.payRedemption(req.params.id, reviewerId);
+    let authorizedBankId = null;
+    if (req.authUser.role === "bank_sampah") {
+      const WasteBank = require("../../../models/WasteBank");
+      const bank = await WasteBank.findOne({
+        $or: [{ ownerId: reviewerId }, { officerIds: reviewerId }],
+      }).select("_id");
+      if (!bank) {
+        return res.status(403).json({ success: false, message: "Akses ditolak: akun bank sampah tidak terafiliasi." });
+      }
+      authorizedBankId = String(bank._id);
+    }
+
+    const redemption = await pointRedemptionService.payRedemption(req.params.id, reviewerId, authorizedBankId);
 
     return res.status(200).json({
       success: true,
@@ -254,7 +278,19 @@ async function rejectRedemption(req, res) {
   try {
     const reviewerId = req.authUser._id;
     const { reason } = req.body;
-    const result = await pointRedemptionService.rejectRedemption(req.params.id, reviewerId, reason);
+    let authorizedBankId = null;
+    if (req.authUser.role === "bank_sampah") {
+      const WasteBank = require("../../../models/WasteBank");
+      const bank = await WasteBank.findOne({
+        $or: [{ ownerId: reviewerId }, { officerIds: reviewerId }],
+      }).select("_id");
+      if (!bank) {
+        return res.status(403).json({ success: false, message: "Akses ditolak: akun bank sampah tidak terafiliasi." });
+      }
+      authorizedBankId = String(bank._id);
+    }
+
+    const result = await pointRedemptionService.rejectRedemption(req.params.id, reviewerId, reason, authorizedBankId);
 
     return res.status(200).json({
       success: true,
@@ -316,21 +352,25 @@ async function getConfig(req, res) {
 
 /**
  * 13. GET /api/geoverse-points/admin/redemptions
- * Staff / Admin lists customer redemptions
+ * Staff / Admin lists customer redemptions with strict Bank Sampah scoping
  */
 async function getAdminRedemptions(req, res) {
   try {
     const { status, type, page, limit } = req.query;
-    let bankSampahId = req.query.bankSampahId;
+    let bankSampahId = null;
 
-    if (req.authUser.role === "bank_sampah" && !bankSampahId) {
+    if (req.authUser.role === "bank_sampah") {
       const WasteBank = require("../../../models/WasteBank");
       const bank = await WasteBank.findOne({
         $or: [{ ownerId: req.authUser._id }, { officerIds: req.authUser._id }],
       }).select("_id");
-      if (bank) {
-        bankSampahId = String(bank._id);
+      if (!bank) {
+        return res.status(403).json({ success: false, message: "Akses ditolak: akun bank sampah tidak terafiliasi." });
       }
+      // Strictly force to own bank
+      bankSampahId = String(bank._id);
+    } else if (req.authUser.role === "admin") {
+      bankSampahId = req.query.bankSampahId || null;
     }
 
     const result = await pointRedemptionService.getAllRedemptions({
@@ -354,6 +394,45 @@ async function getAdminRedemptions(req, res) {
   }
 }
 
+/**
+ * 14. POST /api/geoverse-points/payment-quote
+ * Authoritative backend quote for GEOVERSE Point discounts
+ */
+async function getPaymentQuote(req, res) {
+  try {
+    const userId = req.authUser?._id || req.user?._id || req.body.userId;
+    const {
+      service,
+      grossAmount,
+      voucherDiscount,
+      deliveryFee,
+      serviceFee,
+      requestedPoints,
+    } = req.body;
+
+    const quote = await calculatePaymentQuote({
+      service,
+      grossAmount,
+      voucherDiscount,
+      deliveryFee,
+      serviceFee,
+      requestedPoints,
+      userId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: quote,
+    });
+  } catch (error) {
+    console.error("geoversePoint getPaymentQuote error:", error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Gagal menghitung quote pembayaran poin.",
+    });
+  }
+}
+
 module.exports = {
   getWallet,
   getLedger,
@@ -368,4 +447,5 @@ module.exports = {
   adminAdjustment,
   getConfig,
   getAdminRedemptions,
+  getPaymentQuote,
 };

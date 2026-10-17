@@ -9,6 +9,8 @@ const {
   updateUserProfile,
   getSystemStats,
   getAllPlatformTransactions,
+  getDocumentRequirements,
+  adminVerifyDocument,
 } = require("../controllers/authController");
 
 const router = express.Router();
@@ -22,5 +24,8 @@ router.get("/profile/:id", getUserProfile);
 router.put("/profile/:id", updateUserProfile);
 router.get("/admin/stats", getSystemStats);
 router.get("/admin/transactions", getAllPlatformTransactions);
+router.get("/document-requirements", getDocumentRequirements);
+router.put("/admin/verify-document", adminVerifyDocument);
 
 module.exports = router;
+

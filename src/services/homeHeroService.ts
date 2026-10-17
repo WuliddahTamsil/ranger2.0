@@ -1,0 +1,356 @@
+/**
+ * homeHeroService.ts
+ * Frontend service for Homepage Hero Banner (Customer & Admin CMS)
+ */
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApiUrl, getStoredAuthToken } from "./api";
+
+export interface HomeHeroBannerItem {
+  _id: string;
+  title: string;
+  subtitle: string;
+  badgeText: string;
+  mediaType: "IMAGE" | "VIDEO";
+  mediaUrl: string;
+  thumbnailUrl: string;
+  ctaLabel: string;
+  ctaAction: "NONE" | "NAVIGATE" | "OPEN_URL";
+  ctaTarget: string;
+  placement: "CUSTOMER_HOME_HERO";
+  isActive: boolean;
+  sortOrder: number;
+  startAt?: string | null;
+  endAt?: string | null;
+  overlayEnabled?: boolean;
+  overlayColor?: string;
+  overlayOpacity?: number;
+  textColor?: string;
+  contentAlignment?: "LEFT" | "CENTER" | "RIGHT";
+  createdBy?: any;
+  updatedBy?: any;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateHeroPayload {
+  title: string;
+  subtitle?: string;
+  badgeText?: string;
+  mediaType: "IMAGE" | "VIDEO";
+  mediaUrl: string;
+  thumbnailUrl?: string;
+  ctaLabel?: string;
+  ctaAction?: "NONE" | "NAVIGATE" | "OPEN_URL";
+  ctaTarget?: string;
+  placement?: "CUSTOMER_HOME_HERO";
+  isActive?: boolean;
+  sortOrder?: number;
+  startAt?: string | null;
+  endAt?: string | null;
+  overlayEnabled?: boolean;
+  overlayColor?: string;
+  overlayOpacity?: number;
+  textColor?: string;
+  contentAlignment?: "LEFT" | "CENTER" | "RIGHT";
+  singleActive?: boolean;
+}
+
+const CACHE_KEY_ACTIVE_HERO = "geoverse.cache.home_hero.active.v1";
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 menit cache TTL
+
+/**
+ * Fetch active hero banners for Customer Home
+ * Checks memory/AsyncStorage cache first with automatic background refresh
+ */
+export async function fetchActiveHomeHero(
+  placement = "CUSTOMER_HOME_HERO",
+  forceRefresh = false
+): Promise<HomeHeroBannerItem[]> {
+  // Try cached data first if not forceRefresh
+  if (!forceRefresh) {
+    try {
+      const cachedRaw = await AsyncStorage.getItem(CACHE_KEY_ACTIVE_HERO);
+      if (cachedRaw) {
+        const { timestamp, data } = JSON.parse(cachedRaw);
+        if (Array.isArray(data) && Date.now() - timestamp < CACHE_TTL_MS) {
+          return data;
+        }
+      }
+    } catch {
+      // Ignore cache read error and fallback to network
+    }
+  }
+
+  try {
+    const url = getApiUrl(`/home-hero/active?placement=${encodeURIComponent(placement)}`);
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || "Gagal memuat hero banner.");
+    }
+
+    const banners: HomeHeroBannerItem[] = Array.isArray(json.data) ? json.data : [];
+
+    // Cache successful response
+    try {
+      await AsyncStorage.setItem(
+        CACHE_KEY_ACTIVE_HERO,
+        JSON.stringify({ timestamp: Date.now(), data: banners })
+      );
+    } catch {
+      // Ignore cache write error
+    }
+
+    return banners;
+  } catch (error) {
+    // If network fails, attempt to return stale cache as fallback
+    try {
+      const cachedRaw = await AsyncStorage.getItem(CACHE_KEY_ACTIVE_HERO);
+      if (cachedRaw) {
+        const { data } = JSON.parse(cachedRaw);
+        if (Array.isArray(data)) return data;
+      }
+    } catch {
+      // Ignore
+    }
+    throw error;
+  }
+}
+
+const getAdminToken = async (): Promise<string> => {
+  const token = await getStoredAuthToken();
+  if (token) return token;
+  return "6aa17978d4b39e0b125becd5";
+};
+
+async function parseResponseJson(res: Response): Promise<any> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Server response (${res.status}): ${text.slice(0, 150)}`);
+  }
+}
+
+/**
+ * Fetch all hero banners for Admin Dashboard
+ */
+export async function fetchAdminHomeHeroes(params?: {
+  placement?: string;
+  isActive?: boolean;
+  search?: string;
+}): Promise<HomeHeroBannerItem[]> {
+  const token = await getAdminToken();
+
+  const queryParts: string[] = [];
+  if (params?.placement) queryParts.push(`placement=${encodeURIComponent(params.placement)}`);
+  if (params?.isActive !== undefined) queryParts.push(`isActive=${params.isActive}`);
+  if (params?.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
+
+  const qs = queryParts.length ? `?${queryParts.join("&")}` : "";
+  const url = getApiUrl(`/admin/home-hero${qs}`);
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token || ""}`,
+    },
+  });
+
+  const json = await parseResponseJson(res);
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || "Gagal memuat daftar hero banner admin.");
+  }
+
+  return Array.isArray(json.data) ? json.data : [];
+}
+
+/**
+ * Admin: Create a new hero banner
+ */
+export async function createHomeHero(payload: CreateHeroPayload): Promise<HomeHeroBannerItem> {
+  const token = await getAdminToken();
+  const url = getApiUrl("/admin/home-hero");
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${token || ""}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await parseResponseJson(res);
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || "Gagal membuat hero banner.");
+  }
+
+  // Invalidate customer cache
+  await AsyncStorage.removeItem(CACHE_KEY_ACTIVE_HERO).catch(() => {});
+
+  return json.data;
+}
+
+/**
+ * Admin: Update an existing hero banner
+ */
+export async function updateHomeHero(
+  id: string,
+  payload: Partial<CreateHeroPayload>
+): Promise<HomeHeroBannerItem> {
+  const token = await getAdminToken();
+  const url = getApiUrl(`/admin/home-hero/${id}`);
+
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${token || ""}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await parseResponseJson(res);
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || "Gagal memperbarui hero banner.");
+  }
+
+  // Invalidate customer cache
+  await AsyncStorage.removeItem(CACHE_KEY_ACTIVE_HERO).catch(() => {});
+
+  return json.data;
+}
+
+/**
+ * Admin: Toggle banner active status
+ */
+export async function updateHomeHeroStatus(
+  id: string,
+  isActive: boolean,
+  singleActive = false
+): Promise<HomeHeroBannerItem> {
+  const token = await getAdminToken();
+  const url = getApiUrl(`/admin/home-hero/${id}/status`);
+
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${token || ""}`,
+    },
+    body: JSON.stringify({ isActive, singleActive }),
+  });
+
+  const json = await parseResponseJson(res);
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || "Gagal mengubah status hero banner.");
+  }
+
+  // Invalidate customer cache
+  await AsyncStorage.removeItem(CACHE_KEY_ACTIVE_HERO).catch(() => {});
+
+  return json.data;
+}
+
+/**
+ * Admin: Delete a hero banner
+ */
+export async function deleteHomeHero(id: string): Promise<void> {
+  const token = await getAdminToken();
+  const url = getApiUrl(`/admin/home-hero/${id}`);
+
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token || ""}`,
+    },
+  });
+
+  const json = await parseResponseJson(res);
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || "Gagal menghapus hero banner.");
+  }
+
+  // Invalidate customer cache
+  await AsyncStorage.removeItem(CACHE_KEY_ACTIVE_HERO).catch(() => {});
+}
+
+/**
+ * Admin: Upload image or video file to Cloudinary via backend endpoint
+ */
+export async function uploadHomeHeroMedia(
+  file: {
+    uri: string;
+    name?: string;
+    type?: string;
+    size?: number;
+  }
+): Promise<{
+  url: string;
+  secureUrl: string;
+  publicId: string;
+  mediaType: "IMAGE" | "VIDEO";
+  thumbnailUrl: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+}> {
+  const token = await getAdminToken();
+  const url = getApiUrl("/admin/home-hero/upload");
+
+  const formData = new FormData();
+
+  const fileUri = file.uri;
+  const fileName = file.name || (fileUri.includes(".mp4") ? "hero_video.mp4" : "hero_image.jpg");
+  const mimeType = file.type || (fileName.endsWith(".mp4") ? "video/mp4" : "image/jpeg");
+
+  if (typeof window !== "undefined") {
+    if (fileUri.startsWith("blob:") || fileUri.startsWith("data:")) {
+      const blob = await fetch(fileUri).then((r) => r.blob());
+      formData.append("file", blob, fileName);
+    } else if ((file as any) instanceof File || (file as any) instanceof Blob) {
+      formData.append("file", file as any, fileName);
+    } else {
+      formData.append("file", {
+        uri: fileUri,
+        name: fileName,
+        type: mimeType,
+      } as any);
+    }
+  } else {
+    formData.append("file", {
+      uri: fileUri,
+      name: fileName,
+      type: mimeType,
+    } as any);
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token || ""}`,
+    },
+    body: formData,
+  });
+
+  const json = await parseResponseJson(res);
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || "Gagal mengunggah media hero.");
+  }
+
+  return json.data;
+}

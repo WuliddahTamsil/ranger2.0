@@ -81,73 +81,90 @@ async function createRedemption({
 
   const redemptionCode = `RNG-RDM-${Date.now().toString().slice(-8)}`;
 
-  // Atomically debit points
-  const debitResult = await debitPoints({
-    userId,
-    points: safePoints,
-    type: type === "VOUCHER" ? LEDGER_TYPES.REDEEM_VOUCHER : LEDGER_TYPES.REDEEM_CASH,
-    sourceType: type === "VOUCHER" ? SOURCE_TYPES.VOUCHER : SOURCE_TYPES.CASH_REDEMPTION,
-    sourceId: redemptionCode,
-    notes:
-      type === "VOUCHER"
-        ? `Tukar voucher ${voucherDoc?.title}`
-        : `Tukar kas Rp ${(safePoints * POINT_TO_RUPIAH_RATE).toLocaleString("id-ID")}`,
-    actorId: userId,
-  });
-
-  const isInstantVoucher = type === "VOUCHER";
-  const initialStatus = isInstantVoucher ? REDEMPTION_STATUSES.APPROVED : REDEMPTION_STATUSES.REQUESTED;
-
-  const redemption = await PointRedemption.create({
-    redemptionCode,
-    userId,
-    bankSampahId: bankSampahId || undefined,
-    type,
-    points: safePoints,
-    rupiahValue: safePoints * POINT_TO_RUPIAH_RATE,
-    fee: 0,
-    payoutDestination: {
-      channel: payoutDestination.channel || (isInstantVoucher ? "VOUCHER_WALLET" : "CASH_AT_BANK"),
-      accountNumber: payoutDestination.accountNumber || "",
-      accountName: payoutDestination.accountName || userName,
-    },
-    voucherId: voucherDoc ? voucherDoc._id : undefined,
-    voucherCode: voucherDoc ? voucherDoc.voucherCode : "",
-    voucherDetails: voucherDoc
-      ? {
-          title: voucherDoc.title,
-          service: voucherDoc.service,
-          discountValue: voucherDoc.discountValue,
-        }
-      : undefined,
-    status: initialStatus,
-    paidAt: isInstantVoucher ? new Date() : null,
-    idempotencyKey: idempotencyKey || undefined,
-  });
-
-  // If voucher, record claim
-  if (voucherDoc) {
-    voucherDoc.claimedBy.push({
+  let debitResult = null;
+  try {
+    // Atomically debit points
+    debitResult = await debitPoints({
       userId,
-      claimedAt: new Date(),
-      used: false,
+      points: safePoints,
+      type: type === "VOUCHER" ? LEDGER_TYPES.REDEEM_VOUCHER : LEDGER_TYPES.REDEEM_CASH,
+      sourceType: type === "VOUCHER" ? SOURCE_TYPES.VOUCHER : SOURCE_TYPES.CASH_REDEMPTION,
+      sourceId: redemptionCode,
+      notes:
+        type === "VOUCHER"
+          ? `Tukar voucher ${voucherDoc?.title}`
+          : `Tukar kas Rp ${(safePoints * POINT_TO_RUPIAH_RATE).toLocaleString("id-ID")}`,
+      actorId: userId,
+      idempotencyKey,
     });
-    voucherDoc.usedCount = (voucherDoc.usedCount || 0) + 1;
-    await voucherDoc.save();
+
+    const isInstantVoucher = type === "VOUCHER";
+    const initialStatus = isInstantVoucher ? REDEMPTION_STATUSES.APPROVED : REDEMPTION_STATUSES.REQUESTED;
+
+    const redemption = await PointRedemption.create({
+      redemptionCode,
+      userId,
+      bankSampahId: bankSampahId || undefined,
+      type,
+      points: safePoints,
+      rupiahValue: safePoints * POINT_TO_RUPIAH_RATE,
+      fee: 0,
+      payoutDestination: {
+        channel: payoutDestination.channel || (isInstantVoucher ? "VOUCHER_WALLET" : "CASH_AT_BANK"),
+        accountNumber: payoutDestination.accountNumber || "",
+        accountName: payoutDestination.accountName || userName,
+      },
+      voucherId: voucherDoc ? voucherDoc._id : undefined,
+      voucherCode: voucherDoc ? voucherDoc.voucherCode : "",
+      voucherDetails: voucherDoc
+        ? {
+            title: voucherDoc.title,
+            service: voucherDoc.service,
+            discountValue: voucherDoc.discountValue,
+          }
+        : undefined,
+      status: initialStatus,
+      paidAt: isInstantVoucher ? new Date() : null,
+      idempotencyKey: idempotencyKey || undefined,
+    });
+
+    // If voucher, record claim without double-counting usedCount
+    if (voucherDoc) {
+      voucherDoc.claimedBy.push({
+        userId,
+        claimedAt: new Date(),
+        used: false,
+      });
+      // Do not increment usedCount on claim (usedCount is incremented when the voucher is actually spent on an order)
+      await voucherDoc.save();
+    }
+
+    // Create notification
+    await Notification.create({
+      userId,
+      title: isInstantVoucher ? "Voucher Berhasil Ditukarkan!" : "Permintaan Pencairan Diterima",
+      message: isInstantVoucher
+        ? `Voucher '${voucherDoc?.title}' siap digunakan pada pesanan Anda.`
+        : `Permintaan penukaran kas ${safePoints.toLocaleString("id-ID")} poin (Rp ${(safePoints * POINT_TO_RUPIAH_RATE).toLocaleString("id-ID")}) sedang diproses.`,
+      type: "points",
+      relatedId: redemption._id,
+    }).catch(() => {});
+
+    return { redemption, wallet: debitResult.wallet, alreadyProcessed: false };
+  } catch (error) {
+    if (debitResult?.wallet) {
+      // Rollback points if redemption creation failed
+      await reversePoints({
+        userId,
+        points: safePoints,
+        sourceType: type === "VOUCHER" ? SOURCE_TYPES.VOUCHER : SOURCE_TYPES.CASH_REDEMPTION,
+        sourceId: redemptionCode,
+        notes: `Rollback penukaran gagal: ${error.message}`,
+        actorId: userId,
+      }).catch((rbErr) => console.error("Rollback redemption points error:", rbErr));
+    }
+    throw error;
   }
-
-  // Create notification
-  await Notification.create({
-    userId,
-    title: isInstantVoucher ? "Voucher Berhasil Ditukarkan!" : "Permintaan Pencairan Diterima",
-    message: isInstantVoucher
-      ? `Voucher '${voucherDoc?.title}' siap digunakan pada pesanan Anda.`
-      : `Permintaan penukaran kas ${safePoints.toLocaleString("id-ID")} poin (Rp ${(safePoints * POINT_TO_RUPIAH_RATE).toLocaleString("id-ID")}) sedang diproses.`,
-    type: "points",
-    relatedId: redemption._id,
-  }).catch(() => {});
-
-  return { redemption, wallet: debitResult.wallet, alreadyProcessed: false };
 }
 
 /**
@@ -160,13 +177,17 @@ async function getRedemptionsForUser(userId) {
 /**
  * Gets redemption by ID
  */
-async function getRedemptionById(id, userId, userRole) {
+async function getRedemptionById(id, userId, userRole, authorizedBankId = null) {
   const redemption = await PointRedemption.findById(id).lean();
   if (!redemption) {
     throw new Error("Penukaran poin tidak ditemukan.");
   }
   // Access check
-  if (userRole !== "admin" && userRole !== "bank_sampah" && String(redemption.userId) !== String(userId)) {
+  if (userRole === "bank_sampah") {
+    if (authorizedBankId && String(redemption.bankSampahId) !== String(authorizedBankId)) {
+      throw new Error("Anda tidak memiliki akses ke penukaran pada bank sampah lain.");
+    }
+  } else if (userRole !== "admin" && String(redemption.userId) !== String(userId)) {
     throw new Error("Anda tidak memiliki akses ke penukaran poin ini.");
   }
   return redemption;
@@ -175,10 +196,13 @@ async function getRedemptionById(id, userId, userRole) {
 /**
  * Approves and marks a cash redemption as PAID
  */
-async function payRedemption(id, reviewerId) {
+async function payRedemption(id, reviewerId, authorizedBankId = null) {
   const redemption = await PointRedemption.findById(id);
   if (!redemption) {
     throw new Error("Penukaran tidak ditemukan.");
+  }
+  if (authorizedBankId && String(redemption.bankSampahId) !== String(authorizedBankId)) {
+    throw new Error("Anda tidak memiliki izin memproses penukaran untuk bank sampah lain.");
   }
   if (redemption.status === REDEMPTION_STATUSES.PAID) {
     return redemption;
@@ -206,10 +230,13 @@ async function payRedemption(id, reviewerId) {
 /**
  * Rejects a redemption and reverses points atomically back to user wallet
  */
-async function rejectRedemption(id, reviewerId, reason = "Penukaran kas ditolak oleh petugas.") {
+async function rejectRedemption(id, reviewerId, reason = "Penukaran kas ditolak oleh petugas.", authorizedBankId = null) {
   const redemption = await PointRedemption.findById(id);
   if (!redemption) {
     throw new Error("Penukaran tidak ditemukan.");
+  }
+  if (authorizedBankId && String(redemption.bankSampahId) !== String(authorizedBankId)) {
+    throw new Error("Anda tidak memiliki izin menolak penukaran untuk bank sampah lain.");
   }
   if (redemption.status === REDEMPTION_STATUSES.REJECTED || redemption.status === REDEMPTION_STATUSES.PAID) {
     throw new Error(`Status penukaran sudah ${redemption.status}.`);
@@ -220,7 +247,7 @@ async function rejectRedemption(id, reviewerId, reason = "Penukaran kas ditolak 
   redemption.reviewedBy = reviewerId;
   await redemption.save();
 
-  // Atomically reverse points back to customer
+  // Atomically reverse points back to customer with deterministic reversal key
   const reversalResult = await reversePoints({
     userId: redemption.userId,
     points: redemption.points,
@@ -228,6 +255,7 @@ async function rejectRedemption(id, reviewerId, reason = "Penukaran kas ditolak 
     sourceId: redemption.redemptionCode,
     notes: `Pengembalian poin penukaran #${redemption.redemptionCode} (Ditolak: ${reason})`,
     actorId: reviewerId,
+    reversalKey: `REV-REJECT-${redemption.redemptionCode}`,
   });
 
   await Notification.create({
@@ -266,7 +294,7 @@ async function cancelRedemption(id, userId, reason = "Dibatalkan oleh pelanggan.
     sourceType: SOURCE_TYPES.CASH_REDEMPTION,
     sourceId: redemption.redemptionCode,
     notes: `Pembatalan penukaran #${redemption.redemptionCode} oleh pelanggan`,
-    actorId: userId,
+    reversalKey: `REV-CANCEL-${redemption.redemptionCode}`,
   });
 
   return { redemption, wallet: reversalResult?.wallet };
@@ -284,7 +312,7 @@ async function getAllRedemptions({ status, type, bankSampahId, limit = 50, page 
     filter.type = type;
   }
   if (bankSampahId) {
-    filter.$or = [{ bankSampahId }, { bankSampahId: null }];
+    filter.bankSampahId = bankSampahId;
   }
 
   const safeLimit = Math.max(1, Math.min(100, Number(limit) || 50));

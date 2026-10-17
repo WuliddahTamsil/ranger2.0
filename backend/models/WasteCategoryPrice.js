@@ -59,6 +59,32 @@ const wasteCategoryPriceSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    priceSource: {
+      type: String,
+      default: "Pengepul Rekanan Kamojang",
+    },
+    collectorName: {
+      type: String,
+      default: "",
+    },
+    priceVersion: {
+      type: String,
+      default: "v1.0",
+    },
+    approvedBy: {
+      type: String,
+      default: "",
+    },
+    priceAuditLog: [
+      {
+        pricePerKg: { type: Number, required: true },
+        priceSource: { type: String, default: "" },
+        collectorName: { type: String, default: "" },
+        reason: { type: String, default: "" },
+        changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        changedAt: { type: Date, default: Date.now },
+      },
+    ],
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

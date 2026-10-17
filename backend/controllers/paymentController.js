@@ -334,6 +334,13 @@ const handlePaymentWebhook = async (req, res) => {
  */
 const simulatePaymentWebhook = async (req, res) => {
   try {
+    if (process.env.NODE_ENV === "production" && process.env.ENABLE_PAYMENT_SIMULATION !== "true") {
+      return res.status(403).json({
+        success: false,
+        message: "Simulasi pembayaran dinonaktifkan di environment production kecuali flag ENABLE_PAYMENT_SIMULATION diaktifkan secara eksplisit.",
+      });
+    }
+
     const paymentId = req.params.paymentId || req.body.paymentId || req.body.orderId;
     const { status = "PAID", orderId, orderType = "KANYAAH_SEND" } = req.body;
 

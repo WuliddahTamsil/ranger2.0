@@ -52,7 +52,7 @@ const CATEGORIES: { id: SendPackageCategory; label: string; icon: any }[] = [
   { id: "Lainnya", label: "Lainnya", icon: Box },
 ];
 
-const WEIGHT_PRESETS = [1, 3, 5, 10];
+const WEIGHT_PRESETS = [1, 5, 10, 25];
 
 export const SendPackageDetailScreen: React.FC<SendPackageDetailScreenProps> = ({
   navigate,
@@ -302,7 +302,7 @@ export const SendPackageDetailScreen: React.FC<SendPackageDetailScreenProps> = (
 
             <TouchableOpacity
               style={styles.stepperBtn}
-              onPress={() => setWeightKg((prev) => Math.min(20, Number((prev + 0.5).toFixed(1))))}
+              onPress={() => setWeightKg((prev) => Math.min(50, Number((prev + 0.5).toFixed(1))))}
             >
               <Plus size={16} color="#0F172A" />
             </TouchableOpacity>

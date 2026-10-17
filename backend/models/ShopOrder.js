@@ -215,6 +215,31 @@ const shopOrderSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    pointsUsed: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    pointRate: {
+      type: Number,
+      default: 1,
+    },
+    grossAmount: {
+      type: Number,
+      default: 0,
+    },
+    finalAmount: {
+      type: Number,
+      default: 0,
+    },
+    pointRefunded: {
+      type: Boolean,
+      default: false,
+    },
+    reversalIdempotencyKey: {
+      type: String,
+      default: null,
+    },
     deliveryFee: {
       type: Number,
       required: true,

@@ -93,6 +93,17 @@ const sendOrderSchema = new mongoose.Schema(
       finalFare: { type: Number, default: null },
       totalAmount: { type: Number, default: 0 },
       driverEarnings: { type: Number, default: 0 },
+      revenueSplitSnapshot: {
+        grossDeliveryFare: { type: Number, default: 0 },
+        serviceFee: { type: Number, default: 0 },
+        driverEarnings: { type: Number, default: 0 },
+        platformCommission: { type: Number, default: 0 },
+        driverSharePercent: { type: Number, default: 0 },
+        platformSharePercent: { type: Number, default: 0 },
+        commissionTier: { type: String, default: "" },
+        isKedaiTerpadu: { type: Boolean, default: false },
+        splitCalculatedAt: { type: Date, default: null },
+      },
     },
 
     distanceKm: { type: Number, default: 0 },
@@ -170,6 +181,12 @@ const sendOrderSchema = new mongoose.Schema(
     totalAmount: { type: Number, default: 0 },
     pointDiscount: { type: Number, default: 0 },
     pointsUsed: { type: Number, default: 0 },
+    pointRate: { type: Number, default: 1 },
+    grossAmount: { type: Number, default: 0 },
+    finalAmount: { type: Number, default: 0 },
+    pointRefunded: { type: Boolean, default: false },
+    reversalIdempotencyKey: { type: String, default: null },
+    cashbackIssued: { type: Boolean, default: false },
 
     cancellation: {
       cancelledBy: { type: String, enum: ["customer", "driver", "system", "admin", null], default: null },

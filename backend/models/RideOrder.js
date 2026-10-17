@@ -169,6 +169,26 @@ const rideOrderSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    pointRate: {
+      type: Number,
+      default: 1,
+    },
+    grossAmount: {
+      type: Number,
+      default: 0,
+    },
+    finalAmount: {
+      type: Number,
+      default: 0,
+    },
+    pointRefunded: {
+      type: Boolean,
+      default: false,
+    },
+    reversalIdempotencyKey: {
+      type: String,
+      default: null,
+    },
     totalAmount: {
       type: Number,
       required: true,
@@ -189,6 +209,17 @@ const rideOrderSchema = new mongoose.Schema(
     driverEarnings: {
       type: Number,
       default: 0,
+    },
+    revenueSplitSnapshot: {
+      grossDeliveryFare: { type: Number, default: 0 },
+      serviceFee: { type: Number, default: 0 },
+      driverEarnings: { type: Number, default: 0 },
+      platformCommission: { type: Number, default: 0 },
+      driverSharePercent: { type: Number, default: 0 },
+      platformSharePercent: { type: Number, default: 0 },
+      commissionTier: { type: String, default: "" },
+      isKedaiTerpadu: { type: Boolean, default: false },
+      splitCalculatedAt: { type: Date, default: null },
     },
 
     // Payment Information

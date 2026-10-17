@@ -23,9 +23,11 @@ const {
   KAMOJANG_COORDINATES,
   MAX_SERVICE_RADIUS_KM,
   PRICING_POLICY,
+  validateKamojangRadius,
   validateServiceRoute,
   calculateDistanceFare,
   calculateDriverRevenueSplit,
+  createRevenueSplitSnapshot,
   computeRideFare,
 } = require("../services/pricingPolicyService");
 
@@ -84,7 +86,26 @@ const estimateRideFare = async (req, res) => {
       });
     }
 
-    // Validate Kamojang max radius (15 km)
+    // Validate Kamojang max radius (15 km) from center
+    const pickupKamojangValidation = validateKamojangRadius(pickup, MAX_SERVICE_RADIUS_KM);
+    if (!pickupKamojangValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: `Titik penjemputan: ${pickupKamojangValidation.message}`,
+        radiusValidation: pickupKamojangValidation,
+      });
+    }
+
+    const destKamojangValidation = validateKamojangRadius(destination, MAX_SERVICE_RADIUS_KM);
+    if (!destKamojangValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: `Titik tujuan: ${destKamojangValidation.message}`,
+        radiusValidation: destKamojangValidation,
+      });
+    }
+
+    // Validate Kamojang max route distance (15 km)
     const routeValidation = validateServiceRoute(pickup, destination, MAX_SERVICE_RADIUS_KM);
     if (!routeValidation.allowed) {
       return res.status(400).json({
@@ -236,7 +257,26 @@ const createRideOrder = async (req, res) => {
       });
     }
 
-    // Validate Kamojang max radius (15 km)
+    // Validate Kamojang max radius (15 km) from center
+    const pickupKamojangValidation = validateKamojangRadius(pickup, MAX_SERVICE_RADIUS_KM);
+    if (!pickupKamojangValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: `Titik penjemputan: ${pickupKamojangValidation.message}`,
+        radiusValidation: pickupKamojangValidation,
+      });
+    }
+
+    const destKamojangValidation = validateKamojangRadius(destination, MAX_SERVICE_RADIUS_KM);
+    if (!destKamojangValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: `Titik tujuan: ${destKamojangValidation.message}`,
+        radiusValidation: destKamojangValidation,
+      });
+    }
+
+    // Validate Kamojang max route distance (15 km)
     const routeValidation = validateServiceRoute(pickup, destination, MAX_SERVICE_RADIUS_KM);
     if (!routeValidation.allowed) {
       return res.status(400).json({
@@ -254,109 +294,142 @@ const createRideOrder = async (req, res) => {
     );
     const estimatedFare = breakdown.estimatedFare;
     const requestedPoints = Math.max(0, Math.round(Number(pointsUsed) || Number(pointDiscount) || 0));
-    let finalPointDiscount = 0;
-
     const orderCode = `RNG-RIDE-${Date.now().toString().slice(-8)}`;
 
-    if (requestedPoints > 0 && customerId) {
-      const wallet = await pointWalletService.getOrCreateWallet(customerId);
-      const usablePoints = Math.min(wallet.balancePoint || 0, estimatedFare, requestedPoints);
-      if (usablePoints > 0) {
-        finalPointDiscount = usablePoints;
-        await pointWalletService.debitPoints({
+    const quote = await pointWalletService.calculatePaymentQuote({
+      service: "KANYAAH_RIDE",
+      grossAmount: estimatedFare,
+      voucherDiscount: 0,
+      requestedPoints,
+      userId: customerId,
+    });
+
+    let debitedPoints = 0;
+    if (quote.approvedPoints > 0 && customerId) {
+      await pointWalletService.debitPoints({
+        userId: customerId,
+        points: quote.approvedPoints,
+        type: "PAYMENT",
+        sourceType: "KANYAAH_RIDE",
+        sourceId: orderCode,
+        operationKey: `DEBIT-RIDE-${orderCode}`,
+        notes: `Pembayaran Kanyaah Ride #${orderCode} dengan ${quote.approvedPoints} GEOVERSE Point`,
+        actorId: customerId,
+      });
+      debitedPoints = quote.approvedPoints;
+    }
+
+    try {
+      const totalAmount = quote.finalAmount;
+      const driverEarnings = breakdown.driverEarnings;
+
+      let finalCustomerPhone = String(customerPhone || "").trim();
+      if (!finalCustomerPhone && customerId) {
+        const custUser = await User.findById(customerId).select("phone").lean().catch(() => null);
+        if (custUser?.phone) finalCustomerPhone = String(custUser.phone).trim();
+      }
+
+      const isCashMethod =
+        String(paymentMethod || "").toLowerCase().includes("tunai") ||
+        String(paymentMethod || "").toLowerCase().includes("cash");
+      const resolvedPaymentMethod =
+        totalAmount === 0
+          ? "GEOVERSE_POINT"
+          : quote.approvedPoints > 0
+          ? isCashMethod
+            ? "GEOVERSE_POINT_PLUS_CASH"
+            : "GEOVERSE_POINT_PLUS_QRIS"
+          : paymentMethod;
+
+      const rideOrder = await RideOrder.create({
+        orderCode,
+        idempotencyKey: idempotencyKey || null,
+        orderType: "KANYAAH_RIDE",
+        serviceType: "KANYAAH_RIDE",
+        customerId,
+        customerName,
+        customerPhone: finalCustomerPhone,
+        vehicleType: "MOTOR",
+        pickup: {
+          address: pickup.address,
+          latitude: pickup.latitude,
+          longitude: pickup.longitude,
+          placeName: pickup.placeName || "",
+          notes: pickup.notes || "",
+        },
+        destination: {
+          address: destination.address,
+          latitude: destination.latitude,
+          longitude: destination.longitude,
+          placeName: destination.placeName || "",
+          notes: destination.notes || "",
+        },
+        customerNote: (customerNote || "").slice(0, 250),
+        estimatedDistanceKm: breakdown.distanceKm,
+        estimatedDurationMinutes: breakdown.estimatedDurationMinutes,
+        estimatedDistance: breakdown.distanceKm,
+        estimatedDuration: breakdown.estimatedDurationMinutes,
+        baseFare: breakdown.baseFare,
+        distanceFare: breakdown.distanceFare,
+        timeFare: breakdown.timeFare,
+        serviceFee: breakdown.serviceFee,
+        discount: breakdown.discount,
+        estimatedFare,
+        pointDiscount: quote.pointDiscount,
+        pointsUsed: quote.approvedPoints,
+        pointRate: quote.pointRate,
+        grossAmount: estimatedFare,
+        finalAmount: totalAmount,
+        totalAmount,
+        driverEarnings,
+        paymentMethod: resolvedPaymentMethod,
+        paymentStatus: totalAmount === 0 ? "Lunas" : "Menunggu Pembayaran",
+        status: "SEARCHING_DRIVER",
+        statusHistory: [
+          {
+            status: "SEARCHING_DRIVER",
+            actorId: customerId,
+            actorRole: "customer",
+            note: "Pesanan Kanyaah Ride dibuat oleh customer",
+            createdAt: new Date(),
+          },
+        ],
+      });
+
+      // Create Notification for customer
+      if (isValidUserId(customerId)) {
+        await Notification.create({
           userId: customerId,
-          points: finalPointDiscount,
-          type: "PAYMENT",
+          title: "Kanyaah Ride Dipesan",
+          message: `Mencari Driver Rangers untuk perjalanan Anda (${pickup.placeName || pickup.address} → ${destination.placeName || destination.address}).`,
+          type: "order_new",
+          relatedId: rideOrder._id,
+        }).catch(() => {});
+      }
+
+      // Broadcast to online drivers via socket.io
+      req.io?.emit("ride:new_available", rideOrder);
+      req.io?.emit("order_created", rideOrder);
+
+      return res.status(201).json({
+        success: true,
+        message: "Pesanan Kanyaah Ride berhasil dibuat. Sistem sedang mencari driver terdekat.",
+        data: rideOrder,
+      });
+    } catch (orderCreateError) {
+      if (debitedPoints > 0) {
+        await pointWalletService.reversePoints({
+          userId: customerId,
+          points: debitedPoints,
           sourceType: "KANYAAH_RIDE",
           sourceId: orderCode,
-          notes: `Pembayaran Kanyaah Ride #${orderCode} dengan ${finalPointDiscount} GEOVERSE Point`,
+          reversalKey: `ROLLBACK-RIDE-${orderCode}`,
+          notes: `Rollback pembuatan order Kanyaah Ride #${orderCode} gagal`,
           actorId: customerId,
-        });
+        }).catch((rbErr) => console.error("Rollback ride points error:", rbErr));
       }
+      throw orderCreateError;
     }
-
-    const totalAmount = Math.max(0, estimatedFare - finalPointDiscount);
-    // Driver gets earnings according to pricing policy (80% for new drivers, 100% for Kedai Terpadu)
-    const driverEarnings = breakdown.driverEarnings;
-
-    let finalCustomerPhone = String(customerPhone || "").trim();
-    if (!finalCustomerPhone && customerId) {
-      const custUser = await User.findById(customerId).select("phone").lean().catch(() => null);
-      if (custUser?.phone) finalCustomerPhone = String(custUser.phone).trim();
-    }
-
-    const rideOrder = await RideOrder.create({
-      orderCode,
-      idempotencyKey: idempotencyKey || null,
-      orderType: "KANYAAH_RIDE",
-      serviceType: "KANYAAH_RIDE",
-      customerId,
-      customerName,
-      customerPhone: finalCustomerPhone,
-      vehicleType: "MOTOR",
-      pickup: {
-        address: pickup.address,
-        latitude: pickup.latitude,
-        longitude: pickup.longitude,
-        placeName: pickup.placeName || "",
-        notes: pickup.notes || "",
-      },
-      destination: {
-        address: destination.address,
-        latitude: destination.latitude,
-        longitude: destination.longitude,
-        placeName: destination.placeName || "",
-        notes: destination.notes || "",
-      },
-      customerNote: (customerNote || "").slice(0, 250),
-      estimatedDistanceKm: breakdown.distanceKm,
-      estimatedDurationMinutes: breakdown.estimatedDurationMinutes,
-      estimatedDistance: breakdown.distanceKm,
-      estimatedDuration: breakdown.estimatedDurationMinutes,
-      baseFare: breakdown.baseFare,
-      distanceFare: breakdown.distanceFare,
-      timeFare: breakdown.timeFare,
-      serviceFee: breakdown.serviceFee,
-      discount: breakdown.discount,
-      estimatedFare,
-      pointDiscount: finalPointDiscount,
-      pointsUsed: finalPointDiscount,
-      totalAmount,
-      driverEarnings,
-      paymentMethod: totalAmount === 0 ? "GEOVERSE Point" : paymentMethod,
-      paymentStatus: totalAmount === 0 ? "Lunas" : "Menunggu Pembayaran",
-      status: "SEARCHING_DRIVER",
-      statusHistory: [
-        {
-          status: "SEARCHING_DRIVER",
-          actorId: customerId,
-          actorRole: "customer",
-          note: "Pesanan Kanyaah Ride dibuat oleh customer",
-          createdAt: new Date(),
-        },
-      ],
-    });
-
-    // Create Notification for customer
-    if (isValidUserId(customerId)) {
-      await Notification.create({
-        userId: customerId,
-        title: "Kanyaah Ride Dipesan",
-        message: `Mencari Driver Rangers untuk perjalanan Anda (${pickup.placeName || pickup.address} → ${destination.placeName || destination.address}).`,
-        type: "order_new",
-        relatedId: rideOrder._id,
-      }).catch(() => {});
-    }
-
-    // Broadcast to online drivers via socket.io
-    req.io?.emit("ride:new_available", rideOrder);
-    req.io?.emit("order_created", rideOrder);
-
-    return res.status(201).json({
-      success: true,
-      message: "Pesanan Kanyaah Ride berhasil dibuat. Sistem sedang mencari driver terdekat.",
-      data: rideOrder,
-    });
   } catch (error) {
     console.error("createRideOrder error:", error);
     return res.status(500).json({
@@ -465,6 +538,18 @@ const acceptRideOrder = async (req, res) => {
     }
     if (!driver || driver.role !== "driver") {
       return res.status(403).json({ success: false, message: "Hanya akun Driver Rangers yang dapat menerima pesanan." });
+    }
+
+    // Operational Driver Compliance Check (UU LLAJ & Safety Verification)
+    const { validateDriverOperationalStatus } = require("../services/documentMatrixService");
+    const opStatus = validateDriverOperationalStatus(driver);
+    if (!opStatus.isOperational) {
+      return res.status(403).json({
+        success: false,
+        message: opStatus.reason,
+        isTrainee: opStatus.isTrainee,
+        missingOrPending: opStatus.missingOrPending,
+      });
     }
 
     const driverId = String(driver._id);
@@ -684,11 +769,20 @@ const updateRideStatus = async (req, res) => {
       current.actualDistanceKm = current.estimatedDistanceKm || current.estimatedDistance;
       current.actualDurationMinutes = current.estimatedDurationMinutes || current.estimatedDuration;
 
+      // Calculate and save revenue split snapshot
+      let assignedDriver = null;
+      if (isValidUserId(current.driverId)) {
+        assignedDriver = await User.findById(current.driverId).lean();
+      }
+      const splitSnapshot = createRevenueSplitSnapshot(current.distanceFare || current.baseFare, assignedDriver);
+      current.revenueSplitSnapshot = splitSnapshot;
+      current.driverEarnings = splitSnapshot.driverEarnings;
+
       notifTitle = "Perjalanan Selesai";
       notifMessage = `Terima kasih telah menggunakan Kanyaah Ride. Total tarif: Rp ${current.totalAmount.toLocaleString("id-ID")}.`;
 
-      // Award loyalty cashback points (1% of fare, min 1 point)
-      if (current.totalAmount > 0 && isValidUserId(current.customerId)) {
+      // Award loyalty cashback points (1% of fare, min 1 point) - exactly once
+      if (current.totalAmount > 0 && isValidUserId(current.customerId) && !current.cashbackIssued) {
         try {
           const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
           const rewardPoints = Math.max(1, Math.round(current.totalAmount * 0.01));
@@ -697,9 +791,11 @@ const updateRideStatus = async (req, res) => {
             points: rewardPoints,
             sourceType: "KANYAAH_RIDE",
             sourceId: current.orderCode,
+            operationKey: `EARN-CASHBACK-RIDE-${current.orderCode}`,
             notes: `Cashback 1% perjalanan Kanyaah Ride #${current.orderCode}`,
             actorId: current.driverId || current.customerId,
           });
+          current.cashbackIssued = true;
         } catch (pointErr) {
           console.warn("[Kanyaah Point] Ride cashback error:", pointErr.message);
         }
@@ -866,16 +962,20 @@ const cancelRideOrder = async (req, res) => {
       createdAt: new Date(),
     });
 
-    await order.save();
+    // Reversal of debited GEOVERSE Points if order was discounted with points (idempotent, max 1 time)
+    const pointsToRefund = order.pointsUsed || order.pointDiscount || 0;
+    if (pointsToRefund > 0 && order.customerId && !order.pointRefunded) {
+      order.pointRefunded = true;
+      order.reversalIdempotencyKey = `REV-RIDE-${order.orderCode}`;
+      await order.save();
 
-    // Reversal of debited GEOVERSE Points if order was discounted with points
-    if (order.pointDiscount > 0 && order.customerId) {
       await pointWalletService.reversePoints({
         userId: order.customerId,
-        points: order.pointDiscount,
+        points: pointsToRefund,
         sourceType: "KANYAAH_RIDE",
         sourceId: order.orderCode,
-        notes: `Pengembalian ${order.pointDiscount} poin karena pembatalan Kanyaah Ride #${order.orderCode}`,
+        reversalKey: `REV-RIDE-${order.orderCode}`,
+        notes: `Pengembalian ${pointsToRefund} poin karena pembatalan Kanyaah Ride #${order.orderCode}`,
         actorId: String(authUser?._id || ""),
       }).catch((err) => console.error("Error reversing ride points:", err));
     }

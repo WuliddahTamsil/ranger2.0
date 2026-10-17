@@ -1,5 +1,6 @@
 import { API_BASE_URL, getApiUrl } from "./api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { computeRideFareBreakdown } from "./pricingPolicy";
 
 const AUTH_ACCOUNTS_KEY = "rangers.auth.accounts.v1";
 const AUTH_SESSION_KEY = "rangers.auth.session.v1";
@@ -190,11 +191,42 @@ export const estimateRideFareBreakdown = async (
         routeDurationMinutes: options.routeDurationMinutes,
       }),
     });
-    return await readJson(res);
+    const parsed = await readJson(res);
+    if (parsed && parsed.success && parsed.data) {
+      return parsed;
+    }
+    if (parsed && !parsed.success && parsed.message) {
+      return parsed;
+    }
   } catch (err: unknown) {
-    console.error("estimateRideFareBreakdown error:", err);
-    const message = err instanceof Error ? err.message : "Gagal menghitung estimasi tarif";
-    return { success: false, message };
+    console.warn("estimateRideFareBreakdown backend fetch error, falling back to local pricing policy:", err);
+  }
+
+  // Local pricing policy engine fallback
+  try {
+    const localBreakdown = computeRideFareBreakdown(
+      options.routeDistanceKm,
+      options.discount || 0
+    );
+    return {
+      success: true,
+      data: {
+        distanceKm: localBreakdown.distanceKm,
+        estimatedDurationMinutes: options.routeDurationMinutes,
+        estimatedDuration: options.routeDurationMinutes,
+        baseFare: localBreakdown.baseFare,
+        distanceFare: localBreakdown.distanceFare,
+        timeFare: 0,
+        serviceFee: localBreakdown.serviceFee,
+        discount: localBreakdown.discount,
+        minimumFare: localBreakdown.minimumFare,
+        estimatedFare: localBreakdown.estimatedFare,
+        formattedFare: `Rp ${localBreakdown.estimatedFare.toLocaleString("id-ID")}`,
+        currency: "IDR",
+      },
+    };
+  } catch (fallbackErr: any) {
+    return { success: false, message: fallbackErr.message || "Gagal menghitung estimasi tarif" };
   }
 };
 

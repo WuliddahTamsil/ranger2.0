@@ -1,0 +1,66 @@
+Asset Branding
+File Logo Resmi aplikasi (format PNG transparan resolusi tinggi) untuk splash screen, nota digital, dan header.
+PGE Info Hub: acara, compro, csr
+Ngirim video compro
+Poster2 kegiatan
+Kebijakan Tarif & Layanan Driver (Kanyaah Ride & Send)
+Kebijakan tarif driver: bagaimana skema tarifnya untuk antar penumpang, antar barang/paket, dan jemput cucian/sampah? (misal: tarif dasar 1–2 km pertama Rp..., dan tarif per km berikutnya Rp...)
+Antar jemput penumpang & paket: 
+Tarif dasar Rp2.500/km
+Minimal (<4 km) Rp9.500
+Biaya layanan Rp2.000
+Untuk Paket, Laundry, Sampah
+Disamakan sama yang tarif atas, tapi ada tambahan kiloan
+*Maksimal 20 kg 
+*Kalau lebih dari 20 kg: 
+0 - 20 kg (biayanya disamakan sama biaya penjemputan)
+per kg Rp3.000/kg
+Radius batas maksimal layanan antar-jemput dari wilayah Kamojang (misal maksimal 15 km atau berapa km?)
+Makanan: 15 km an
+Kebijakan bagi hasil/komisi: bagaimana persentase bagi hasil antara pelaku usaha/mitra, driver, dan pihak geoverse (admin)?
+Untuk 5 orang eksisting - lanjut dengan integrasi sama Kedai Terpadu
+Untuk driver baru, 80% 20% (80% driver, 20% platform/admin)
+Syarat Dokumen Pendaftaran Mitra (Verifikasi Admin)
+Mohon konfirmasi dokumen wajib yang harus diunggah calon mitra agar admin bisa menyetujui (ACC):
+Driver: KTP, SIM C/A aktif, foto STNK, dan foto kendaraan (apakah SKCK diwajibkan?).
+Baru ada 1 yang punya SIM
+No
+Nama Driver
+Persyaratan
+(KTP, SIM C/A Aktif, STNK, foto kendaraan)
+Homestay / Kos: KTP pemilik, bukti kepemilikan/pengelolaan properti, foto kamar & fasilitas.
+No
+Nama Pemilik Kos
+Persyaratan
+(KTP, Bukti Kepemilikan Properti)
+Laundry & Catering: KTP pemilik, foto tempat usaha (apakah perlu NIB / Sertifikat Halal?)
+No
+Nama Pegawai Laundry & Catering
+Persyaratan
+(KTP, foto tempat usaha, NIB/Sertifikasi Halal)
+1
+Siti Nurazizah - Laundry 
+Laundry Kanyaah 
+2
+Gusni Santiana - Laundry
+Laundry Kanyaah
+3
+Aisyah - Catering
+Catering Aisyah 
+4
+5
+Kanyaah Shop (Toko/Apotek): KTP pemilik, foto toko, dan SIPA (khusus kategori obat/kesehatan).
+No
+Nama
+Persyaratan
+(KTP, foto toko, SIPA)
+Wisata
+No
+Nama Pemilik Wisata
+Persyaratan
+(KTP, Bukti Kepemilikan Properti)
+Nilai Konversi Poin Bank Sampah (Kanyaah Recycle)
+Berapa nilai konversi rupiah ke poin reward komunitas? (Contoh acuan: Rp 1.000 = 10 Poin GEOVERSE, atau ada rasio tersendiri?)
+Driver bawa kiloan, sampah anorganik langsung dipisah, dikilo → Harga campuran
+Harga tergantung pengepul (cari harga)
+Nominal dimasukkan ke saldo aplikasi → harga dari pengepul, langsung masuk aplikasi

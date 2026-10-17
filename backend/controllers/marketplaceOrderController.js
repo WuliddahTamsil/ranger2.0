@@ -370,6 +370,27 @@ const cancelMarketplaceOrder = async (req, res) => {
         };
       }
 
+      // Reversal of debited GEOVERSE Points if used
+      const pointsToRefund = order.pointsUsed || order.pointDiscount || 0;
+      if (pointsToRefund > 0 && order.customerId && !order.pointRefunded) {
+        order.pointRefunded = true;
+        order.reversalIdempotencyKey = `REV-MKT-${order.orderCode}`;
+        try {
+          const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+          await pointWalletService.reversePoints({
+            userId: order.customerId,
+            points: pointsToRefund,
+            sourceType: "MARKETPLACE",
+            sourceId: order.orderCode,
+            reversalKey: `REV-MKT-${order.orderCode}`,
+            notes: `Pengembalian poin karena pembatalan pesanan Marketplace #${order.orderCode}`,
+            actorId: String(order.customerId || ""),
+          });
+        } catch (revErr) {
+          console.error("Error reversing marketplace points:", revErr);
+        }
+      }
+
       await order.save({ session });
 
       // 3. If Payment record exists, update to REFUNDED / FAILED
@@ -632,11 +653,10 @@ const simulateMarketplacePayment = async (req, res) => {
       return res.status(401).json({ success: false, message: "Autentikasi diperlukan." });
     }
 
-    const isProduction = process.env.NODE_ENV === "production" && process.env.ENABLE_PAYMENT_SIMULATION !== "true";
-    if (isProduction && authUser.role !== "admin") {
+    if (process.env.NODE_ENV === "production" && process.env.ENABLE_PAYMENT_SIMULATION !== "true") {
       return res.status(403).json({
         success: false,
-        message: "Simulasi pembayaran dinonaktifkan di environment production.",
+        message: "Simulasi pembayaran dinonaktifkan di environment production kecuali flag ENABLE_PAYMENT_SIMULATION diaktifkan secara eksplisit.",
       });
     }
 

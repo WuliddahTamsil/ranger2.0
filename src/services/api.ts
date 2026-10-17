@@ -56,6 +56,14 @@ const getDevHost = (): string | null => {
 };
 
 const resolveApiBaseUrl = (): string => {
+  if (
+    Platform.OS === "web" &&
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+  ) {
+    return "http://localhost:5000/api";
+  }
+
   const configured = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
 
   if (configured) {

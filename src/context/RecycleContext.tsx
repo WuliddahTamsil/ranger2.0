@@ -7,6 +7,8 @@ import {
 } from "../types/recycleTypes";
 import { getPointWallet } from "../services/recycleService";
 
+import { useGeoversePoint } from "../features/geoversePoint/context/GeoversePointContext";
+
 export interface DraftDepositState {
   bankSampahId?: string;
   bankSampahName?: string;
@@ -52,29 +54,42 @@ const initialDraft: DraftDepositState = {
 const RecycleContext = createContext<RecycleContextType | undefined>(undefined);
 
 export const RecycleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [wallet, setWallet] = useState<PointWalletUI | null>(null);
-  const [walletLoading, setWalletLoading] = useState(false);
+  let geoPointContext: any = null;
+  try {
+    geoPointContext = useGeoversePoint();
+  } catch {
+    // If mounted outside GeoversePointProvider, use fallback state
+  }
+
+  const [fallbackWallet, setFallbackWallet] = useState<PointWalletUI | null>(null);
+  const [fallbackLoading, setFallbackLoading] = useState(false);
   const [selectedBank, setSelectedBank] = useState<WasteBankUI | null>(null);
   const [selectedDeposit, setSelectedDeposit] = useState<WasteDepositUI | null>(null);
   const [draftDeposit, setDraftDeposit] = useState<DraftDepositState>(initialDraft);
 
-  const refreshWallet = useCallback(async () => {
-    setWalletLoading(true);
+  const refreshFallbackWallet = useCallback(async () => {
+    setFallbackLoading(true);
     try {
       const res = await getPointWallet();
       if (res.success && res.data) {
-        setWallet(res.data);
+        setFallbackWallet(res.data);
       }
     } catch (err) {
       console.error("Failed to load point wallet in context:", err);
     } finally {
-      setWalletLoading(false);
+      setFallbackLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refreshWallet();
-  }, [refreshWallet]);
+    if (!geoPointContext) {
+      refreshFallbackWallet();
+    }
+  }, [geoPointContext, refreshFallbackWallet]);
+
+  const wallet = (geoPointContext?.wallet as unknown as PointWalletUI) ?? fallbackWallet;
+  const walletLoading = geoPointContext ? geoPointContext.walletLoading : fallbackLoading;
+  const refreshWallet = geoPointContext ? geoPointContext.refreshWallet : refreshFallbackWallet;
 
   const updateDraftDeposit = useCallback((partial: Partial<DraftDepositState>) => {
     setDraftDeposit((prev) => ({ ...prev, ...partial }));

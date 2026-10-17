@@ -39,6 +39,11 @@ export interface AuthDocument {
   size?: number;
   status: AuthDocumentStatus;
   progress: number;
+  description?: string;
+  required?: boolean;
+  uploadedAt?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
 }
 
 export interface AuthDocumentRequirement {
@@ -46,6 +51,8 @@ export interface AuthDocumentRequirement {
   label: string;
   description: string;
   required: boolean;
+  isPendingConfirmation?: boolean;
+  pendingConfirmationNote?: string;
 }
 
 export interface RegistrationForm {

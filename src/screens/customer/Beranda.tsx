@@ -84,6 +84,9 @@ import { fetchCustomerLaundryOrders } from "../../services/laundryService";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 import { setPendingMarketplaceCart } from "./marketplaceCartStore";
 import { setActiveCateringTrackingOrderId } from "./customerCateringStore";
+import { PgeInfoHubModal } from "../../features/pgeInfoHub";
+import { HomeHeroBannerView } from "../../components/HomeHeroBannerView";
+import { fetchActiveHomeHero, HomeHeroBannerItem } from "../../services/homeHeroService";
 
 interface CartItem {
   id: number | string;
@@ -151,12 +154,39 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   const [piknikModalVisible, setPiknikModalVisible] = useState(false);
   const [launcherExpanded, setLauncherExpanded] = useState(false);
   const [helpModalVisible, setHelpModalVisible] = useState(false);
+  const [pgeInfoHubVisible, setPgeInfoHubVisible] = useState(false);
+  const [heroBanners, setHeroBanners] = useState<HomeHeroBannerItem[]>([]);
+  const [heroLoading, setHeroLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadHeroBanners = async () => {
+      setHeroLoading(true);
+      try {
+        const banners = await fetchActiveHomeHero("CUSTOMER_HOME_HERO");
+        if (isMounted) {
+          setHeroBanners(banners);
+        }
+      } catch (err) {
+        console.warn("Failed to load active home heroes:", err);
+      } finally {
+        if (isMounted) setHeroLoading(false);
+      }
+    };
+    loadHeroBanners();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handlePullRefresh = async () => {
     setRefreshing(true);
     try {
       await Promise.allSettled([
         refreshPointWallet(),
+        fetchActiveHomeHero("CUSTOMER_HOME_HERO", true)
+          .then((b) => setHeroBanners(b))
+          .catch(() => {}),
         new Promise<void>((resolve) => {
           setProductsReloadKey((k) => k + 1);
           setOrdersReloadKey((k) => k + 1);
@@ -1097,74 +1127,20 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         }
       >
         {/* ============================================================ */}
-        {/* 1. GOJEK-STYLE GREEN HEADER */}
+        {/* 1. FULL-BLEED SUPER-APP HERO HEADER (Image/Video Background) */}
         {/* ============================================================ */}
-        <View style={styles.gojekHeader}>
-          {/* Subtle translucent circles */}
-          <View style={styles.headerDecoCircle1} />
-          <View style={styles.headerDecoCircle2} />
-
-          {/* Top Search Bar & Profile Button Row */}
-          <View style={styles.headerTopRow}>
-            <TouchableOpacity
-              style={styles.headerSearchBar}
-              onPress={() => setSearchModalVisible(true)}
-              activeOpacity={0.9}
-              accessibilityLabel="Cari kuliner, laundry, belanja, ojek"
-            >
-              <Search size={18} color="#0D7A53" />
-              <Text style={styles.headerSearchPlaceholder} numberOfLines={1}>
-                Cari kuliner, mart, laundry, ojek...
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.headerProfileBtn}
-              onPress={() => setCurrentTab(4)}
-              activeOpacity={0.85}
-              accessibilityLabel="Profil Saya"
-            >
-              {customerProfilePhoto ? (
-                <Image source={{ uri: customerProfilePhoto }} style={styles.headerProfileImg} />
-              ) : (
-                <UserIcon size={20} color="#0D7A53" />
-              )}
-              {unreadNotifCount > 0 && <View style={styles.headerProfileDot} />}
-            </TouchableOpacity>
-          </View>
-
-          {/* Hero Headline & Location Pill */}
-          <View style={styles.headerHeroArea}>
-            <View style={styles.headerEyebrowRow}>
-              <View style={styles.headerChip}>
-                <Sparkles size={10} color="#DDF4E7" />
-                <Text style={styles.headerChipText}>Fresh & Fast</Text>
-              </View>
-            </View>
-            <Text style={styles.headerHeroTitle}>
-              Pilihan Tepat{"\n"}buat semua kebutuhan
-            </Text>
-            <View style={styles.headerTagRow}>
-              <View style={styles.headerTagPill}>
-                <Text style={styles.headerTagText}>Gratis antar</Text>
-              </View>
-              <View style={styles.headerTagPill}>
-                <Text style={styles.headerTagText}>Siap 24 jam</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.headerLocationPill}
-              onPress={() => navigate("c_addresses")}
-              activeOpacity={0.8}
-            >
-              <MapPin size={11} color="#DDF4E7" />
-              <Text style={styles.headerLocationText} numberOfLines={1}>
-                {customerLocation || "Jl. Kamojang No. 14, Garut"}
-              </Text>
-              <ChevronRight size={11} color="#DDF4E7" />
-            </TouchableOpacity>
-          </View>
-        </View>
+        <HomeHeroBannerView
+          banners={heroBanners}
+          loading={heroLoading}
+          customerLocation={customerLocation}
+          customerProfilePhoto={customerProfilePhoto}
+          unreadNotifCount={unreadNotifCount}
+          onPressProfile={() => setCurrentTab(4)}
+          onPressSearch={() => setSearchModalVisible(true)}
+          onPressInfoHub={() => setPgeInfoHubVisible(true)}
+          onNavigateLocation={() => navigate("c_addresses")}
+          onNavigate={(route) => navigate(route as any)}
+        />
 
         {/* ============================================================ */}
         {/* 2. 3 QUICK CATEGORY CARDS (Resto, Bepergian, Kebutuhan) */}
@@ -1644,6 +1620,28 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             decelerationRate="fast"
             snapToInterval={292}
           >
+            {/* Promo Card 0: PGE Info Hub */}
+            <TouchableOpacity
+              style={[styles.promoCard, { backgroundColor: "#FEF9C3", borderColor: "#FEF08A" }]}
+              onPress={() => setPgeInfoHubVisible(true)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.promoCardTop}>
+                <View style={[styles.promoBadgePill, { backgroundColor: "#CA8A04" }]}>
+                  <Text style={styles.promoBadgeText}>PGE INFO HUB</Text>
+                </View>
+                <Sparkles size={18} color="#CA8A04" />
+              </View>
+              <Text style={styles.promoCardTitle}>Pusat Acara, Profil & CSR Kamojang</Text>
+              <Text style={styles.promoCardDesc} numberOfLines={2}>
+                Akses video profil resmi PGE Kamojang, poster kegiatan komunitas, dan program CSR.
+              </Text>
+              <View style={styles.promoCardFooter}>
+                <Text style={[styles.promoCtaText, { color: "#A16207" }]}>Buka Info Hub</Text>
+                <ArrowRight size={13} color="#A16207" />
+              </View>
+            </TouchableOpacity>
+
             {/* Promo Card 1: Kanyaah Shop */}
             <TouchableOpacity
               style={[styles.promoCard, { backgroundColor: "#EAF8F0", borderColor: "#DDF4E7" }]}
@@ -2479,6 +2477,14 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       </Modal>
 
       {/* ============================================================ */}
+      {/* MODAL: PGE INFO HUB (Acara, Profil, CSR & Komunitas) */}
+      {/* ============================================================ */}
+      <PgeInfoHubModal
+        visible={pgeInfoHubVisible}
+        onClose={() => setPgeInfoHubVisible(false)}
+      />
+
+      {/* ============================================================ */}
       {/* MODAL 8: PUSAT BANTUAN & FAQ */}
       {/* ============================================================ */}
       <Modal visible={helpModalVisible} transparent animationType="slide" onRequestClose={() => setHelpModalVisible(false)}>
@@ -2590,6 +2596,63 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.04)",
     bottom: -30,
     left: -20,
+  },
+  headerBrandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    zIndex: 2,
+  },
+  headerBrandLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerBrandLogoContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  headerBrandLogo: {
+    width: 28,
+    height: 28,
+  },
+  headerBrandTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
+  },
+  headerBrandSubtitle: {
+    fontSize: 10,
+    color: "#DDF4E7",
+    fontWeight: "600",
+  },
+  headerInfoHubBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#FDFDFD",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  headerInfoHubBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
   },
   headerTopRow: {
     flexDirection: "row",

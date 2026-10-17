@@ -4,7 +4,7 @@
  */
 
 const express = require("express");
-const { requireAuth } = require("../../../middleware/authMiddleware");
+const { requireAuth, optionalAuth } = require("../../../middleware/authMiddleware");
 const {
   getWallet,
   getLedger,
@@ -19,14 +19,16 @@ const {
   adminAdjustment,
   getConfig,
   getAdminRedemptions,
+  getPaymentQuote,
 } = require("../controllers/geoversePointController");
 const { enforceWalletOwner, enforceStaffOrAdmin } = require("../policies/pointAccessPolicy");
 const { validateCreateRedemption, validateAdminAdjustment } = require("../validators/geoversePointValidators");
 
 const router = express.Router();
 
-// Public / Authenticated Configuration
+// Public / Authenticated Configuration & Payment Quote
 router.get("/config", getConfig);
+router.post("/payment-quote", optionalAuth, getPaymentQuote);
 
 // Digital Wallet & Ledger
 router.get("/wallet", requireAuth, enforceWalletOwner, getWallet);

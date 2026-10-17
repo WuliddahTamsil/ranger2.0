@@ -7,7 +7,7 @@ const Notification = require("../models/Notification");
 const { syncConversationForOrder } = require("../services/conversationService");
 const { getRoleDataValue } = require("../utils/roleData");
 const { getCateringDueAt, getPaymentPlan, getPaymentReminder } = require("../utils/cateringOrderLifecycle");
-const { PRICING_POLICY } = require("../services/pricingPolicyService");
+const { PRICING_POLICY, validateKamojangRadius, MAX_SERVICE_RADIUS_KM } = require("../services/pricingPolicyService");
 
 const cateringMonths = new Map([
   ["januari", 1], ["februari", 2], ["maret", 3], ["april", 4],
@@ -87,6 +87,21 @@ const createCateringOrder = async (req, res) => {
     if (!isValidCateringSchedule(cateringDate, cateringTime)) {
       return res.status(400).json({ success: false, message: "Pilih jadwal Catering minimal dua hari dari sekarang dan gunakan salah satu jam yang tersedia." });
     }
+
+    // Validasi radius maksimal 15 km dari Kamojang
+    const deliveryLat = addressSnapshot?.latitude ?? body.latitude;
+    const deliveryLon = addressSnapshot?.longitude ?? body.longitude;
+    if (deliveryLat != null && deliveryLon != null && Number.isFinite(Number(deliveryLat)) && Number.isFinite(Number(deliveryLon))) {
+      const radiusCheck = validateKamojangRadius({ latitude: Number(deliveryLat), longitude: Number(deliveryLon) }, MAX_SERVICE_RADIUS_KM || 15);
+      if (!radiusCheck.valid) {
+        return res.status(400).json({
+          success: false,
+          message: radiusCheck.message || "Alamat pengantaran katering melebihi batas radius maksimal Kamojang (15 km).",
+          radiusValidation: radiusCheck,
+        });
+      }
+    }
+
     if (await replayExistingOrder(res, idempotencyKey, requestHash)) return;
 
     const [customer, owner] = await Promise.all([
@@ -118,34 +133,46 @@ const createCateringOrder = async (req, res) => {
     const grossTotal = subtotal + deliveryFee + serviceFee;
 
     const requestedPoints = Math.max(0, Math.round(Number(body.pointsUsed) || Number(body.pointDiscount) || 0));
-    let finalPointDiscount = 0;
     const orderCode = `RNG-CAT-${randomUUID().slice(0, 8).toUpperCase()}`;
+    const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
 
-    if (requestedPoints > 0 && customerId) {
-      const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
-      const wallet = await pointWalletService.getOrCreateWallet(customerId);
-      const usablePoints = Math.min(wallet.balancePoint || 0, grossTotal, requestedPoints);
-      if (usablePoints > 0) {
-        finalPointDiscount = usablePoints;
-        await pointWalletService.debitPoints({
-          userId: customerId,
-          points: finalPointDiscount,
-          type: "PAYMENT",
-          sourceType: "CATERING",
-          sourceId: orderCode,
-          notes: `Pembayaran pesanan Catering #${orderCode} dengan ${finalPointDiscount} GEOVERSE Point`,
-          actorId: customerId,
-        });
-      }
+    const quote = await pointWalletService.calculatePaymentQuote({
+      service: "CATERING",
+      grossAmount: grossTotal,
+      voucherDiscount: 0,
+      requestedPoints,
+      userId: customerId,
+    });
+
+    let debitedPoints = 0;
+    if (quote.approvedPoints > 0 && customerId) {
+      await pointWalletService.debitPoints({
+        userId: customerId,
+        points: quote.approvedPoints,
+        type: "PAYMENT",
+        sourceType: "CATERING",
+        sourceId: orderCode,
+        operationKey: `DEBIT-CAT-${orderCode}`,
+        notes: `Pembayaran pesanan Catering #${orderCode} dengan ${quote.approvedPoints} GEOVERSE Point`,
+        actorId: customerId,
+      });
+      debitedPoints = quote.approvedPoints;
     }
 
-    const totalAmount = Math.max(0, grossTotal - finalPointDiscount);
+    const totalAmount = quote.finalAmount;
     const isFullyPaid = totalAmount === 0;
     const paymentPlan = getPaymentPlan(totalAmount, paymentOption);
     const paidAmount = isFullyPaid ? grossTotal : 0;
     const remainingAmount = isFullyPaid ? 0 : totalAmount;
     const paymentStatus = isFullyPaid ? "Lunas" : "Menunggu Pembayaran";
     const paymentDueAt = getCateringDueAt(cateringDate);
+
+    const resolvedPaymentMethod = isFullyPaid
+      ? "GEOVERSE_POINT"
+      : quote.approvedPoints > 0
+      ? (paymentMethod === "cod" ? "GEOVERSE_POINT_PLUS_CASH" : "GEOVERSE_POINT_PLUS_QRIS")
+      : paymentMethod;
+
     const storeName = getRoleDataValue(owner, "businessName") || owner.name || "Mitra Catering";
     const storeAddress = getRoleDataValue(owner, "businessAddress") || getRoleDataValue(owner, "address") || owner.address || "";
     const storeNotes = getRoleDataValue(owner, "patokan") || getRoleDataValue(owner, "storeNotes") || getRoleDataValue(owner, "cateringNotes") || "";
@@ -206,10 +233,13 @@ const createCateringOrder = async (req, res) => {
           totalAmount,
           deliveryFee,
           serviceFee,
-          pointDiscount: finalPointDiscount,
-          pointsUsed: finalPointDiscount,
+          pointDiscount: quote.pointDiscount,
+          pointsUsed: quote.approvedPoints,
+          pointRate: quote.pointRate,
+          grossAmount: quote.grossAmount,
+          finalAmount: totalAmount,
           paymentOption,
-          paymentMethod,
+          paymentMethod: resolvedPaymentMethod,
           paymentBankName: paymentMethod === "bca_va"
             ? "BCA Virtual Account"
             : paymentMethod === "mandiri_va"
@@ -245,16 +275,16 @@ const createCateringOrder = async (req, res) => {
         order = created;
       });
     } catch (txError) {
-      if (finalPointDiscount > 0) {
-        const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+      if (debitedPoints > 0) {
         await pointWalletService.reversePoints({
           userId: customerId,
-          points: finalPointDiscount,
+          points: debitedPoints,
           sourceType: "CATERING",
           sourceId: orderCode,
+          reversalKey: `ROLLBACK-CAT-${orderCode}`,
           notes: "Rollback poin karena checkout catering gagal",
           actorId: customerId,
-        }).catch(() => {});
+        }).catch((rbErr) => console.error("Rollback catering points error:", rbErr));
       }
       throw txError;
     }

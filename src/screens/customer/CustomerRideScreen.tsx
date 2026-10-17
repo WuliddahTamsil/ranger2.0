@@ -54,6 +54,7 @@ import { NativeMapComponent } from "../../components/NativeMapComponent";
 import { rp } from "../../utils/formatters";
 import { DigitalPaymentModal } from "../../components/DigitalPaymentModal";
 import { PaymentMethodType } from "../../services/paymentService";
+import { validateKamojangRadius, MAX_SERVICE_RADIUS_KM } from "../../services/pricingPolicy";
 
 const DEFAULT_COORDS = {
   pickup: {
@@ -91,7 +92,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   navigate,
   authAccount,
 }) => {
-  // Pickup state initialized dynamically from cached user location or default Bogor
+  // Pickup state initialized dynamically from cached user location or default Kamojang
   const [pickup, setPickup] = useState<RideLocation>(() => {
     if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
       try {
@@ -99,19 +100,22 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && typeof parsed.latitude === "number" && typeof parsed.longitude === "number") {
-            return {
-              address: parsed.address || "Lokasi Saya",
-              placeName: "Lokasi Saya",
-              latitude: parsed.latitude,
-              longitude: parsed.longitude,
-            };
+            const radCheck = validateKamojangRadius(parsed, MAX_SERVICE_RADIUS_KM);
+            if (radCheck.valid) {
+              return {
+                address: parsed.address || "Lokasi Saya",
+                placeName: "Lokasi Saya",
+                latitude: parsed.latitude,
+                longitude: parsed.longitude,
+              };
+            }
           }
         }
       } catch {}
     }
     return {
       address: authAccount?.address || DEFAULT_COORDS.pickup.address,
-      placeName: "Lokasi Saya",
+      placeName: "Lokasi Saya (Kamojang)",
       latitude: DEFAULT_COORDS.pickup.latitude,
       longitude: DEFAULT_COORDS.pickup.longitude,
     };
@@ -311,19 +315,22 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     };
   }, [authAccount?.id]);
 
-  // Auto-detect GPS location on screen mount
+  // Auto-detect GPS location on screen mount (only accept if within Kamojang radius)
   useEffect(() => {
     let active = true;
     (async () => {
       try {
         const userLoc = await getCurrentUserCoordinates();
         if (!active || !userLoc) return;
-        setPickup({
-          address: userLoc.address,
-          placeName: userLoc.placeName || "Lokasi Saya",
-          latitude: userLoc.latitude,
-          longitude: userLoc.longitude,
-        });
+        const radCheck = validateKamojangRadius(userLoc, MAX_SERVICE_RADIUS_KM);
+        if (radCheck.valid) {
+          setPickup({
+            address: userLoc.address,
+            placeName: userLoc.placeName || "Lokasi Saya",
+            latitude: userLoc.latitude,
+            longitude: userLoc.longitude,
+          });
+        }
       } catch (err) {
         console.warn("Auto-detect GPS error on mount:", err);
       }

@@ -22,12 +22,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.wuliddah_tamsil.the_ranger_react_native",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyGEOVERSE_MAPS_KEY_FALLBACK_ACTIVE"
-        }
-      }
+      "package": "com.wuliddah_tamsil.the_ranger_react_native"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -47,7 +42,8 @@
           "photosPermission": "GEOVERSE memerlukan akses foto untuk mengubah foto profil.",
           "cameraPermission": "GEOVERSE memerlukan akses kamera untuk mengambil foto profil."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "extra": {
       "eas": {

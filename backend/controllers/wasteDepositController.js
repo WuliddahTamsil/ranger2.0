@@ -4,14 +4,16 @@ const WasteDeposit = require("../models/WasteDeposit");
 const WasteBank = require("../models/WasteBank");
 const WasteCategoryPrice = require("../models/WasteCategoryPrice");
 const Notification = require("../models/Notification");
-const { computeEnvironmentalImpact, calculateCategoryPointAndRupiah } = require("../services/recycleFareService");
+const { computeEnvironmentalImpact, calculateCategoryPointAndRupiah, RECYCLE_POINT_CONFIG } = require("../services/recycleFareService");
 const { creditPoints } = require("../services/pointWalletService");
 const { checkBankOperationalStatus } = require("../utils/bankOperationalUtils");
 const {
   PRICING_POLICY,
   calculateHaversineKm,
+  validateKamojangRadius,
   computeGoodsAndPickupFare,
   calculateDriverRevenueSplit,
+  createRevenueSplitSnapshot,
 } = require("../services/pricingPolicyService");
 
 /**
@@ -54,8 +56,23 @@ const createDeposit = async (req, res) => {
       return res.status(400).json({ success: false, message: "Bank Sampah wajib dipilih." });
     }
 
-    if (method === "PICKUP" && (!pickupAddress || pickupLatitude == null || pickupLongitude == null)) {
-      return res.status(400).json({ success: false, message: "Alamat dan titik lokasi penjemputan wajib diisi." });
+    if (method === "PICKUP") {
+      if (!pickupAddress || pickupLatitude == null || pickupLongitude == null) {
+        return res.status(400).json({ success: false, message: "Alamat dan titik lokasi penjemputan wajib diisi." });
+      }
+
+      // Validasi radius maksimal 15 km dari pusat Kamojang
+      const radiusValidation = validateKamojangRadius(
+        { latitude: Number(pickupLatitude), longitude: Number(pickupLongitude) },
+        PRICING_POLICY.maxServiceRadiusKm || 15
+      );
+      if (!radiusValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: radiusValidation.message || "Lokasi penjemputan melebihi batas radius maksimal Kamojang (15 km).",
+          radiusValidation,
+        });
+      }
     }
 
     // Idempotency check
@@ -116,6 +133,12 @@ const createDeposit = async (req, res) => {
           pricePerKg,
           totalRupiah,
           totalPoint,
+          priceSource: RECYCLE_POINT_CONFIG.defaultPriceSource,
+          collectorName: "Pengepul Rekanan Kamojang",
+          priceVersion: "v1.0",
+          effectiveFrom: new Date(),
+          effectiveUntil: null,
+          approvedBy: "Admin Bank Sampah",
         };
       });
     } else {
@@ -127,6 +150,12 @@ const createDeposit = async (req, res) => {
           pricePerKg: 0,
           totalRupiah: 0,
           totalPoint: 0,
+          priceSource: RECYCLE_POINT_CONFIG.defaultPriceSource,
+          collectorName: "Pengepul Rekanan Kamojang",
+          priceVersion: "v1.0",
+          effectiveFrom: new Date(),
+          effectiveUntil: null,
+          approvedBy: "Admin Bank Sampah",
         },
       ];
     }
@@ -173,6 +202,8 @@ const createDeposit = async (req, res) => {
       driverEarnings,
       distanceKm,
       weightFee,
+      pointToRupiahRate: RECYCLE_POINT_CONFIG.pointToRupiahRate,
+      pointConversionPolicy: RECYCLE_POINT_CONFIG,
       customerPhotos: Array.isArray(customerPhotos) ? customerPhotos : [],
       status: "REQUESTED",
       statusHistory: [
@@ -631,10 +662,14 @@ const weighDeposit = async (req, res) => {
       return res.status(400).json({ success: false, message: "Total berat aktual harus lebih dari 0 kg." });
     }
 
+    const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
+    const currentPointRate = typeof pointWalletService.getPointToRupiahRate === "function" ? pointWalletService.getPointToRupiahRate() : 1;
+
     deposit.categories = updatedCategories;
     deposit.actualTotalWeightKg = Math.round(actualTotalWeightKg * 10) / 10;
     deposit.finalRupiah = finalTotalRupiah;
-    deposit.finalPoint = finalTotalRupiah; // 1 Point = Rp 1
+    deposit.pointRate = currentPointRate;
+    deposit.finalPoint = Math.round(finalTotalRupiah / currentPointRate);
     deposit.weighingProofPhotos = Array.isArray(weighingProofPhotos) ? weighingProofPhotos : [];
     deposit.weighingNotes = weighingNotes;
     deposit.weighedBy = officerId;
@@ -703,12 +738,13 @@ const confirmWeighing = async (req, res) => {
       });
     }
 
-    // Atomic credit to PointWallet & PointLedger
+    // Atomic credit to PointWallet & PointLedger with deterministic operationKey
     const creditResult = await creditPoints({
       userId: customerId,
       points: deposit.finalPoint,
       sourceType: "WASTE_DEPOSIT",
       sourceId: String(deposit._id),
+      operationKey: `CREDIT-DEPOSIT-${deposit._id}`,
       notes: `Setor sampah #${deposit.depositCode} (${deposit.actualTotalWeightKg} kg)`,
       actorId: customerId,
       kgDeposited: deposit.actualTotalWeightKg,
@@ -717,6 +753,21 @@ const confirmWeighing = async (req, res) => {
 
     deposit.customerConfirmedAt = new Date();
     deposit.status = "COMPLETED";
+
+    // Snapshot revenue split if driver pickup order
+    if (deposit.method === "PICKUP" && deposit.driverId) {
+      try {
+        let driverUser = await User.findById(deposit.driverId).lean();
+        const deliveryFare = Math.max(
+          PRICING_POLICY.minimumDistanceFare,
+          (deposit.pickupFee || PRICING_POLICY.minimumDistanceFare + PRICING_POLICY.serviceFee) - PRICING_POLICY.serviceFee
+        );
+        deposit.revenueSplitSnapshot = createRevenueSplitSnapshot(deliveryFare, driverUser);
+      } catch (snapErr) {
+        console.warn("Waste deposit revenue split snapshot warning:", snapErr.message);
+      }
+    }
+
     deposit.statusHistory.push({
       status: "POINT_ISSUED",
       actorId: customerId,

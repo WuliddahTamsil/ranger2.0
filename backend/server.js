@@ -56,6 +56,8 @@ const pointRoutes = require("./routes/pointRoutes");
 const geoversePointRoutes = require("./features/geoversePoint/routes/geoversePointRoutes");
 const voucherRoutes = require("./routes/voucherRoutes");
 const shopRoutes = require("./routes/shopRoutes");
+const homeHeroRoutes = require("./routes/homeHeroRoutes");
+const pgeInfoHubRoutes = require("./features/pgeInfoHub/pgeInfoHubRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -79,6 +81,9 @@ app.use("/api/geoverse-points", geoversePointRoutes);
 app.use("/api/points", pointRoutes);
 app.use("/api/vouchers", voucherRoutes);
 app.use("/api/shop", shopRoutes);
+app.use("/api/home-hero", homeHeroRoutes);
+app.use("/api/admin/home-hero", homeHeroRoutes);
+app.use("/api/pge-info-hub", pgeInfoHubRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {

@@ -45,6 +45,30 @@ const depositCategoryItemSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    priceSource: {
+      type: String,
+      default: "Pengepul Rekanan Kamojang",
+    },
+    collectorName: {
+      type: String,
+      default: "",
+    },
+    priceVersion: {
+      type: String,
+      default: "v1.0",
+    },
+    effectiveFrom: {
+      type: Date,
+      default: Date.now,
+    },
+    effectiveUntil: {
+      type: Date,
+      default: null,
+    },
+    approvedBy: {
+      type: String,
+      default: "",
+    },
   },
   { _id: true }
 );
@@ -150,6 +174,26 @@ const wasteDepositSchema = new mongoose.Schema(
     weightFee: {
       type: Number,
       default: 0,
+    },
+    pointToRupiahRate: {
+      type: Number,
+      default: 1.0,
+    },
+    pointConversionPolicy: {
+      rate: { type: Number, default: 1.0 },
+      isPendingClientFinalRatioConfirmation: { type: Boolean, default: true },
+      description: { type: String, default: "" },
+    },
+    revenueSplitSnapshot: {
+      grossDeliveryFare: { type: Number, default: 0 },
+      serviceFee: { type: Number, default: 0 },
+      driverEarnings: { type: Number, default: 0 },
+      platformCommission: { type: Number, default: 0 },
+      driverSharePercent: { type: Number, default: 0 },
+      platformSharePercent: { type: Number, default: 0 },
+      commissionTier: { type: String, default: "" },
+      isKedaiTerpadu: { type: Boolean, default: false },
+      splitCalculatedAt: { type: Date, default: null },
     },
 
     // Photos & Proof

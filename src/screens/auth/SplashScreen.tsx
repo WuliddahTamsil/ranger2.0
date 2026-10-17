@@ -14,7 +14,7 @@ export const SplashScreen: React.FC<Nav> = ({ navigate }) => {
     <View style={styles.container}>
       <View style={styles.logoContainer}>
         <Image
-          source={require("../../../assets/geoverse-logo.png")}
+          source={require("../../../assets/geoverse-pge-official.png")}
           style={styles.logoImage}
           resizeMode="contain"
         />

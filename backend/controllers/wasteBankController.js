@@ -230,7 +230,19 @@ const getCategoryPrices = async (req, res) => {
 const updateCategoryPrice = async (req, res) => {
   try {
     const bankSampahId = req.params.id;
-    const { category, subCategory, pricePerKg, minWeightKg } = req.body;
+    const {
+      category,
+      subCategory,
+      pricePerKg,
+      minWeightKg,
+      priceSource = "Pengepul Rekanan Kamojang",
+      collectorName = "",
+      priceVersion = "v1.0",
+      approvedBy = "",
+      reason = "Pembaruan harga pengepul",
+      effectiveFrom = new Date(),
+      effectiveUntil = null,
+    } = req.body;
 
     if (!category || pricePerKg == null) {
       return res.status(400).json({
@@ -239,20 +251,40 @@ const updateCategoryPrice = async (req, res) => {
       });
     }
 
+    const auditEntry = {
+      pricePerKg: Number(pricePerKg),
+      priceSource,
+      collectorName,
+      reason,
+      changedBy: req.authUser?._id || null,
+      changedAt: new Date(),
+    };
+
     const price = await WasteCategoryPrice.findOneAndUpdate(
       { bankSampahId, category, subCategory: subCategory || "Standard" },
       {
-        pricePerKg: Number(pricePerKg),
-        minWeightKg: Number(minWeightKg) || 0.1,
-        isActive: true,
-        updatedBy: req.authUser._id,
+        $set: {
+          pricePerKg: Number(pricePerKg),
+          minWeightKg: Number(minWeightKg) || 0.1,
+          priceSource,
+          collectorName,
+          priceVersion,
+          approvedBy,
+          effectiveFrom,
+          effectiveUntil,
+          isActive: true,
+          updatedBy: req.authUser?._id,
+        },
+        $push: {
+          priceAuditLog: auditEntry,
+        },
       },
       { upsert: true, new: true }
     );
 
     return res.status(200).json({
       success: true,
-      message: "Harga kategori sampah berhasil diperbarui.",
+      message: "Harga kategori sampah berhasil diperbarui dengan catatan audit log.",
       data: price,
     });
   } catch (error) {

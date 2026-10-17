@@ -270,26 +270,32 @@ const createShopOrder = async (req, res) => {
       }
     }
 
-    // GEOVERSE Points deduction validation
-    let pointDiscount = 0;
+    // Step 2B: Authoritative payment calculation
+    const grossAmount = calculatedSubtotal + deliveryFee + serviceFee + tip;
     const safePoints = Math.round(Number(pointsToUse) || 0);
-    if (usePoints && safePoints > 0) {
-      const wallet = await pointWalletService.getOrCreateWallet(customerId);
-      const usablePoints = Math.min(wallet.balancePoint, safePoints, calculatedSubtotal);
-      if (usablePoints > 0) {
-        pointDiscount = usablePoints;
-      }
-    }
 
-    const totalAmount = Math.max(
-      0,
-      calculatedSubtotal + deliveryFee + serviceFee + tip - voucherDiscount - pointDiscount
-    );
+    const quote = await pointWalletService.calculatePaymentQuote({
+      service: "KANYAAH_SHOP",
+      grossAmount,
+      voucherDiscount,
+      requestedPoints: usePoints ? safePoints : 0,
+      userId: customerId,
+    });
 
+    const totalAmount = quote.finalAmount;
     const orderCode = `RNG-SHOP-${randomUUID().slice(0, 8).toUpperCase()}`;
 
     // Payment Intent creation via paymentGateway
     const isCash = paymentMethod.toUpperCase() === "CASH" || paymentMethod.toUpperCase() === "COD";
+    const resolvedPaymentMethod =
+      totalAmount === 0
+        ? "GEOVERSE_POINT"
+        : quote.approvedPoints > 0
+        ? isCash
+          ? "GEOVERSE_POINT_PLUS_CASH"
+          : "GEOVERSE_POINT_PLUS_QRIS"
+        : paymentMethod.toUpperCase();
+
     let gatewayResult = null;
     let paymentId = "";
 
@@ -303,7 +309,7 @@ const createShopOrder = async (req, res) => {
         customerName,
         customerPhone,
         amount: totalAmount,
-        paymentMethod: paymentMethod.toUpperCase(),
+        paymentMethod: resolvedPaymentMethod,
       });
       paymentId = gatewayResult.paymentId;
 
@@ -338,91 +344,101 @@ const createShopOrder = async (req, res) => {
 
     const initialPaymentStatus = isCash ? "PENDING" : totalAmount === 0 ? "PAID" : "PENDING";
 
-    // Deduct points from wallet atomically if used
-    if (pointDiscount > 0) {
-      await pointWalletService.debitPoints({
-        userId: customerId,
-        points: pointDiscount,
-        type: "SHOP_PAYMENT",
-        sourceType: "KANYAAH_SHOP",
-        sourceId: orderCode,
-        notes: `Pembayaran pesanan Kanyaah Shop #${orderCode}`,
-        actorId: customerId,
-      });
-    }
+    let debitedPoints = 0;
+    const decrementedStocks = [];
 
-    // Atomic Stock decrement
-    for (const [pId, qty] of stockDeltas.entries()) {
-      const updated = await MarketplaceProduct.findOneAndUpdate(
-        { _id: pId, stock: { $gte: qty } },
-        { $inc: { stock: -qty, sold: qty } },
-        { new: true }
-      );
-      if (!updated) {
-        throw new Error("Gagal memproses stok produk. Silakan coba beberapa saat lagi.");
+    // Deduct points from wallet atomically if used
+    if (quote.approvedPoints > 0) {
+        await pointWalletService.debitPoints({
+          userId: customerId,
+          points: quote.approvedPoints,
+          type: "PAYMENT",
+          sourceType: "KANYAAH_SHOP",
+          sourceId: orderCode,
+          operationKey: `DEBIT-SHOP-${orderCode}`,
+          notes: `Pembayaran pesanan Kanyaah Shop #${orderCode}`,
+          actorId: customerId,
+        });
+        debitedPoints = quote.approvedPoints;
       }
 
-      await InventoryLog.create({
-        productId: pId,
+      // Atomic Stock decrement
+      for (const [pId, qty] of stockDeltas.entries()) {
+        const updated = await MarketplaceProduct.findOneAndUpdate(
+          { _id: pId, stock: { $gte: qty } },
+          { $inc: { stock: -qty, sold: qty } },
+          { new: true }
+        );
+        if (!updated) {
+          throw new Error("Gagal memproses stok produk. Silakan coba beberapa saat lagi.");
+        }
+        decrementedStocks.push({ pId, qty });
+
+        await InventoryLog.create({
+          productId: pId,
+          storeId,
+          type: "SALE",
+          quantity: -qty,
+          beforeStock: updated.stock + qty,
+          afterStock: updated.stock,
+          sourceOrderId: null,
+          createdBy: customerId,
+          note: `Penjualan pesanan Kanyaah Shop #${orderCode}`,
+        });
+      }
+
+      // Create Order Record
+      const order = await ShopOrder.create({
+        orderCode,
+        idempotencyKey: idempotencyKey || undefined,
+        requestHash,
+        customerId,
+        customerName,
+        customerPhone,
         storeId,
-        type: "SALE",
-        quantity: -qty,
-        beforeStock: updated.stock + qty,
-        afterStock: updated.stock,
-        sourceOrderId: null,
-        createdBy: customerId,
-        note: `Penjualan pesanan Kanyaah Shop #${orderCode}`,
+        storeName: store.name,
+        storeAddress: store.address,
+        items: validatedItems,
+        deliveryAddress,
+        deliveryLatitude: userLat,
+        deliveryLongitude: userLon,
+        deliveryNotes,
+        deliverySlot,
+        substitutionPolicy,
+        subtotal: calculatedSubtotal,
+        discount: 0,
+        voucherCode: validatedVoucherCode,
+        voucherDiscount,
+        pointDiscount: quote.pointDiscount,
+        pointsUsed: quote.approvedPoints,
+        pointRate: quote.pointRate,
+        grossAmount: quote.grossAmount,
+        finalAmount: totalAmount,
+        deliveryFee,
+        serviceFee,
+        driverTip: tip,
+        totalAmount,
+        paymentId,
+        paymentMethod: resolvedPaymentMethod,
+        paymentStatus: initialPaymentStatus,
+        orderStatus: initialOrderStatus,
+        prescriptionId: prescriptionDoc?._id || null,
+        statusHistory: [
+          {
+            status: initialOrderStatus,
+            actorId: String(customerId),
+            actorRole: "customer",
+            note: "Pesanan berhasil dibuat oleh pelanggan.",
+            timestamp: new Date(),
+          },
+        ],
       });
-    }
 
-    // Create Order Record
-    const order = await ShopOrder.create({
-      orderCode,
-      idempotencyKey: idempotencyKey || undefined,
-      requestHash,
-      customerId,
-      customerName,
-      customerPhone,
-      storeId,
-      storeName: store.name,
-      storeAddress: store.address,
-      items: validatedItems,
-      deliveryAddress,
-      deliveryLatitude: userLat,
-      deliveryLongitude: userLon,
-      deliveryNotes,
-      deliverySlot,
-      substitutionPolicy,
-      subtotal: calculatedSubtotal,
-      discount: 0,
-      voucherCode: validatedVoucherCode,
-      voucherDiscount,
-      pointDiscount,
-      deliveryFee,
-      serviceFee,
-      driverTip: tip,
-      totalAmount,
-      paymentId,
-      paymentMethod: paymentMethod.toUpperCase(),
-      paymentStatus: initialPaymentStatus,
-      orderStatus: initialOrderStatus,
-      prescriptionId: prescriptionDoc?._id || null,
-      statusHistory: [
-        {
-          status: initialOrderStatus,
-          actorId: String(customerId),
-          actorRole: "customer",
-          note: "Pesanan berhasil dibuat oleh pelanggan.",
-          timestamp: new Date(),
-        },
-      ],
-    });
-
-    // Link prescription if any
-    if (prescriptionDoc) {
-      prescriptionDoc.orderId = order._id;
-      await prescriptionDoc.save();
-    }
+      // Link prescription if any
+      if (prescriptionDoc) {
+        prescriptionDoc.orderId = order._id;
+        await prescriptionDoc.save();
+      }
 
     // Mark voucher claim as used if applicable
     if (validatedVoucherDocId) {
@@ -454,6 +470,25 @@ const createShopOrder = async (req, res) => {
       paymentDetails: gatewayResult,
     });
   } catch (error) {
+    // Rollback any debited points
+    if (debitedPoints > 0) {
+      await pointWalletService.reversePoints({
+        userId: customerId,
+        points: debitedPoints,
+        sourceType: "KANYAAH_SHOP",
+        sourceId: orderCode,
+        reversalKey: `ROLLBACK-SHOP-${orderCode}`,
+        notes: `Rollback pembuatan order Kanyaah Shop #${orderCode}`,
+        actorId: customerId,
+      }).catch((rbErr) => console.error("Failed to rollback shop points:", rbErr));
+    }
+    // Restore any decremented stocks
+    for (const { pId, qty } of decrementedStocks) {
+      await MarketplaceProduct.findByIdAndUpdate(pId, {
+        $inc: { stock: qty, sold: -qty },
+      }).catch(() => {});
+    }
+
     console.error("createShopOrder error:", error);
     return res.status(500).json({ success: false, message: error.message || "Gagal membuat pesanan" });
   }
@@ -548,13 +583,19 @@ const cancelOrder = async (req, res) => {
       });
     }
 
-    // Reverse points if used
-    if (order.pointDiscount > 0) {
+    // Reverse points if used (idempotent, max 1 time)
+    const pointsToRefund = order.pointsUsed || order.pointDiscount || 0;
+    if (pointsToRefund > 0 && !order.pointRefunded) {
+      order.pointRefunded = true;
+      order.reversalIdempotencyKey = `REV-SHOP-${order.orderCode}`;
+      await order.save();
+
       await pointWalletService.reversePoints({
         userId: order.customerId,
-        points: order.pointDiscount,
+        points: pointsToRefund,
         sourceType: "KANYAAH_SHOP",
         sourceId: order.orderCode,
+        reversalKey: `REV-SHOP-${order.orderCode}`,
         notes: `Pengembalian poin karena pembatalan pesanan #${order.orderCode}`,
         actorId: authUser?._id,
       });
@@ -691,6 +732,13 @@ const simulateShopPayment = async (req, res) => {
     const authUser = req.authUser;
     if (!authUser) {
       return res.status(401).json({ success: false, message: "Autentikasi diperlukan." });
+    }
+
+    if (process.env.NODE_ENV === "production" && process.env.ENABLE_PAYMENT_SIMULATION !== "true") {
+      return res.status(403).json({
+        success: false,
+        message: "Simulasi pembayaran dinonaktifkan di environment production kecuali flag ENABLE_PAYMENT_SIMULATION diaktifkan secara eksplisit.",
+      });
     }
 
     const { id } = req.params;

@@ -63,6 +63,16 @@ if (mongoose.models.PointLedger) {
         ref: "User",
         default: null,
       },
+      operationKey: {
+        type: String,
+        sparse: true,
+        index: true,
+      },
+      idempotencyKey: {
+        type: String,
+        sparse: true,
+        index: true,
+      },
     },
     {
       timestamps: true,
@@ -70,6 +80,7 @@ if (mongoose.models.PointLedger) {
   );
 
   pointLedgerSchema.index({ userId: 1, createdAt: -1 });
+  pointLedgerSchema.index({ sourceType: 1, sourceId: 1, type: 1 });
 
   module.exports = mongoose.model("PointLedger", pointLedgerSchema);
 }
