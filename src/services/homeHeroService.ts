@@ -59,6 +59,49 @@ export interface CreateHeroPayload {
 const CACHE_KEY_ACTIVE_HERO = "geoverse.cache.home_hero.active.v1";
 const CACHE_TTL_MS = 3 * 60 * 1000; // 3 menit cache TTL
 
+// Keep the customer home usable while an older production backend is being
+// redeployed. A successful API response still always wins over these defaults.
+const DEFAULT_CUSTOMER_HOME_HEROES: HomeHeroBannerItem[] = [
+  {
+    _id: "default-pge-proper-2025",
+    title: "260126 Proper PGE 2025",
+    subtitle: "",
+    badgeText: "",
+    mediaType: "VIDEO",
+    mediaUrl:
+      "https://res.cloudinary.com/hdlw3v3n/video/upload/v1792241225/geoverse/home-hero/pge-proper-2025-16x9.mp4",
+    thumbnailUrl:
+      "https://res.cloudinary.com/hdlw3v3n/video/upload/v1792241225/geoverse/home-hero/pge-proper-2025-16x9.jpg",
+    ctaLabel: "",
+    ctaAction: "NONE",
+    ctaTarget: "",
+    placement: "CUSTOMER_HOME_HERO",
+    isActive: true,
+    sortOrder: 1,
+    overlayEnabled: false,
+    overlayOpacity: 0,
+  },
+  {
+    _id: "default-pge-kamojang-final",
+    title: "PGE Kamojang Bahasa Final",
+    subtitle: "",
+    badgeText: "",
+    mediaType: "VIDEO",
+    mediaUrl:
+      "https://res.cloudinary.com/hdlw3v3n/video/upload/v1792241244/geoverse/home-hero/pge-kamojang-bahasa-final-16x9.mp4",
+    thumbnailUrl:
+      "https://res.cloudinary.com/hdlw3v3n/video/upload/v1792241244/geoverse/home-hero/pge-kamojang-bahasa-final-16x9.jpg",
+    ctaLabel: "",
+    ctaAction: "NONE",
+    ctaTarget: "",
+    placement: "CUSTOMER_HOME_HERO",
+    isActive: true,
+    sortOrder: 2,
+    overlayEnabled: false,
+    overlayOpacity: 0,
+  },
+];
+
 /**
  * Fetch active hero banners for Customer Home
  * Checks memory/AsyncStorage cache first with automatic background refresh
@@ -73,7 +116,7 @@ export async function fetchActiveHomeHero(
       const cachedRaw = await AsyncStorage.getItem(CACHE_KEY_ACTIVE_HERO);
       if (cachedRaw) {
         const { timestamp, data } = JSON.parse(cachedRaw);
-        if (Array.isArray(data) && Date.now() - timestamp < CACHE_TTL_MS) {
+        if (Array.isArray(data) && data.length > 0 && Date.now() - timestamp < CACHE_TTL_MS) {
           return data;
         }
       }
@@ -96,7 +139,13 @@ export async function fetchActiveHomeHero(
       throw new Error(json.message || "Gagal memuat hero banner.");
     }
 
-    const banners: HomeHeroBannerItem[] = Array.isArray(json.data) ? json.data : [];
+    const rawBanners: HomeHeroBannerItem[] = Array.isArray(json.data) ? json.data : [];
+    const banners: HomeHeroBannerItem[] =
+      rawBanners.length > 0
+        ? rawBanners
+        : placement === "CUSTOMER_HOME_HERO"
+        ? DEFAULT_CUSTOMER_HOME_HEROES
+        : [];
 
     // Cache successful response
     try {
@@ -115,10 +164,13 @@ export async function fetchActiveHomeHero(
       const cachedRaw = await AsyncStorage.getItem(CACHE_KEY_ACTIVE_HERO);
       if (cachedRaw) {
         const { data } = JSON.parse(cachedRaw);
-        if (Array.isArray(data)) return data;
+        if (Array.isArray(data) && data.length > 0) return data;
       }
     } catch {
       // Ignore
+    }
+    if (placement === "CUSTOMER_HOME_HERO") {
+      return DEFAULT_CUSTOMER_HOME_HEROES;
     }
     throw error;
   }

@@ -86,9 +86,9 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
   const [formSingleActive, setFormSingleActive] = useState(true);
 
   // Readability & Overlay Customization
-  const [formOverlayEnabled, setFormOverlayEnabled] = useState(true);
-  const [formOverlayColor, setFormOverlayColor] = useState("#064E3B");
-  const [formOverlayOpacity, setFormOverlayOpacity] = useState("0.35");
+  const [formOverlayEnabled, setFormOverlayEnabled] = useState(false);
+  const [formOverlayColor, setFormOverlayColor] = useState("transparent");
+  const [formOverlayOpacity, setFormOverlayOpacity] = useState("0");
   const [formTextColor, setFormTextColor] = useState("#FFFFFF");
   const [formContentAlignment, setFormContentAlignment] = useState<"LEFT" | "CENTER" | "RIGHT">("LEFT");
 
@@ -124,21 +124,21 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
     setEditingBannerId(null);
     setFormTitle("");
     setFormSubtitle("");
-    setFormBadgeText("Fresh & Fast");
+    setFormBadgeText("");
     setFormMediaType("IMAGE");
     setFormMediaUrl("");
     setFormThumbnailUrl("");
-    setFormCtaLabel("Lihat Promo");
-    setFormCtaAction("NAVIGATE");
-    setFormCtaTarget("c_shop_home");
+    setFormCtaLabel("");
+    setFormCtaAction("NONE");
+    setFormCtaTarget("");
     setFormSortOrder("0");
     setFormStartAt("");
     setFormEndAt("");
     setFormIsActive(true);
-    setFormSingleActive(true);
-    setFormOverlayEnabled(true);
-    setFormOverlayColor("#064E3B");
-    setFormOverlayOpacity("0.35");
+    setFormSingleActive(false);
+    setFormOverlayEnabled(false);
+    setFormOverlayColor("transparent");
+    setFormOverlayOpacity("0");
     setFormTextColor("#FFFFFF");
     setFormContentAlignment("LEFT");
     setUploadError("");
@@ -161,9 +161,9 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
     setFormEndAt(item.endAt ? item.endAt.slice(0, 10) : "");
     setFormIsActive(Boolean(item.isActive));
     setFormSingleActive(false);
-    setFormOverlayEnabled(item.overlayEnabled !== false);
-    setFormOverlayColor(item.overlayColor || "#064E3B");
-    setFormOverlayOpacity(String(item.overlayOpacity !== undefined ? item.overlayOpacity : 0.35));
+    setFormOverlayEnabled(Boolean(item.overlayEnabled));
+    setFormOverlayColor(item.overlayColor || "transparent");
+    setFormOverlayOpacity(String(item.overlayOpacity !== undefined ? item.overlayOpacity : 0));
     setFormTextColor(item.textColor || "#FFFFFF");
     setFormContentAlignment(item.contentAlignment || "LEFT");
     setUploadError("");
@@ -215,58 +215,41 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
 
   const handleSaveBanner = async () => {
     // Validations
-    if (!formTitle.trim()) {
-      Alert.alert("Validasi Gagal", "Judul hero banner wajib diisi.");
-      return;
-    }
     if (!formMediaUrl.trim()) {
-      Alert.alert("Validasi Gagal", "URL media atau unggahan media wajib tersedia.");
+      Alert.alert("Validasi Gagal", "Pilih dan unggah gambar atau video terlebih dahulu.");
       return;
     }
     if (!/^https?:\/\/.+/i.test(formMediaUrl.trim())) {
       Alert.alert("Validasi Gagal", "URL media harus berupa URL HTTP/HTTPS yang valid.");
       return;
     }
-    if (formCtaAction !== "NONE" && !formCtaTarget.trim()) {
-      Alert.alert("Validasi Gagal", "Target navigasi/URL wajib diisi jika tombol CTA diaktifkan.");
-      return;
-    }
-    if (formStartAt && formEndAt) {
-      if (new Date(formEndAt) < new Date(formStartAt)) {
-        Alert.alert("Validasi Gagal", "Tanggal berakhir tidak boleh lebih awal daripada tanggal mulai.");
-        return;
-      }
-    }
-
-    const parsedOpacity = parseFloat(formOverlayOpacity);
-    if (isNaN(parsedOpacity) || parsedOpacity < 0 || parsedOpacity > 1) {
-      Alert.alert("Validasi Gagal", "Transparansi overlay harus bernilai antara 0 dan 1 (contoh: 0.35).");
-      return;
-    }
 
     setSubmitting(true);
     try {
+      const mediaTitle =
+        formTitle.trim() ||
+        (formMediaType === "VIDEO" ? "Video Beranda Customer" : "Gambar Beranda Customer");
       const payload: CreateHeroPayload = {
-        title: formTitle.trim(),
-        subtitle: formSubtitle.trim(),
-        badgeText: formBadgeText.trim(),
+        title: mediaTitle,
+        subtitle: "",
+        badgeText: "",
         mediaType: formMediaType,
         mediaUrl: formMediaUrl.trim(),
         thumbnailUrl: formThumbnailUrl.trim() || undefined,
-        ctaLabel: formCtaLabel.trim(),
-        ctaAction: formCtaAction,
-        ctaTarget: formCtaTarget.trim(),
+        ctaLabel: "",
+        ctaAction: "NONE",
+        ctaTarget: "",
         placement: "CUSTOMER_HOME_HERO",
         isActive: formIsActive,
         sortOrder: Number(formSortOrder) || 0,
-        startAt: formStartAt ? new Date(formStartAt).toISOString() : null,
-        endAt: formEndAt ? new Date(formEndAt).toISOString() : null,
-        singleActive: formSingleActive,
-        overlayEnabled: formOverlayEnabled,
-        overlayColor: formOverlayColor.trim() || "#064E3B",
-        overlayOpacity: parsedOpacity,
-        textColor: formTextColor.trim() || "#FFFFFF",
-        contentAlignment: formContentAlignment,
+        startAt: null,
+        endAt: null,
+        singleActive: false,
+        overlayEnabled: false,
+        overlayColor: "transparent",
+        overlayOpacity: 0,
+        textColor: "#FFFFFF",
+        contentAlignment: "LEFT",
       };
 
       if (editingBannerId) {
@@ -323,21 +306,21 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
   // Build live preview data
   const currentPreviewBanner: HomeHeroBannerItem = {
     _id: editingBannerId || "preview_id",
-    title: formTitle || "Pilihan Tepat buat semua kebutuhan",
-    subtitle: formSubtitle || "Koleksi promo terbaik untuk warga Kamojang",
-    badgeText: formBadgeText || "Fresh & Fast",
+    title: formTitle || "Media Beranda Customer",
+    subtitle: "",
+    badgeText: "",
     mediaType: formMediaType,
     mediaUrl: formMediaUrl,
     thumbnailUrl: formThumbnailUrl || formMediaUrl,
-    ctaLabel: formCtaLabel || "Buka Sekarang",
-    ctaAction: formCtaAction,
-    ctaTarget: formCtaTarget || "c_shop_home",
+    ctaLabel: "",
+    ctaAction: "NONE",
+    ctaTarget: "",
     placement: "CUSTOMER_HOME_HERO",
     isActive: true,
     sortOrder: Number(formSortOrder) || 0,
-    overlayEnabled: formOverlayEnabled,
-    overlayColor: formOverlayColor.trim() || "#064E3B",
-    overlayOpacity: parseFloat(formOverlayOpacity) || 0.35,
+    overlayEnabled: false,
+    overlayColor: "transparent",
+    overlayOpacity: 0,
     textColor: formTextColor.trim() || "#FFFFFF",
     contentAlignment: formContentAlignment,
   };
@@ -605,8 +588,10 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 32 }}
             >
-              {/* Media Type Selection */}
-              <Text style={styles.inputLabel}>1. Tipe Media</Text>
+              <Text style={styles.inputLabel}>Media Beranda Customer</Text>
+              <Text style={styles.formHintText}>
+                Pilih satu gambar atau video. Tidak ada teks, tombol, atau overlay yang ditampilkan di atas media.
+              </Text>
               <View style={styles.mediaTypeRow}>
                 <TouchableOpacity
                   style={[
@@ -645,8 +630,7 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {/* Upload Media Button / Preview */}
-              <Text style={styles.inputLabel}>2. Unggah Media ke Cloudinary</Text>
+              <Text style={styles.inputLabel}>File Media</Text>
               <View style={styles.uploadBox}>
                 {formMediaUrl ? (
                   <View style={styles.uploadedPreviewWrap}>
@@ -680,142 +664,15 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
                   )}
                 </TouchableOpacity>
                 <Text style={styles.uploadHelperText}>
-                Format didukung: JPG, PNG, WEBP (maks. 10MB) atau MP4, MOV (maks. 600MB, maks. 5 menit)
+                  Format: JPG, PNG, WEBP (maks. 10MB) atau MP4, MOV (maks. 600MB, maks. 5 menit)
                 </Text>
               </View>
+              {uploadError ? <Text style={styles.uploadErrorText}>{uploadError}</Text> : null}
 
-              {/* Or Direct Media URL */}
-              <Text style={styles.inputLabel}>Atau Masukkan URL Media Langsung</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formMediaUrl}
-                onChangeText={setFormMediaUrl}
-                placeholder="https://res.cloudinary.com/..."
-                placeholderTextColor="#94A3B8"
-              />
-
-              {/* Title Input */}
-              <Text style={styles.inputLabel}>3. Judul Hero Banner *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formTitle}
-                onChangeText={setFormTitle}
-                placeholder="Contoh: Diskon Kuliner Kamojang hingga 50%"
-                placeholderTextColor="#94A3B8"
-                maxLength={120}
-              />
-
-              {/* Subtitle Input */}
-              <Text style={styles.inputLabel}>Subjudul (Opsional)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formSubtitle}
-                onChangeText={setFormSubtitle}
-                placeholder="Contoh: Pesan makan siang hangat langsung antar ke rumah"
-                placeholderTextColor="#94A3B8"
-                maxLength={240}
-              />
-
-              {/* Badge Text Input */}
-              <Text style={styles.inputLabel}>Teks Badge Promosi</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formBadgeText}
-                onChangeText={setFormBadgeText}
-                placeholder="Contoh: Fresh & Fast, Promo Warga, Spesial PGE"
-                placeholderTextColor="#94A3B8"
-                maxLength={40}
-              />
-
-              {/* Call-to-Action (CTA) Config */}
-              <Text style={styles.inputLabel}>4. Pengaturan Tombol Aksi (CTA)</Text>
-              <View style={styles.ctaActionRow}>
-                {(["NONE", "NAVIGATE", "OPEN_URL"] as const).map((action) => (
-                  <TouchableOpacity
-                    key={action}
-                    style={[
-                      styles.ctaChoiceBtn,
-                      formCtaAction === action && styles.ctaChoiceBtnActive,
-                    ]}
-                    onPress={() => setFormCtaAction(action)}
-                  >
-                    <Text
-                      style={[
-                        styles.ctaChoiceText,
-                        formCtaAction === action && styles.ctaChoiceTextActive,
-                      ]}
-                    >
-                      {action === "NONE" ? "Tanpa Tombol" : action === "NAVIGATE" ? "Buka Layanan" : "Buka URL Web"}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {formCtaAction !== "NONE" && (
-                <>
-                  <Text style={styles.inputLabel}>Label Tombol CTA</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formCtaLabel}
-                    onChangeText={setFormCtaLabel}
-                    placeholder="Contoh: Beli Sekarang, Naik Ojek, Tukar Poin"
-                    placeholderTextColor="#94A3B8"
-                    maxLength={40}
-                  />
-
-                  <Text style={styles.inputLabel}>
-                    {formCtaAction === "NAVIGATE"
-                      ? "Target Rute Aplikasi (c_shop_home, c_ride, c_catering, dll)"
-                      : "Target Alamat Web (https://...)"}
-                  </Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formCtaTarget}
-                    onChangeText={setFormCtaTarget}
-                    placeholder={
-                      formCtaAction === "NAVIGATE" ? "c_shop_home" : "https://pertamina.com"
-                    }
-                    placeholderTextColor="#94A3B8"
-                  />
-                </>
-              )}
-
-              {/* Sort Order & Dates */}
-              <View style={{ flexDirection: "row", gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Urutan (Sort Order)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formSortOrder}
-                    onChangeText={setFormSortOrder}
-                    keyboardType="numeric"
-                    placeholder="0"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Mulai (YYYY-MM-DD)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formStartAt}
-                    onChangeText={setFormStartAt}
-                    placeholder="2026-10-16"
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.inputLabel}>Selesai Tayang (YYYY-MM-DD)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formEndAt}
-                onChangeText={setFormEndAt}
-                placeholder="2026-12-31"
-              />
-
-              {/* Toggle Active */}
               <View style={styles.toggleRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.toggleLabel}>Aktifkan Banner Ini</Text>
-                  <Text style={styles.toggleSub}>Banner akan langsung tayang di Beranda Customer</Text>
+                  <Text style={styles.toggleLabel}>Tampilkan di Beranda Customer</Text>
+                  <Text style={styles.toggleSub}>Media akan langsung diputar otomatis saat aktif.</Text>
                 </View>
                 <Switch
                   value={formIsActive}
@@ -825,162 +682,22 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
                 />
               </View>
 
-              {/* Single Active Option */}
-              <View style={styles.toggleRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.toggleLabel}>Jadikan Banner Utama Tunggal</Text>
-                  <Text style={styles.toggleSub}>Otomatis menonaktifkan banner lain agar tidak carousel</Text>
-                </View>
-                <Switch
-                  value={formSingleActive}
-                  onValueChange={setFormSingleActive}
-                  trackColor={{ false: "#E2E8F0", true: "#A7F3D0" }}
-                  thumbColor={formSingleActive ? "#15803D" : "#94A3B8"}
-                />
-              </View>
-
-              {/* 5. Readability & Overlay Settings */}
-              <Text style={[styles.inputLabel, { marginTop: 16 }]}>5. Readability & Lapisan Overlay</Text>
-              
-              {/* Overlay Toggle */}
-              <View style={styles.toggleRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.toggleLabel}>Aktifkan Lapisan Overlay</Text>
-                  <Text style={styles.toggleSub}>Lapisan warna transparan agar teks selalu terbaca jelas</Text>
-                </View>
-                <Switch
-                  value={formOverlayEnabled}
-                  onValueChange={setFormOverlayEnabled}
-                  trackColor={{ false: "#E2E8F0", true: "#A7F3D0" }}
-                  thumbColor={formOverlayEnabled ? "#15803D" : "#94A3B8"}
-                />
-              </View>
-
-              {formOverlayEnabled && (
-                <>
-                  {/* Overlay Color Presets */}
-                  <Text style={styles.inputLabel}>Warna Overlay</Text>
-                  <View style={styles.colorPresetRow}>
-                    {[
-                      { label: "Hijau PGE", hex: "#064E3B" },
-                      { label: "Dark Slate", hex: "#0F172A" },
-                      { label: "Hitam", hex: "#000000" },
-                      { label: "Biru Tua", hex: "#1E3A8A" },
-                      { label: "Cokelat", hex: "#7C2D12" },
-                    ].map((col) => (
-                      <TouchableOpacity
-                        key={col.hex}
-                        style={[
-                          styles.colorChip,
-                          formOverlayColor.toLowerCase() === col.hex.toLowerCase() && styles.colorChipActive,
-                        ]}
-                        onPress={() => setFormOverlayColor(col.hex)}
-                      >
-                        <View style={[styles.colorSample, { backgroundColor: col.hex }]} />
-                        <Text style={styles.colorChipText}>{col.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formOverlayColor}
-                    onChangeText={setFormOverlayColor}
-                    placeholder="#064E3B"
-                    placeholderTextColor="#94A3B8"
-                  />
-
-                  {/* Overlay Opacity Presets */}
-                  <Text style={styles.inputLabel}>Transparansi Overlay (0.00 - 1.00)</Text>
-                  <View style={styles.colorPresetRow}>
-                    {[
-                      { label: "Tipis (0.20)", val: "0.20" },
-                      { label: "Standar (0.35)", val: "0.35" },
-                      { label: "Sedang (0.50)", val: "0.50" },
-                      { label: "Pekat (0.70)", val: "0.70" },
-                    ].map((op) => (
-                      <TouchableOpacity
-                        key={op.val}
-                        style={[
-                          styles.colorChip,
-                          formOverlayOpacity === op.val && styles.colorChipActive,
-                        ]}
-                        onPress={() => setFormOverlayOpacity(op.val)}
-                      >
-                        <Text style={styles.colorChipText}>{op.label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formOverlayOpacity}
-                    onChangeText={setFormOverlayOpacity}
-                    keyboardType="numeric"
-                    placeholder="0.35"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </>
-              )}
-
-              {/* Text Color Presets */}
-              <Text style={styles.inputLabel}>Warna Teks Hero</Text>
-              <View style={styles.colorPresetRow}>
-                {[
-                  { label: "Putih", hex: "#FFFFFF" },
-                  { label: "Abu Terang", hex: "#F8FAFC" },
-                  { label: "Kuning Emas", hex: "#FEF08A" },
-                  { label: "Gelap", hex: "#0F172A" },
-                ].map((txt) => (
-                  <TouchableOpacity
-                    key={txt.hex}
-                    style={[
-                      styles.colorChip,
-                      formTextColor.toLowerCase() === txt.hex.toLowerCase() && styles.colorChipActive,
-                    ]}
-                    onPress={() => setFormTextColor(txt.hex)}
-                  >
-                    <View style={[styles.colorSample, { backgroundColor: txt.hex }]} />
-                    <Text style={styles.colorChipText}>{txt.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <Text style={[styles.inputLabel, { marginTop: 16 }]}>Urutan Media</Text>
               <TextInput
                 style={styles.textInput}
-                value={formTextColor}
-                onChangeText={setFormTextColor}
-                placeholder="#FFFFFF"
+                value={formSortOrder}
+                onChangeText={setFormSortOrder}
+                keyboardType="numeric"
+                placeholder="0"
                 placeholderTextColor="#94A3B8"
               />
 
-              {/* Content Alignment */}
-              <Text style={styles.inputLabel}>Posisi Konten Hero (Alignment)</Text>
-              <View style={styles.segmentedRow}>
-                {(["LEFT", "CENTER", "RIGHT"] as const).map((pos) => (
-                  <TouchableOpacity
-                    key={pos}
-                    style={[
-                      styles.segmentedBtn,
-                      formContentAlignment === pos && styles.segmentedBtnActive,
-                    ]}
-                    onPress={() => setFormContentAlignment(pos)}
-                  >
-                    <Text
-                      style={[
-                        styles.segmentedBtnText,
-                        formContentAlignment === pos && styles.segmentedBtnTextActive,
-                      ]}
-                    >
-                      {pos === "LEFT" ? "Rata Kiri" : pos === "CENTER" ? "Rata Tengah" : "Rata Kanan"}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Live Form Preview Section */}
-              <Text style={[styles.inputLabel, { marginTop: 18 }]}>Preview Hasil Tampilan</Text>
+              <Text style={[styles.inputLabel, { marginTop: 18 }]}>Preview Bersih</Text>
               <View style={styles.miniPreviewCard}>
                 <HomeHeroBannerView
                   banners={[currentPreviewBanner]}
-                  customerLocation="Jl. Kamojang No. 14, Garut"
+                  customerLocation=""
+                  isPreview
                 />
               </View>
             </ScrollView>
@@ -1427,6 +1144,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 6,
   },
+  formHintText: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: "#64748B",
+    marginBottom: 4,
+  },
   textInput: {
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
@@ -1519,6 +1242,14 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     textAlign: "center",
   },
+  uploadErrorText: {
+    width: "100%",
+    fontSize: 10.5,
+    lineHeight: 15,
+    color: "#B91C1C",
+    textAlign: "center",
+    marginTop: 2,
+  },
   ctaActionRow: {
     flexDirection: "row",
     gap: 8,
@@ -1567,10 +1298,11 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   miniPreviewCard: {
-    backgroundColor: "#0D7A53",
+    backgroundColor: "#F8FAFC",
     borderRadius: 16,
-    padding: 12,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   modalFooterRow: {
     flexDirection: "row",
@@ -1608,16 +1340,20 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   simulatedHeaderWrap: {
-    backgroundColor: "#0D7A53",
+    backgroundColor: "#F8FAFC",
     borderRadius: 20,
-    padding: 16,
-    gap: 10,
+    paddingBottom: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   simulatedLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#FFFFFF",
-    marginBottom: 6,
+    color: "#0F172A",
+    marginHorizontal: 14,
+    marginTop: 12,
+    marginBottom: 8,
   },
   colorPresetRow: {
     flexDirection: "row",

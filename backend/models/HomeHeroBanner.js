@@ -102,18 +102,18 @@ const homeHeroBannerSchema = new mongoose.Schema(
 
     overlayEnabled: {
       type: Boolean,
-      default: true,
+      default: false,
     },
 
     overlayColor: {
       type: String,
-      default: "#064E3B",
+      default: "transparent",
       trim: true,
     },
 
     overlayOpacity: {
       type: Number,
-      default: 0.35,
+      default: 0,
       min: [0, "Overlay opacity minimal 0"],
       max: [1, "Overlay opacity maksimal 1"],
     },

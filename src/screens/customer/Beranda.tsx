@@ -1142,55 +1142,6 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           onNavigate={(route) => navigate(route as any)}
         />
 
-        {/* ============================================================ */}
-        {/* 2. 3 QUICK CATEGORY CARDS (Resto, Bepergian, Kebutuhan) */}
-        {/* ============================================================ */}
-        <View style={styles.categoryCardsRow}>
-          {/* Card 1: Resto Jempolan */}
-          <TouchableOpacity
-            style={styles.categoryCardItem}
-            onPress={() => navigate("c_catering")}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.categoryCardIconBox, { backgroundColor: "#FEE2E2" }]}>
-              <Coffee size={18} color="#DC2626" />
-            </View>
-            <View style={styles.categoryCardTextCol}>
-              <Text style={styles.categoryCardTitle} numberOfLines={1}>Resto Jempolan</Text>
-              <Text style={styles.categoryCardSub} numberOfLines={1}>Kuliner lezat</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Card 2: Mudah Bepergian */}
-          <TouchableOpacity
-            style={styles.categoryCardItem}
-            onPress={() => navigate("c_ride")}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.categoryCardIconBox, { backgroundColor: "#DCFCE7" }]}>
-              <Bike size={18} color="#15803D" />
-            </View>
-            <View style={styles.categoryCardTextCol}>
-              <Text style={styles.categoryCardTitle} numberOfLines={1}>Mudah Bepergian</Text>
-              <Text style={styles.categoryCardSub} numberOfLines={1}>Ojek & kurir</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Card 3: Kebutuhan Harian */}
-          <TouchableOpacity
-            style={styles.categoryCardItem}
-            onPress={() => navigate("c_shop_home")}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.categoryCardIconBox, { backgroundColor: "#FEF3C7" }]}>
-              <ShoppingBag size={18} color="#D97706" />
-            </View>
-            <View style={styles.categoryCardTextCol}>
-              <Text style={styles.categoryCardTitle} numberOfLines={1}>Kebutuhan Harian</Text>
-              <Text style={styles.categoryCardSub} numberOfLines={1}>Grocery segar</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
 
         {/* ============================================================ */}
         {/* 3. GOPAY / GEOVERSE POINT FLOATING WALLET CARD */}

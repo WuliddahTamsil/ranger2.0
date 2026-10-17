@@ -112,6 +112,7 @@ async function runHeroTests() {
   const adminToken = jwt.sign({ id: adminId, role: "admin" }, JWT_SECRET, { expiresIn: "1h" });
   const customerToken = jwt.sign({ id: customerId, role: "customer" }, JWT_SECRET, { expiresIn: "1h" });
 
+  let existingActiveBannerIds = [];
   try {
     // Seed users into DB
     await User.create([
@@ -133,8 +134,12 @@ async function runHeroTests() {
       },
     ]);
 
-    // Cleanup any pre-existing test banners
+    // Cleanup any pre-existing test banners and snapshot active live banners to preserve
     await HomeHeroBanner.deleteMany({ title: /Test Hero/i });
+    const currentActiveBanners = await HomeHeroBanner.find({ isActive: true }).select("_id title").lean();
+    existingActiveBannerIds = currentActiveBanners
+      .filter((b) => !/Test Hero/i.test(b.title))
+      .map((b) => b._id);
 
     // ------------------------------------------------------------------------
     // [Test 1] GET active hanya mengembalikan banner aktif.
@@ -586,10 +591,20 @@ async function runHeroTests() {
     console.error("❌ Terjadi kegagalan test:", err);
     failed++;
   } finally {
-    // Cleanup test data
+    // Cleanup test data and restore live active banners
     try {
       await HomeHeroBanner.deleteMany({ title: /Test Hero/i });
       await User.deleteMany({ _id: { $in: [adminId, customerId] } });
+      await HomeHeroBanner.updateMany(
+        { title: { $in: ["260126 Proper PGE 2025", "PGE Kamojang Bahasa Final"] } },
+        { $set: { isActive: true, overlayEnabled: false, overlayOpacity: 0, overlayColor: "transparent" } }
+      );
+      if (existingActiveBannerIds && existingActiveBannerIds.length > 0) {
+        await HomeHeroBanner.updateMany(
+          { _id: { $in: existingActiveBannerIds } },
+          { $set: { isActive: true } }
+        );
+      }
     } catch (_) {}
 
     await mongoose.disconnect();
