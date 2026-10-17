@@ -43,6 +43,8 @@ export interface PaymentDetails {
   deepLink?: string;
   deepLinkUrl?: string;
   qrCodeUrl?: string;
+  snapToken?: string;
+  snapRedirectUrl?: string;
   virtualAccount?: {
     bank?: string;
     vaNumber?: string;

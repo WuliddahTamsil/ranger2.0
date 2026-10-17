@@ -185,6 +185,7 @@ const createPayment = async (req, res) => {
     const customerId = req.authUser ? String(req.authUser._id) : req.body.customerId || "anonymous";
     const customerName = req.authUser?.name || req.body.customerName || "Pelanggan";
     const customerPhone = req.authUser?.phone || req.body.customerPhone || "";
+    const customerEmail = req.authUser?.email || req.body.customerEmail || "customer@kanyaah.com";
 
     const gatewayResult = await paymentGateway.createPayment({
       orderId,
@@ -194,6 +195,7 @@ const createPayment = async (req, res) => {
       customerId,
       customerName,
       customerPhone,
+      customerEmail,
       amount: Number(amount),
       paymentMethod,
     });
@@ -215,6 +217,8 @@ const createPayment = async (req, res) => {
       qrString: gatewayResult.qrString,
       qrCodeUrl: gatewayResult.qrCodeUrl,
       deepLinkUrl: gatewayResult.deepLinkUrl,
+      snapToken: gatewayResult.snapToken,
+      snapRedirectUrl: gatewayResult.snapRedirectUrl,
       virtualAccount: gatewayResult.virtualAccount,
       expiredAt: gatewayResult.expiryTime,
     });

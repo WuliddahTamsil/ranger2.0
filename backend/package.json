@@ -18,6 +18,7 @@
     "express": "^4.21.2",
     "googleapis": "^144.0.0",
     "jsonwebtoken": "^9.0.2",
+    "midtrans-client": "^1.4.3",
     "mongoose": "^8.9.5",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^10.0.1",

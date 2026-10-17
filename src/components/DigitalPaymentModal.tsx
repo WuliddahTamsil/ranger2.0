@@ -300,6 +300,15 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
     }
   };
 
+  const handleOpenSnapUrl = async (url?: string) => {
+    if (!url) return;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Buka Link", "Tidak dapat membuka link Midtrans Snap.");
+    }
+  };
+
   const filteredMethods = PAYMENT_METHODS.filter((m) => {
     if (activeCategory === "ALL") return true;
     return m.category === activeCategory;
@@ -452,6 +461,17 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
               <View style={styles.invoiceActions}>
                 {paymentDetails.status !== "PAID" && (
                   <>
+                    {Boolean(paymentDetails.snapRedirectUrl) && (
+                      <TouchableOpacity
+                        style={styles.snapPortalBtn}
+                        onPress={() => handleOpenSnapUrl(paymentDetails.snapRedirectUrl)}
+                        activeOpacity={0.85}
+                      >
+                        <ExternalLink size={17} color="#FFFFFF" />
+                        <Text style={styles.snapPortalBtnText}>Buka Portal Bayar Midtrans Snap</Text>
+                      </TouchableOpacity>
+                    )}
+
                     <TouchableOpacity
                       style={styles.checkStatusBtn}
                       onPress={handleCheckStatus}
@@ -967,6 +987,25 @@ const styles = StyleSheet.create({
   invoiceActions: {
     gap: 10,
     marginTop: 4,
+  },
+  snapPortalBtn: {
+    backgroundColor: "#0F766E",
+    paddingVertical: 14,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#0F766E",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  snapPortalBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
   checkStatusBtn: {
     flexDirection: "row",

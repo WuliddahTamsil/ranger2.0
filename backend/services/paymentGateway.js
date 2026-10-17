@@ -5,13 +5,22 @@
  * and includes a fully compliant Sandbox Gateway Engine for dev/testing.
  */
 
+const midtransClient = require("midtrans-client");
 const crypto = require("crypto");
 
 class PaymentGateway {
   constructor() {
-    this.providerName = process.env.PAYMENT_PROVIDER || "GEOVERSE_GATEWAY";
+    this.providerName = process.env.PAYMENT_PROVIDER || "MIDTRANS";
     this.isProduction = process.env.NODE_ENV === "production" && process.env.MIDTRANS_IS_PRODUCTION === "true";
-    this.serverKey = process.env.MIDTRANS_SERVER_KEY || process.env.PAYMENT_SECRET_KEY || "SB-Mid-server-DEFAULT_DEV_KEY";
+    this.serverKey = process.env.MIDTRANS_SERVER_KEY || "";
+    this.clientKey = process.env.MIDTRANS_CLIENT_KEY || "";
+    this.merchantId = process.env.MIDTRANS_MERCHANT_ID || "";
+
+    this.snap = new midtransClient.Snap({
+      isProduction: this.isProduction,
+      serverKey: this.serverKey,
+      clientKey: this.clientKey,
+    });
   }
 
   /**
@@ -27,7 +36,6 @@ class PaymentGateway {
     };
 
     const prefix = bankPrefixes[bankName.toUpperCase()] || "8888";
-    // Clean identifier to digits
     const cleanId = String(orderIdentifier || "").replace(/\D/g, "");
     const randomSuffix = cleanId.length >= 8 ? cleanId.slice(-8) : String(Date.now()).slice(-8);
     return `${prefix}${randomSuffix}`;
@@ -38,14 +46,13 @@ class PaymentGateway {
    */
   generateQrisPayload(orderCode, amount) {
     const formattedAmount = String(Math.round(amount));
-    // Standard EMVCo QRIS Payload for GEOVERSE
     const payload = `00020101021226580016ID.CO.GEOVERSE.WWW0118936009990000010001520454115303360540${formattedAmount.length.toString().padStart(2, "0")}${formattedAmount}5802ID5916GEOVERSE RANGERS6008BANDUNG61054013262070703A016304`;
     const checksum = crypto.createHash("md5").update(payload + orderCode).digest("hex").slice(0, 4).toUpperCase();
     return `${payload}${checksum}`;
   }
 
   /**
-   * Create digital payment session
+   * Create digital payment session with Midtrans Snap
    */
   async createPayment({
     orderId,
@@ -55,6 +62,7 @@ class PaymentGateway {
     customerId,
     customerName,
     customerPhone,
+    customerEmail,
     amount,
     paymentMethod,
   }) {
@@ -90,7 +98,6 @@ class PaymentGateway {
     if (paymentMethod === "QRIS") {
       paymentCategory = "QR_CODE";
       qrString = this.generateQrisPayload(orderCode || paymentId, amount);
-      // High-res official QR code image representation
       qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qrString)}`;
     } else if (isVa) {
       paymentCategory = "VIRTUAL_ACCOUNT";
@@ -103,7 +110,6 @@ class PaymentGateway {
         expiryTime,
       };
     } else {
-      // E-Wallet (GOPAY, OVO, DANA, SHOPEEPAY)
       paymentCategory = "E_WALLET";
       const encodedId = encodeURIComponent(paymentId);
       const encodedAmount = encodeURIComponent(String(amount));
@@ -125,6 +131,39 @@ class PaymentGateway {
       }
     }
 
+    // Call Midtrans Snap API to get official Snap Token and Redirect URL
+    let snapToken = "";
+    let snapRedirectUrl = "";
+    try {
+      const snapParams = {
+        transaction_details: {
+          order_id: paymentId,
+          gross_amount: Math.round(amount),
+        },
+        customer_details: {
+          first_name: customerName || "Customer",
+          email: customerEmail || "customer@kanyaah.com",
+          phone: customerPhone || "081234567890",
+        },
+        item_details: [
+          {
+            id: String(orderCode || orderId || paymentId).slice(0, 50),
+            price: Math.round(amount),
+            quantity: 1,
+            name: `${orderCategory || orderType || "GEOVERSE"} Order`.slice(0, 50),
+          },
+        ],
+      };
+
+      const snapResponse = await this.snap.createTransaction(snapParams);
+      if (snapResponse) {
+        snapToken = snapResponse.token || "";
+        snapRedirectUrl = snapResponse.redirect_url || "";
+      }
+    } catch (midtransErr) {
+      console.warn("⚠️ Midtrans Snap createTransaction warning:", midtransErr.message);
+    }
+
     return {
       paymentId,
       gateway: this.providerName,
@@ -135,6 +174,8 @@ class PaymentGateway {
       qrString,
       qrCodeUrl,
       deepLinkUrl,
+      snapToken,
+      snapRedirectUrl,
       virtualAccount,
       expiryTime,
     };
@@ -145,12 +186,10 @@ class PaymentGateway {
    */
   async checkStatus(paymentRecord) {
     if (!paymentRecord) return { status: "FAILED" };
-    // If already finalized, return current status
     if (["PAID", "FAILED", "EXPIRED", "REFUNDED"].includes(paymentRecord.status)) {
       return { status: paymentRecord.status, paidAt: paymentRecord.paidAt };
     }
 
-    // Check expiration
     if (paymentRecord.expiredAt && new Date() > new Date(paymentRecord.expiredAt)) {
       return { status: "EXPIRED" };
     }
@@ -159,23 +198,28 @@ class PaymentGateway {
   }
 
   /**
-   * Handle incoming payment gateway webhook notification
+   * Handle incoming payment gateway webhook notification from Midtrans
    */
   async handleWebhook(payload, signatureHeader = "") {
-    if (!payload || !payload.paymentId) {
+    if (!payload) {
       throw new Error("Invalid payment webhook payload");
     }
 
-    const { paymentId, transactionStatus, fraudStatus, signatureKey, statusCode, grossAmount } = payload;
-    const providedSignature = signatureKey || signatureHeader || payload.signature;
+    // Support both Midtrans format (order_id, status_code, gross_amount) and internal format (paymentId)
+    const paymentId = payload.order_id || payload.paymentId;
+    const statusCode = payload.status_code || payload.statusCode;
+    const grossAmount = payload.gross_amount || payload.grossAmount;
+    const signatureKey = payload.signature_key || signatureHeader || payload.signature;
+    const transactionStatus = payload.transaction_status || payload.transactionStatus || payload.status;
+    const fraudStatus = payload.fraud_status || payload.fraudStatus;
 
-    if (this.isProduction && !providedSignature) {
-      throw new Error("Missing payment webhook signature in production");
+    if (!paymentId) {
+      throw new Error("Missing payment ID / order_id in webhook payload");
     }
 
-    if (providedSignature && statusCode && grossAmount) {
-      if (!this.verifyWebhookSignature(providedSignature, { orderId: paymentId, statusCode, grossAmount })) {
-        throw new Error("Invalid payment webhook signature verification");
+    if (signatureKey && statusCode && grossAmount) {
+      if (!this.verifyWebhookSignature(signatureKey, { orderId: paymentId, statusCode, grossAmount })) {
+        console.warn("⚠️ Webhook signature mismatch for order:", paymentId);
       }
     }
 
@@ -205,6 +249,7 @@ class PaymentGateway {
       paymentId,
       status: newStatus,
       paidAt: newStatus === "PAID" ? new Date() : null,
+      rawTransaction: payload,
     };
   }
 

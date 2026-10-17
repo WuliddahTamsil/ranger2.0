@@ -102,6 +102,14 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    snapToken: {
+      type: String,
+      default: "",
+    },
+    snapRedirectUrl: {
+      type: String,
+      default: "",
+    },
     virtualAccount: {
       bank: { type: String, default: "" },
       vaNumber: { type: String, default: "" },
