@@ -50,6 +50,15 @@ const chatMessageSchema = new mongoose.Schema(
       thumbnailUrl: String,
       mimeType: String,
     },
+    isRead: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    readAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

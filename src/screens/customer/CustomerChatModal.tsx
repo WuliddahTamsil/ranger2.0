@@ -1,5 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   FlatList,
   Modal,
@@ -37,6 +37,7 @@ import {
   Video,
   Play,
   User,
+  Calendar,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -72,6 +73,68 @@ interface AttachmentItem {
   name: string;
   size?: string;
 }
+
+const getChatDateKey = (dateInput?: string | Date): string => {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const valid = !isNaN(d.getTime());
+  const effective = valid ? d : new Date();
+  return `${effective.getFullYear()}-${String(effective.getMonth() + 1).padStart(2, "0")}-${String(effective.getDate()).padStart(2, "0")}`;
+};
+
+const formatChatDateBadge = (dateInput?: string | Date): string => {
+  const date = dateInput ? new Date(dateInput) : new Date();
+  const valid = !isNaN(date.getTime());
+  const effectiveDate = valid ? date : new Date();
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (d1: Date, d2: Date) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+
+  const dayName = dayNames[effectiveDate.getDay()];
+  const dayDate = effectiveDate.getDate();
+  const monthName = monthNames[effectiveDate.getMonth()];
+  const year = effectiveDate.getFullYear();
+
+  if (isSameDay(effectiveDate, today)) {
+    return `Hari Ini • ${dayName}, ${dayDate} ${monthName} ${year}`;
+  } else if (isSameDay(effectiveDate, yesterday)) {
+    return `Kemarin • ${dayName}, ${dayDate} ${monthName} ${year}`;
+  } else {
+    return `${dayName}, ${dayDate} ${monthName} ${year}`;
+  }
+};
+
+const formatMessageTimestamp = (dateInput?: string | Date, fallbackTime?: string): string => {
+  const d = dateInput ? new Date(dateInput) : null;
+  const valid = d && !isNaN(d.getTime());
+  const effectiveDate = valid ? d : new Date();
+
+  const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const monthNames = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agt", "Sep", "Okt", "Nov", "Des"
+  ];
+
+  const day = dayNames[effectiveDate.getDay()];
+  const dateNum = effectiveDate.getDate();
+  const month = monthNames[effectiveDate.getMonth()];
+  const hours = String(effectiveDate.getHours()).padStart(2, "0");
+  const minutes = String(effectiveDate.getMinutes()).padStart(2, "0");
+  const timeStr = fallbackTime || `${hours}:${minutes}`;
+
+  return `${day}, ${dateNum} ${month} • ${timeStr}`;
+};
 
 export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   visible,
@@ -140,22 +203,66 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [canSend, setCanSend] = useState(true);
+  const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (visible && thread?.messages && thread.messages.length > 0) {
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [thread?.messages?.length, visible]);
+
+  const defaultGreeting = isDriverUser
+    ? "Halo, saya driver untuk perjalanan Anda."
+    : isOwnerView
+    ? "Halo kak, ada yang bisa kami bantu mengenai ketersediaan kamar / unit properti kami?"
+    : isDriver
+    ? (isRide ? "Halo Pak Driver, saya sudah di titik jemput." : "Halo Pak Kurir, saya customer pesanan ini.")
+    : isKost
+    ? `Halo, saya ingin bertanya mengenai properti ${participantName}. Apakah masih tersedia?`
+    : "Halo Toko, ada yang ingin saya tanyakan mengenai pesanan ini.";
+  const activeInitialMsg = initialMessage || defaultGreeting;
+
+  const loadMessages = useCallback(async () => {
+    try {
+      const conversation = await getChatConversation(orderId);
+      if (conversation.success && conversation.data) {
+        setConversationId(String(conversation.data._id || conversation.data.id));
+        setCanSend(conversation.data.canSend !== false);
+      }
+      const res = await getChatMessages(orderId, chatTargetRole, currentUserEffectiveRole);
+      if (res.success && Array.isArray(res.data)) {
+        const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
+          id: m._id,
+          sender: m.sender === currentUserEffectiveRole ? "customer" : "other",
+          text: m.text,
+          time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          createdAt: m.createdAt,
+          attachment: m.attachment,
+        }));
+
+        upsertCustomerChatThread({
+          id: threadId,
+          orderId,
+          participantType,
+          participantName,
+          lastMessage: mapped.length > 0 ? mapped[mapped.length - 1].text : activeInitialMsg,
+          updatedAt: mapped.length > 0 ? mapped[mapped.length - 1].time : "Baru saja",
+          unreadCount: 0,
+          messages: mapped,
+        });
+      }
+    } catch (e) {
+      // Handled silently
+    }
+  }, [activeInitialMsg, chatTargetRole, currentUserEffectiveRole, orderId, participantName, participantType, threadId]);
 
   useEffect(() => {
     if (!visible) return;
     setConversationId(null);
     setCanSend(true);
-
-    const defaultGreeting = isDriverUser
-      ? "Halo, saya driver untuk perjalanan Anda."
-      : isOwnerView
-      ? "Halo kak, ada yang bisa kami bantu mengenai ketersediaan kamar / unit properti kami?"
-      : isDriver
-      ? (isRide ? "Halo Pak Driver, saya sudah di titik jemput." : "Halo Pak Kurir, saya customer pesanan ini.")
-      : isKost
-      ? `Halo, saya ingin bertanya mengenai properti ${participantName}. Apakah masih tersedia?`
-      : "Halo Toko, ada yang ingin saya tanyakan mengenai pesanan ini.";
-    const activeInitialMsg = initialMessage || defaultGreeting;
 
     // Ensure local thread exists first
     const existing = ensureCustomerChatThread({
@@ -169,39 +276,6 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       messages: [],
     });
     setThread(existing);
-
-    const loadMessages = async () => {
-      try {
-        const conversation = await getChatConversation(orderId);
-        if (conversation.success && conversation.data) {
-          setConversationId(String(conversation.data._id || conversation.data.id));
-          setCanSend(conversation.data.canSend !== false);
-        }
-        const res = await getChatMessages(orderId, chatTargetRole, currentUserEffectiveRole);
-        if (res.success && Array.isArray(res.data)) {
-          const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
-            id: m._id,
-            sender: m.sender === currentUserEffectiveRole ? "customer" : "other",
-            text: m.text,
-            time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-            attachment: m.attachment,
-          }));
-
-          upsertCustomerChatThread({
-            id: threadId,
-            orderId,
-            participantType,
-            participantName,
-            lastMessage: mapped.length > 0 ? mapped[mapped.length - 1].text : activeInitialMsg,
-            updatedAt: mapped.length > 0 ? mapped[mapped.length - 1].time : "Baru saja",
-            unreadCount: 0,
-            messages: mapped,
-          });
-        }
-      } catch (e) {
-        // Handled silently
-      }
-    };
 
     void loadMessages();
     const interval = setInterval(loadMessages, 3000);
@@ -219,7 +293,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       unsubscribeRealtime();
       unsubscribe();
     };
-  }, [initialMessage, isDriver, isDriverChat, isDriverUser, isKost, isRide, orderId, participantName, participantType, threadId, visible]);
+  }, [loadMessages, orderId, threadId, visible, activeInitialMsg, participantName, participantType]);
 
   const handlePickImage = async () => {
     setIsAttachMenuOpen(false);
@@ -342,12 +416,14 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     if (!text && !selectedAttachment) return;
 
     let attachmentToSend = selectedAttachment;
-    const nowTime = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    const now = new Date();
+    const nowTime = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
     const message: CustomerChatMessage = {
       id: `${threadId}_${Date.now()}`,
       sender: "customer",
       text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : selectedAttachment?.type === "video" ? "🎥 Video terkirim" : "📎 File terlampir"),
       time: nowTime,
+      createdAt: now.toISOString(),
       attachment: attachmentToSend ? { ...attachmentToSend } : undefined,
     };
 
@@ -382,9 +458,15 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       chatTargetRole,
       undefined,
       conversationId || undefined
-    ).catch((err) => {
-      console.warn("Backend chat send error (handled):", err);
-    });
+    )
+      .then((res) => {
+        if (res?.success) {
+          void loadMessages();
+        }
+      })
+      .catch((err) => {
+        console.warn("Backend chat send error (handled):", err);
+      });
   };
 
   const Icon = (isOwnerView || isDriverUser) ? User : isDriver ? Bike : isKost ? Building2 : Store;
@@ -540,18 +622,15 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
 
           {/* Messages FlatList */}
           <FlatList
+            ref={flatListRef}
+            onContentSizeChange={() => {
+              if (thread?.messages && thread.messages.length > 0) {
+                flatListRef.current?.scrollToEnd({ animated: false });
+              }
+            }}
             data={thread?.messages || []}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messageList}
-            ListHeaderComponent={
-              (thread?.messages && thread.messages.length > 0) ? (
-                <View style={styles.dateSeparatorRow}>
-                  <View style={styles.dateSeparatorPill}>
-                    <Text style={styles.dateSeparatorText}>Hari Ini</Text>
-                  </View>
-                </View>
-              ) : null
-            }
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
                 <View style={[
@@ -586,63 +665,81 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                 </Text>
               </View>
             }
-            renderItem={({ item }) => {
+            renderItem={({ item, index }) => {
+              const messages = thread?.messages || [];
+              const prevItem = index > 0 ? messages[index - 1] : null;
+              const currentDateKey = getChatDateKey(item.createdAt);
+              const prevDateKey = prevItem ? getChatDateKey(prevItem.createdAt) : null;
+              const showDateHeader = index === 0 || currentDateKey !== prevDateKey;
+
               const isMe = item.sender === "customer";
               const hasAttachment = !!item.attachment;
               const isImg = item.attachment?.type === "image";
 
               return (
-                <View style={[styles.messageWrap, isMe ? styles.messageRight : styles.messageLeft]}>
-                  {!isMe && (
-                    <Text style={styles.senderNameLabel}>
-                      {chatTargetRole === "driver"
-                        ? (isRide ? "🛵 Driver Rangers" : "🛵 Kurir Pengantar")
-                        : chatTargetRole === "owner"
-                        ? (isKost ? "🏠 Pemilik Kos" : "📦 Toko / Penjual")
-                        : "👤 Pelanggan"}
-                    </Text>
-                  )}
-                  <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-                    {/* Attachment Render */}
-                    {hasAttachment && (
-                      <View style={styles.attachmentInBubble}>
-                        {isImg ? (
-                          <TouchableOpacity
-                            onPress={() => setPreviewImageUri(item.attachment?.uri || null)}
-                            activeOpacity={0.9}
-                          >
-                            <Image
-                              source={{ uri: item.attachment?.uri }}
-                              style={styles.bubbleImg}
-                              resizeMode="cover"
-                            />
-                          </TouchableOpacity>
-                        ) : (
-                          <View style={[styles.bubbleFileCard, isMe ? styles.bubbleFileMe : styles.bubbleFileOther]}>
-                            <View style={[styles.fileIconBox, isMe && { backgroundColor: "rgba(255,255,255,0.2)" }]}>
-                              <FileText size={20} color={isMe ? "#FFFFFF" : "#0D7A53"} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.bubbleFileName, isMe && styles.bubbleFileNameMe]} numberOfLines={1}>
-                                {item.attachment?.name || "Dokumen"}
-                              </Text>
-                              <Text style={[styles.bubbleFileSize, isMe && styles.bubbleFileSizeMe]}>
-                                {item.attachment?.size || "PDF / File"}
-                              </Text>
-                            </View>
-                          </View>
-                        )}
+                <View key={item.id} style={styles.messageItemContainer}>
+                  {showDateHeader && (
+                    <View style={styles.dateSeparatorRow}>
+                      <View style={styles.dateSeparatorPill}>
+                        <Calendar size={12} color="#0D7A53" style={{ marginRight: 6 }} />
+                        <Text style={styles.dateSeparatorText}>{formatChatDateBadge(item.createdAt)}</Text>
                       </View>
+                    </View>
+                  )}
+                  <View style={[styles.messageWrap, isMe ? styles.messageRight : styles.messageLeft]}>
+                    {!isMe && (
+                      <Text style={styles.senderNameLabel}>
+                        {chatTargetRole === "driver"
+                          ? (isRide ? "🛵 Driver Rangers" : "🛵 Kurir Pengantar")
+                          : chatTargetRole === "owner"
+                          ? (isKost ? "🏠 Pemilik Kos" : "📦 Toko / Penjual")
+                          : "👤 Pelanggan"}
+                      </Text>
                     )}
+                    <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+                      {/* Attachment Render */}
+                      {hasAttachment && (
+                        <View style={styles.attachmentInBubble}>
+                          {isImg ? (
+                            <TouchableOpacity
+                              onPress={() => setPreviewImageUri(item.attachment?.uri || null)}
+                              activeOpacity={0.9}
+                            >
+                              <Image
+                                source={{ uri: item.attachment?.uri }}
+                                style={styles.bubbleImg}
+                                resizeMode="cover"
+                              />
+                            </TouchableOpacity>
+                          ) : (
+                            <View style={[styles.bubbleFileCard, isMe ? styles.bubbleFileMe : styles.bubbleFileOther]}>
+                              <View style={[styles.fileIconBox, isMe && { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+                                <FileText size={20} color={isMe ? "#FFFFFF" : "#0D7A53"} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.bubbleFileName, isMe && styles.bubbleFileNameMe]} numberOfLines={1}>
+                                  {item.attachment?.name || "Dokumen"}
+                                </Text>
+                                <Text style={[styles.bubbleFileSize, isMe && styles.bubbleFileSizeMe]}>
+                                  {item.attachment?.size || "PDF / File"}
+                                </Text>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      )}
 
-                    {/* Text Message */}
-                    {item.text && (!hasAttachment || (item.text !== "📷 Foto terkirim" && item.text !== "📎 File terlampir")) ? (
-                      <Text style={[styles.messageText, isMe && styles.messageTextMe]}>{item.text}</Text>
-                    ) : null}
+                      {/* Text Message */}
+                      {item.text && (!hasAttachment || (item.text !== "📷 Foto terkirim" && item.text !== "📎 File terlampir")) ? (
+                        <Text style={[styles.messageText, isMe && styles.messageTextMe]}>{item.text}</Text>
+                      ) : null}
 
-                    <View style={[styles.messageFooterRow, isMe ? styles.footerRowRight : styles.footerRowLeft]}>
-                      <Text style={[styles.time, isMe && styles.timeMe]}>{item.time}</Text>
-                      {isMe && <CheckCheck size={13} color="#A7F3D0" style={{ marginLeft: 4 }} />}
+                      <View style={[styles.messageFooterRow, isMe ? styles.footerRowRight : styles.footerRowLeft]}>
+                        <Text style={[styles.time, isMe && styles.timeMe]}>
+                          {formatMessageTimestamp(item.createdAt, item.time)}
+                        </Text>
+                        {isMe && <CheckCheck size={13} color="#A7F3D0" style={{ marginLeft: 4 }} />}
+                      </View>
                     </View>
                   </View>
                 </View>
@@ -968,20 +1065,31 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   dateSeparatorRow: {
+    width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 10,
+    marginVertical: 14,
   },
   dateSeparatorPill: {
-    backgroundColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 16,
     paddingHorizontal: 12,
-    paddingVertical: 3,
-    borderRadius: 12,
+    paddingVertical: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   dateSeparatorText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#475569",
+    letterSpacing: 0.2,
   },
   emptyWrap: {
     alignItems: "center",
@@ -1034,6 +1142,9 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: "#065F46",
     fontWeight: "700",
+  },
+  messageItemContainer: {
+    width: "100%",
   },
   messageWrap: {
     marginBottom: 10,

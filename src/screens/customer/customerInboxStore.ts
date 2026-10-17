@@ -7,6 +7,7 @@ export interface CustomerChatMessage {
   sender: "customer" | "other";
   text: string;
   time: string;
+  createdAt?: string;
   attachment?: {
     type: "image" | "file" | "video";
     uri: string;
@@ -77,7 +78,32 @@ export const hydrateCustomerChatThreads = async () => {
 export const upsertCustomerChatThread = (thread: CustomerChatThread) => {
   const existingIndex = threads.findIndex((item) => item.id === thread.id);
   if (existingIndex >= 0) {
-    threads = threads.map((item, index) => (index === existingIndex ? { ...item, ...thread, messages: thread.messages || item.messages || [] } : item));
+    const existingThread = threads[existingIndex];
+    const incomingMessages = Array.isArray(thread.messages) ? thread.messages : (existingThread.messages || []);
+
+    // Seamlessly preserve any optimistic/pending messages not yet in incoming server messages
+    const pendingMessages = (existingThread.messages || []).filter((existingMsg) => {
+      const isOptimistic = existingMsg.id.startsWith("local_") || existingMsg.id.startsWith("chat_");
+      if (!isOptimistic) return false;
+      const alreadyConfirmed = incomingMessages.some(
+        (inc) => inc.id === existingMsg.id || (inc.text === existingMsg.text && inc.sender === existingMsg.sender)
+      );
+      return !alreadyConfirmed;
+    });
+
+    const mergedMessages = [...incomingMessages, ...pendingMessages];
+
+    threads = threads.map((item, index) =>
+      index === existingIndex
+        ? {
+            ...item,
+            ...thread,
+            messages: mergedMessages,
+            lastMessage: mergedMessages.length > 0 ? mergedMessages[mergedMessages.length - 1].text : thread.lastMessage,
+            updatedAt: mergedMessages.length > 0 ? mergedMessages[mergedMessages.length - 1].time : thread.updatedAt,
+          }
+        : item
+    );
   } else {
     threads = [thread, ...threads];
   }
