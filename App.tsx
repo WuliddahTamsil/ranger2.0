@@ -137,6 +137,93 @@ export default function App() {
             setCurrentAuthAccount(adminAcc);
             void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: adminAcc, accountId: adminAcc.id }));
             void AsyncStorage.setItem("rangers.auth.accounts.v1", JSON.stringify([adminAcc]));
+          } else if (screenParam === "d_home" || urlParams.get("role") === "driver") {
+            const driverAcc: any = {
+              id: "6a9c2f97c0998813eb04450c",
+              name: "Wuwu Driver",
+              email: "wuliddah@gmail.com",
+              phone: "081234567894",
+              role: "driver",
+              status: "verified",
+              token: "6a9c2f97c0998813eb04450c",
+            };
+            setCurrentAuthAccount(driverAcc);
+            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: driverAcc, accountId: driverAcc.id }));
+          } else if (screenParam === "pemilik_catering_home" || urlParams.get("role") === "pemilik_catering") {
+            const catAcc: any = {
+              id: "6aa7fc9ba28bf4d6d90dae7f",
+              name: "cateringsehat",
+              email: "cateringsehat@gmail.com",
+              phone: "+6286352354288",
+              role: "pemilik_catering",
+              status: "verified",
+              token: "6aa7fc9ba28bf4d6d90dae7f",
+              roleData: {
+                businessName: "Catering sehat",
+                businessAddress: "Bogor",
+                businessType: "Nasi Box",
+                isDapurOpen: "true",
+                cateringBankAccountHolder: "Wuliddah Tamsil Barokah",
+                cateringBankAccountNumber: "198378687244",
+                cateringBankName: "BCA",
+                cateringQrisImageUrl: "https://res.cloudinary.com/b9soz7ka/image/upload/v1789639345/ranger_uploads/ranger_1789639326093_ChatGPT_Image_Sep_17__2026__05_01_45_PM.png",
+                cateringBankTransferEnabled: "true",
+                cateringQrisEnabled: "true"
+              }
+            };
+            setCurrentAuthAccount(catAcc);
+            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: catAcc, accountId: catAcc.id }));
+          } else if (screenParam === "pemilik_marketplace_home" || urlParams.get("role") === "pemilik_marketplace") {
+            const mktAcc: any = {
+              id: "6ac8bab40244f6bb3bc61bec",
+              name: "Titing Sriyanti",
+              email: "titing06@gmail.com",
+              phone: "081234567891",
+              role: "pemilik_marketplace",
+              status: "verified",
+              token: "6ac8bab40244f6bb3bc61bec",
+            };
+            setCurrentAuthAccount(mktAcc);
+            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: mktAcc, accountId: mktAcc.id }));
+          } else if (screenParam?.startsWith("bank_sampah") || urlParams.get("role") === "bank_sampah") {
+            const bankAcc: any = {
+              id: "6aadbb8c5513afda4c34d999",
+              name: "Bank Sampah Induk Kamojang Asri",
+              email: "banksampah@geoverse.com",
+              phone: "081234567896",
+              role: "bank_sampah",
+              status: "verified",
+              token: "6aadbb8c5513afda4c34d999",
+            };
+            setCurrentAuthAccount(bankAcc);
+            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: bankAcc, accountId: bankAcc.id }));
+          } else if (screenParam?.startsWith("c_") || urlParams.get("role") === "customer") {
+            const custAcc: any = {
+              id: "6a85892d8d27c7d42a0d8ba8",
+              name: "Wuwu Customer",
+              email: "wuliddahtamsilbarokah19@gmail.com",
+              phone: "081234567895",
+              role: "customer",
+              status: "verified",
+              token: "6a85892d8d27c7d42a0d8ba8",
+              address: "Jl. Raya Kamojang No. 12, Samarang, Garut",
+              roleData: {
+                customerAddresses: JSON.stringify([{
+                  id: "addr_kamojang_1",
+                  label: "Rumah",
+                  receiverName: "Wuwu Customer",
+                  phoneNumber: "081234567895",
+                  street: "Jl. Raya Kamojang No. 12",
+                  district: "Samarang",
+                  city: "Garut",
+                  province: "Jawa Barat",
+                  fullAddress: "Jl. Raya Kamojang No. 12, Samarang, Garut",
+                  isMain: true
+                }])
+              }
+            };
+            setCurrentAuthAccount(custAcc);
+            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: custAcc, accountId: custAcc.id }));
           }
           setCurrentScreen(screenParam);
           return;

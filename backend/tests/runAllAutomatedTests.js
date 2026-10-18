@@ -55,6 +55,10 @@ const testSuites = [
     name: "Audit Implementasi Kebutuhan Klien (Pricing, SIM, Matriks Dokumen, PGE Hub, Point)",
     file: "backend/tests/clientRequirementsAuditImplementation.test.js",
   },
+  {
+    name: "Jangkauan Nasional Seluruh Indonesia & Penyesuaian Tarif Driver",
+    file: "backend/tests/nationwideCoverageAndPricing.test.js",
+  },
 ];
 
 console.log("================================================================================");

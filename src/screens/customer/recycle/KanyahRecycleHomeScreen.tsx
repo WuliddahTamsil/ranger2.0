@@ -786,6 +786,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
+    maxWidth: 1000,
+    width: "100%",
+    alignSelf: "center",
   },
   // Location & Address Bar
   locationBar: {

@@ -57,8 +57,19 @@ export const KanyahSendHomeScreen: React.FC<KanyahSendHomeScreenProps> = ({
     if (authAccount) {
       setSender((prev) => ({
         ...prev,
-        name: prev.name || authAccount.name || "",
-        phone: prev.phone || authAccount.phone || "",
+        name: prev.name || authAccount.name || "Wuwu Customer",
+        phone: prev.phone || authAccount.phone || "081234567895",
+        address: prev.address || "PGE Area Kamojang, Jl. Raya Kamojang, Garut",
+        latitude: prev.latitude != null ? prev.latitude : -7.151,
+        longitude: prev.longitude != null ? prev.longitude : 107.7915,
+      }));
+      setRecipient((prev) => ({
+        ...prev,
+        name: prev.name || "Budi Santoso",
+        phone: prev.phone || "085211223344",
+        address: prev.address || "Kantor Camat Samarang, Jl. Raya Kamojang, Garut",
+        latitude: prev.latitude != null ? prev.latitude : -7.185,
+        longitude: prev.longitude != null ? prev.longitude : 107.82,
       }));
     }
   }, [authAccount]);

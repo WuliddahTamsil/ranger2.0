@@ -90,7 +90,7 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
   };
 
   const distanceKm = Math.max(1, calculateDistanceKm(currentCoords.lat, currentCoords.lng, bankCoords.lat, bankCoords.lng));
-  const isExceedsKamojangRadius = distanceKm > 15;
+  const isExceedsBankRadius = distanceKm > 25;
 
   // Tarif Standar Antar Jemput Roda Dua:
   // Tarif dasar Rp 2.500/km
@@ -115,10 +115,10 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
       return;
     }
 
-    if (isExceedsKamojangRadius) {
+    if (isExceedsBankRadius) {
       Alert.alert(
         "Radius Melebihi Batas",
-        `Jarak penjemputan (${distanceKm} km) melebihi batas radius maksimal layanan Kamojang (15 km). Silakan gunakan Bank Sampah yang lebih dekat.`
+        `Jarak penjemputan (${distanceKm} km) melebihi batas maksimal penjemputan Bank Sampah (25 km). Silakan gunakan Bank Sampah yang lebih dekat.`
       );
       return;
     }
@@ -341,7 +341,7 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
               • Kapasitas standar motor s.d. 20 kg (Kelebihan beban di atas 20 kg dikenakan biaya tambahan Rp3.000/kg setelah ditimbang resmi di Bank Sampah).
             </Text>
             <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 16 }}>
-              • Maksimal batas radius layanan antar-jemput 15 km dari wilayah Kamojang.
+              • Penjemputan sampah anorganik menjangkau area operasional Bank Sampah tujuan di seluruh Indonesia.
             </Text>
           </View>
         </View>

@@ -54,7 +54,7 @@ import { NativeMapComponent } from "../../components/NativeMapComponent";
 import { rp } from "../../utils/formatters";
 import { DigitalPaymentModal } from "../../components/DigitalPaymentModal";
 import { PaymentMethodType } from "../../services/paymentService";
-import { validateKamojangRadius, MAX_SERVICE_RADIUS_KM } from "../../services/pricingPolicy";
+import { validateKamojangRadius, validateServiceCoverage, MAX_SERVICE_RADIUS_KM } from "../../services/pricingPolicy";
 
 const DEFAULT_COORDS = {
   pickup: {
@@ -92,7 +92,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   navigate,
   authAccount,
 }) => {
-  // Pickup state initialized dynamically from cached user location or default Kamojang
+  // Pickup state initialized dynamically from cached user location or default location
   const [pickup, setPickup] = useState<RideLocation>(() => {
     if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
       try {
@@ -100,8 +100,8 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && typeof parsed.latitude === "number" && typeof parsed.longitude === "number") {
-            const radCheck = validateKamojangRadius(parsed, MAX_SERVICE_RADIUS_KM);
-            if (radCheck.valid) {
+            const covCheck = validateServiceCoverage(parsed);
+            if (covCheck.valid) {
               return {
                 address: parsed.address || "Lokasi Saya",
                 placeName: "Lokasi Saya",
@@ -115,7 +115,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     }
     return {
       address: authAccount?.address || DEFAULT_COORDS.pickup.address,
-      placeName: "Lokasi Saya (Kamojang)",
+      placeName: authAccount?.address ? "Lokasi Saya" : DEFAULT_COORDS.pickup.placeName,
       latitude: DEFAULT_COORDS.pickup.latitude,
       longitude: DEFAULT_COORDS.pickup.longitude,
     };
@@ -315,15 +315,15 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     };
   }, [authAccount?.id]);
 
-  // Auto-detect GPS location on screen mount (only accept if within Kamojang radius)
+  // Auto-detect GPS location on screen mount (seluruh Indonesia)
   useEffect(() => {
     let active = true;
     (async () => {
       try {
         const userLoc = await getCurrentUserCoordinates();
         if (!active || !userLoc) return;
-        const radCheck = validateKamojangRadius(userLoc, MAX_SERVICE_RADIUS_KM);
-        if (radCheck.valid) {
+        const covCheck = validateServiceCoverage(userLoc);
+        if (covCheck.valid) {
           setPickup({
             address: userLoc.address,
             placeName: userLoc.placeName || "Lokasi Saya",
@@ -902,7 +902,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
               {estimatedFare > 0 ? (
                 <Text style={styles.vehiclePriceText}>{rp(estimatedFare)}</Text>
               ) : (
-                <Text style={styles.vehiclePricePlaceholder}>Rp 8.000+</Text>
+                <Text style={styles.vehiclePricePlaceholder}>Rp 9.500</Text>
               )}
             </View>
           </TouchableOpacity>
@@ -1120,7 +1120,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                   )}
                   <View style={{ backgroundColor: "#F0FDF4", borderRadius: 6, padding: 6, marginTop: 4 }}>
                     <Text style={{ fontSize: 10, color: "#166534" }}>
-                      📍 Radius batas maksimal layanan operasional Kamojang: 15 km
+                      🇮🇩 Jangkauan operasional: Seluruh Indonesia (Rute aman s/d 50 km)
                     </Text>
                   </View>
                 </View>

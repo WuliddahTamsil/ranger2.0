@@ -2,7 +2,9 @@ const {
   getPublishedInfoHubItems,
   getAllInfoHubItems,
   createInfoHubItem,
+  updateInfoHubItem,
   updateInfoHubItemStatus,
+  deleteInfoHubItem,
 } = require("./pgeInfoHubService");
 
 /**
@@ -99,9 +101,131 @@ const updateStatus = async (req, res) => {
   }
 };
 
+/**
+ * Admin: Update full content item
+ * PUT /api/pge-info-hub/:id
+ */
+const updateItem = async (req, res) => {
+  try {
+    const actorId = String(req.authUser?._id || req.user?._id || "admin");
+    const item = await updateInfoHubItem(req.params.id, req.body, actorId);
+    return res.status(200).json({
+      success: true,
+      message: "Konten PGE Info Hub berhasil diperbarui.",
+      data: item,
+    });
+  } catch (error) {
+    console.error("pgeInfoHub updateItem error:", error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Gagal memperbarui konten PGE Info Hub.",
+    });
+  }
+};
+
+/**
+ * Admin: Delete content item
+ * DELETE /api/pge-info-hub/:id
+ */
+const deleteItem = async (req, res) => {
+  try {
+    const actorId = String(req.authUser?._id || req.user?._id || "admin");
+    const result = await deleteInfoHubItem(req.params.id, actorId);
+    return res.status(200).json({
+      success: true,
+      message: "Konten PGE Info Hub berhasil dihapus.",
+      data: result,
+    });
+  } catch (error) {
+    console.error("pgeInfoHub deleteItem error:", error);
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Gagal menghapus konten PGE Info Hub.",
+    });
+  }
+};
+
+/**
+ * Admin: Upload poster or media for PGE Info Hub
+ * POST /api/pge-info-hub/upload
+ */
+const path = require("path");
+const fs = require("fs");
+const cloudinary = require("cloudinary").v2;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "hdlw3v3n",
+  api_key: process.env.CLOUDINARY_API_KEY || "644169682494749",
+  api_secret: process.env.CLOUDINARY_API_SECRET || "IWYyiIt5Ro8CgAbw8BSsyIIo8tk",
+  secure: true,
+});
+
+const uploadMedia = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "File media wajib diunggah.",
+      });
+    }
+
+    const { mimetype, size, path: tempFilePath, originalname } = req.file;
+    const isVideo = mimetype && mimetype.startsWith("video/");
+    const cleanBaseName = (originalname || "pge_media").replace(/[^a-zA-Z0-9._-]/g, "_");
+    const publicId = `pge_${Date.now()}_${path.parse(cleanBaseName).name}`;
+
+    try {
+      const uploadResult = await cloudinary.uploader.upload(tempFilePath, {
+        folder: "geoverse/pge-info-hub",
+        public_id: publicId,
+        resource_type: isVideo ? "video" : "image",
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "File berhasil diunggah ke Cloudinary.",
+        data: {
+          url: uploadResult.secure_url,
+          mediaType: isVideo ? "VIDEO" : "IMAGE",
+          publicId: uploadResult.public_id,
+        },
+      });
+    } catch (cldErr) {
+      console.warn("Cloudinary upload failed, falling back to local storage:", cldErr.message);
+      const uploadsDir = path.join(__dirname, "../../uploads");
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      const destFilename = `${publicId}${path.extname(originalname || ".jpg")}`;
+      const destPath = path.join(uploadsDir, destFilename);
+      fs.copyFileSync(tempFilePath, destPath);
+
+      const host = req.get("host") || "localhost:5000";
+      const protocol = req.protocol || "http";
+      const fileUrl = `${protocol}://${host}/uploads/${destFilename}`;
+
+      return res.status(200).json({
+        success: true,
+        message: "File berhasil disimpan di penyimpanan lokal.",
+        data: {
+          url: fileUrl,
+          mediaType: isVideo ? "VIDEO" : "IMAGE",
+        },
+      });
+    }
+  } catch (error) {
+    console.error("pgeInfoHub uploadMedia error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Gagal mengunggah file media.",
+    });
+  }
+};
+
 module.exports = {
   getPublished,
   getAdminAll,
   createItem,
+  updateItem,
   updateStatus,
+  deleteItem,
+  uploadMedia,
 };

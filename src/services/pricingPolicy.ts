@@ -16,6 +16,11 @@ export const KEDAI_TERPADU_COUNT_MISMATCH_NOTE =
   "Client document specifies 5 existing drivers for Kedai Terpadu, while legacy codebase records 6 identifiers. Supported dynamically via partnerProgram/isExistingDriver/commissionTier with legacy email/ID fallback.";
 
 export const PRICING_POLICY = {
+  // Jangkauan Layanan Operasional (Seluruh Indonesia)
+  isNationwide: true,
+  enforceKamojangRadius: false,
+  maxRouteDistanceKm: 50, // Batas maksimal rute motor per order
+
   // Tarif dasar per km (Rp 2.500 / km)
   ratePerKm: 2500,
   RATE_PER_KM: 2500,
@@ -34,7 +39,7 @@ export const PRICING_POLICY = {
   // Ambang batas dokumen client: "Minimal (<4 km) Rp9.500"
   minimumTotalFare: 9500,
   minimumFareThresholdKm: 4,
-  minimumFareMode: "distance_plus_service_fee" as "distance_plus_service_fee" | "flat_total_under_threshold",
+  minimumFareMode: "flat_total_under_threshold" as "distance_plus_service_fee" | "flat_total_under_threshold",
 
   // Batas Maksimal Beban Standar Kiloan (0 - 20 kg termasuk biaya dasar penjemputan)
   baseWeightIncludedKg: 20,
@@ -42,7 +47,7 @@ export const PRICING_POLICY = {
   extraWeightRatePerKg: 3000, // > 20 kg: Rp 3.000 / kg
   EXTRA_WEIGHT_RATE_PER_KG: 3000,
 
-  // Batas radius layanan Kamojang
+  // Batas radius layanan legacy Kamojang
   maxServiceRadiusKm: MAX_SERVICE_RADIUS_KM,
 
   // Persentase Bagi Hasil Driver
@@ -132,10 +137,48 @@ export const validateKamojangRadius = (
   };
 };
 
+export const validateServiceCoverage = (
+  location?: { latitude?: number | null; longitude?: number | null } | null,
+  options: { allowWorldwide?: boolean } = {}
+) => {
+  if (
+    !location ||
+    location.latitude == null ||
+    location.longitude == null ||
+    !Number.isFinite(Number(location.latitude)) ||
+    !Number.isFinite(Number(location.longitude))
+  ) {
+    return {
+      valid: false,
+      isWithinIndonesia: false,
+      message: "Koordinat lokasi tidak valid atau tidak lengkap.",
+    };
+  }
+
+  const lat = Number(location.latitude);
+  const lon = Number(location.longitude);
+
+  const isWithinIndonesia = lat >= -11.5 && lat <= 6.5 && lon >= 94.5 && lon <= 141.5;
+
+  if (!isWithinIndonesia && !options.allowWorldwide) {
+    return {
+      valid: false,
+      isWithinIndonesia: false,
+      message: `Koordinat (${lat.toFixed(4)}, ${lon.toFixed(4)}) di luar wilayah Republik Indonesia. Layanan GEOVERSE beroperasi di seluruh Indonesia.`,
+    };
+  }
+
+  return {
+    valid: true,
+    isWithinIndonesia: true,
+    message: "Lokasi berada dalam cakupan jangkauan layanan GEOVERSE di seluruh Indonesia.",
+  };
+};
+
 export const validateServiceRoute = (
   pickup?: { latitude?: number | null; longitude?: number | null } | null,
   destination?: { latitude?: number | null; longitude?: number | null } | null,
-  maxRadiusKm = MAX_SERVICE_RADIUS_KM
+  maxRadiusKm = PRICING_POLICY.maxRouteDistanceKm || 50
 ) => {
   if (
     !pickup ||
@@ -181,7 +224,7 @@ export const validateServiceRoute = (
     routeDistanceKm,
     maxRadiusKm,
     message: isAllowed
-      ? "Rute perjalanan dalam batas layanan Kamojang."
+      ? "Rute perjalanan dalam batas operasional layanan."
       : `Jarak rute pengantaran (${routeDistanceKm} km) melebihi batas maksimal ${maxRadiusKm} km.`,
   };
 };

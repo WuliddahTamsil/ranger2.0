@@ -26,6 +26,11 @@ const KEDAI_TERPADU_COUNT_MISMATCH_NOTE =
 
 // Konfigurasi Bisnis Terpadu
 const PRICING_POLICY = {
+  // Jangkauan Layanan Operasional (Seluruh Indonesia)
+  isNationwide: true,
+  enforceKamojangRadius: false,
+  maxRouteDistanceKm: 50, // Batas maksimal rute perjalanan motor per order
+
   // Tarif dasar per km (Rp 2.500/km)
   ratePerKm: 2500,
   RATE_PER_KM: 2500,
@@ -41,10 +46,10 @@ const PRICING_POLICY = {
   MIN_DISTANCE_FARE: 2500,
   BASE_DISTANCE_FARE: 2500,
 
-  // Ambang batas catatan client: "Minimal (<4 km) Rp9.500"
+  // Ambang batas dokumen client: "Minimal (<4 km) Rp9.500"
   // Catatan: 3 km * Rp2.500 = Rp7.500 + service fee Rp2.000 = Rp9.500.
-  // Mode default: "distance_plus_service_fee" (mempertahankan hasil test yang sudah terverifikasi).
-  // Mode alternatif: "flat_total_under_threshold" (jika client mengonfirmasi flat total Rp9.500 untuk semua perjalanan < 4km).
+  // Mode default: "distance_plus_service_fee" untuk backward compatibility fungsi kalkulasi murni,
+  // atau "flat_total_under_threshold" untuk memaksakan minimal total Rp 9.500 bagi perjalanan < 4 km.
   minimumTotalFare: 9500,
   minimumFareThresholdKm: 4,
   minimumFareMode: "distance_plus_service_fee", // "distance_plus_service_fee" | "flat_total_under_threshold"
@@ -57,7 +62,7 @@ const PRICING_POLICY = {
   weightEnforcementMode: "surcharge", // "surcharge" | "strict_reject"
   maxAllowedWeightKg: 20, // Batas kaku jika strict_reject aktif
 
-  // Batas radius layanan Kamojang
+  // Batas radius layanan legacy Kamojang
   maxServiceRadiusKm: MAX_SERVICE_RADIUS_KM,
 
   // Bagi hasil komisi
@@ -188,9 +193,46 @@ const validateKamojangRadius = (location, maxRadiusKm = MAX_SERVICE_RADIUS_KM) =
 };
 
 /**
- * Validasi rute penjemputan dan pengantaran (maks. 15 km per rute perjalanan)
+ * Validasi cakupan operasional layanan di seluruh Indonesia (Nationwide)
+ * Batas geografis Indonesia: Lintang -11.5° s/d 6.5°, Bujur 94.5° s/d 141.5°
  */
-const validateServiceRoute = (pickup, destination, maxRadiusKm = MAX_SERVICE_RADIUS_KM) => {
+const validateServiceCoverage = (location, options = {}) => {
+  if (
+    !location ||
+    !isValidCoordinateValue(Number(location.latitude)) ||
+    !isValidCoordinateValue(Number(location.longitude))
+  ) {
+    return {
+      valid: false,
+      isWithinIndonesia: false,
+      message: "Koordinat lokasi tidak valid atau tidak lengkap.",
+    };
+  }
+
+  const lat = Number(location.latitude);
+  const lon = Number(location.longitude);
+
+  const isWithinIndonesia = lat >= -11.5 && lat <= 6.5 && lon >= 94.5 && lon <= 141.5;
+
+  if (!isWithinIndonesia && !options.allowWorldwide) {
+    return {
+      valid: false,
+      isWithinIndonesia: false,
+      message: `Koordinat (${lat.toFixed(4)}, ${lon.toFixed(4)}) berada di luar wilayah Republik Indonesia. Layanan GEOVERSE beroperasi di seluruh Indonesia.`,
+    };
+  }
+
+  return {
+    valid: true,
+    isWithinIndonesia: true,
+    message: "Lokasi berada dalam cakupan jangkauan layanan GEOVERSE di seluruh Indonesia.",
+  };
+};
+
+/**
+ * Validasi rute penjemputan dan pengantaran (maksimal rute per perjalanan)
+ */
+const validateServiceRoute = (pickup, destination, maxRadiusKm = PRICING_POLICY.maxRouteDistanceKm || 50) => {
   if (
     !pickup ||
     !isValidCoordinateValue(Number(pickup.latitude)) ||
@@ -232,7 +274,7 @@ const validateServiceRoute = (pickup, destination, maxRadiusKm = MAX_SERVICE_RAD
     routeDistanceKm,
     maxRadiusKm,
     message: isAllowed
-      ? "Rute dalam jangkauan layanan resmi Kamojang."
+      ? "Rute dalam jangkauan operasional layanan."
       : `Jarak rute perjalanan (${routeDistanceKm} km) melebihi batas maksimal ${maxRadiusKm} km.`,
   };
 };
@@ -525,6 +567,7 @@ module.exports = {
   EXISTING_KEDAI_TERPADU_DRIVERS,
   calculateHaversineKm,
   validateKamojangRadius,
+  validateServiceCoverage,
   validateServiceRoute,
   calculateDistanceFare,
   calculateWeightFare,

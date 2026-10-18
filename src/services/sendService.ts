@@ -11,6 +11,7 @@ const AUTH_ACCOUNTS_KEY = "rangers.auth.accounts.v1";
 const AUTH_SESSION_KEY = "rangers.auth.session.v1";
 
 const getAuthHeaders = async (accountId?: string): Promise<Record<string, string>> => {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
   try {
     const [accountsRaw, sessionRaw] = await Promise.all([
       AsyncStorage.getItem(AUTH_ACCOUNTS_KEY),
@@ -20,22 +21,27 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
     const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
 
     const target =
-      accounts.find((a: any) => a.id === accountId) ||
-      accounts.find((a: any) => a.id === session?.currentAccountId) ||
+      accounts.find((a: any) => a.id === accountId || a._id === accountId) ||
+      accounts.find((a: any) => a.id === session?.currentAccountId || a._id === session?.currentAccountId) ||
       session?.currentAccount ||
       accounts[0];
 
-    const token = target?.token || target?.accessToken;
+    const token = target?.token || target?.accessToken || session?.token;
+    const resolvedId = target?.id || target?._id || session?.accountId || accountId;
+
     if (token) {
-      return {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
+      headers["Authorization"] = `Bearer ${token}`;
     }
+    if (resolvedId) {
+      headers["x-user-id"] = String(resolvedId);
+      headers["x-account-id"] = String(resolvedId);
+      headers["x-customer-id"] = String(resolvedId);
+    }
+    return headers;
   } catch (err) {
     console.warn("getAuthHeaders error in sendService:", err);
   }
-  return { "Content-Type": "application/json" };
+  return headers;
 };
 
 export interface EstimateFarePayload {

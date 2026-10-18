@@ -15,8 +15,13 @@ import {
   TextInput,
   Switch,
 } from "react-native";
-import { getSelectedCateringShop } from "./customerCateringStore";
-import { getCateringProducts, createCateringOrder } from "../../services/api";
+import {
+  getSelectedCateringShop,
+  setSelectedCateringShop,
+  setActiveCateringPaymentOrder,
+  setActiveCateringTrackingOrderId,
+} from "./customerCateringStore";
+import { getCateringProducts, createCateringOrder, getCateringShops } from "../../services/api";
 import { useRecycle } from "../../context/RecycleContext";
 import {
   Calendar,
@@ -284,13 +289,45 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
     const fetchMenus = async () => {
       setLoading(true);
       setMenuError("");
-      if (!selectedCateringShop?.ownerId) {
+      let currentShop = selectedCateringShop;
+      if (!currentShop?.ownerId) {
+        try {
+          const shopRes = await getCateringShops();
+          if (shopRes.success && Array.isArray(shopRes.data) && shopRes.data.length > 0) {
+            const first = shopRes.data[0];
+            const hasBankDetails = Boolean(first.roleData?.cateringBankName && first.roleData?.cateringBankAccountNumber && first.roleData?.cateringBankAccountHolder);
+            const hasQris = Boolean(first.roleData?.cateringQrisImageUrl);
+            currentShop = {
+              id: first._id,
+              name: first.roleData?.businessName || first.name || "Mitra Catering",
+              ownerId: first._id,
+              isOpen: first.roleData?.isDapurOpen === "true",
+              address: first.roleData?.businessAddress || first.address || "",
+              phone: first.phone || "",
+              profilePhoto: first.profilePhoto,
+              coverImage: first.coverImage,
+              topMenuName: first.topMenuName,
+              description: first.roleData?.menuSpecialty || "",
+              bankName: first.roleData?.cateringBankName || "",
+              bankAccountNumber: first.roleData?.cateringBankAccountNumber || "",
+              bankAccountHolder: first.roleData?.cateringBankAccountHolder || "",
+              qrisImageUrl: first.roleData?.cateringQrisImageUrl || "",
+              bankTransferEnabled: hasBankDetails,
+              qrisEnabled: hasQris,
+            };
+            setSelectedCateringShop(currentShop);
+          }
+        } catch (e) {
+          console.warn("Auto load shop error:", e);
+        }
+      }
+      if (!currentShop?.ownerId) {
         setMenus([]);
         setMenuError("Mitra Catering tidak ditemukan. Kembali dan pilih mitra yang tersedia.");
         setLoading(false);
         return;
       }
-      const res = await getCateringProducts(selectedCateringShop.ownerId);
+      const res = await getCateringProducts(currentShop.ownerId);
       if (!active) return;
       if (res.success && res.data && res.data.length > 0) {
         const mapped = res.data.map((m: any) => ({
@@ -463,6 +500,8 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
       };
 
       addCustomerOrder(order);
+      setActiveCateringPaymentOrder(res.data);
+      setActiveCateringTrackingOrderId(String(res.data._id));
       idempotencyKey.current = null;
       if (total === 0) {
         navigate("c_catering_tracking");

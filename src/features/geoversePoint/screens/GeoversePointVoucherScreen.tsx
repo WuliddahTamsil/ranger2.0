@@ -88,7 +88,7 @@ export const GeoversePointVoucherScreen: React.FC<Nav> = ({ navigate }) => {
 
               if (res.success) {
                 Alert.alert(
-                  "Berhasil Ditukarkan! 🎉",
+                  "Berhasil Ditukarkan",
                   `Kode Voucher: ${res.data?.voucherCode || "Aktif"}.\nVoucher otomatis tersimpan di tab "Voucher Saya".`
                 );
                 await refreshWallet();

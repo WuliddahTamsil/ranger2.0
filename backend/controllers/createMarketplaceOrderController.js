@@ -7,7 +7,7 @@ const User = require("../models/User");
 const Notification = require("../models/Notification");
 const paymentGateway = require("../services/paymentGateway");
 const { syncConversationForOrder } = require("../services/conversationService");
-const { PRICING_POLICY, validateKamojangRadius, MAX_SERVICE_RADIUS_KM } = require("../services/pricingPolicyService");
+const { PRICING_POLICY, validateKamojangRadius, validateServiceCoverage, MAX_SERVICE_RADIUS_KM } = require("../services/pricingPolicyService");
 
 const pointWalletService = require("../features/geoversePoint/services/pointWalletService");
 
@@ -62,6 +62,16 @@ const respondWithExistingOrder = async (res, key, requestHash) => {
   return true;
 };
 
+const splitAmount = (amount, groupCount = 1, groupIndex = 0) => {
+  const numericAmount = Math.max(0, Number(amount) || 0);
+  const count = Math.max(1, Number(groupCount) || 1);
+  const index = Math.max(0, Number(groupIndex) || 0);
+  if (count <= 1) return numericAmount;
+  const base = Math.floor(numericAmount / count);
+  const remainder = numericAmount % count;
+  return index < remainder ? base + 1 : base;
+};
+
 const createMarketplaceOrder = async (req, res) => {
   let session;
   const idempotencyKey = String(req.get("Idempotency-Key") || req.get("x-idempotency-key") || "").trim();
@@ -106,15 +116,18 @@ const createMarketplaceOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Produk atau jumlah pesanan tidak valid" });
     }
 
-    // Validasi radius maksimal 15 km dari Kamojang
+    // Validasi jangkauan alamat pengantaran marketplace (Seluruh Indonesia)
     const deliveryLat = addressSnapshot?.latitude ?? body.latitude;
     const deliveryLon = addressSnapshot?.longitude ?? body.longitude;
     if (deliveryLat != null && deliveryLon != null && Number.isFinite(Number(deliveryLat)) && Number.isFinite(Number(deliveryLon))) {
-      const radiusCheck = validateKamojangRadius({ latitude: Number(deliveryLat), longitude: Number(deliveryLon) }, MAX_SERVICE_RADIUS_KM || 15);
+      const isKamojangOnly = Boolean(PRICING_POLICY.enforceKamojangRadius);
+      const radiusCheck = isKamojangOnly
+        ? validateKamojangRadius({ latitude: Number(deliveryLat), longitude: Number(deliveryLon) }, MAX_SERVICE_RADIUS_KM || 15)
+        : validateServiceCoverage({ latitude: Number(deliveryLat), longitude: Number(deliveryLon) });
       if (!radiusCheck.valid) {
         return res.status(400).json({
           success: false,
-          message: radiusCheck.message || "Alamat pengantaran marketplace melebihi batas radius maksimal Kamojang (15 km).",
+          message: radiusCheck.message || "Alamat pengantaran marketplace di luar wilayah layanan.",
           radiusValidation: radiusCheck,
         });
       }
@@ -211,9 +224,11 @@ const createMarketplaceOrder = async (req, res) => {
       debitedPoints = quote.approvedPoints;
     }
 
+    let gatewayResult = null;
+    let order = null;
+
     try {
       // Create payment gateway session if digital payment
-      let gatewayResult = null;
       if (!isCod && totalAmount > 0) {
         gatewayResult = await paymentGateway.createPayment({
           orderId: orderCode,

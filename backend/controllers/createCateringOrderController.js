@@ -7,7 +7,7 @@ const Notification = require("../models/Notification");
 const { syncConversationForOrder } = require("../services/conversationService");
 const { getRoleDataValue } = require("../utils/roleData");
 const { getCateringDueAt, getPaymentPlan, getPaymentReminder } = require("../utils/cateringOrderLifecycle");
-const { PRICING_POLICY, validateKamojangRadius, MAX_SERVICE_RADIUS_KM } = require("../services/pricingPolicyService");
+const { PRICING_POLICY, validateKamojangRadius, validateServiceCoverage, MAX_SERVICE_RADIUS_KM } = require("../services/pricingPolicyService");
 
 const cateringMonths = new Map([
   ["januari", 1], ["februari", 2], ["maret", 3], ["april", 4],
@@ -88,15 +88,18 @@ const createCateringOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Pilih jadwal Catering minimal dua hari dari sekarang dan gunakan salah satu jam yang tersedia." });
     }
 
-    // Validasi radius maksimal 15 km dari Kamojang
+    // Validasi jangkauan alamat pengantaran katering (Seluruh Indonesia)
     const deliveryLat = addressSnapshot?.latitude ?? body.latitude;
     const deliveryLon = addressSnapshot?.longitude ?? body.longitude;
     if (deliveryLat != null && deliveryLon != null && Number.isFinite(Number(deliveryLat)) && Number.isFinite(Number(deliveryLon))) {
-      const radiusCheck = validateKamojangRadius({ latitude: Number(deliveryLat), longitude: Number(deliveryLon) }, MAX_SERVICE_RADIUS_KM || 15);
+      const isKamojangOnly = Boolean(PRICING_POLICY.enforceKamojangRadius);
+      const radiusCheck = isKamojangOnly
+        ? validateKamojangRadius({ latitude: Number(deliveryLat), longitude: Number(deliveryLon) }, MAX_SERVICE_RADIUS_KM || 15)
+        : validateServiceCoverage({ latitude: Number(deliveryLat), longitude: Number(deliveryLon) });
       if (!radiusCheck.valid) {
         return res.status(400).json({
           success: false,
-          message: radiusCheck.message || "Alamat pengantaran katering melebihi batas radius maksimal Kamojang (15 km).",
+          message: radiusCheck.message || "Alamat pengantaran katering di luar wilayah layanan.",
           radiusValidation: radiusCheck,
         });
       }

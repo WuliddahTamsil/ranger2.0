@@ -354,8 +354,7 @@ const mapSendDriverOrder = (order: any): DriverOrder => {
     completedAt: order.deliveredAt || order.completedAt || order.updatedAt || order.createdAt,
     status:
       order.status === "SEARCHING_DRIVER" || order.status === "PAYMENT_PENDING" || order.status === "CREATED" ? "Menunggu"
-      : order.status === "DRIVER_ASSIGNED" ? "Siap"
-      : order.status === "DRIVER_ON_THE_WAY_TO_PICKUP" ? "Menuju Pickup"
+      : order.status === "DRIVER_ASSIGNED" || order.status === "DRIVER_ON_THE_WAY_TO_PICKUP" ? "Menuju Pickup"
       : order.status === "DRIVER_ARRIVED_AT_PICKUP" || order.status === "PICKUP_VERIFICATION" ? "Sampai Pickup"
       : order.status === "PICKED_UP" || order.status === "IN_TRANSIT" || order.status === "ARRIVED_AT_DESTINATION" || order.status === "DELIVERY_VERIFICATION" ? "Mengantar"
       : order.status === "DELIVERED" || order.status === "COMPLETED" ? "Selesai"

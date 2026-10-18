@@ -87,10 +87,33 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
 
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
 
+  useEffect(() => {
+    if (!deposit) {
+      let targetId: string | null = null;
+      if (typeof window !== "undefined" && window.location?.search) {
+        const params = new URLSearchParams(window.location.search);
+        targetId = params.get("depositId");
+      }
+      if (targetId) {
+        setLoading(true);
+        getWasteDepositById(targetId)
+          .then((res) => {
+            if (res.success && res.data) {
+              setDeposit(res.data);
+              setSelectedDeposit(res.data);
+            }
+          })
+          .catch((err) => console.error("Load deposit by URL id error:", err))
+          .finally(() => setLoading(false));
+      }
+    }
+  }, [deposit]);
+
   const fetchLatest = async () => {
-    if (!deposit?._id) return;
+    const currentId = deposit?._id || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("depositId") : null);
+    if (!currentId) return;
     try {
-      const res = await getWasteDepositById(deposit._id);
+      const res = await getWasteDepositById(currentId);
       if (res.success && res.data) {
         setDeposit(res.data);
         setSelectedDeposit(res.data);
@@ -574,11 +597,11 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
             let stepDesc = step.desc;
             if (isPickup && step.key === "DRIVER_TRANSIT") {
               if (deposit.status === "DRIVER_ASSIGNED" || deposit.status === "PICKUP_ON_THE_WAY") {
-                stepDesc = "🛵 Driver ditugaskan & sedang menuju lokasi Anda untuk menjemput sampah.";
+                stepDesc = "Driver ditugaskan & sedang menuju lokasi penjemputan sampah.";
               } else if (deposit.status === "PICKED_UP") {
-                stepDesc = "📦 Sampah telah diambil driver & sedang dalam perjalanan ke Bank Sampah.";
+                stepDesc = "Sampah telah diambil driver & dalam perjalanan ke Bank Sampah.";
               } else if (deposit.status === "AT_BANK") {
-                stepDesc = "🏢 Sampah telah tiba di Bank Sampah & siap ditimbang oleh petugas.";
+                stepDesc = "Sampah telah tiba di Bank Sampah & siap ditimbang oleh petugas.";
               }
             }
 

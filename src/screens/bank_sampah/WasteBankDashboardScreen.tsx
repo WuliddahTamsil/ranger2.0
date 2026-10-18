@@ -317,7 +317,7 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
       const res = await acceptWasteDeposit(item._id);
       if (res.success) {
         Alert.alert(
-          "Driver Dipanggil! 🛵",
+          "Driver Dipanggil",
           `Permintaan setor sampah #${item.depositCode} berhasil disetujui. Tugas penjemputan telah disiarkan ke driver.`
         );
         loadDashboard(true);
@@ -1162,21 +1162,21 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                     ]}
                   >
                     {item.status === "DISPUTED"
-                      ? "⚠️ Komplain / Ditolak"
+                      ? "Komplain / Ditolak"
                       : item.status === "WAITING_CUSTOMER_CONFIRMATION"
                       ? "Menunggu ACC"
                       : item.status === "COMPLETED" || item.status === "POINT_ISSUED"
                       ? "Poin Terbit"
                       : item.method === "PICKUP" && item.status === "REQUESTED"
-                      ? "⚠️ Panggil Driver"
+                      ? "Panggil Driver"
                       : item.method === "PICKUP" && item.status === "ACCEPTED"
-                      ? "🛵 Cari Driver"
+                      ? "Cari Driver"
                       : item.method === "PICKUP" && item.status === "DRIVER_ASSIGNED"
-                      ? "🛵 Driver Menuju Nasabah"
+                      ? "Driver Menuju Nasabah"
                       : item.method === "PICKUP" && item.status === "PICKED_UP"
-                      ? "📦 Diantar ke Bank"
+                      ? "Diantar ke Bank"
                       : item.method === "PICKUP" && item.status === "AT_BANK"
-                      ? "🏢 Tiba di Bank"
+                      ? "Tiba di Bank"
                       : "Perlu Timbang"}
                   </Text>
                 </View>

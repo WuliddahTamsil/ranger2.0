@@ -50,8 +50,9 @@ export const GeoversePointLedgerScreen: React.FC<Nav> = ({ navigate }) => {
       await Promise.allSettled([
         refreshWallet(),
         fetchPointLedger(params).then((res) => {
-          if (res.success && res.data?.ledger) {
-            setLedgerItems(res.data.ledger);
+          const items = res.data?.ledger || (res.data as any)?.ledgers;
+          if (res.success && Array.isArray(items)) {
+            setLedgerItems(items);
           }
         }),
       ]);

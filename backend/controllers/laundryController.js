@@ -7,6 +7,7 @@ const { syncConversationForOrder } = require("../services/conversationService");
 const {
   PRICING_POLICY,
   validateKamojangRadius,
+  validateServiceCoverage,
   calculateDistanceFare,
   calculateWeightFare,
   calculateDriverRevenueSplit,
@@ -252,7 +253,7 @@ exports.createOrder = async (req, res) => {
       notes,
     } = req.body;
 
-    // Validasi radius maksimal 15 km dari pusat Kamojang
+    // Validasi radius/jangkauan penjemputan/pengantaran laundry (Seluruh Indonesia)
     let lat = addressSnapshot?.latitude;
     let lon = addressSnapshot?.longitude;
     if ((lat == null || lon == null) && typeof pickupCoords === "string" && pickupCoords.includes(",")) {
@@ -261,11 +262,14 @@ exports.createOrder = async (req, res) => {
       lon = Number(parts[1]);
     }
     if (lat != null && lon != null && Number.isFinite(Number(lat)) && Number.isFinite(Number(lon))) {
-      const radiusCheck = validateKamojangRadius({ latitude: Number(lat), longitude: Number(lon) }, 15);
+      const isKamojangOnly = Boolean(PRICING_POLICY.enforceKamojangRadius);
+      const radiusCheck = isKamojangOnly
+        ? validateKamojangRadius({ latitude: Number(lat), longitude: Number(lon) }, 15)
+        : validateServiceCoverage({ latitude: Number(lat), longitude: Number(lon) });
       if (!radiusCheck.valid) {
         return res.status(400).json({
           success: false,
-          message: radiusCheck.message || "Lokasi penjemputan/pengantaran laundry melebihi batas radius maksimal Kamojang (15 km).",
+          message: radiusCheck.message || "Lokasi penjemputan/pengantaran laundry berada di luar wilayah jangkauan.",
           radiusValidation: radiusCheck,
         });
       }

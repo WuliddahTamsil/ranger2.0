@@ -10,7 +10,7 @@
  *    Clean and clear without promotional text or dark overlays.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -27,6 +27,8 @@ import {
   User as UserIcon,
   Play,
   Pause,
+  Volume2,
+  VolumeX,
 } from "lucide-react-native";
 import { HomeHeroBannerItem } from "../services/homeHeroService";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -35,12 +37,21 @@ const HeroNativeVideo: React.FC<{
   uri: string;
   poster?: string;
   paused: boolean;
-}> = ({ uri, poster, paused }) => {
+  muted: boolean;
+}> = ({ uri, poster, paused, muted }) => {
   const player = useVideoPlayer(uri, (videoPlayer) => {
     videoPlayer.loop = true;
-    videoPlayer.muted = true;
+    videoPlayer.muted = muted;
+    videoPlayer.volume = 1.0;
     videoPlayer.play();
   });
+
+  useEffect(() => {
+    player.muted = muted;
+    if (!muted) {
+      player.volume = 1.0;
+    }
+  }, [muted, player]);
 
   useEffect(() => {
     if (paused) {
@@ -102,6 +113,22 @@ export const HomeHeroBannerView: React.FC<HomeHeroHeaderProps> = ({
   const [activeIndex, setActiveIndex] = useState(0);
   const [videoPausedMap, setVideoPausedMap] = useState<Record<string, boolean>>({});
   const [mediaErrorMap, setMediaErrorMap] = useState<Record<string, boolean>>({});
+  const [isMuted, setIsMuted] = useState(true);
+  const webVideoRef = useRef<any>(null);
+
+  const toggleMute = () => {
+    setIsMuted((prev) => {
+      const nextMuted = !prev;
+      if (webVideoRef.current) {
+        webVideoRef.current.muted = nextMuted;
+        if (!nextMuted) {
+          webVideoRef.current.volume = 1.0;
+          webVideoRef.current.play().catch(() => {});
+        }
+      }
+      return nextMuted;
+    });
+  };
 
   // If in preview mode with an override, use the override banner
   const effectiveBanners: HomeHeroBannerItem[] =
@@ -238,15 +265,16 @@ export const HomeHeroBannerView: React.FC<HomeHeroHeaderProps> = ({
               Platform.OS === "web" ? (
                 <video
                   ref={(el: any) => {
+                    webVideoRef.current = el;
                     if (el) {
-                      el.muted = true;
+                      el.muted = isMuted;
                       if (!isPaused) el.play().catch(() => {});
                     }
                   }}
                   src={currentMediaUrl}
                   poster={currentBanner?.thumbnailUrl || undefined}
                   autoPlay={!isPaused}
-                  muted
+                  muted={isMuted}
                   loop
                   playsInline
                   preload="auto"
@@ -274,6 +302,7 @@ export const HomeHeroBannerView: React.FC<HomeHeroHeaderProps> = ({
                   uri={currentMediaUrl}
                   poster={currentBanner?.thumbnailUrl}
                   paused={isPaused}
+                  muted={isMuted}
                 />
               )
             ) : (
@@ -291,27 +320,57 @@ export const HomeHeroBannerView: React.FC<HomeHeroHeaderProps> = ({
               />
             )}
 
-            {/* Small pause/play toggle button on bottom-right of video */}
-            {isVideo && currentBanner && (
+            {/* Unmute badge on top-left of video */}
+            {isVideo && isMuted && (
               <TouchableOpacity
-                style={styles.videoControlBtn}
-                onPress={() =>
-                  currentBanner &&
-                  setVideoPausedMap((prev) => ({
-                    ...prev,
-                    [currentBanner._id]: !prev[currentBanner._id],
-                  }))
-                }
-                activeOpacity={0.75}
+                style={styles.unmuteBadge}
+                onPress={toggleMute}
+                activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={isPaused ? "Putar video" : "Jeda video"}
+                accessibilityLabel="Aktifkan suara video"
               >
-                {isPaused ? (
-                  <Play size={12} color="#FFFFFF" />
-                ) : (
-                  <Pause size={12} color="#FFFFFF" />
-                )}
+                <VolumeX size={12} color="#FFFFFF" />
+                <Text style={styles.unmuteBadgeText}>Ketuk untuk suara</Text>
               </TouchableOpacity>
+            )}
+
+            {/* Control buttons cluster on bottom-right of video (Sound + Play/Pause) */}
+            {isVideo && currentBanner && (
+              <View style={styles.videoControlsCluster}>
+                <TouchableOpacity
+                  style={styles.videoControlBtn}
+                  onPress={toggleMute}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel={isMuted ? "Aktifkan suara video" : "Bisukan suara video"}
+                >
+                  {isMuted ? (
+                    <VolumeX size={13} color="#FFFFFF" />
+                  ) : (
+                    <Volume2 size={13} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.videoControlBtn}
+                  onPress={() =>
+                    currentBanner &&
+                    setVideoPausedMap((prev) => ({
+                      ...prev,
+                      [currentBanner._id]: !prev[currentBanner._id],
+                    }))
+                  }
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel={isPaused ? "Putar video" : "Jeda video"}
+                >
+                  {isPaused ? (
+                    <Play size={12} color="#FFFFFF" />
+                  ) : (
+                    <Pause size={12} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
+              </View>
             )}
 
             {/* Small subtle pagination dots if multiple media exist */}
@@ -523,10 +582,36 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
-  videoControlBtn: {
+  unmuteBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    zIndex: 5,
+  },
+  unmuteBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  videoControlsCluster: {
     position: "absolute",
     right: 10,
     bottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    zIndex: 5,
+  },
+  videoControlBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -535,7 +620,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.35)",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 5,
   },
   paginationRow: {
     position: "absolute",

@@ -623,7 +623,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
                   • <Text style={{ fontWeight: "700" }}>Antar-Jemput (2x Trip):</Text> Penjemputan pakaian kotor ke rumah & pengantaran pakaian bersih.{"\n"}
                   • <Text style={{ fontWeight: "700" }}>Tarif Dasar Jarak:</Text> Rp 2.500/km (Minimal &lt; 4 km Rp 9.500, sudah termasuk Biaya Layanan Platform Rp 2.000).{"\n"}
                   • <Text style={{ fontWeight: "700" }}>Beban Maksimal Motor:</Text> Kapasitas standar bagasi motor maks. 20 kg (0–20 kg masuk tarif standar). Kelebihan di atas 20 kg dikenakan Rp 3.000/kg.{"\n"}
-                  • <Text style={{ fontWeight: "700" }}>Radius Layanan:</Text> Maksimal 15 km dari titik wilayah Kamojang.
+                  • <Text style={{ fontWeight: "700" }}>Jangkauan Layanan:</Text> Melayani penjemputan dan pengantaran laundry di seluruh Indonesia.
                 </Text>
               </View>
 

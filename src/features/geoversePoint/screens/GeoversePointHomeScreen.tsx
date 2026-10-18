@@ -102,7 +102,7 @@ export const GeoversePointHomeScreen: React.FC<Nav> = ({ navigate }) => {
 
               if (res.success) {
                 Alert.alert(
-                  "Voucher Berhasil Ditukar! 🎉",
+                  "Voucher Berhasil Ditukar",
                   `Kode voucher: ${res.data?.voucherCode || "Lihat di riwayat"}. Anda dapat menggunakannya saat checkout.`,
                   [
                     {
@@ -373,6 +373,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 36,
+    maxWidth: 1000,
+    width: "100%",
+    alignSelf: "center",
   },
   desktopContainer: {
     maxWidth: 1100,

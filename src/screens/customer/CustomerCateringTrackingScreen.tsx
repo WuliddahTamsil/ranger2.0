@@ -140,23 +140,22 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
         });
         setAllCateringOrders(sortedOrders);
 
-        const currentTargetId = targetOrderId.current || getActiveCateringTrackingOrderId();
-        let live = currentTargetId
-          ? sortedOrders.find((candidate: any) => String(candidate._id || candidate.id) === currentTargetId)
-          : null;
-
-        // Smart fallback: Jika order target saat ini belum ada bukti dan masih berstatus Siap/Menunggu tanpa kurir,
-        // namun customer punya pesanan catering yang baru selesai dengan bukti foto pengantaran:
-        if ((!live || (!live.deliveryProofUrl && ["Siap", "Menunggu"].includes(live.status) && !live.driverId)) && sortedOrders.length > 0) {
-          const deliveredWithProof = sortedOrders.find((o: any) => Boolean(o.deliveryProofUrl) && o.status === "Selesai");
-          if (deliveredWithProof && (!targetOrderId.current || !live?.driverId)) {
-            live = deliveredWithProof;
+        let targetId = targetOrderId.current || getActiveCateringTrackingOrderId();
+        if (!targetId && typeof window !== "undefined" && window.location?.search) {
+          const urlParamId = new URLSearchParams(window.location.search).get("orderId");
+          if (urlParamId) {
+            targetId = urlParamId;
+            targetOrderId.current = urlParamId;
           }
         }
 
+        let live = targetId
+          ? sortedOrders.find((candidate: any) => String(candidate._id || candidate.id) === targetId)
+          : null;
+
         if (!live && sortedOrders.length > 0) {
-          live = sortedOrders.find((o: any) => Boolean(o.deliveryProofUrl) && o.status === "Selesai")
-            || sortedOrders.find((o: any) => ["Mengantar", "Diambil", "Sampai Pickup", "Menuju Pickup", "Siap"].includes(o.status))
+          live = sortedOrders.find((o: any) => ["Menunggu", "Diproses", "Siap", "Menuju Pickup", "Sampai Pickup", "Diambil", "Mengantar"].includes(o.status))
+            || sortedOrders.find((o: any) => Boolean(o.deliveryProofUrl) && o.status === "Selesai")
             || sortedOrders[0];
         }
 

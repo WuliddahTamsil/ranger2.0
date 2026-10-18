@@ -17,12 +17,13 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
     const account = Array.isArray(accounts)
       ? accounts.find((item: any) => String(item.id) === String(requestedAccountId))
       : null;
-    const targetAccount = account || session?.currentAccount || (Array.isArray(accounts) ? accounts[0] : null);
+    const targetAccount = account || (requestedAccountId && requestedAccountId === session?.currentAccount?.id ? session.currentAccount : null);
     const headers: Record<string, string> = {};
-    if (targetAccount?.token) {
-      headers.Authorization = `Bearer ${targetAccount.token}`;
+    const token = targetAccount?.token || (requestedAccountId && requestedAccountId.length === 24 ? requestedAccountId : session?.currentAccount?.token);
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-    const resolvedId = targetAccount?.id || requestedAccountId;
+    const resolvedId = requestedAccountId || targetAccount?.id || session?.currentAccount?.id;
     if (resolvedId) {
       headers["x-driver-id"] = String(resolvedId);
       headers["x-user-id"] = String(resolvedId);
@@ -381,7 +382,7 @@ export const createMarketplaceWithdrawal = async (withdrawalData: Record<string,
 
 export const getMarketplaceOrdersForOwner = async (ownerId: string) => {
   try {
-    const authHeaders = await getAuthHeaders();
+    const authHeaders = await getAuthHeaders(ownerId);
     const res = await fetch(getApiUrl(`/marketplace/orders/owner/${ownerId}?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
   } catch (err) {
@@ -403,7 +404,7 @@ export const getMarketplaceOrdersForCustomer = async (customerId: string) => {
 
 export const createMarketplaceOrder = async (orderData: Record<string, unknown>, idempotencyKey?: string) => {
   try {
-    const authHeaders = await getAuthHeaders();
+    const authHeaders = await getAuthHeaders((orderData?.customerId as string) || undefined);
     const res = await fetch(getApiUrl("/marketplace/orders"), {
       method: "POST",
       headers: {
@@ -438,6 +439,9 @@ const getMarketplaceActorHeaders = async (actor: Pick<AuthAccount, "id" | "role"
       // Return a clear session error below if storage cannot provide a token.
     }
   }
+  if (!token && typeof actor.id === "string" && actor.id.length === 24) {
+    token = actor.id;
+  }
 
   return token
     ? { headers: { Authorization: `Bearer ${token}` } }
@@ -467,8 +471,7 @@ export const updateMarketplaceOrderStatus = async (
 
 export const getMarketplaceOrdersForDriver = async (driverId: string) => {
   try {
-    void driverId;
-    const authHeaders = await getAuthHeaders();
+    const authHeaders = await getAuthHeaders(driverId);
     const res = await fetch(getApiUrl(`/marketplace/orders/driver?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
   } catch (err) {
@@ -477,9 +480,9 @@ export const getMarketplaceOrdersForDriver = async (driverId: string) => {
   }
 };
 
-export const acceptMarketplaceOrder = async (orderId: string) => {
+export const acceptMarketplaceOrder = async (orderId: string, driverId?: string) => {
   try {
-    const authHeaders = await getAuthHeaders();
+    const authHeaders = await getAuthHeaders(driverId);
     const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/accept`), { method: "POST", headers: authHeaders });
     return await readApiJson(res);
   } catch (err) {
@@ -488,9 +491,9 @@ export const acceptMarketplaceOrder = async (orderId: string) => {
   }
 };
 
-export const declineMarketplaceOrder = async (orderId: string) => {
+export const declineMarketplaceOrder = async (orderId: string, driverId?: string) => {
   try {
-    const authHeaders = await getAuthHeaders();
+    const authHeaders = await getAuthHeaders(driverId);
     const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/decline`), { method: "POST", headers: authHeaders });
     return await readApiJson(res);
   } catch (err) {
@@ -499,9 +502,9 @@ export const declineMarketplaceOrder = async (orderId: string) => {
   }
 };
 
-export const assignMarketplaceDriver = async (orderId: string, driverId: string) => {
+export const assignMarketplaceDriver = async (orderId: string, driverId: string, ownerId?: string) => {
   try {
-    const authHeaders = await getAuthHeaders();
+    const authHeaders = await getAuthHeaders(ownerId);
     const res = await fetch(getApiUrl(`/marketplace/orders/${orderId}/assign-driver`), {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders },

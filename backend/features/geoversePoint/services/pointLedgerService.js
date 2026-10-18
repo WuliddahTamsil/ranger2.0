@@ -35,6 +35,7 @@ async function getLedgerForUser(userId, { type, sourceType, limit = 50, page = 1
   return {
     wallet,
     ledgers,
+    ledger: ledgers,
     pagination: {
       total,
       page: safePage,

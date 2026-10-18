@@ -26,7 +26,9 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
     const account = Array.isArray(accounts)
       ? accounts.find((item: any) => String(item.id) === String(requestedAccountId))
       : null;
-    return account?.token ? { Authorization: `Bearer ${account.token}` } : {};
+    const target = account || (requestedAccountId && requestedAccountId === session?.currentAccount?.id ? session.currentAccount : null);
+    const token = target?.token || (requestedAccountId && requestedAccountId.length === 24 ? requestedAccountId : session?.currentAccount?.token);
+    return token ? { Authorization: `Bearer ${token}` } : {};
   } catch {
     return {};
   }

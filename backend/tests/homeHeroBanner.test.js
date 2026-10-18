@@ -596,7 +596,7 @@ async function runHeroTests() {
       await HomeHeroBanner.deleteMany({ title: /Test Hero/i });
       await User.deleteMany({ _id: { $in: [adminId, customerId] } });
       await HomeHeroBanner.updateMany(
-        { title: { $in: ["260126 Proper PGE 2025", "PGE Kamojang Bahasa Final"] } },
+        { title: { $in: ["GEOVERSE - All Your Daily Needs in One App", "260126 Proper PGE 2025", "PGE Kamojang Bahasa Final"] } },
         { $set: { isActive: true, overlayEnabled: false, overlayOpacity: 0, overlayColor: "transparent" } }
       );
       if (existingActiveBannerIds && existingActiveBannerIds.length > 0) {

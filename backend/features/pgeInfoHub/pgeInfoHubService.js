@@ -236,10 +236,79 @@ const updateInfoHubItemStatus = async (id, { status, rejectionReason = "", appro
   throw new Error("Konten PGE Info Hub tidak ditemukan.");
 };
 
+/**
+ * Admin CMS: Update existing item content and settings
+ */
+const updateInfoHubItem = async (id, data = {}, actorId = "admin") => {
+  const isPublished = data.status ? data.status === "PUBLISHED" : undefined;
+  const updatePayload = {
+    ...(data.title !== undefined ? { title: data.title } : {}),
+    ...(data.category !== undefined ? { category: data.category } : {}),
+    ...(data.description !== undefined ? { description: data.description } : {}),
+    ...(data.body !== undefined ? { body: data.body } : {}),
+    ...(data.imageUrl !== undefined ? { imageUrl: data.imageUrl } : {}),
+    ...(data.posterUrl !== undefined ? { posterUrl: data.posterUrl } : {}),
+    ...(data.videoUrl !== undefined ? { videoUrl: data.videoUrl } : {}),
+    ...(data.authorOrDept !== undefined ? { authorOrDept: data.authorOrDept } : {}),
+    ...(data.location !== undefined ? { location: data.location } : {}),
+    ...(data.eventDate !== undefined ? { eventDate: data.eventDate } : {}),
+    ...(data.tags !== undefined ? { tags: Array.isArray(data.tags) ? data.tags : [] } : {}),
+    ...(data.status !== undefined ? { status: data.status, isPublished } : {}),
+    ...(isPublished ? { publishedAt: new Date() } : {}),
+    $push: {
+      auditTrail: {
+        action: "UPDATED",
+        actorId,
+        note: `Konten diperbarui oleh ${actorId}.`,
+        timestamp: new Date(),
+      },
+    },
+  };
+
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { itemId: id };
+    const updated = await PgeInfoHubItem.findOneAndUpdate(query, updatePayload, { new: true }).lean();
+    if (updated) return { ...updated, id: updated.itemId || String(updated._id) };
+  }
+
+  const idx = INITIAL_PGE_INFO_HUB_ITEMS.findIndex((i) => i.id === id || i.itemId === id);
+  if (idx !== -1) {
+    INITIAL_PGE_INFO_HUB_ITEMS[idx] = {
+      ...INITIAL_PGE_INFO_HUB_ITEMS[idx],
+      ...data,
+      ...(isPublished !== undefined ? { isPublished } : {}),
+    };
+    return INITIAL_PGE_INFO_HUB_ITEMS[idx];
+  }
+
+  throw new Error("Konten PGE Info Hub tidak ditemukan.");
+};
+
+/**
+ * Admin CMS: Delete an item
+ */
+const deleteInfoHubItem = async (id, actorId = "admin") => {
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { itemId: id };
+    const deleted = await PgeInfoHubItem.findOneAndDelete(query).lean();
+    if (deleted) return { success: true, id };
+  }
+
+  const idx = INITIAL_PGE_INFO_HUB_ITEMS.findIndex((i) => i.id === id || i.itemId === id);
+  if (idx !== -1) {
+    INITIAL_PGE_INFO_HUB_ITEMS.splice(idx, 1);
+    return { success: true, id };
+  }
+
+  throw new Error("Konten PGE Info Hub tidak ditemukan untuk dihapus.");
+};
+
 module.exports = {
   INITIAL_PGE_INFO_HUB_ITEMS,
   getPublishedInfoHubItems,
   getAllInfoHubItems,
   createInfoHubItem,
+  updateInfoHubItem,
   updateInfoHubItemStatus,
+  deleteInfoHubItem,
 };

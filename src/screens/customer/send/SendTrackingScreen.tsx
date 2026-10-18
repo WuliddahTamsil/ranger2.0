@@ -39,6 +39,7 @@ import { CustomerChatModal } from "../CustomerChatModal";
 import { SafeCallModal } from "../../../components/SafeCallModal";
 import {
   fetchSendOrderById,
+  fetchCustomerSendOrders,
   submitSendRating,
   submitSendComplaint,
 } from "../../../services/sendService";
@@ -90,9 +91,29 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
     setTimeout(() => setToastText(null), 3000);
   };
 
+  // Auto-load latest customer send order if not present in context
+  useEffect(() => {
+    if ((!activeOrder?._id || activeOrder._id === "mock_active_order") && authAccount?.id) {
+      void (async () => {
+        try {
+          const res = await fetchCustomerSendOrders(authAccount.id, authAccount.id);
+          if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+            const latest = res.data[0];
+            setActiveOrder(latest);
+            if (latest.status === "COMPLETED" && !latest.rating?.score) {
+              setRatingModalVisible(true);
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to auto-load customer send order:", e);
+        }
+      })();
+    }
+  }, [activeOrder?._id, authAccount?.id]);
+
   // Socket and Polling for live tracking
   useEffect(() => {
-    if (!activeOrder?._id) return;
+    if (!activeOrder?._id || activeOrder._id === "mock_active_order") return;
 
     const socketUrl = API_BASE_URL.replace(/\/api\/?$/, "");
     const socket = io(socketUrl, { transports: ["websocket", "polling"] });

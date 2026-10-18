@@ -118,7 +118,9 @@ export const SendFareEstimateScreen: React.FC<SendFareEstimateScreenProps> = ({
         customerId: authAccount?.id,
       };
 
+      console.log("[SendFareEstimate] Submitting payload:", payload);
       const res = await createSendOrder(payload, authAccount?.id);
+      console.log("[SendFareEstimate] createSendOrder response:", res);
       if (res.success && res.data) {
         setActiveOrder(res.data);
         if (paymentMethod === "CASH") {
@@ -130,6 +132,7 @@ export const SendFareEstimateScreen: React.FC<SendFareEstimateScreenProps> = ({
         alert(res.message || "Gagal membuat pesanan.");
       }
     } catch (e: any) {
+      console.error("[SendFareEstimate] handleCheckout exception:", e);
       alert("Terjadi kendala koneksi saat memproses pesanan.");
     } finally {
       setSubmitting(false);
@@ -373,7 +376,7 @@ export const SendFareEstimateScreen: React.FC<SendFareEstimateScreenProps> = ({
 
               <View style={{ backgroundColor: "#F0FDF4", borderRadius: 8, padding: 8, marginTop: 8, borderWidth: 1, borderColor: "#BBF7D0" }}>
                 <Text style={{ fontSize: 11, color: "#166534", lineHeight: 16 }}>
-                  💡 <Text style={{ fontWeight: "700" }}>Kebijakan Tarif Kanyaah Send:</Text> Beban 0-20 kg bebas biaya penjemputan dasar, kelipatan di atas 20 kg dikenakan Rp3.000/kg. Radius operasional maksimal 15 km dari wilayah Kamojang.
+                  💡 <Text style={{ fontWeight: "700" }}>Kebijakan Tarif Kanyaah Send:</Text> Beban 0-20 kg bebas biaya penjemputan dasar, kelipatan di atas 20 kg dikenakan Rp3.000/kg. Jangkauan operasional melayani seluruh wilayah Indonesia.
                 </Text>
               </View>
 

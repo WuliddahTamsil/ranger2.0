@@ -83,6 +83,7 @@ import { rp } from "../../utils/formatters";
 import { useTimeGreeting } from "../../utils/timeGreeting";
 import { getApiUrl } from "../../services/api";
 import { AdminHomeHeroSection } from "../../components/AdminHomeHeroSection";
+import { AdminPgeInfoHubSection } from "../../components/AdminPgeInfoHubSection";
 
 interface AdminHomeProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -169,6 +170,9 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 
   // Notifications Sheet Modal
   const [notifModalVisible, setNotifModalVisible] = useState(false);
+
+  // Sub-Tab State for CMS (Tab 4: Hero Slider vs PGE Info Hub)
+  const [adminCmsSubTab, setAdminCmsSubTab] = useState<"HERO" | "INFO_HUB">("HERO");
 
   // Fullscreen Preview Image Modal State
   const [previewImageModal, setPreviewImageModal] = useState<{
@@ -445,7 +449,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     { label: "Monitoring", icon: TrendingUp },
     { label: "Transaksi", icon: Receipt },
     { label: "Mitra", icon: Store },
-    { label: "Konten Beranda", icon: Sparkles },
+    { label: "Konten & Hub", icon: Sparkles },
     { label: "Akun", icon: User },
   ];
 
@@ -2133,7 +2137,88 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
       case 3:
         return renderMitraDirectoryTab();
       case 4:
-        return <AdminHomeHeroSection onPreviewCustomer={() => navigate("c_home")} />;
+        return (
+          <View style={{ width: "100%", paddingBottom: 24 }}>
+            {/* Top CMS Switcher */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  backgroundColor: "#E2E8F0",
+                  borderRadius: 14,
+                  padding: 4,
+                  gap: 4,
+                }}
+              >
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    paddingVertical: 9,
+                    borderRadius: 11,
+                    backgroundColor: adminCmsSubTab === "HERO" ? "#FFFFFF" : "transparent",
+                    shadowColor: adminCmsSubTab === "HERO" ? "#000" : "transparent",
+                    shadowOpacity: adminCmsSubTab === "HERO" ? 0.08 : 0,
+                    shadowRadius: 3,
+                    elevation: adminCmsSubTab === "HERO" ? 2 : 0,
+                  }}
+                  onPress={() => setAdminCmsSubTab("HERO")}
+                  activeOpacity={0.8}
+                >
+                  <Sparkles size={14} color={adminCmsSubTab === "HERO" ? "#0D7A53" : "#64748B"} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: adminCmsSubTab === "HERO" ? "700" : "600",
+                      color: adminCmsSubTab === "HERO" ? "#0D7A53" : "#64748B",
+                    }}
+                  >
+                    Hero Beranda
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    paddingVertical: 9,
+                    borderRadius: 11,
+                    backgroundColor: adminCmsSubTab === "INFO_HUB" ? "#FFFFFF" : "transparent",
+                    shadowColor: adminCmsSubTab === "INFO_HUB" ? "#000" : "transparent",
+                    shadowOpacity: adminCmsSubTab === "INFO_HUB" ? 0.08 : 0,
+                    shadowRadius: 3,
+                    elevation: adminCmsSubTab === "INFO_HUB" ? 2 : 0,
+                  }}
+                  onPress={() => setAdminCmsSubTab("INFO_HUB")}
+                  activeOpacity={0.8}
+                >
+                  <Building2 size={14} color={adminCmsSubTab === "INFO_HUB" ? "#0D7A53" : "#64748B"} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: adminCmsSubTab === "INFO_HUB" ? "700" : "600",
+                      color: adminCmsSubTab === "INFO_HUB" ? "#0D7A53" : "#64748B",
+                    }}
+                  >
+                    PGE Info Hub
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {adminCmsSubTab === "HERO" ? (
+              <AdminHomeHeroSection onPreviewCustomer={() => navigate("c_home")} />
+            ) : (
+              <AdminPgeInfoHubSection onPreviewCustomer={() => navigate("c_home")} />
+            )}
+          </View>
+        );
       case 5:
         return renderPengaturanTab();
       default:

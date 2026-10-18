@@ -11,6 +11,7 @@ const {
   PRICING_POLICY,
   calculateHaversineKm,
   validateKamojangRadius,
+  validateServiceCoverage,
   computeGoodsAndPickupFare,
   calculateDriverRevenueSplit,
   createRevenueSplitSnapshot,
@@ -61,15 +62,18 @@ const createDeposit = async (req, res) => {
         return res.status(400).json({ success: false, message: "Alamat dan titik lokasi penjemputan wajib diisi." });
       }
 
-      // Validasi radius maksimal 15 km dari pusat Kamojang
-      const radiusValidation = validateKamojangRadius(
-        { latitude: Number(pickupLatitude), longitude: Number(pickupLongitude) },
-        PRICING_POLICY.maxServiceRadiusKm || 15
-      );
+      // Validasi jangkauan lokasi penjemputan sampah (Seluruh Indonesia)
+      const isKamojangOnly = Boolean(PRICING_POLICY.enforceKamojangRadius);
+      const radiusValidation = isKamojangOnly
+        ? validateKamojangRadius(
+            { latitude: Number(pickupLatitude), longitude: Number(pickupLongitude) },
+            PRICING_POLICY.maxServiceRadiusKm || 15
+          )
+        : validateServiceCoverage({ latitude: Number(pickupLatitude), longitude: Number(pickupLongitude) });
       if (!radiusValidation.valid) {
         return res.status(400).json({
           success: false,
-          message: radiusValidation.message || "Lokasi penjemputan melebihi batas radius maksimal Kamojang (15 km).",
+          message: radiusValidation.message || "Lokasi penjemputan sampah di luar wilayah jangkauan layanan.",
           radiusValidation,
         });
       }

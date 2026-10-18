@@ -5,6 +5,7 @@ const {
   PRICING_POLICY,
   calculateHaversineKm,
   validateKamojangRadius,
+  validateServiceCoverage,
   validateServiceRoute,
   calculateDistanceFare,
   calculateWeightFare,
@@ -86,8 +87,10 @@ const computeSendFare = async ({
   packageData = {},
   discount = 0,
   driver = null,
+  fareMode = null,
 }) => {
   const config = await getPricingConfig();
+  const effectiveFareMode = fareMode || config.minimumFareMode || PRICING_POLICY.minimumFareMode;
 
   // 1. Calculate distance (km)
   let distanceKm = 0;
@@ -111,13 +114,22 @@ const computeSendFare = async ({
   // 2. Duration estimate (approx 3.5 min/km + 8 min handling buffer)
   const estimatedDurationMinutes = Math.round(distanceKm * 3.5) + 8;
 
-  // 3. Kamojang Radius Validation (Max 15 km)
-  const pickupRadiusCheck = validateKamojangRadius(pickup, config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM);
-  const destRadiusCheck = validateKamojangRadius(destination, config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM);
-  const routeValidation = validateServiceRoute(pickup, destination, config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM);
+  // 3. Radius Validation (Nationwide Seluruh Indonesia / Kamojang configurable)
+  const isKamojangOnly = Boolean(config.enforceKamojangRadius || PRICING_POLICY.enforceKamojangRadius);
+  const maxRadius = isKamojangOnly
+    ? (config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM)
+    : (config.maxRouteDistanceKm || PRICING_POLICY.maxRouteDistanceKm || 50);
+
+  const pickupRadiusCheck = isKamojangOnly
+    ? validateKamojangRadius(pickup, maxRadius)
+    : validateServiceCoverage(pickup);
+  const destRadiusCheck = isKamojangOnly
+    ? validateKamojangRadius(destination, maxRadius)
+    : validateServiceCoverage(destination);
+  const routeValidation = validateServiceRoute(pickup, destination, maxRadius);
 
   const isAllowedRadius = pickupRadiusCheck.valid && destRadiusCheck.valid && routeValidation.allowed;
-  let radiusErrorMessage = "Rute dalam jangkauan layanan resmi Kamojang.";
+  let radiusErrorMessage = "Rute dalam jangkauan operasional layanan seluruh Indonesia.";
   if (!pickupRadiusCheck.valid) radiusErrorMessage = `Titik penjemputan: ${pickupRadiusCheck.message}`;
   else if (!destRadiusCheck.valid) radiusErrorMessage = `Titik tujuan: ${destRadiusCheck.message}`;
   else if (!routeValidation.allowed) radiusErrorMessage = routeValidation.message;
@@ -127,12 +139,12 @@ const computeSendFare = async ({
     pickupRadius: pickupRadiusCheck,
     destinationRadius: destRadiusCheck,
     routeDistanceKm: routeValidation.routeDistanceKm,
-    maxRadiusKm: config.maxServiceRadiusKm || MAX_SERVICE_RADIUS_KM,
+    maxRadiusKm: maxRadius,
     message: radiusErrorMessage,
   };
 
   // 4. Distance Fare (< 4 km Rp 9.500, per km berikutnya Rp 2.500)
-  const distanceFare = calculateDistanceFare(distanceKm);
+  const distanceFare = calculateDistanceFare(distanceKm, effectiveFareMode);
   const baseFare = config.baseFare || PRICING_POLICY.MIN_DISTANCE_FARE;
 
   // 5. Weight Fare (0 - 20 kg Rp 0, > 20 kg Rp 3.000 / kg)
@@ -169,7 +181,10 @@ const computeSendFare = async ({
   const deliverySubtotal = distanceFare + weightFare + sizeFare + fragileFee + insuranceFee;
   const rawFare = deliverySubtotal + serviceFee - safeDiscount;
 
-  const minFareRequirement = config.minimumFare || (PRICING_POLICY.MIN_DISTANCE_FARE + PRICING_POLICY.SERVICE_FEE);
+  const minFareRequirement =
+    effectiveFareMode === "flat_total_under_threshold" && distanceKm < PRICING_POLICY.minimumFareThresholdKm
+      ? PRICING_POLICY.minimumTotalFare
+      : (config.minimumFare || (PRICING_POLICY.MIN_DISTANCE_FARE + PRICING_POLICY.SERVICE_FEE));
   const estimatedFare = Math.max(minFareRequirement, Math.ceil(rawFare / 500) * 500);
 
   // 11. Driver Revenue Sharing (80% Driver Baru vs 100% Mitra Eksisting Kedai Terpadu)

@@ -24,6 +24,7 @@ const {
   MAX_SERVICE_RADIUS_KM,
   PRICING_POLICY,
   validateKamojangRadius,
+  validateServiceCoverage,
   validateServiceRoute,
   calculateDistanceFare,
   calculateDriverRevenueSplit,
@@ -50,6 +51,7 @@ const computeFareBreakdown = (distanceKm, durationMinutes, vehicleType = "MOTOR"
     vehicleType,
     discount,
     driver,
+    fareMode: "flat_total_under_threshold",
   });
 };
 
@@ -86,27 +88,33 @@ const estimateRideFare = async (req, res) => {
       });
     }
 
-    // Validate Kamojang max radius (15 km) from center
-    const pickupKamojangValidation = validateKamojangRadius(pickup, MAX_SERVICE_RADIUS_KM);
-    if (!pickupKamojangValidation.valid) {
+    // Validasi jangkauan wilayah penjemputan & tujuan (Seluruh Indonesia)
+    const isKamojangOnly = Boolean(PRICING_POLICY.enforceKamojangRadius);
+    const pickupValidation = isKamojangOnly
+      ? validateKamojangRadius(pickup, MAX_SERVICE_RADIUS_KM)
+      : validateServiceCoverage(pickup);
+    if (!pickupValidation.valid) {
       return res.status(400).json({
         success: false,
-        message: `Titik penjemputan: ${pickupKamojangValidation.message}`,
-        radiusValidation: pickupKamojangValidation,
+        message: `Titik penjemputan: ${pickupValidation.message}`,
+        radiusValidation: pickupValidation,
       });
     }
 
-    const destKamojangValidation = validateKamojangRadius(destination, MAX_SERVICE_RADIUS_KM);
-    if (!destKamojangValidation.valid) {
+    const destValidation = isKamojangOnly
+      ? validateKamojangRadius(destination, MAX_SERVICE_RADIUS_KM)
+      : validateServiceCoverage(destination);
+    if (!destValidation.valid) {
       return res.status(400).json({
         success: false,
-        message: `Titik tujuan: ${destKamojangValidation.message}`,
-        radiusValidation: destKamojangValidation,
+        message: `Titik tujuan: ${destValidation.message}`,
+        radiusValidation: destValidation,
       });
     }
 
-    // Validate Kamojang max route distance (15 km)
-    const routeValidation = validateServiceRoute(pickup, destination, MAX_SERVICE_RADIUS_KM);
+    // Validasi batas maksimal rute per perjalanan (maks. 50 km)
+    const maxTripKm = isKamojangOnly ? MAX_SERVICE_RADIUS_KM : (PRICING_POLICY.maxRouteDistanceKm || 50);
+    const routeValidation = validateServiceRoute(pickup, destination, maxTripKm);
     if (!routeValidation.allowed) {
       return res.status(400).json({
         success: false,
@@ -257,27 +265,33 @@ const createRideOrder = async (req, res) => {
       });
     }
 
-    // Validate Kamojang max radius (15 km) from center
-    const pickupKamojangValidation = validateKamojangRadius(pickup, MAX_SERVICE_RADIUS_KM);
-    if (!pickupKamojangValidation.valid) {
+    // Validasi jangkauan wilayah penjemputan & tujuan (Seluruh Indonesia)
+    const isKamojangOnly = Boolean(PRICING_POLICY.enforceKamojangRadius);
+    const pickupValidation = isKamojangOnly
+      ? validateKamojangRadius(pickup, MAX_SERVICE_RADIUS_KM)
+      : validateServiceCoverage(pickup);
+    if (!pickupValidation.valid) {
       return res.status(400).json({
         success: false,
-        message: `Titik penjemputan: ${pickupKamojangValidation.message}`,
-        radiusValidation: pickupKamojangValidation,
+        message: `Titik penjemputan: ${pickupValidation.message}`,
+        radiusValidation: pickupValidation,
       });
     }
 
-    const destKamojangValidation = validateKamojangRadius(destination, MAX_SERVICE_RADIUS_KM);
-    if (!destKamojangValidation.valid) {
+    const destValidation = isKamojangOnly
+      ? validateKamojangRadius(destination, MAX_SERVICE_RADIUS_KM)
+      : validateServiceCoverage(destination);
+    if (!destValidation.valid) {
       return res.status(400).json({
         success: false,
-        message: `Titik tujuan: ${destKamojangValidation.message}`,
-        radiusValidation: destKamojangValidation,
+        message: `Titik tujuan: ${destValidation.message}`,
+        radiusValidation: destValidation,
       });
     }
 
-    // Validate Kamojang max route distance (15 km)
-    const routeValidation = validateServiceRoute(pickup, destination, MAX_SERVICE_RADIUS_KM);
+    // Validasi batas maksimal rute per perjalanan (maks. 50 km)
+    const maxTripKm = isKamojangOnly ? MAX_SERVICE_RADIUS_KM : (PRICING_POLICY.maxRouteDistanceKm || 50);
+    const routeValidation = validateServiceRoute(pickup, destination, maxTripKm);
     if (!routeValidation.allowed) {
       return res.status(400).json({
         success: false,

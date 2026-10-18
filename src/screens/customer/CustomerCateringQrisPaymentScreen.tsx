@@ -174,6 +174,39 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
     pendingPayment?.proofUrl || order?.paymentProofUrl || null
   );
 
+  useEffect(() => {
+    let active = true;
+    const fetchOrder = async () => {
+      let targetId: string | null = null;
+      if (typeof window !== "undefined" && window.location?.search) {
+        targetId = new URLSearchParams(window.location.search).get("orderId");
+      }
+      if (!targetId && authAccount?.id) {
+        const res = await getCateringOrdersForCustomer(authAccount.id);
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const liveOrder = res.data.find((o: any) => Number(o.remainingAmount || 0) > 0 || String(o.paymentStatus || "").toLowerCase().includes("menunggu")) || res.data[0];
+          if (liveOrder && active) {
+            setOrder(liveOrder);
+            setPaidAmount(Number(liveOrder.paidAmount || 0));
+            setRemainingAmount(Number(liveOrder.remainingAmount || 0));
+          }
+        }
+      } else if (targetId && authAccount?.id) {
+        const res = await getCateringOrdersForCustomer(authAccount.id);
+        if (res.success && Array.isArray(res.data)) {
+          const liveOrder = res.data.find((o: any) => String(o._id || o.id) === targetId || o.orderCode === targetId);
+          if (liveOrder && active) {
+            setOrder(liveOrder);
+            setPaidAmount(Number(liveOrder.paidAmount || 0));
+            setRemainingAmount(Number(liveOrder.remainingAmount || 0));
+          }
+        }
+      }
+    };
+    void fetchOrder();
+    return () => { active = false; };
+  }, [authAccount?.id]);
+
   // 2. Modals state
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [showUploadSheet, setShowUploadSheet] = useState<boolean>(false);

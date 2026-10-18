@@ -100,13 +100,16 @@ const resolveUserFromRequest = async (req) => {
     if (user) return user;
   }
 
-  // Header or payload fallback for driver / user ID
+  // Header or payload fallback for driver / user / customer ID
   const candidateId =
     req.headers["x-driver-id"] ||
     req.headers["x-user-id"] ||
     req.headers["x-account-id"] ||
+    req.headers["x-customer-id"] ||
     req.body?.driverId ||
-    req.query?.driverId;
+    req.query?.driverId ||
+    req.body?.customerId ||
+    req.query?.customerId;
 
   if (candidateId && typeof candidateId === "string") {
     if (mongoose.Types.ObjectId.isValid(candidateId)) {

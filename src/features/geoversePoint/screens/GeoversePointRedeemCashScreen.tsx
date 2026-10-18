@@ -120,7 +120,7 @@ export const GeoversePointRedeemCashScreen: React.FC<Nav> = ({ navigate }) => {
               if (res.success && res.data) {
                 await Promise.all([refreshWallet(), refreshLedger(), refreshRedemptions()]);
                 Alert.alert(
-                  "Permintaan Pencairan Berhasil Dibuat! 🚀",
+                  "Permintaan Pencairan Berhasil Dibuat",
                   `Kode Pencairan: ${res.data.redemptionCode}\n\nStatus saat ini: MENUNGGU VERIFIKASI. Poin Anda telah diamankan sementara.`,
                   [
                     {
