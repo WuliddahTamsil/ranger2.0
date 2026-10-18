@@ -614,19 +614,30 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
               <Text style={styles.billValue}>Rp {laundryPrice.toLocaleString("id-ID")}</Text>
             </View>
 
-            {/* Rincian Transparan Ongkir Perjalanan Ganda (2x Trip) */}
+            {/* Rincian Transparan Ongkir Perjalanan Ganda (2x Trip Motor) */}
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>• Ongkir Penjemputan Baju Kotor (Trip 1)</Text>
+              <Text style={styles.billLabel}>• Ongkir Jemput Baju Kotor (Trip 1 - Motor)</Text>
               <Text style={styles.billValue}>Rp {deliveryPickup.toLocaleString("id-ID")}</Text>
             </View>
 
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>• Ongkir Pengantaran Baju Bersih (Trip 2)</Text>
+              <Text style={styles.billLabel}>• Ongkir Antar Baju Bersih (Trip 2 - Motor)</Text>
               <Text style={styles.billValue}>Rp {deliveryDrop.toLocaleString("id-ID")}</Text>
             </View>
 
+            {order?.actualWeightOrQty && order.actualWeightOrQty > 20 ? (
+              <View style={styles.billRow}>
+                <Text style={[styles.billLabel, { color: "#C2410C", fontWeight: "600" }]}>
+                  • Biaya Kelebihan Beban Motor (&gt;20 kg)
+                </Text>
+                <Text style={[styles.billValue, { color: "#C2410C", fontWeight: "700" }]}>
+                  Rp {(((order.actualWeightOrQty - 20) * 3000)).toLocaleString("id-ID")}
+                </Text>
+              </View>
+            ) : null}
+
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Biaya Layanan</Text>
+              <Text style={styles.billLabel}>Biaya Layanan Platform</Text>
               <Text style={styles.billValue}>Rp {serviceFee.toLocaleString("id-ID")}</Text>
             </View>
 

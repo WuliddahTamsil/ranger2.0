@@ -611,9 +611,19 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
                 </Text>
               </View>
 
-              <View style={{ backgroundColor: "#F0FDF4", borderRadius: 10, borderWidth: 1, borderColor: "#BBF7D0", padding: 10, marginBottom: 12 }}>
-                <Text style={{ fontSize: 11, color: "#166534", lineHeight: 15 }}>
-                  <Text style={{ fontWeight: "700" }}>ℹ️ Transparansi Ongkir:</Text> Biaya pengantaran mencakup perjalanan ganda (2x Trip): Penjemputan pakaian kotor ke rumah Anda dan pengantaran pakaian bersih setelah selesai dicuci.
+              <View style={{ backgroundColor: "#F0FDF4", borderRadius: 12, borderWidth: 1, borderColor: "#BBF7D0", padding: 12, marginBottom: 14 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <Bike size={16} color="#0D7A53" />
+                  <Text style={{ fontSize: 12, fontWeight: "800", color: "#166534" }}>
+                    Ketentuan Kurir Sepeda Motor Ranger (Kamojang):
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 11, color: "#15803D", lineHeight: 17 }}>
+                  • <Text style={{ fontWeight: "700" }}>Armada Kurir:</Text> Seluruh kurir menggunakan Sepeda Motor (Roda Dua).{"\n"}
+                  • <Text style={{ fontWeight: "700" }}>Antar-Jemput (2x Trip):</Text> Penjemputan pakaian kotor ke rumah & pengantaran pakaian bersih.{"\n"}
+                  • <Text style={{ fontWeight: "700" }}>Tarif Dasar Jarak:</Text> Rp 2.500/km (Minimal &lt; 4 km Rp 9.500, sudah termasuk Biaya Layanan Platform Rp 2.000).{"\n"}
+                  • <Text style={{ fontWeight: "700" }}>Beban Maksimal Motor:</Text> Kapasitas standar bagasi motor maks. 20 kg (0–20 kg masuk tarif standar). Kelebihan di atas 20 kg dikenakan Rp 3.000/kg.{"\n"}
+                  • <Text style={{ fontWeight: "700" }}>Radius Layanan:</Text> Maksimal 15 km dari titik wilayah Kamojang.
                 </Text>
               </View>
 
