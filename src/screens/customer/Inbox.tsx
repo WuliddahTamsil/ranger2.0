@@ -29,6 +29,7 @@ import {
   CustomerChatMessage,
   CustomerChatThread,
 } from "./customerInboxStore";
+import { CustomerChatModal } from "./CustomerChatModal";
 import { getChatMessages, sendChatMessage } from "../../services/api";
 import { AuthAccount } from "../auth/authTypes";
 
@@ -331,57 +332,16 @@ export const Inbox: React.FC<InboxProps> = ({
         />
       )}
 
-      {/* Chat Room Dialog Modal */}
+      {/* Unified Full-Featured Customer Chat Modal */}
       {selectedThread && (
-        <Modal visible={chatModalVisible} transparent animationType="slide">
-          <View style={styles.modalBgBottom}>
-            <View style={styles.chatSheetContainer}>
-              <View style={styles.sheetHeader}>
-                <View>
-                  <Text style={styles.sheetTitle}>{selectedThread.participantName}</Text>
-                  <Text style={styles.sheetSubtitle}>Order #{selectedThread.orderId}</Text>
-                </View>
-                <TouchableOpacity onPress={() => setChatModalVisible(false)}>
-                  <X size={20} color="#111827" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Chat messages stream */}
-              <FlatList
-                data={messagesHistory[selectedThread.id] || []}
-                keyExtractor={(_, index) => index.toString()}
-                contentContainerStyle={styles.chatListContent}
-                renderItem={({ item }) => {
-                  const isMe = item.sender === "customer";
-                  return (
-                    <View style={[styles.bubbleContainer, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
-                      <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-                        <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
-                          {item.text}
-                        </Text>
-                      </View>
-                      <Text style={styles.chatBubbleTime}>{item.time}</Text>
-                    </View>
-                  );
-                }}
-              />
-
-              {/* Chat Input field */}
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.chatTextInput}
-                  value={typedMessage}
-                  onChangeText={setTypedMessage}
-                  placeholder="Ketik pesan..."
-                  onSubmitEditing={handleSendMessage}
-                />
-                <TouchableOpacity style={styles.sendBtn} onPress={handleSendMessage}>
-                  <Send size={16} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        <CustomerChatModal
+          visible={chatModalVisible}
+          onClose={() => setChatModalVisible(false)}
+          orderId={selectedThread.orderId}
+          participantName={selectedThread.participantName}
+          participantType={selectedThread.participantType}
+          currentUserRole="customer"
+        />
       )}
     </ResponsiveSafeAreaView>
   );
