@@ -202,6 +202,8 @@ const createDeposit = async (req, res) => {
       driverEarnings,
       distanceKm,
       weightFee,
+      vehicleType: "MOTOR",
+      isMotorcycleOnly: true,
       pointToRupiahRate: RECYCLE_POINT_CONFIG.pointToRupiahRate,
       pointConversionPolicy: RECYCLE_POINT_CONFIG,
       customerPhotos: Array.isArray(customerPhotos) ? customerPhotos : [],
@@ -675,6 +677,32 @@ const weighDeposit = async (req, res) => {
     deposit.weighedBy = officerId;
     deposit.status = "WAITING_CUSTOMER_CONFIRMATION";
     deposit.environmentalImpact = computeEnvironmentalImpact(updatedCategories);
+
+    // Update weight surcharge (>20 kg: Rp 3.000/kg) and driver earnings if PICKUP
+    if (deposit.method === "PICKUP") {
+      const extraKg = Math.max(0, deposit.actualTotalWeightKg - (PRICING_POLICY.baseWeightIncludedKg || 20));
+      const weightFee = Math.round(extraKg * (PRICING_POLICY.extraWeightRatePerKg || 3000));
+      deposit.weightFee = weightFee;
+
+      const distanceKm = deposit.distanceKm || 2;
+      const pickupPricing = computeGoodsAndPickupFare({
+        serviceType: "RECYCLE",
+        distanceKm,
+        weightKg: deposit.actualTotalWeightKg,
+      });
+      deposit.pickupFee = pickupPricing.estimatedFare;
+
+      let driverObj = null;
+      if (deposit.driverId && mongoose.Types.ObjectId.isValid(deposit.driverId)) {
+        driverObj = await User.findById(deposit.driverId).lean();
+      }
+      const deliveryFare = Math.max(
+        PRICING_POLICY.minimumDistanceFare,
+        (deposit.pickupFee || PRICING_POLICY.minimumDistanceFare + PRICING_POLICY.serviceFee) - PRICING_POLICY.serviceFee
+      );
+      const split = calculateDriverRevenueSplit(deliveryFare, driverObj);
+      deposit.driverEarnings = split.driverEarnings;
+    }
 
     deposit.statusHistory.push({
       status: "WAITING_CUSTOMER_CONFIRMATION",

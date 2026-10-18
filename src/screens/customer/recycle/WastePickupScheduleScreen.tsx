@@ -23,12 +23,16 @@ import {
   Building2,
   Zap,
   ShieldCheck,
+  Bike,
+  Scale,
+  Info,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
 import { createWasteDeposit } from "../../../services/recycleService";
 import { WasteDepositUI } from "../../../types/recycleTypes";
 import { checkBankOperationalStatus } from "../../../utils/bankOperationalUtils";
+import { rp } from "../../../utils/formatters";
 
 interface Props extends Nav {
   authAccount?: any;
@@ -42,7 +46,7 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
   } = useRecycle();
 
   const [address, setAddress] = useState(
-    draftDeposit.pickupAddress || authAccount?.address || selectedBank?.address || "Pakuan, Bogor, Jawa Barat"
+    draftDeposit.pickupAddress || authAccount?.address || selectedBank?.address || "Kamojang, Samarang, Garut"
   );
   const [driverNotes, setDriverNotes] = useState(draftDeposit.pickupNotes || "");
   const [submitting, setSubmitting] = useState(false);
@@ -50,11 +54,52 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
 
   const opStatus = checkBankOperationalStatus(selectedBank?.openingHours);
 
-  const totalWeight = draftDeposit.categories.reduce((sum, c) => sum + (c.estimatedWeightKg || 0), 0);
-  const totalRupiah = draftDeposit.categories.reduce(
-    (sum, c) => sum + Math.round((c.estimatedWeightKg || 0) * (c.pricePerKg || 0)),
-    0
-  );
+  // Dynamic coordinates resolution
+  const getCoords = (addr: string) => {
+    const lower = (addr || "").toLowerCase();
+    if (lower.includes("pakuan") || lower.includes("bogor")) return { lat: -6.5976, lng: 106.8062 };
+    if (lower.includes("kamojang") || lower.includes("samarang")) return { lat: -7.1452, lng: 107.7891 };
+    if (lower.includes("cimanuk") || lower.includes("garut kota")) return { lat: -7.2185, lng: 107.9022 };
+    if (lower.includes("dago") || lower.includes("coblong")) return { lat: -6.885, lng: 107.614 };
+    if (lower.includes("merdeka") || lower.includes("sumur bandung")) return { lat: -6.912, lng: 107.6105 };
+    return {
+      lat: draftDeposit.pickupLatitude || -7.1452,
+      lng: draftDeposit.pickupLongitude || 107.7891,
+    };
+  };
+
+  const currentCoords = getCoords(address);
+  const bankCoords = {
+    lat: selectedBank?.latitude || -7.1452,
+    lng: selectedBank?.longitude || 107.7891,
+  };
+
+  // Haversine distance
+  const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c * 10) / 10;
+  };
+
+  const distanceKm = Math.max(1, calculateDistanceKm(currentCoords.lat, currentCoords.lng, bankCoords.lat, bankCoords.lng));
+  const isExceedsKamojangRadius = distanceKm > 15;
+
+  // Tarif Standar Antar Jemput Roda Dua:
+  // Tarif dasar Rp 2.500/km
+  // Minimal (< 4 km) Rp 9.500 total (sudah termasuk biaya layanan Rp 2.000)
+  // Biaya Layanan Platform Rp 2.000
+  const ratePerKm = 2500;
+  const serviceFee = 2000;
+  const distanceFare = distanceKm < 4 ? 7500 : Math.ceil((distanceKm * ratePerKm) / 500) * 500;
+  const estimatedTotalFare = distanceKm < 4 ? 9500 : distanceFare + serviceFee;
 
   const handleSubmitPickup = async () => {
     if (!opStatus.isOpen) {
@@ -70,6 +115,14 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
       return;
     }
 
+    if (isExceedsKamojangRadius) {
+      Alert.alert(
+        "Radius Melebihi Batas",
+        `Jarak penjemputan (${distanceKm} km) melebihi batas radius maksimal layanan Kamojang (15 km). Silakan gunakan Bank Sampah yang lebih dekat.`
+      );
+      return;
+    }
+
     if (!selectedBank?._id) {
       Alert.alert("Error", "Bank Sampah tujuan tidak valid.");
       return;
@@ -82,8 +135,8 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
         method: "PICKUP" as const,
         categories: [],
         pickupAddress: address.trim(),
-        pickupLatitude: -7.15,
-        pickupLongitude: 107.8,
+        pickupLatitude: currentCoords.lat,
+        pickupLongitude: currentCoords.lng,
         pickupNotes: driverNotes.trim(),
       };
 
@@ -240,26 +293,56 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
           />
         </View>
 
-        {/* Summary Card */}
+        {/* Summary Card with Transparent Pickup Fare Breakdown */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
-            <Truck size={18} color="#065F46" />
-            <Text style={styles.summaryTitle}>Ringkasan Penjemputan</Text>
+            <Bike size={18} color="#065F46" />
+            <Text style={styles.summaryTitle}>Tarif & Ketentuan Penjemputan Driver Motor</Text>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Waktu Penjemputan:</Text>
-            <Text style={[styles.summaryVal, { color: "#15803D", fontWeight: "800" }]}>
-              Langsung / Real-time
-            </Text>
+
+          {/* Motorcycle Vehicle Badge */}
+          <View style={{ backgroundColor: "#DCFCE7", borderRadius: 8, padding: 10, marginBottom: 12, flexDirection: "row", alignItems: "center" }}>
+            <Bike size={20} color="#15803D" />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#166534" }}>Armada Sepeda Motor</Text>
+              <Text style={{ fontSize: 11, color: "#15803D" }}>Driver roda dua resmi siap menjemput sampah daur ulang Anda</Text>
+            </View>
           </View>
+
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Bank Sampah Tujuan:</Text>
             <Text style={styles.summaryVal}>{selectedBank?.name || "Bank Sampah Terdekat"}</Text>
           </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Estimasi Jarak Tempuh:</Text>
+            <Text style={[styles.summaryVal, { fontWeight: "700", color: "#1E293B" }]}>{distanceKm} km</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Tarif Antar-Jemput ({distanceKm < 4 ? "Min. <4 km" : `${distanceKm} km × Rp 2.500`}):</Text>
+            <Text style={[styles.summaryVal, { fontWeight: "700", color: "#1E293B" }]}>{rp(distanceFare)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Biaya Layanan Platform:</Text>
+            <Text style={[styles.summaryVal, { fontWeight: "700", color: "#1E293B" }]}>{rp(serviceFee)}</Text>
+          </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryPointLabel}>Status Penimbangan:</Text>
-            <Text style={styles.summaryPointVal}>Ditimbang di Bank Sampah</Text>
+            <Text style={[styles.summaryPointLabel, { fontWeight: "800", color: "#065F46" }]}>Total Estimasi Ongkir:</Text>
+            <Text style={[styles.summaryPointVal, { fontSize: 16, fontWeight: "800", color: "#15803D" }]}>{rp(estimatedTotalFare)}</Text>
+          </View>
+
+          {/* Weight & Radius Policy Note */}
+          <View style={{ backgroundColor: "#F8FAFC", borderRadius: 8, padding: 10, marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+              <Scale size={14} color="#64748B" />
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#475569", marginLeft: 6 }}>Batas Berat & Radius Layanan:</Text>
+            </View>
+            <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 16 }}>
+              • Kapasitas standar motor s.d. 20 kg (Kelebihan beban di atas 20 kg dikenakan biaya tambahan Rp3.000/kg setelah ditimbang resmi di Bank Sampah).
+            </Text>
+            <Text style={{ fontSize: 11, color: "#64748B", lineHeight: 16 }}>
+              • Maksimal batas radius layanan antar-jemput 15 km dari wilayah Kamojang.
+            </Text>
           </View>
         </View>
       </ScrollView>

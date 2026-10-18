@@ -26,6 +26,8 @@ import {
   Info,
   Eye,
   X,
+  Bike,
+  Leaf,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
@@ -304,6 +306,69 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
           </View>
           <Text style={styles.conversionNote}>*1 Point = Rp 1, langsung diterbitkan saat Anda setujui.</Text>
         </View>
+
+        {/* Pickup Breakdown Card if PICKUP */}
+        {deposit.method === "PICKUP" && (
+          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 12, padding: 14, marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+              <Bike size={18} color="#15803D" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginLeft: 8 }}>
+                Informasi Penjemputan Driver Motor
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>Jarak Tempuh:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#1E293B" }}>{deposit.distanceKm || 2} km</Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>Ongkir Penjemputan:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#1E293B" }}>{rp(deposit.pickupFee || 9500)}</Text>
+            </View>
+            {(deposit.weightFee || 0) > 0 && (
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                <Text style={{ fontSize: 12, color: "#D97706" }}>Tambahan Berat (&gt;20 kg @ Rp 3.000/kg):</Text>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#D97706" }}>{rp(deposit.weightFee || 0)}</Text>
+              </View>
+            )}
+            <Text style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>
+              *Armada motor resmi. Kapasitas standar hingga 20 kg.
+            </Text>
+          </View>
+        )}
+
+        {/* Environmental Impact Card */}
+        {deposit.environmentalImpact && (
+          <View style={{ backgroundColor: "#F0FDF4", borderRadius: 12, padding: 14, marginHorizontal: 16, marginTop: 12, marginBottom: 20, borderWidth: 1, borderColor: "#BBF7D0" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+              <Leaf size={18} color="#15803D" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#166534", marginLeft: 8 }}>
+                Dampak Lingkungan Aksi Daur Ulang Anda
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-around", marginTop: 4 }}>
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ fontSize: 15, fontWeight: "800", color: "#15803D" }}>
+                  {deposit.environmentalImpact.co2ReductionKg || 0} kg
+                </Text>
+                <Text style={{ fontSize: 10, color: "#166534" }}>Reduksi CO₂e</Text>
+              </View>
+              <View style={{ width: 1, height: 28, backgroundColor: "#86EFAC" }} />
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ fontSize: 15, fontWeight: "800", color: "#15803D" }}>
+                  {deposit.environmentalImpact.treesEquivalent || 0}
+                </Text>
+                <Text style={{ fontSize: 10, color: "#166534" }}>Pohon Setara</Text>
+              </View>
+              <View style={{ width: 1, height: 28, backgroundColor: "#86EFAC" }} />
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ fontSize: 15, fontWeight: "800", color: "#15803D" }}>
+                  {totalActualWeight.toFixed(1)} kg
+                </Text>
+                <Text style={{ fontSize: 10, color: "#166534" }}>Lolos dari TPA</Text>
+              </View>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Sticky CTAs */}

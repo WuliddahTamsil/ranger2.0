@@ -30,6 +30,9 @@ import {
   Eye,
   X,
   AlertCircle,
+  Bike,
+  Leaf,
+  TreeDeciduous,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
@@ -403,11 +406,16 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
           )}
 
           {isPickup && deposit.driverId && (
-            <View style={styles.driverRow}>
-              <User size={14} color="#0284C7" />
-              <Text style={styles.driverText}>
-                Driver: {typeof deposit.driverId === "object" ? deposit.driverId?.name : "Driver GEOVERSE"}
-              </Text>
+            <View style={{ backgroundColor: "#F0FDF4", borderRadius: 8, padding: 10, marginTop: 8, flexDirection: "row", alignItems: "center" }}>
+              <Bike size={18} color="#15803D" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#166534" }}>
+                  Driver Motor: {typeof deposit.driverId === "object" ? deposit.driverId?.name : "Mitra Driver GEOVERSE"}
+                </Text>
+                {typeof deposit.driverId === "object" && deposit.driverId?.phone && (
+                  <Text style={{ fontSize: 11, color: "#15803D" }}>Telp / WA: {deposit.driverId.phone}</Text>
+                )}
+              </View>
             </View>
           )}
         </View>
@@ -447,6 +455,77 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
                   </View>
                 </View>
               ))}
+          </View>
+        )}
+
+        {/* Pickup Fare Breakdown Card if PICKUP */}
+        {isPickup && (
+          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}>
+              <Bike size={18} color="#15803D" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1E293B", marginLeft: 8 }}>
+                Rincian Ongkir Penjemputan Driver Motor
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>Jarak Tempuh:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#1E293B" }}>{deposit.distanceKm || 2} km</Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>Tarif Dasar ({deposit.distanceKm && deposit.distanceKm >= 4 ? `${deposit.distanceKm} km × Rp 2.500` : "Min. <4 km"}):</Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#1E293B" }}>
+                {rp(Math.max(7500, (deposit.pickupFee || 9500) - 2000 - (deposit.weightFee || 0)))}
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, color: "#64748B" }}>Biaya Layanan Platform:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#1E293B" }}>{rp(2000)}</Text>
+            </View>
+            {(deposit.weightFee || 0) > 0 && (
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+                <Text style={{ fontSize: 12, color: "#D97706" }}>Tambahan Berat (&gt;20 kg @ Rp 3.000/kg):</Text>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#D97706" }}>{rp(deposit.weightFee || 0)}</Text>
+              </View>
+            )}
+            <View style={{ height: 1, backgroundColor: "#E2E8F0", marginVertical: 8 }} />
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Total Ongkir Penjemputan:</Text>
+              <Text style={{ fontSize: 15, fontWeight: "800", color: "#15803D" }}>{rp(deposit.pickupFee || 9500)}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Environmental Impact Card */}
+        {deposit.environmentalImpact && (
+          <View style={{ backgroundColor: "#F0FDF4", borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: "#BBF7D0" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+              <Leaf size={18} color="#15803D" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#166534", marginLeft: 8 }}>
+                Dampak Lingkungan (Eco Impact)
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-around", marginTop: 4 }}>
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ fontSize: 15, fontWeight: "800", color: "#15803D" }}>
+                  {deposit.environmentalImpact.co2ReductionKg || 0} kg
+                </Text>
+                <Text style={{ fontSize: 10, color: "#166534" }}>Reduksi CO₂e</Text>
+              </View>
+              <View style={{ width: 1, height: 28, backgroundColor: "#86EFAC" }} />
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ fontSize: 15, fontWeight: "800", color: "#15803D" }}>
+                  {deposit.environmentalImpact.treesEquivalent || 0}
+                </Text>
+                <Text style={{ fontSize: 10, color: "#166534" }}>Pohon Setara</Text>
+              </View>
+              <View style={{ width: 1, height: 28, backgroundColor: "#86EFAC" }} />
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ fontSize: 15, fontWeight: "800", color: "#15803D" }}>
+                  {deposit.actualTotalWeightKg || deposit.environmentalImpact.landfillDivertedKg || 0} kg
+                </Text>
+                <Text style={{ fontSize: 10, color: "#166534" }}>Lolos dari TPA</Text>
+              </View>
+            </View>
           </View>
         )}
 

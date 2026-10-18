@@ -175,6 +175,14 @@ const wasteDepositSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    vehicleType: {
+      type: String,
+      default: "MOTOR",
+    },
+    isMotorcycleOnly: {
+      type: Boolean,
+      default: true,
+    },
     pointToRupiahRate: {
       type: Number,
       default: 1.0,

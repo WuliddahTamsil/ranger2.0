@@ -94,6 +94,12 @@ export interface WasteDepositUI {
   finalPoint: number;
   estimatedRupiah: number;
   finalRupiah: number;
+  pickupFee?: number;
+  driverEarnings?: number;
+  distanceKm?: number;
+  weightFee?: number;
+  vehicleType?: string;
+  isMotorcycleOnly?: boolean;
   customerPhotos?: string[];
   weighingProofPhotos?: string[];
   weighingNotes?: string;

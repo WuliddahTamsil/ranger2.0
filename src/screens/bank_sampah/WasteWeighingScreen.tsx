@@ -521,6 +521,20 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
           <Text style={styles.note}>
             *Koin poin akan otomatis terbit dan masuk ke akun nasabah setelah dikonfirmasi.
           </Text>
+
+          {deposit.method === "PICKUP" && totalActualKg > 20 && (
+            <View style={{ backgroundColor: "#FEF3C7", borderRadius: 8, padding: 10, marginTop: 10, borderWidth: 1, borderColor: "#FDE68A" }}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <AlertTriangle size={15} color="#D97706" />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#B45309", marginLeft: 6 }}>
+                  Kelebihan Beban Motor (+{(totalActualKg - 20).toFixed(1)} kg)
+                </Text>
+              </View>
+              <Text style={{ fontSize: 11, color: "#92400E", marginTop: 2, lineHeight: 15 }}>
+                Beban di atas 20 kg dikenakan biaya tambahan Rp 3.000/kg ({rp(Math.round((totalActualKg - 20) * 3000))}) yang otomatis dialokasikan ke kompensasi driver motor.
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
