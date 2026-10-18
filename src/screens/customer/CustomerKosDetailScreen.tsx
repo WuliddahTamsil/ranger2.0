@@ -13,6 +13,7 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  Linking,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Nav, OrderItem } from "../../types";
@@ -84,7 +85,7 @@ import {
   LodgingCategoryType,
 } from "./customerKosStore";
 import { AuthAccount } from "../auth/authTypes";
-import { uploadFileToBackend } from "../../services/api";
+import { uploadFileToBackend, createDigitalPayment } from "../../services/api";
 import { rp } from "../../utils/formatters";
 
 interface CustomerKosDetailProps extends Nav {
@@ -107,6 +108,8 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
   const [isUploadingProof, setIsUploadingProof] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingResponse, setBookingResponse] = useState<any>(null);
+  const [paymentTab, setPaymentTab] = useState<"midtrans" | "manual">("midtrans");
+  const [isMidtransLoading, setIsMidtransLoading] = useState(false);
 
   // Photo Gallery State
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -618,6 +621,135 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
     setIsSubmitting(false);
     setOrderCreated(true);
     setIsReceiptModalOpen(true);
+  };
+
+  const handlePayWithMidtrans = async () => {
+    setIsMidtransLoading(true);
+    const orderPrefix = categoryType === "hotel" ? "HTL" : categoryType === "wisata" ? "WST" : "KOS";
+    const bookingCode = `${orderPrefix}-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+
+    try {
+      let createdBookingId = `booking_${Date.now()}`;
+      if (kostData?._id) {
+        const createRes = await createKostBooking({
+          customerId: authAccount?.id || authAccount?.email || "customer_1",
+          kostId: String(kostData._id),
+          categoryType: categoryType,
+          roomId: selectedRoom?._id || selectedHotelRoom?.roomId || selectedWisataTicket?.ticketId,
+          roomNumber:
+            categoryType === "hotel"
+              ? selectedHotelRoom?.roomName || "Deluxe Room"
+              : categoryType === "wisata"
+              ? selectedWisataTicket?.ticketName || "Tiket Masuk"
+              : selectedRoom?.roomNumber || "101",
+          customerName: tenantName || "Customer",
+          customerPhone: phone || "081234567890",
+          customerEmail: email || "customer@geoverse.id",
+          entryDate: startDate || new Date().toISOString(),
+          checkOutDate: categoryType === "hotel" ? calculatedCheckOutIso : undefined,
+          guestCount: categoryType === "hotel" ? (parseInt(guestCount) || 2) : undefined,
+          durationMonths: durationNum,
+          durationNights: nightsNum,
+          ticketCount: ticketsNum,
+          monthlyPrice: currentUnitCost,
+          totalAmount: totalPrice,
+          dpAmount: dpAmount,
+          notes: categoryType === "hotel" ? `Rombongan: ${guestCount} Tamu` : "",
+        });
+        if (createRes?.data) {
+          createdBookingId = createRes.data._id;
+        }
+      }
+
+      const payRes = await createDigitalPayment({
+        orderId: createdBookingId,
+        orderCode: bookingCode,
+        orderType: categoryType.toUpperCase(),
+        amount: dpAmount,
+        customerName: tenantName || "Customer",
+        customerPhone: phone || "081234567890",
+        customerEmail: email || "customer@geoverse.id",
+      });
+
+      if (payRes?.data?.snapRedirectUrl) {
+        Linking.openURL(payRes.data.snapRedirectUrl).catch(() => {});
+      }
+
+      const orderDetailText =
+        categoryType === "hotel"
+          ? `${selectedHotelRoom?.roomName || "Kamar Hotel"} • ${nightsNum} Malam`
+          : categoryType === "wisata"
+          ? `${selectedWisataTicket?.ticketName || "Tiket Wisata"} • ${ticketsNum} Tiket`
+          : `${selectedRoom?.roomNumber ? `Kamar ${selectedRoom.roomNumber} (${selectedRoom.roomType})` : "Kamar Pilihan"} • ${durationNum} Bulan`;
+
+      const order: OrderItem = {
+        id: `RNG-${orderPrefix}-${Date.now().toString().slice(-6)}`,
+        type: categoryType === "hotel" ? "Hotel" : categoryType === "wisata" ? "Wisata" : "Kos",
+        iconName: categoryType === "hotel" ? "Hotel" : categoryType === "wisata" ? "Ticket" : "Building2",
+        color: categoryType === "hotel" ? "#0284C7" : categoryType === "wisata" ? "#D97706" : "#0D7A53",
+        item: kostData?.name || "Layanan GEOVERSE",
+        detail: orderDetailText,
+        status: "Pembayaran Terverifikasi",
+        statusColor: "green",
+        date: "Hari ini",
+        total: totalPrice,
+        paymentMethod: "Midtrans Snap (QRIS/VA)",
+        paymentStatus: categoryType === "wisata" ? "Lunas" : "DP Terbayar",
+        paidAmount: dpAmount,
+        remainingAmount: totalPrice - dpAmount,
+        address: kostData?.address || "Garut, Jawa Barat",
+      };
+      addCustomerOrder(order);
+
+      const activeObj = {
+        _id: createdBookingId,
+        bookingCode: bookingCode,
+        categoryType: categoryType,
+        customerName: tenantName || authAccount?.name || "Customer",
+        customerPhone: phone || authAccount?.phone || "081234567890",
+        customerEmail: email || authAccount?.email || "customer@geoverse.id",
+        kostId: kostData?._id || "",
+        kostName: kostData?.name || "Properti Pilihan",
+        kostAddress: kostData?.address,
+        kostImage: currentImage,
+        roomNumber:
+          categoryType === "hotel"
+            ? selectedHotelRoom?.roomName || "Deluxe Room"
+            : categoryType === "wisata"
+            ? selectedWisataTicket?.ticketName || "Tiket Masuk"
+            : selectedRoom?.roomNumber || "101",
+        roomType:
+          categoryType === "hotel"
+            ? `${nightsNum} Malam`
+            : categoryType === "wisata"
+            ? `${ticketsNum} Tiket / Orang`
+            : selectedRoom?.roomType || "AC Exclusive",
+        entryDate: startDate,
+        checkOutDate: categoryType === "hotel" ? calculatedCheckOut : undefined,
+        guestCount: categoryType === "hotel" ? (parseInt(guestCount) || 2) : undefined,
+        durationMonths: durationNum,
+        durationNights: nightsNum,
+        ticketCount: ticketsNum,
+        monthlyPrice: currentUnitCost,
+        totalAmount: totalPrice,
+        dpAmount: dpAmount,
+        dpProofImage: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=400&q=80",
+        status: "dp_verified" as const,
+        createdAt: new Date().toISOString(),
+        ownerPhone: kostData?.bankAccount?.accountNumber || "087805987309",
+        ownerName: kostData?.bankAccount?.accountHolder || kostData?.name || "Pengelola",
+      };
+      setActiveCustomerBooking(activeObj);
+      setBookingResponse(activeObj);
+      setOrderCreated(true);
+      setIsPaymentModalOpen(false);
+      setIsReceiptModalOpen(true);
+    } catch (err: any) {
+      console.warn("Midtrans lodging payment error:", err);
+      Alert.alert("Gagal Membuka Pembayaran", err.message || "Terjadi kesalahan saat memproses pembayaran digital.");
+    } finally {
+      setIsMidtransLoading(false);
+    }
   };
 
   const roomsList = Array.isArray(kostData?.rooms) ? kostData.rooms : [];
@@ -1508,66 +1640,138 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
               <Text style={styles.sheetTitle}>Pembayaran Resmi</Text>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}>
-              <View style={styles.bankAccountCard}>
-                <Text style={styles.bankAccountHeader}>Transfer Rekening / Virtual Account:</Text>
-                <View style={styles.bankDetailRow}>
-                  <Text style={styles.bankLabel}>Bank</Text>
-                  <Text style={styles.bankValue}>{kostData?.bankAccount?.bankName || "BCA (Bank Central Asia)"}</Text>
-                </View>
-                <View style={styles.bankDetailRow}>
-                  <Text style={styles.bankLabel}>No. Rekening</Text>
-                  <Text style={[styles.bankValue, { color: "#0D7A53", fontSize: 16, fontWeight: "900" }]}>
-                    {kostData?.bankAccount?.accountNumber || "8472910394"}
-                  </Text>
-                </View>
-                <View style={styles.bankDetailRow}>
-                  <Text style={styles.bankLabel}>Atas Nama</Text>
-                  <Text style={styles.bankValue}>{kostData?.bankAccount?.accountHolder || "GEOVERSE INDONESIA"}</Text>
-                </View>
-                <View style={[styles.bankDetailRow, { borderBottomWidth: 0, marginTop: 4 }]}>
-                  <Text style={styles.bankLabel}>Nominal Pembayaran</Text>
-                  <Text style={[styles.bankValue, { color: "#0D7A53", fontWeight: "900", fontSize: 16 }]}>
-                    {rp(dpAmount)}
-                  </Text>
-                </View>
-              </View>
+            {/* Payment Mode Selector Tabs */}
+            <View style={{ flexDirection: "row", paddingHorizontal: 20, paddingTop: 12, gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setPaymentTab("midtrans")}
+                style={{
+                  flex: 1,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  backgroundColor: paymentTab === "midtrans" ? "#0D7A53" : "#F1F5F9",
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", color: paymentTab === "midtrans" ? "#FFFFFF" : "#64748B" }}>
+                  ⚡ Midtrans Otomatis
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setPaymentTab("manual")}
+                style={{
+                  flex: 1,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  backgroundColor: paymentTab === "manual" ? "#0D7A53" : "#F1F5F9",
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", color: paymentTab === "manual" ? "#FFFFFF" : "#64748B" }}>
+                  🏦 Transfer Rekening
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-              {/* Upload Struk Proof */}
-              <View style={styles.uploadProofSection}>
-                <Text style={styles.uploadProofTitle}>Unggah Bukti Transfer / Resi</Text>
-                <TouchableOpacity
-                  style={styles.uploadImageBox}
-                  onPress={handlePickProofImage}
-                  activeOpacity={0.8}
-                >
-                  {isUploadingProof ? (
-                    <ActivityIndicator size="small" color="#0D7A53" />
-                  ) : proofImage ? (
-                    <Image source={{ uri: proofImage }} style={{ width: "100%", height: 140, borderRadius: 10 }} />
-                  ) : (
-                    <View style={{ alignItems: "center", gap: 6 }}>
-                      <Upload size={24} color="#0D7A53" />
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#0D7A53" }}>
-                        Ketuk untuk Pilih Foto Bukti Transfer
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, paddingTop: 10 }}>
+              {paymentTab === "midtrans" ? (
+                <View style={{ gap: 14 }}>
+                  <View style={[styles.bankAccountCard, { backgroundColor: "#F0FDF4", borderColor: "#86EFAC" }]}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <Zap size={16} color="#0D7A53" />
+                      <Text style={[styles.bankAccountHeader, { color: "#166534", marginBottom: 0 }]}>
+                        Pembayaran Digital Instant (Midtrans Snap)
                       </Text>
                     </View>
-                  )}
-                </TouchableOpacity>
-              </View>
+                    <Text style={{ fontSize: 11.5, color: "#166534", lineHeight: 16 }}>
+                      Dukungan QRIS Real-time (BCA Mobile, GoPay, OVO, ShopeePay, Dana) dan Virtual Account (BCA, Mandiri, BRI, BNI). Verifikasi otomatis tanpa perlu kirim foto struk!
+                    </Text>
 
-              <TouchableOpacity
-                style={[styles.btnPayDp, isSubmitting && { opacity: 0.7 }]}
-                onPress={saveBookingOrder}
-                disabled={isSubmitting}
-                activeOpacity={0.85}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.btnPayDpText}>Konfirmasi Pembayaran</Text>
-                )}
-              </TouchableOpacity>
+                    <View style={[styles.bankDetailRow, { borderBottomWidth: 0, marginTop: 8 }]}>
+                      <Text style={styles.bankLabel}>Nominal Pembayaran</Text>
+                      <Text style={[styles.bankValue, { color: "#0D7A53", fontWeight: "900", fontSize: 17 }]}>
+                        {rp(dpAmount)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.btnPayDp, isMidtransLoading && { opacity: 0.7 }]}
+                    onPress={handlePayWithMidtrans}
+                    disabled={isMidtransLoading}
+                    activeOpacity={0.85}
+                  >
+                    {isMidtransLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.btnPayDpText}>Bayar via Midtrans Snap</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.bankAccountCard}>
+                    <Text style={styles.bankAccountHeader}>Transfer Rekening / Virtual Account:</Text>
+                    <View style={styles.bankDetailRow}>
+                      <Text style={styles.bankLabel}>Bank</Text>
+                      <Text style={styles.bankValue}>{kostData?.bankAccount?.bankName || "BCA (Bank Central Asia)"}</Text>
+                    </View>
+                    <View style={styles.bankDetailRow}>
+                      <Text style={styles.bankLabel}>No. Rekening</Text>
+                      <Text style={[styles.bankValue, { color: "#0D7A53", fontSize: 16, fontWeight: "900" }]}>
+                        {kostData?.bankAccount?.accountNumber || "8472910394"}
+                      </Text>
+                    </View>
+                    <View style={styles.bankDetailRow}>
+                      <Text style={styles.bankLabel}>Atas Nama</Text>
+                      <Text style={styles.bankValue}>{kostData?.bankAccount?.accountHolder || "GEOVERSE INDONESIA"}</Text>
+                    </View>
+                    <View style={[styles.bankDetailRow, { borderBottomWidth: 0, marginTop: 4 }]}>
+                      <Text style={styles.bankLabel}>Nominal Pembayaran</Text>
+                      <Text style={[styles.bankValue, { color: "#0D7A53", fontWeight: "900", fontSize: 16 }]}>
+                        {rp(dpAmount)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Upload Struk Proof */}
+                  <View style={styles.uploadProofSection}>
+                    <Text style={styles.uploadProofTitle}>Unggah Bukti Transfer / Resi</Text>
+                    <TouchableOpacity
+                      style={styles.uploadImageBox}
+                      onPress={handlePickProofImage}
+                      activeOpacity={0.8}
+                    >
+                      {isUploadingProof ? (
+                        <ActivityIndicator size="small" color="#0D7A53" />
+                      ) : proofImage ? (
+                        <Image source={{ uri: proofImage }} style={{ width: "100%", height: 140, borderRadius: 10 }} />
+                      ) : (
+                        <View style={{ alignItems: "center", gap: 6 }}>
+                          <Upload size={24} color="#0D7A53" />
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: "#0D7A53" }}>
+                            Ketuk untuk Pilih Foto Bukti Transfer
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.btnPayDp, isSubmitting && { opacity: 0.7 }]}
+                    onPress={saveBookingOrder}
+                    disabled={isSubmitting}
+                    activeOpacity={0.85}
+                  >
+                    {isSubmitting ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.btnPayDpText}>Konfirmasi Pembayaran</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
             </ScrollView>
           </View>
         </View>

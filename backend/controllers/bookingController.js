@@ -226,8 +226,15 @@ const verifyDpBooking = async (req, res) => {
           }
         );
 
+        if (updateRes.matchedCount === 0 && booking.roomId) {
+          updateRes = await Kost.updateOne(
+            { _id: kostIdToUpdate, "hotelRooms._id": booking.roomId },
+            { $set: { "hotelRooms.$.isAvailable": false } }
+          );
+        }
+
         if (updateRes.matchedCount === 0 && booking.roomNumber) {
-          await Kost.updateOne(
+          const resRoom = await Kost.updateOne(
             { _id: kostIdToUpdate, "rooms.roomNumber": booking.roomNumber },
             {
               $set: {
@@ -236,6 +243,12 @@ const verifyDpBooking = async (req, res) => {
               },
             }
           );
+          if (resRoom.matchedCount === 0) {
+            await Kost.updateOne(
+              { _id: kostIdToUpdate, "hotelRooms.roomName": booking.roomNumber },
+              { $set: { "hotelRooms.$.isAvailable": false } }
+            );
+          }
         }
       }
     }

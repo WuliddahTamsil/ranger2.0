@@ -193,6 +193,90 @@ const syncOrderPaymentStatus = async (orderId, orderType, paymentStatus, payment
           }
         }
       }
+    } else if (["KOS", "HOTEL", "WISATA", "HOMESTAY", "BOOKING"].includes(orderType)) {
+      const Booking = require("../models/Booking");
+      const Kost = require("../models/Kost");
+      const bookingQuery = {
+        $or: [
+          ...(mongoose.Types.ObjectId.isValid(orderId) ? [{ _id: orderId }] : []),
+          { bookingCode: orderId },
+        ],
+      };
+      const booking = await Booking.findOne(bookingQuery);
+      if (booking) {
+        if (isPaid) {
+          booking.status = "dp_verified";
+          booking.dpPaidAt = new Date();
+          booking.verifiedAt = new Date();
+          if (booking.categoryType === "wisata") {
+            booking.settlementStatus = "settled";
+            booking.settledAmount = booking.totalAmount;
+            booking.settledAt = new Date();
+            booking.settlementPaymentMethod = paymentMethod || "Midtrans Digital";
+          }
+          await booking.save();
+
+          if (booking.kostId) {
+            const tenantData = {
+              userId: booking.customerId,
+              name: booking.customerName,
+              phone: booking.customerPhone,
+              entryDate: booking.entryDate,
+              dueDate: new Date(new Date(booking.entryDate).setMonth(new Date(booking.entryDate).getMonth() + (booking.durationMonths || 1))),
+            };
+            let updateRes = { matchedCount: 0 };
+            if (booking.roomId) {
+              updateRes = await Kost.updateOne(
+                { _id: booking.kostId, "rooms._id": booking.roomId },
+                { $set: { "rooms.$.isAvailable": false, "rooms.$.currentTenant": tenantData } }
+              );
+              if (updateRes.matchedCount === 0) {
+                await Kost.updateOne(
+                  { _id: booking.kostId, "hotelRooms._id": booking.roomId },
+                  { $set: { "hotelRooms.$.isAvailable": false } }
+                );
+              }
+            }
+            if (updateRes.matchedCount === 0 && booking.roomNumber) {
+              const res2 = await Kost.updateOne(
+                { _id: booking.kostId, "rooms.roomNumber": booking.roomNumber },
+                { $set: { "rooms.$.isAvailable": false, "rooms.$.currentTenant": tenantData } }
+              );
+              if (res2.matchedCount === 0) {
+                await Kost.updateOne(
+                  { _id: booking.kostId, "hotelRooms.roomName": booking.roomNumber },
+                  { $set: { "hotelRooms.$.isAvailable": false } }
+                );
+              }
+            }
+          }
+
+          const isWisata = booking.categoryType === "wisata";
+          const isHotel = booking.categoryType === "hotel" || booking.categoryType === "homestay";
+          await Notification.create([
+            {
+              userId: booking.ownerId,
+              title: isWisata ? "🎟️ Tiket Wisata Terbayar!" : isHotel ? "🏨 Reservasi Hotel/Homestay Terbayar!" : "🏠 Pembayaran DP Kost Diterima!",
+              message: `Pembayaran ${isWisata ? "tiket wisata" : "DP"} #${booking.bookingCode} sebesar Rp ${booking.dpAmount.toLocaleString("id-ID")} telah lunas via ${paymentMethod || "Midtrans"}.`,
+              type: "booking_new",
+              relatedId: booking._id,
+            },
+            {
+              userId: booking.customerId,
+              title: isWisata ? "🎉 E-Ticket Wisata Terbit!" : isHotel ? "🎉 Reservasi Terkonfirmasi!" : "✅ DP Kost Berhasil Diverifikasi!",
+              message: `Pembayaran #${booking.bookingCode} sebesar Rp ${booking.dpAmount.toLocaleString("id-ID")} berhasil diverifikasi via ${paymentMethod || "Midtrans"}.`,
+              type: "dp_verified",
+              relatedId: booking._id,
+            },
+          ]).catch(() => undefined);
+
+          if (io) {
+            io.emit("booking:update", booking);
+            io.to(`user:${String(booking.ownerId)}`).emit("booking:update", booking);
+            io.to(`user:${String(booking.customerId)}`).emit("booking:update", booking);
+          }
+        }
+      }
     }
   } catch (error) {
     console.error(`⚠️ Failed to sync order payment status for ${orderId}:`, error);
