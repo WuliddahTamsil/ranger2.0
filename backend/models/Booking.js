@@ -82,6 +82,14 @@ const bookingSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    dpPercentage: {
+      type: Number,
+      default: 20,
+    },
+    platformFee: {
+      type: Number,
+      default: 2000, // Potongan biaya layanan platform komisi (Rp 2.000)
+    },
     dpProofImage: {
       type: String, // Google Drive URL
     },
@@ -95,6 +103,14 @@ const bookingSchema = new mongoose.Schema(
     },
     rejectionReason: {
       type: String,
+    },
+    cancellation: {
+      cancelledAt: { type: Date },
+      cancellationReason: { type: String },
+      eligibleForRefund: { type: Boolean, default: false },
+      refundPercent: { type: Number, default: 0 },
+      refundAmount: { type: Number, default: 0 },
+      refundStatus: { type: String, enum: ["none", "pending", "refunded", "rejected"], default: "none" },
     },
     verifiedAt: {
       type: Date,

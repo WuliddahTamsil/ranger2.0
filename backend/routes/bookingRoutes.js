@@ -6,6 +6,7 @@ const {
   settleBookingPayment,
   getBookingsByCustomer,
   getUserNotifications,
+  cancelBooking,
 } = require("../controllers/bookingController");
 
 const router = express.Router();
@@ -14,6 +15,7 @@ router.post("/", createBooking);
 router.get("/owner/:ownerId", getBookingsByOwner);
 router.put("/:id/verify-dp", verifyDpBooking);
 router.put("/:id/settle", settleBookingPayment);
+router.put("/:id/cancel", cancelBooking);
 router.get("/customer/:customerId", getBookingsByCustomer);
 router.get("/notifications/:userId", getUserNotifications);
 

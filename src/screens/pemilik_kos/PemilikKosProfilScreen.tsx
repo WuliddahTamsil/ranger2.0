@@ -33,6 +33,7 @@ import {
   User,
   X,
   Check,
+  Percent,
 } from "lucide-react-native";
 
 import { fetchKostProperty, updateKostProperty } from "../../services/kostService";
@@ -52,7 +53,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
   const [avatarUri, setAvatarUri] = useState<string | null>(authAccount?.profilePhoto || null);
 
   // Modals state
-  const [activeModal, setActiveModal] = useState<"edit" | "alamat" | "pembayaran" | "bantuan" | "privasi" | "pengaturan" | "logout" | null>(null);
+  const [activeModal, setActiveModal] = useState<"edit" | "alamat" | "pembayaran" | "dp" | "bantuan" | "privasi" | "pengaturan" | "logout" | null>(null);
 
   // Form Edit State
   const [editName, setEditName] = useState(name);
@@ -61,6 +62,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
   const [latitude, setLatitude] = useState("-7.2278");
   const [longitude, setLongitude] = useState("107.9087");
   const [metodePembayaran, setMetodePembayaran] = useState("Belum diatur");
+  const [dpPercentage, setDpPercentage] = useState("20");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -80,9 +82,30 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
         if (prop.address) setAlamatKos(prop.address);
         if (prop.latitude) setLatitude(String(prop.latitude));
         if (prop.longitude) setLongitude(String(prop.longitude));
+        if (prop.dpPercentage) setDpPercentage(String(prop.dpPercentage));
       }
     });
   }, [authAccount]);
+
+  const handleSaveDpSetting = async () => {
+    setIsSaving(true);
+    try {
+      const ownerId = authAccount?.email || authAccount?.id || "";
+      const numDp = Math.min(100, Math.max(5, parseInt(dpPercentage) || 20));
+      if (ownerId) {
+        await updateKostProperty(ownerId, {
+          dpPercentage: numDp,
+        });
+      }
+      setDpPercentage(String(numDp));
+      Alert.alert("Sukses", `Persentase DP berhasil diatur menjadi ${numDp}%!`);
+      setActiveModal(null);
+    } catch (err: any) {
+      Alert.alert("Gagal", "Tidak dapat menyimpan pengaturan DP: " + (err.message || ""));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
@@ -202,7 +225,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
 
           {/* Item 3: Metode Pembayaran */}
           <TouchableOpacity
-            style={[styles.menuRow, { borderBottomWidth: 0 }]}
+            style={styles.menuRow}
             onPress={() => setActiveModal("pembayaran")}
             activeOpacity={0.7}
           >
@@ -210,6 +233,22 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
               <CreditCard size={18} color="#9333EA" />
             </View>
             <Text style={styles.menuTitle}>Metode Pembayaran</Text>
+            <ChevronRight size={18} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          {/* Item 4: Pengaturan DP & Biaya */}
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 0 }]}
+            onPress={() => setActiveModal("dp")}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBg, { backgroundColor: "#FEF9C3" }]}>
+              <Percent size={18} color="#CA8A04" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuTitle}>Pengaturan DP & Pembatalan</Text>
+              <Text style={{ fontSize: 11, color: "#64748B" }}>DP saat ini: {dpPercentage}% • H-3 Refund 50%</Text>
+            </View>
             <ChevronRight size={18} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
@@ -443,6 +482,92 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
 
             <TouchableOpacity style={styles.btnPrimary} onPress={() => setActiveModal(null)} activeOpacity={0.85}>
               <Text style={styles.btnPrimaryText}>Simpan Metode</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL DP: Pengaturan DP & Pembatalan */}
+      <Modal visible={activeModal === "dp"} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Pengaturan DP & Kebijakan</Text>
+              <TouchableOpacity onPress={() => setActiveModal(null)}>
+                <X size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.label}>Pilih Persentase DP Tanda Jadi</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+              {["10", "20", "30", "50", "100"].map((pct) => (
+                <TouchableOpacity
+                  key={pct}
+                  onPress={() => setDpPercentage(pct)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: dpPercentage === pct ? "#0D7A53" : "#E2E8F0",
+                    backgroundColor: dpPercentage === pct ? "#E8F5EE" : "#F8FAFC",
+                    alignItems: "center",
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: dpPercentage === pct ? "#0D7A53" : "#475569" }}>
+                    {pct}%
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Atau Masukkan Persentase Custom (%)</Text>
+            <TextInput
+              style={styles.input}
+              value={dpPercentage}
+              onChangeText={(v) => {
+                const clean = v.replace(/[^0-9]/g, "");
+                setDpPercentage(clean);
+              }}
+              keyboardType="number-pad"
+              placeholder="Contoh: 25"
+            />
+
+            <View style={{
+              backgroundColor: "#FEF3C7",
+              borderColor: "#FCD34D",
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 12,
+              gap: 4,
+              marginTop: 10,
+              marginBottom: 16,
+            }}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#92400E" }}>
+                🛡️ Kebijakan Pembatalan & Pengembalian DP (H-3)
+              </Text>
+              <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 15 }}>
+                • Pembatalan minimal 3 hari sebelum jadwal masuk (≥ H-3) berhak menerima pengembalian DP 50%.
+              </Text>
+              <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 15 }}>
+                • Pembatalan kurang dari H-3 tidak memperoleh pengembalian (DP hangus).
+              </Text>
+              <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 15, marginTop: 4 }}>
+                • Potongan komisi biaya layanan sistem aplikasi adalah Rp 2.000 (seperti pada Ride & Laundry).
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.btnPrimary}
+              onPress={handleSaveDpSetting}
+              disabled={isSaving}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnPrimaryText}>
+                {isSaving ? "Menyimpan ke Server..." : "Simpan Pengaturan DP"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

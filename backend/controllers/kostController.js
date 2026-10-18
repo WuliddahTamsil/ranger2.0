@@ -1184,6 +1184,19 @@ const updateKostProperty = async (req, res) => {
     if (dpAmount !== undefined) {
       kost.dpAmount = Number(dpAmount);
     }
+    if (req.body.dpPercentage !== undefined) {
+      kost.dpPercentage = Number(req.body.dpPercentage);
+    }
+    if (req.body.cancellationPolicy !== undefined) {
+      kost.cancellationPolicy = {
+        refundDaysBefore: Number(req.body.cancellationPolicy.refundDaysBefore) || 3,
+        refundPercent: Number(req.body.cancellationPolicy.refundPercent) || 50,
+      };
+      kost.markModified("cancellationPolicy");
+    }
+    if (req.body.platformFee !== undefined) {
+      kost.platformFee = Number(req.body.platformFee);
+    }
 
     await kost.save();
 

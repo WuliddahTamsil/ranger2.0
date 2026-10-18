@@ -286,7 +286,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
   const dpTxs: Transaction[] = validBookings.map((b) => ({
     id: `dp_${b._id}`,
     title: `Penerimaan DP Kamar ${b.roomNumber || "101"}`,
-    subtitle: `${b.customerName || "Customer"} • Transfer DP 20%`,
+    subtitle: `${b.customerName || "Customer"} • Transfer DP ${b.dpPercentage || 20}%`,
     date: b.verifiedAt ? new Date(b.verifiedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini",
     amount: `+ Rp ${Number(b.dpAmount || 0).toLocaleString("id-ID")}`,
     type: "income" as const,

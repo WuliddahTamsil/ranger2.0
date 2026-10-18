@@ -36,6 +36,12 @@ export interface SelectedKost {
   city?: string;
   price: number; // For kost: price/mo; for hotel: price/night; for wisata: price/ticket
   dpAmount?: number;
+  dpPercentage?: number;
+  platformFee?: number;
+  cancellationPolicy?: {
+    refundDaysBefore?: number;
+    refundPercent?: number;
+  };
   description?: string;
   facilities: string[];
   rules?: string[];

@@ -14,6 +14,12 @@ export interface KostData {
   longitude?: number;
   price: number;
   dpAmount?: number;
+  dpPercentage?: number;
+  platformFee?: number;
+  cancellationPolicy?: {
+    refundDaysBefore?: number;
+    refundPercent?: number;
+  };
   description?: string;
   facilities: string[];
   rules: string[];
@@ -60,6 +66,16 @@ export interface BookingData {
   monthlyPrice: number;
   totalAmount: number;
   dpAmount: number;
+  dpPercentage?: number;
+  platformFee?: number;
+  cancellation?: {
+    cancelledAt?: string;
+    cancellationReason?: string;
+    eligibleForRefund?: boolean;
+    refundPercent?: number;
+    refundAmount?: number;
+    refundStatus?: "none" | "pending" | "refunded" | "rejected";
+  };
   dpProofImage?: string;
   status?: "pending_dp" | "dp_submitted" | "dp_verified" | "rejected" | "active" | "completed" | "cancelled";
   rejectionReason?: string;
@@ -378,6 +394,21 @@ export const deleteOwnerTransaction = async (txId: string) => {
     return await response.json();
   } catch (error) {
     console.error("❌ deleteOwnerTransaction error:", error);
+    throw error;
+  }
+};
+
+export const cancelKostBooking = async (bookingId: string, reason?: string) => {
+  try {
+    const url = getApiUrl(`/bookings/${bookingId}/cancel`);
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("❌ cancelKostBooking error:", error);
     throw error;
   }
 };

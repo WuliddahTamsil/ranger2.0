@@ -92,6 +92,8 @@ const createBooking = async (req, res) => {
       monthlyPrice: Number(monthlyPrice) || kost.price,
       totalAmount: Number(totalAmount) || (Number(monthlyPrice) || kost.price),
       dpAmount: Number(dpAmount),
+      dpPercentage: Number(req.body.dpPercentage) || kost.dpPercentage || 20,
+      platformFee: Number(req.body.platformFee) || kost.platformFee || 2000,
       dpProofImage: dpProofImage || "",
       dpPaidAt: dpProofImage ? new Date() : undefined,
       status: dpProofImage || categoryType === "wisata" ? "dp_submitted" : "pending_dp",
@@ -384,6 +386,109 @@ const settleBookingPayment = async (req, res) => {
   }
 };
 
+// Cancel booking with 50% refund policy if cancelled >= 3 days before entry (H-3)
+const cancelBooking = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const booking = await Booking.findById(id).populate("kostId");
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Pemesanan tidak ditemukan" });
+    }
+
+    if (booking.status === "cancelled") {
+      return res.status(400).json({ success: false, message: "Pemesanan ini sudah dibatalkan sebelumnya" });
+    }
+
+    const now = new Date();
+    const entryDate = new Date(booking.entryDate);
+    const diffTime = entryDate.getTime() - now.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    // Kebijakan: H-3 (>= 3 hari sebelum tgl masuk) pengembalian 50% DP
+    const eligibleH3 = diffDays >= 3;
+    const refundPercent = eligibleH3 ? 50 : 0;
+    const refundAmount = eligibleH3 ? Math.round(Number(booking.dpAmount) * 0.5) : 0;
+
+    booking.status = "cancelled";
+    booking.cancellation = {
+      cancelledAt: now,
+      cancellationReason: reason || "Dibatalkan oleh pelanggan",
+      eligibleForRefund: eligibleH3,
+      refundPercent,
+      refundAmount,
+      refundStatus: eligibleH3 ? "pending" : "rejected",
+    };
+
+    // Lepaskan kamar agar kembali tersedia
+    if (booking.kostId) {
+      const kostId = booking.kostId._id || booking.kostId;
+      if (booking.roomId) {
+        await Kost.updateOne(
+          { _id: kostId, "rooms._id": booking.roomId },
+          { $set: { "rooms.$.isAvailable": true, "rooms.$.currentTenant": undefined } }
+        );
+        await Kost.updateOne(
+          { _id: kostId, "hotelRooms._id": booking.roomId },
+          { $set: { "hotelRooms.$.isAvailable": true } }
+        );
+      }
+      if (booking.roomNumber) {
+        await Kost.updateOne(
+          { _id: kostId, "rooms.roomNumber": booking.roomNumber },
+          { $set: { "rooms.$.isAvailable": true, "rooms.$.currentTenant": undefined } }
+        );
+        await Kost.updateOne(
+          { _id: kostId, "hotelRooms.roomName": booking.roomNumber },
+          { $set: { "hotelRooms.$.isAvailable": true } }
+        );
+      }
+    }
+
+    await booking.save();
+
+    // Notifikasi ke Customer & Owner
+    const custMsg = eligibleH3
+      ? `Pembatalan berhasil. Sesuai kebijakan H-3, Anda berhak menerima pengembalian DP 50% sebesar Rp ${refundAmount.toLocaleString("id-ID")}.`
+      : `Pembatalan berhasil. Mohon maaf, pembatalan kurang dari H-3 tidak memperoleh pengembalian DP (DP hangus).`;
+
+    await Notification.create([
+      {
+        userId: booking.customerId,
+        title: "Pembatalan Pemesanan",
+        message: custMsg,
+        type: "booking_cancelled",
+        relatedId: booking._id,
+      },
+      {
+        userId: booking.ownerId,
+        title: "Pemesanan Dibatalkan",
+        message: `Pemesanan #${booking.bookingCode} kamar ${booking.roomNumber || ""} dibatalkan oleh ${booking.customerName}. Unit kembali tersedia.${eligibleH3 ? ` (Pengembalian DP 50%: Rp ${refundAmount.toLocaleString("id-ID")})` : " (DP Hangus)"}`,
+        type: "booking_cancelled",
+        relatedId: booking._id,
+      },
+    ]).catch(() => undefined);
+
+    if (req.io) {
+      req.io.emit("booking:cancelled", booking);
+      req.io.to(`user:${String(booking.ownerId)}`).emit("booking:cancelled", booking);
+      req.io.to(`user:${String(booking.customerId)}`).emit("booking:cancelled", booking);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: eligibleH3
+        ? `Pemesanan berhasil dibatalkan. Pengembalian 50% DP (Rp ${refundAmount.toLocaleString("id-ID")}) sedang diproses.`
+        : `Pemesanan dibatalkan. Pembatalan kurang dari H-3, DP hangus sesuai kebijakan.`,
+      data: booking,
+    });
+  } catch (error) {
+    console.error("❌ Cancel booking error:", error);
+    return res.status(500).json({ success: false, message: "Gagal membatalkan pemesanan", error: error.message });
+  }
+};
+
 module.exports = {
   createBooking,
   getBookingsByOwner,
@@ -391,4 +496,5 @@ module.exports = {
   settleBookingPayment,
   getBookingsByCustomer,
   getUserNotifications,
+  cancelBooking,
 };

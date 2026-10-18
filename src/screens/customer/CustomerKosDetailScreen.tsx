@@ -414,19 +414,22 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
       ? (selectedWisataTicket?.price || kostData?.price || 45000)
       : pricePerMonth;
 
-  const totalPrice =
+  const ownerDpPercent = Number(kostData?.dpPercentage) || (categoryType === "hotel" ? 50 : 20);
+  const platformFee = categoryType === "wisata" ? 0 : 2000; // Biaya layanan komisi platform seperti pada ride & laundry
+
+  const basePrice =
     categoryType === "hotel"
       ? currentUnitCost * nightsNum
       : categoryType === "wisata"
       ? currentUnitCost * ticketsNum
       : pricePerMonth * durationNum;
 
+  const totalPrice = basePrice + platformFee;
+
   const dpAmount =
     categoryType === "wisata"
       ? totalPrice // 100% full payment for tickets
-      : categoryType === "hotel"
-      ? Math.round(totalPrice * 0.5) // 50% DP / booking guarantee for hotel
-      : Math.round(totalPrice * 0.2); // 20% DP for kost
+      : Math.round(basePrice * (ownerDpPercent / 100)) + platformFee;
 
   const calculatedCheckOut = React.useMemo(() => {
     if (!startDate) return "-";
@@ -1588,18 +1591,54 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
               {/* Price Calculation Box */}
               <View style={styles.priceCalcBlock}>
                 <View style={styles.priceCalcRow}>
-                  <Text style={styles.calcLabel}>Total Pembayaran</Text>
-                  <Text style={styles.calcVal}>{rp(totalPrice)}</Text>
+                  <Text style={styles.calcLabel}>
+                    {categoryType === "wisata" ? "Total Tiket" : "Biaya Sewa Unit"}
+                  </Text>
+                  <Text style={[styles.calcVal, { fontWeight: "700" }]}>{rp(basePrice)}</Text>
+                </View>
+
+                {platformFee > 0 && (
+                  <View style={styles.priceCalcRow}>
+                    <Text style={styles.calcLabel}>Biaya Layanan Aplikasi</Text>
+                    <Text style={[styles.calcVal, { fontWeight: "700" }]}>{rp(platformFee)}</Text>
+                  </View>
+                )}
+
+                <View style={[styles.priceCalcRow, { borderTopWidth: 1, borderTopColor: "#E2E8F0", paddingTop: 6 }]}>
+                  <Text style={[styles.calcLabel, { fontWeight: "800", color: "#0F172A" }]}>Total Pesanan</Text>
+                  <Text style={[styles.calcVal, { fontWeight: "900", color: "#0F172A", fontSize: 14 }]}>{rp(totalPrice)}</Text>
                 </View>
 
                 <View style={styles.dpBoxGreen}>
                   <View style={styles.dpBoxLeft}>
                     <Wallet size={18} color="#0D7A53" />
                     <Text style={styles.dpBoxLabel}>
-                      {categoryType === "wisata" ? "Total Bayar (Lunas)" : "Uang Muka / DP"}
+                      {categoryType === "wisata" ? "Total Bayar (Lunas)" : `DP Tanda Jadi (${ownerDpPercent}%)`}
                     </Text>
                   </View>
                   <Text style={styles.dpBoxVal}>{rp(dpAmount)}</Text>
+                </View>
+              </View>
+
+              {/* Cancellation Policy Banner (H-3 50% Refund) */}
+              <View style={{
+                backgroundColor: "#FEF3C7",
+                borderColor: "#FCD34D",
+                borderWidth: 1,
+                borderRadius: 10,
+                padding: 10,
+                flexDirection: "row",
+                gap: 8,
+                alignItems: "flex-start",
+              }}>
+                <ShieldAlert size={16} color="#D97706" style={{ marginTop: 1 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: "800", color: "#92400E" }}>
+                    Kebijakan Pembatalan & Pengembalian DP (H-3)
+                  </Text>
+                  <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 15, marginTop: 2 }}>
+                    Pembatalan minimal 3 hari sebelum jadwal masuk (≥ H-3) berhak menerima pengembalian DP 50%. Pembatalan kurang dari H-3 tidak memperoleh pengembalian (DP hangus).
+                  </Text>
                 </View>
               </View>
 

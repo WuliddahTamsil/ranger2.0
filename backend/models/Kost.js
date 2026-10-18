@@ -110,6 +110,18 @@ const kostSchema = new mongoose.Schema(
       type: Number,
       default: 200000, // Nominal minimum DP
     },
+    dpPercentage: {
+      type: Number,
+      default: 20, // Pemilik kos/villa bebas atur persentase DP sendiri (e.g. 20%, 30%, 50%)
+    },
+    cancellationPolicy: {
+      refundDaysBefore: { type: Number, default: 3 }, // H-3 sebelum tanggal masuk/check-in
+      refundPercent: { type: Number, default: 50 }, // Pengembalian 50% jika >= H-3
+    },
+    platformFee: {
+      type: Number,
+      default: 2000, // Biaya layanan komisi platform Rp 2.000 (seperti pada Ride & Laundry)
+    },
     rating: {
       type: Number,
       default: 4.8,
