@@ -40,6 +40,7 @@ import {
   Search,
 } from "lucide-react-native";
 import { addCustomerOrder } from "./customerOrderStore";
+import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
 import { getPrimaryCustomerAddress } from "../../services/customerAddressService";
 import {
@@ -440,7 +441,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
 
       {/* Fixed Bottom Action Bar */}
       <SafeAreaBottomBar absolute style={styles.bottomActionBar}>
-        <TouchableOpacity style={styles.btnChatSquare} onPress={() => Alert.alert("Chat setelah order", "Chat mitra tersedia dari detail pesanan setelah order laundry dibuat.")} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.btnChatSquare} onPress={() => setChatVisible(true)} activeOpacity={0.8}>
           <MessageCircle size={22} color="#0D7A53" />
           <Text style={styles.btnChatText}>Chat</Text>
         </TouchableOpacity>
@@ -759,6 +760,17 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
           </View>
         </View>
       </Modal>
+
+      {/* Live Direct Consultation Chat Modal */}
+      <CustomerChatModal
+        visible={chatVisible}
+        onClose={() => setChatVisible(false)}
+        orderId={`laundry_${store._id || store.id || "inquiry"}`}
+        participantName={store.storeName}
+        participantType="merchant"
+        initialMessage={`Halo ${store.storeName}, saya tertarik untuk memesan layanan laundry. Apakah bisa konsultasi terlebih dahulu?`}
+        currentUserRole="customer"
+      />
 
     </ResponsiveSafeAreaView>
   );

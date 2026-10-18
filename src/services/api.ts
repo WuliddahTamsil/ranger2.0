@@ -974,3 +974,43 @@ export const getChatConversations = async (
 
   return { success: false, data: [] };
 };
+
+export interface DigitalPaymentPayload {
+  orderId: string;
+  orderCode?: string;
+  orderType: string;
+  orderCategory?: string;
+  amount: number;
+  paymentMethod?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  customerId?: string;
+}
+
+export const createDigitalPayment = async (payload: DigitalPaymentPayload) => {
+  try {
+    const res = await fetch(getApiUrl("/payments/create"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await readApiJson(res);
+  } catch (error: any) {
+    console.error("❌ createDigitalPayment error:", error);
+    return { success: false, message: error.message || "Gagal membuat sesi pembayaran" };
+  }
+};
+
+export const checkDigitalPaymentStatus = async (paymentId: string) => {
+  try {
+    const res = await fetch(getApiUrl(`/payments/${paymentId}/status`), {
+      method: "GET",
+    });
+    return await readApiJson(res);
+  } catch (error: any) {
+    console.error("❌ checkDigitalPaymentStatus error:", error);
+    return { success: false, message: error.message || "Gagal memeriksa status pembayaran" };
+  }
+};
+

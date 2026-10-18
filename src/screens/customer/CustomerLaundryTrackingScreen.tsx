@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   Switch,
+  Linking,
 } from "react-native";
 import { Nav } from "../../types";
 import {
@@ -36,12 +37,13 @@ import {
   Copy,
   AlertCircle,
   X,
+  Zap,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
 import { useRecycle } from "../../context/RecycleContext";
-import { uploadFileToBackend } from "../../services/api";
+import { uploadFileToBackend, createDigitalPayment, checkDigitalPaymentStatus } from "../../services/api";
 import {
   getActiveLaundryOrder,
   subscribeLaundry,
@@ -66,9 +68,10 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const [chatVisible, setChatVisible] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isWeighingPreviewOpen, setIsWeighingPreviewOpen] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"QRIS" | "Transfer Bank">("Transfer Bank");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"Midtrans" | "Transfer Bank" | "QRIS">("Midtrans");
   const [proofImageUri, setProofImageUri] = useState<string>("");
   const [isSubmittingProof, setIsSubmittingProof] = useState(false);
+  const [isMidtransLoading, setIsMidtransLoading] = useState(false);
 
   const { wallet } = useRecycle();
   const [usePoints, setUsePoints] = useState(false);
@@ -236,6 +239,66 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
       console.warn("Picker error:", err);
       // Fallback demo proof image if on web / simulator
       setProofImageUri("https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=500&q=80");
+    }
+  };
+
+  const handlePayWithMidtrans = async () => {
+    if (!order) return;
+    setIsMidtransLoading(true);
+    try {
+      const orderId = order._id || order.id || "temp";
+      const payload = {
+        orderId: String(orderId),
+        orderCode: order.orderCode,
+        orderType: "LAUNDRY",
+        orderCategory: "LAUNDRY",
+        amount: finalPayableTotal,
+        paymentMethod: "SNAP",
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        customerId: order.customerId,
+      };
+
+      const res = await createDigitalPayment(payload);
+      if (res.success && res.data) {
+        const redirectUrl = res.data.snapRedirectUrl || res.data.paymentUrl;
+        if (redirectUrl) {
+          Linking.openURL(redirectUrl).catch(() => {
+            Alert.alert("Link Pembayaran", `Buka link berikut di browser:\n${redirectUrl}`);
+          });
+          Alert.alert(
+            "Pembayaran Midtrans Terbuka",
+            "Halaman pembayaran Midtrans Snap telah dibuka di browser. Silakan selesaikan pembayaran Anda (BCA VA / ShopeePay / GoPay / QRIS).",
+            [
+              {
+                text: "Sudah Bayar / Cek Status",
+                onPress: async () => {
+                  if (res.data.paymentId) {
+                    const statusRes = await checkDigitalPaymentStatus(res.data.paymentId);
+                    if (statusRes.success && (statusRes.data?.status === "PAID" || statusRes.data?.status === "SETTLEMENT")) {
+                      setIsPaymentModalOpen(false);
+                      Alert.alert("Pembayaran Berhasil!", "Pembayaran laundry Anda telah lunas!");
+                      loadData();
+                    } else {
+                      Alert.alert("Belum Terdeteksi", "Pembayaran belum terkonfirmasi lunas. Silakan selesaikan transaksi atau coba beberapa saat lagi.");
+                    }
+                  }
+                },
+              },
+              { text: "Tutup", style: "cancel" },
+            ]
+          );
+        } else {
+          Alert.alert("Info Pembayaran", "Sesi pembayaran telah dibuat.");
+        }
+      } else {
+        Alert.alert("Gagal Membuat Pembayaran", res.message || "Gagal menghubungi gateway Midtrans.");
+      }
+    } catch (err: any) {
+      console.error("handlePayWithMidtrans error:", err);
+      Alert.alert("Error", err.message || "Terjadi kesalahan pembayaran digital.");
+    } finally {
+      setIsMidtransLoading(false);
     }
   };
 
@@ -804,10 +867,35 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                 </View>
               ) : (
                 <>
-                  {/* 2 Payment Methods Only: QRIS & Transfer Bank */}
+                  {/* 3 Payment Methods: Midtrans Snap, QRIS & Transfer Bank */}
                   <Text style={styles.sectionMethodTitle}>Pilih Metode Pembayaran</Text>
                   <View style={styles.methodList}>
-                    {/* Opsi 1: QRIS */}
+                    {/* Opsi 1: Midtrans Snap Gateway (RECOMMENDED) */}
+                    <TouchableOpacity
+                      style={[styles.methodItem, selectedPaymentMethod === "Midtrans" && styles.methodItemSelected]}
+                      onPress={() => setSelectedPaymentMethod("Midtrans")}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.methodLeft}>
+                        <View style={[styles.methodIconBg, selectedPaymentMethod === "Midtrans" && { backgroundColor: "#DCFCE7" }]}>
+                          <Zap size={20} color="#0D7A53" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={styles.methodName}>Midtrans Snap Gateway</Text>
+                            <View style={{ backgroundColor: "#0D7A53", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                              <Text style={{ fontSize: 9, fontWeight: "800", color: "#FFFFFF" }}>OTOMATIS</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.methodSub}>BCA VA, Mandiri, BRI, ShopeePay, GoPay, QRIS</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.radioCircle, selectedPaymentMethod === "Midtrans" && styles.radioCircleSelected]}>
+                        {selectedPaymentMethod === "Midtrans" && <View style={styles.radioInnerDot} />}
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Opsi 2: QRIS Toko Manual */}
                     <TouchableOpacity
                       style={[styles.methodItem, selectedPaymentMethod === "QRIS" && styles.methodItemSelected]}
                       onPress={() => setSelectedPaymentMethod("QRIS")}
@@ -818,8 +906,8 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                           <QrCode size={20} color="#0D7A53" />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.methodName}>QRIS All Payment</Text>
-                          <Text style={styles.methodSub}>BCA Mobile, GoPay, OVO, Dana, ShopeePay</Text>
+                          <Text style={styles.methodName}>QRIS Toko (Manual)</Text>
+                          <Text style={styles.methodSub}>Scan QRIS Toko lalu unggah bukti transfer</Text>
                         </View>
                       </View>
                       <View style={[styles.radioCircle, selectedPaymentMethod === "QRIS" && styles.radioCircleSelected]}>
@@ -827,7 +915,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                       </View>
                     </TouchableOpacity>
 
-                    {/* Opsi 2: Transfer Bank */}
+                    {/* Opsi 3: Transfer Bank Manual */}
                     <TouchableOpacity
                       style={[styles.methodItem, selectedPaymentMethod === "Transfer Bank" && styles.methodItemSelected]}
                       onPress={() => setSelectedPaymentMethod("Transfer Bank")}
@@ -839,7 +927,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.methodName}>Transfer Bank Manual</Text>
-                          <Text style={styles.methodSub}>BCA, Mandiri, BNI, BRI</Text>
+                          <Text style={styles.methodSub}>BCA, Mandiri, BNI, BRI (Wajib upload struk)</Text>
                         </View>
                       </View>
                       <View style={[styles.radioCircle, selectedPaymentMethod === "Transfer Bank" && styles.radioCircleSelected]}>
@@ -849,7 +937,17 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                   </View>
 
                   {/* Payment Details Container */}
-                  {selectedPaymentMethod === "QRIS" ? (
+                  {selectedPaymentMethod === "Midtrans" ? (
+                    <View style={{ backgroundColor: "#F0FDF4", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#BBF7D0", marginVertical: 10 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <ShieldCheck size={20} color="#0D7A53" />
+                        <Text style={{ fontSize: 13, fontWeight: "800", color: "#166534" }}>Verifikasi Instan Tanpa Upload Resi</Text>
+                      </View>
+                      <Text style={{ fontSize: 11, color: "#15803D", lineHeight: 16 }}>
+                        Pilih metode favorit Anda di Midtrans (BCA Virtual Account, ShopeePay, GoPay, QRIS, dll). Setelah pembayaran selesai di m-banking, pesanan langsung otomatis tercatat lunas dan mitra laundry segera mencuci pakaian Anda.
+                      </Text>
+                    </View>
+                  ) : selectedPaymentMethod === "QRIS" ? (
                     <View style={styles.qrisContainer}>
                       <Text style={styles.qrisTitle}>Scan Barcode QRIS Toko {storeName}</Text>
                       {effectiveQrisImage ? (
@@ -863,15 +961,15 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                           <QrCode size={56} color="#9CA3AF" />
                           <Text style={styles.qrisPlaceholderCustomerTitle}>QRIS Belum Diunggah Pemilik Toko</Text>
                           <Text style={styles.qrisPlaceholderCustomerSub}>
-                            Silakan gunakan opsi Transfer Bank / E-Wallet Manual di bawah untuk menyelesaikan pembayaran.
+                            Silakan gunakan opsi Transfer Bank Manual atau Midtrans di atas untuk menyelesaikan pembayaran.
                           </Text>
                           <TouchableOpacity
                             style={styles.btnSwitchToBank}
-                            onPress={() => setSelectedPaymentMethod("Transfer Bank")}
+                            onPress={() => setSelectedPaymentMethod("Midtrans")}
                             activeOpacity={0.8}
                           >
-                            <CreditCard size={14} color="#FFFFFF" />
-                            <Text style={styles.btnSwitchToBankText}>Pilih Transfer Bank / E-Wallet</Text>
+                            <Zap size={14} color="#FFFFFF" />
+                            <Text style={styles.btnSwitchToBankText}>Pilih Pembayaran Midtrans</Text>
                           </TouchableOpacity>
                         </View>
                       )}
@@ -904,56 +1002,78 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                     </View>
                   )}
 
-                  {/* Upload Proof Section (MANDATORY) */}
-                  <View style={styles.uploadSection}>
-                    <Text style={styles.uploadTitle}>
-                      Upload Bukti Transfer / Resi <Text style={{ color: "#EF4444" }}>*</Text>
-                    </Text>
-                    <Text style={styles.uploadSub}>Wajib lampirkan screenshot struk transfer untuk diverifikasi pemilik laundry.</Text>
+                  {/* Upload Proof Section (Only for Manual QRIS & Bank Transfer) */}
+                  {selectedPaymentMethod !== "Midtrans" && (
+                    <View style={styles.uploadSection}>
+                      <Text style={styles.uploadTitle}>
+                        Upload Bukti Transfer / Resi <Text style={{ color: "#EF4444" }}>*</Text>
+                      </Text>
+                      <Text style={styles.uploadSub}>Wajib lampirkan screenshot struk transfer untuk diverifikasi pemilik laundry.</Text>
 
-                    {proofImageUri ? (
-                      <View style={styles.proofPreviewCard}>
-                        <Image source={{ uri: proofImageUri }} style={styles.proofPreviewImg} />
-                        <View style={styles.proofPreviewInfo}>
-                          <Text style={styles.proofSuccessText}>✓ Foto Bukti Terpasang</Text>
-                          <TouchableOpacity style={styles.btnChangeProof} onPress={handlePickProofImage}>
-                            <Text style={styles.btnChangeProofText}>Ganti Foto</Text>
-                          </TouchableOpacity>
+                      {proofImageUri ? (
+                        <View style={styles.proofPreviewCard}>
+                          <Image source={{ uri: proofImageUri }} style={styles.proofPreviewImg} />
+                          <View style={styles.proofPreviewInfo}>
+                            <Text style={styles.proofSuccessText}>✓ Foto Bukti Terpasang</Text>
+                            <TouchableOpacity style={styles.btnChangeProof} onPress={handlePickProofImage}>
+                              <Text style={styles.btnChangeProofText}>Ganti Foto</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                      </View>
-                    ) : (
-                      <TouchableOpacity style={styles.uploadPlaceholderBtn} onPress={handlePickProofImage} activeOpacity={0.8}>
-                        <View style={styles.uploadIconCircle}>
-                          <Upload size={22} color="#0D7A53" />
-                        </View>
-                        <Text style={styles.uploadPlaceholderTitle}>Pilih Foto Bukti Transfer</Text>
-                        <Text style={styles.uploadPlaceholderSub}>Format JPG, PNG (Maks 10MB)</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                      ) : (
+                        <TouchableOpacity style={styles.uploadPlaceholderBtn} onPress={handlePickProofImage} activeOpacity={0.8}>
+                          <View style={styles.uploadIconCircle}>
+                            <Upload size={22} color="#0D7A53" />
+                          </View>
+                          <Text style={styles.uploadPlaceholderTitle}>Pilih Foto Bukti Transfer</Text>
+                          <Text style={styles.uploadPlaceholderSub}>Format JPG, PNG (Maks 10MB)</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
                 </>
               )}
             </ScrollView>
 
-            <TouchableOpacity
-              style={[styles.btnSubmitPayment, isSubmittingProof && { opacity: 0.7 }]}
-              onPress={handleSendPaymentProof}
-              disabled={isSubmittingProof}
-              activeOpacity={0.85}
-            >
-              {isSubmittingProof ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Text style={styles.btnSubmitPaymentText}>
-                    {finalPayableTotal === 0
-                      ? `Konfirmasi Pelunasan Poin (${pointDiscount.toLocaleString("id-ID")} pts)`
-                      : "Kirim Bukti Pembayaran"}
-                  </Text>
-                  <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
-                </>
-              )}
-            </TouchableOpacity>
+            {selectedPaymentMethod === "Midtrans" && finalPayableTotal > 0 ? (
+              <TouchableOpacity
+                style={[styles.btnSubmitPayment, isMidtransLoading && { opacity: 0.7 }]}
+                onPress={handlePayWithMidtrans}
+                disabled={isMidtransLoading}
+                activeOpacity={0.85}
+              >
+                {isMidtransLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Zap size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.btnSubmitPaymentText}>
+                      Buka Pembayaran Midtrans (Rp {finalPayableTotal.toLocaleString("id-ID")})
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.btnSubmitPayment, isSubmittingProof && { opacity: 0.7 }]}
+                onPress={handleSendPaymentProof}
+                disabled={isSubmittingProof}
+                activeOpacity={0.85}
+              >
+                {isSubmittingProof ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.btnSubmitPaymentText}>
+                      {finalPayableTotal === 0
+                        ? `Konfirmasi Pelunasan Poin (${pointDiscount.toLocaleString("id-ID")} pts)`
+                        : "Kirim Bukti Pembayaran ke Toko"}
+                    </Text>
+                    <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>

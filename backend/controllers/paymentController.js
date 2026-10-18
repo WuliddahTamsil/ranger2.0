@@ -75,7 +75,45 @@ const syncOrderPaymentStatus = async (orderId, orderType, paymentStatus, payment
     } else if (orderType === "CATERING") {
       await CateringOrder.findOneAndUpdate(query, { paymentStatus: mappedStatus, paymentMethod });
     } else if (orderType === "LAUNDRY") {
-      await LaundryOrder.findOneAndUpdate(query, { paymentStatus: mappedStatus, paymentMethod });
+      const laundryOrder = await LaundryOrder.findOneAndUpdate(
+        query,
+        {
+          paymentStatus: isPaid ? "lunas" : "menunggu_pembayaran",
+          paymentMethod: paymentMethod || "Midtrans Digital",
+          ...(isPaid
+            ? {
+                paidAt: new Date(),
+                status: "PEMBAYARAN_LUNAS",
+              }
+            : {}),
+        },
+        { new: true }
+      );
+
+      if (laundryOrder && isPaid) {
+        await Notification.create([
+          {
+            userId: laundryOrder.ownerId,
+            title: "Pembayaran Laundry Lunas!",
+            message: `Pembayaran cucian #${laundryOrder.orderCode} sebesar Rp ${(laundryOrder.totalAmount || laundryOrder.finalAmount || 0).toLocaleString("id-ID")} telah lunas via ${paymentMethod || "Midtrans"}. Cucian siap diproses.`,
+            type: "laundry",
+            relatedId: laundryOrder._id,
+          },
+          {
+            userId: laundryOrder.customerId,
+            title: "Pembayaran Laundry Berhasil!",
+            message: `Pembayaran pesanan laundry #${laundryOrder.orderCode} berhasil diverifikasi. Pakaian Anda segera diproses oleh mitra.`,
+            type: "laundry",
+            relatedId: laundryOrder._id,
+          },
+        ]).catch(() => undefined);
+
+        if (io) {
+          io.emit("laundry_order_updated", laundryOrder);
+          io.to(`user:${String(laundryOrder.ownerId)}`).emit("laundry_order_updated", laundryOrder);
+          io.to(`user:${String(laundryOrder.customerId)}`).emit("laundry_order_updated", laundryOrder);
+        }
+      }
     } else if (orderType === "SEND" || orderType === "KANYAAH_SEND") {
       const existingOrder = await SendOrder.findOne(query);
       if (existingOrder) {
