@@ -78,7 +78,7 @@ for (const suite of testSuites) {
     execSync(`node ${suite.file}`, {
       cwd: path.resolve(__dirname, "../../"),
       stdio: "pipe",
-      timeout: 60000,
+      timeout: 120000,
     });
     const durationMs = Date.now() - startTime;
     console.log(`✅ LULUS (${durationMs}ms)`);

@@ -90,7 +90,11 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
       <BackHeader title="Catering Lokal" onBack={() => navigate("c_home")} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
-          <View style={styles.heroIcon}><ChefHat size={25} color="#1B7A4E" /></View>
+          <Image
+            source={require("../../../assets/kanyaah-catering.png")}
+            style={{ width: 48, height: 48, borderRadius: 12, marginRight: 12 }}
+            resizeMode="cover"
+          />
           <View style={styles.heroCopy}>
             <Text style={styles.heroTitle}>Pesan catering untuk acara kamu</Text>
             <Text style={styles.heroDescription}>Pilih mitra catering lokal dan tentukan jadwal pengiriman sesuai kebutuhan.</Text>

@@ -111,7 +111,33 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
                   activeOpacity={0.7}
                 >
                   <View style={[styles.categoryIconBg, { backgroundColor: cat.bg }]}>
-                    <IconComp size={24} color={cat.color} />
+                    {cat.id === "c_laundry" ? (
+                      <Image
+                        source={require("../../../assets/kanyaah-laundry.png")}
+                        style={{ width: 34, height: 34, borderRadius: 8 }}
+                        resizeMode="contain"
+                      />
+                    ) : cat.id === "c_kos" ? (
+                      <Image
+                        source={require("../../../assets/kanyaah-homestay.png")}
+                        style={{ width: 34, height: 34, borderRadius: 8 }}
+                        resizeMode="contain"
+                      />
+                    ) : cat.id === "c_catering" ? (
+                      <Image
+                        source={require("../../../assets/kanyaah-catering.png")}
+                        style={{ width: 34, height: 34, borderRadius: 8 }}
+                        resizeMode="contain"
+                      />
+                    ) : cat.id === "c_marketplace" ? (
+                      <Image
+                        source={require("../../../assets/kanyaah-mart.png")}
+                        style={{ width: 34, height: 34, borderRadius: 8 }}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <IconComp size={24} color={(cat as any).color || "#15803D"} />
+                    )}
                   </View>
                   <Text style={styles.categoryName}>{cat.name}</Text>
                 </TouchableOpacity>
@@ -131,7 +157,33 @@ export const CustomerHomeScreen: React.FC<CustomerHomeProps> = ({ navigate, auth
                   activeOpacity={0.7}
                 >
                   <View style={[styles.categoryIconBg, { backgroundColor: cat.bg }]}>
-                    <IconComp size={24} color={cat.color} />
+                    {cat.id === "c_ride" ? (
+                      <Image
+                        source={require("../../../assets/kanyaah-ride.png")}
+                        style={{ width: 34, height: 34, borderRadius: 8 }}
+                        resizeMode="contain"
+                      />
+                    ) : cat.id === "c_send" ? (
+                      <Image
+                        source={require("../../../assets/kanyaah-send.png")}
+                        style={{ width: 34, height: 34, borderRadius: 8 }}
+                        resizeMode="contain"
+                      />
+                    ) : cat.id === "c_recycle_home" ? (
+                      <Image
+                        source={require("../../../assets/kanyaah-recycle.png")}
+                        style={{ width: 34, height: 34, borderRadius: 8 }}
+                        resizeMode="contain"
+                      />
+                    ) : cat.id === "c_shop_home" ? (
+                      <Image
+                        source={require("../../../assets/kanyaah-shop.png")}
+                        style={{ width: 34, height: 34, borderRadius: 8 }}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <IconComp size={24} color={(cat as any).color || "#15803D"} />
+                    )}
                   </View>
                   <Text style={styles.categoryName}>{cat.name}</Text>
                 </TouchableOpacity>

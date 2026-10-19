@@ -15,8 +15,9 @@ import { ArrowLeft, Ticket, CheckCircle2, Copy } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useGeoversePoint } from "../hooks/useGeoversePoint";
 import { GeoversePointVoucherCard } from "../components/GeoversePointVoucherCard";
-import { createRedemption, fetchAvailableVouchers } from "../services/geoversePointService";
 import { PointVoucherUI } from "../types/pointTypes";
+import { formatDateSafe } from "../../../utils/formatters";
+import { createRedemption } from "../services/geoversePointService";
 
 export const GeoversePointVoucherScreen: React.FC<Nav> = ({ navigate }) => {
   const { width } = useWindowDimensions();
@@ -259,11 +260,7 @@ export const GeoversePointVoucherScreen: React.FC<Nav> = ({ navigate }) => {
                       <Text style={styles.myVoucherBadgeText}>Voucher Aktif</Text>
                     </View>
                     <Text style={styles.myVoucherDate}>
-                      {new Date(item.createdAt).toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {formatDateSafe(item.createdAt)}
                     </Text>
                   </View>
 

@@ -33,10 +33,10 @@ export const getDocumentRequirements = (
       {
         key: "skck",
         label: "SKCK (Opsional)",
-        description: "Surat Keterangan Catatan Kepolisian (opsional, menunggu konfirmasi final client).",
+        description: "Surat Keterangan Catatan Kepolisian (opsional / tidak wajib untuk pendaftaran awal).",
         required: false,
-        isPendingConfirmation: true,
-        pendingConfirmationNote: "Kewajiban dokumen SKCK sedang menunggu konfirmasi bisnis final dari client.",
+        isPendingConfirmation: false,
+        pendingConfirmationNote: "Konfirmasi Client: Saat ini baru ada 1 driver yang memiliki SIM aktif. SKCK diatur opsional agar pendaftaran awal driver tidak terhambat.",
       },
     ];
   }
@@ -61,8 +61,8 @@ export const getDocumentRequirements = (
         label: "NIB / Izin Usaha (Opsional)",
         description: "Nomor Induk Berusaha (NIB) atau surat izin operasional perdagangan.",
         required: false,
-        isPendingConfirmation: true,
-        pendingConfirmationNote: "Menunggu konfirmasi kewajiban NIB retail dari client.",
+        isPendingConfirmation: false,
+        pendingConfirmationNote: "NIB opsional untuk pendaftaran awal toko perintis retail Kamojang.",
       },
     ];
 
@@ -120,18 +120,18 @@ export const getDocumentRequirements = (
       {
         key: "business_license",
         label: "NIB / Izin Usaha (Opsional)",
-        description: "Nomor Induk Berusaha (opsional, menunggu konfirmasi final client).",
+        description: "Nomor Induk Berusaha (opsional bagi mitra perintis binaan: Aisyah, Kiki, Dessy, Sari, Ema).",
         required: false,
-        isPendingConfirmation: true,
-        pendingConfirmationNote: "Menunggu konfirmasi kewajiban NIB catering dari client.",
+        isPendingConfirmation: false,
+        pendingConfirmationNote: "Konfirmasi Client: NIB opsional bagi UMKM catering perintis agar dapat langsung diverifikasi admin.",
       },
       {
         key: "halal_cert",
         label: "Sertifikat Halal (Opsional)",
-        description: "Sertifikat halal dari BPJPH/MUI (opsional, menunggu konfirmasi final client).",
+        description: "Sertifikat halal BPJPH/MUI (opsional bagi UMKM kuliner lokal binaan).",
         required: false,
-        isPendingConfirmation: true,
-        pendingConfirmationNote: "Menunggu konfirmasi kewajiban Sertifikat Halal dari client.",
+        isPendingConfirmation: false,
+        pendingConfirmationNote: "Konfirmasi Client: Sertifikasi halal bersifat opsional dalam tahap verifikasi awal.",
       },
     ];
   }
@@ -143,18 +143,18 @@ export const getDocumentRequirements = (
       {
         key: "business_license",
         label: "NIB / Izin Usaha (Opsional)",
-        description: "Nomor Induk Berusaha (opsional, menunggu konfirmasi final client).",
+        description: "Nomor Induk Berusaha (opsional bagi mitra perintis: Siti Nurazizah, Gusni Santiana).",
         required: false,
-        isPendingConfirmation: true,
-        pendingConfirmationNote: "Menunggu konfirmasi kewajiban NIB laundry dari client.",
+        isPendingConfirmation: false,
+        pendingConfirmationNote: "Konfirmasi Client: NIB opsional bagi perintis usaha laundry binaan.",
       },
       {
         key: "halal_cert",
         label: "Sertifikat Halal Deterjen / Laundry (Opsional)",
-        description: "Sertifikasi halal operasional (opsional, menunggu konfirmasi final client).",
+        description: "Sertifikasi halal operasional (opsional untuk pendaftaran awal).",
         required: false,
-        isPendingConfirmation: true,
-        pendingConfirmationNote: "Menunggu konfirmasi kewajiban sertifikasi halal laundry dari client.",
+        isPendingConfirmation: false,
+        pendingConfirmationNote: "Konfirmasi Client: Sertifikasi halal laundry bersifat opsional.",
       },
     ];
   }

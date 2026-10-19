@@ -11,6 +11,7 @@ import {
   Recycle,
 } from "lucide-react-native";
 import { PointLedgerUI } from "../types/pointTypes";
+import { formatDateSafe } from "../../../utils/formatters";
 
 interface GeoversePointLedgerItemProps {
   item: PointLedgerUI;
@@ -82,13 +83,7 @@ export const GeoversePointLedgerItem: React.FC<GeoversePointLedgerItemProps> = (
   const details = getSourceDetails();
   const IconComponent = details.icon;
 
-  const dateFormatted = new Date(item.createdAt).toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const dateFormatted = formatDateSafe(item.createdAt, true);
 
   return (
     <View style={styles.container}>

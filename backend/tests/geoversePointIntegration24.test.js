@@ -70,7 +70,12 @@ async function run24Tests() {
   console.log("🧪 MENJALANKAN 24 TEST INTEGRASI & ACCEPTANCE GEOVERSE POINT");
   console.log("================================================================================\n");
 
-  await mongoose.connect(MONGO_URI);
+  try {
+    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 60000 });
+  } catch (connErr) {
+    console.warn("Retrying mongoose connect...", connErr.message);
+    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 60000 });
+  }
 
   let passed = 0;
   let failed = 0;

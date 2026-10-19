@@ -36,7 +36,21 @@ import {
   confirmWasteDeposit,
   disputeWasteDeposit,
 } from "../../../services/recycleService";
-import { rp } from "../../../utils/formatters";
+import { rp, formatNumberSafe } from "../../../utils/formatters";
+const formatSafeDateTime = (dateVal?: string | number | Date | null): string => {
+  if (!dateVal) return "Waktu penimbangan";
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return "Waktu penimbangan";
+    const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} • ${hh}:${mm} WIB`;
+  } catch {
+    return "Waktu penimbangan";
+  }
+};
 
 export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
   const { selectedDeposit, setSelectedDeposit, refreshWallet: refreshRecycleWallet } = useRecycle();
@@ -186,13 +200,7 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
               <View style={styles.officerTimeRow}>
                 <Clock size={12} color="#6B7280" />
                 <Text style={styles.officerTimeText}>
-                  {new Date(deposit.updatedAt).toLocaleDateString("id-ID", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {formatSafeDateTime(deposit.updatedAt)}
                 </Text>
               </View>
             </View>
@@ -218,7 +226,7 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
                 <Text style={styles.catTitle}>{cat.subCategory || cat.category}</Text>
               </View>
               <View style={styles.catPriceBadge}>
-                <Text style={styles.catPriceBadgeText}>Rp {cat.pricePerKg?.toLocaleString("id-ID")}/kg</Text>
+                <Text style={styles.catPriceBadgeText}>Rp {formatNumberSafe(cat.pricePerKg)}/kg</Text>
               </View>
             </View>
 
@@ -240,7 +248,7 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
               <Text style={styles.subtotalLabel}>Subtotal Nilai:</Text>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={styles.subtotalRupiah}>{rp(cat.totalRupiah || 0)}</Text>
-                <Text style={styles.subtotalPoints}>+{cat.totalPoint?.toLocaleString("id-ID") || 0} Points</Text>
+                <Text style={styles.subtotalPoints}>+{formatNumberSafe(cat.totalPoint || 0)} Points</Text>
               </View>
             </View>
           </View>
@@ -302,7 +310,7 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
               <Sparkles size={20} color="#FBBF24" />
               <Text style={styles.pointRewardLabel}>GEOVERSE Point Diterima:</Text>
             </View>
-            <Text style={styles.pointRewardVal}>+{totalPoint.toLocaleString("id-ID")} Pts</Text>
+            <Text style={styles.pointRewardVal}>+{formatNumberSafe(totalPoint)} Pts</Text>
           </View>
           <Text style={styles.conversionNote}>*1 Point = Rp 1, langsung diterbitkan saat Anda setujui.</Text>
         </View>
@@ -537,7 +545,7 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
               <Sparkles size={36} color="#15803D" />
             </View>
             <Text style={styles.successModalTitle}>Poin Berhasil Diterbitkan!</Text>
-            <Text style={styles.successModalPoints}>+{totalPoint.toLocaleString("id-ID")} Points</Text>
+            <Text style={styles.successModalPoints}>+{formatNumberSafe(totalPoint)} Points</Text>
             <Text style={styles.successModalSub}>
               Selamat! Saldo GEOVERSE Point Anda telah bertambah. Poin ini dapat ditukarkan menjadi voucher belanja atau Rupiah kapan saja.
             </Text>

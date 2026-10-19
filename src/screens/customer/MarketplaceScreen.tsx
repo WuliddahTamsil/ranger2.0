@@ -410,11 +410,24 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
     if (view === "cart") return "Keranjang Belanja";
     if (view === "checkout") return "Checkout Marketplace";
     if (view === "success") return partialCheckout ? "Pesanan Sebagian Tersimpan" : "Pesanan Dibuat";
-    return "GEOVERSE Marketplace";
+    return "Kanyaah Mart";
   }, [view]);
 
   const renderMenu = () => (
     <>
+      <View style={styles.martHeroBanner}>
+        <Image
+          source={require("../../../assets/kanyaah-mart.png")}
+          style={{ width: 44, height: 44, borderRadius: 12, marginRight: 12 }}
+          resizeMode="cover"
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: "#881337" }}>Kanyaah Mart</Text>
+          <Text style={{ fontSize: 11, color: "#9F1239", marginTop: 2 }}>
+            Sajian kuliner, jajanan manis & kebutuhan harian UMKM
+          </Text>
+        </View>
+      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -877,6 +890,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   flexOne: { flex: 1 },
   catalogContent: { padding: 16, paddingBottom: 28 },
+  martHeroBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF1F2",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#FECDD3",
+  },
   pageContent: { padding: 16, paddingBottom: 32 },
   storeHeader: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: "#E5E7EB" },
   storeLogo: { width: 52, height: 52, borderRadius: 16, backgroundColor: "#E8F5EE", alignItems: "center", justifyContent: "center", marginRight: 12 },

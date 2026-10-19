@@ -289,7 +289,7 @@ export const GeoversePointRedeemCashScreen: React.FC<Nav> = ({ navigate }) => {
                       )}
                     </View>
                     <Text style={styles.channelMin}>
-                      Min. {channel.min.toLocaleString("id-ID")} Pts
+                      Min. {formatPoint(channel.min)}
                     </Text>
                   </TouchableOpacity>
                 );

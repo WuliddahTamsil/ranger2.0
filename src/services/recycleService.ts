@@ -212,13 +212,16 @@ export const getWasteBanks = async (
     const url = getApiUrl(`/waste-banks${query.toString() ? `?${query.toString()}` : ""}`);
     let apiBanks: WasteBankUI[] = [];
     try {
-      const res = await fetch(url);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
       const resJson = await readApiJson(res);
       if (resJson.success && Array.isArray(resJson.data)) {
         apiBanks = resJson.data;
       }
     } catch (e) {
-      console.log("Fetch api waste-banks error:", e);
+      // Gracefully fall back to local known banks without blocking
     }
 
     // Merge default known banks with apiBanks (apiBanks from MongoDB takes absolute priority)
@@ -483,12 +486,15 @@ export const getCustomerDeposits = async (
 ): Promise<{ success: boolean; data: WasteDepositUI[]; message?: string }> => {
   try {
     const authHeaders = await getAuthHeaders(customerId);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
     const res = await fetch(getApiUrl(`/waste/deposits/customer/${customerId}?t=${Date.now()}`), {
       headers: authHeaders,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     return await readApiJson(res);
   } catch (err: any) {
-    console.error("getCustomerDeposits error:", err);
     return { success: false, data: [], message: err?.message || "Gagal memuat riwayat setoran" };
   }
 };

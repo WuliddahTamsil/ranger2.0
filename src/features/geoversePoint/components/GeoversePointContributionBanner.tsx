@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { Recycle, ArrowRight } from "lucide-react-native";
+import { Recycle, ArrowRight, Sparkles } from "lucide-react-native";
 
 interface GeoversePointContributionBannerProps {
   onDepositPress: () => void;
@@ -14,22 +14,22 @@ export const GeoversePointContributionBanner: React.FC<GeoversePointContribution
       <View style={styles.contentCol}>
         <View style={styles.tagRow}>
           <View style={styles.tagBadge}>
-            <Recycle size={12} color="#047857" />
+            <Recycle size={11} color="#059669" />
             <Text style={styles.tagText}>Daur Ulang Berhadiah</Text>
           </View>
         </View>
-        <Text style={styles.title}>Setor sampah, kumpulkan Point!</Text>
+        <Text style={styles.title}>Setor Sampah, Dapatkan Saldo Poin!</Text>
         <Text style={styles.subtitle}>
-          Timbang sampah anorganik di Bank Sampah terdekat dan dapatkan poin langsung ke dompetmu.
+          Timbang sampah anorganik di mitra Bank Sampah terdekat dan langsung klaim poin reward ke dompetmu.
         </Text>
         <TouchableOpacity
           style={styles.ctaButton}
           onPress={onDepositPress}
-          activeOpacity={0.8}
+          activeOpacity={0.82}
           accessibilityLabel="Setor Sampah Sekarang"
         >
-          <Text style={styles.ctaText}>Setor Sampah Sekarang</Text>
-          <ArrowRight size={14} color="#FFFFFF" />
+          <Text style={styles.ctaText}>Mulai Setor Sampah</Text>
+          <ArrowRight size={13} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
     </View>
@@ -39,7 +39,7 @@ export const GeoversePointContributionBanner: React.FC<GeoversePointContribution
 const styles = StyleSheet.create({
   bannerContainer: {
     backgroundColor: "#F0FDF4",
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#BBF7D0",
     padding: 16,
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
   },
   tagRow: {
-    marginBottom: 6,
+    marginBottom: 8,
   },
   tagBadge: {
     flexDirection: "row",
@@ -57,24 +57,27 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: "#DCFCE7",
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
     alignSelf: "flex-start",
   },
   tagText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "700",
-    color: "#047857",
+    color: "#059669",
   },
   title: {
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#14532D",
     marginBottom: 4,
+    letterSpacing: -0.2,
   },
   subtitle: {
     fontSize: 12,
-    color: "#374151",
+    color: "#4B5563",
     lineHeight: 18,
     marginBottom: 12,
   },
@@ -83,10 +86,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#15803D",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    backgroundColor: "#059669",
+    paddingVertical: 9,
+    paddingHorizontal: 15,
+    borderRadius: 9,
     alignSelf: "flex-start",
   },
   ctaText: {

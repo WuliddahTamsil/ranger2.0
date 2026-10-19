@@ -42,6 +42,8 @@ import {
   TrendingUp,
   Wallet,
   User,
+  Tag,
+  ChevronRight,
 } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Nav } from "../../types";
@@ -64,6 +66,7 @@ import { ShopOrderTab } from "./ShopOrderTab";
 import { ShopPendapatanTab } from "./ShopPendapatanTab";
 import { ShopKeuanganTab } from "./ShopKeuanganTab";
 import { ShopProfilTab } from "./ShopProfilTab";
+import { MerchantVoucherManagementModal } from "../../components/MerchantVoucherManagementModal";
 
 interface Props extends Nav {
   authAccount?: AuthAccount | null;
@@ -85,6 +88,7 @@ export const Beranda: React.FC<Props> = ({ navigate, authAccount, onUpdateAccoun
   const [loading, setLoading] = useState(true);
   const [formVisible, setFormVisible] = useState(false);
   const [editing, setEditing] = useState<ShopProduct | null>(null);
+  const [voucherModalVisible, setVoucherModalVisible] = useState(false);
 
   // Layout view mode: "grid" vs "list"
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -289,7 +293,7 @@ Saus Sambal Asli 335ml, Sembako, 16500, 30, botol, ABC, 8998888100089, https://i
 Indomie Goreng Spesial 85g, Sembako, 3500, 200, bungkus, Indofood, 8998866200111, https://images.unsplash.com/photo-1612927601601-6638404737ce?w=400&q=80
 Indomie Kuah Kari Ayam 72g, Sembako, 3500, 150, bungkus, Indofood, 8998866200222, https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&q=80
 Aqua Air Mineral 600ml, Minuman, 3500, 120, botol, Danone, 8992753210011, https://images.unsplash.com/photo-1523362628745-0c100150b504?w=400&q=80
-Le Minerale 600ml, Minuman, 3500, 100, botol, Mayora, 8996001210022, https://images.unsplash.com/photo-1548839140-29a749e1bc4e?w=400&q=80
+Le Minerale 600ml, Minuman, 3500, 100, botol, Mayora, 8996001210022, https://images.unsplash.com/photo-1559839914-17aae19cec71?w=400&q=80
 Pocari Sweat 500ml, Minuman, 8500, 48, botol, Otsuka, 8996001210033, https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=400&q=80
 Teh Botol Sosro Kotak 250ml, Minuman, 4000, 72, kotak, Sosro, 8991001210044, https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&q=80
 Ultra Milk Full Cream 250ml, Minuman, 7000, 60, kotak, Ultrajaya, 8992745210055, https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&q=80
@@ -676,6 +680,24 @@ Madu TJ Murni 150g, Kesehatan, 23500, 25, botol, Tresno Joyo, 8997001600055, htt
             </View>
           </View>
         </View>
+
+        {/* Banner Promo & Voucher Toko */}
+        <TouchableOpacity
+          style={styles.voucherPromoBanner}
+          onPress={() => setVoucherModalVisible(true)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.voucherPromoIcon}>
+            <Tag size={20} color="#0D7A53" />
+          </View>
+          <View style={styles.voucherPromoTextCol}>
+            <Text style={styles.voucherPromoTitle}>Promo & Voucher Toko</Text>
+            <Text style={styles.voucherPromoSub}>
+              Kelola voucher gratis ongkir & diskon harga khusus pembeli Anda
+            </Text>
+          </View>
+          <ChevronRight size={18} color="#0D7A53" />
+        </TouchableOpacity>
 
         {/* Action Header: Search & Buttons */}
         <View style={styles.actionToolbar}>
@@ -1410,6 +1432,13 @@ Madu TJ Murni 150g, Kesehatan, 23500, 25, botol, Tresno Joyo, 8997001600055, htt
           );
         })}
       </View>
+      <MerchantVoucherManagementModal
+        visible={voucherModalVisible}
+        onClose={() => setVoucherModalVisible(false)}
+        merchantId={store?._id || authAccount?.id}
+        merchantName={store?.outletName || store?.name || authAccount?.name || "Kanyaah Shop"}
+        service="SHOP"
+      />
     </ResponsiveSafeAreaView>
   );
 };
@@ -1430,6 +1459,39 @@ const Stat = ({
 );
 
 const styles = StyleSheet.create({
+  voucherPromoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    gap: 12,
+  },
+  voucherPromoIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  voucherPromoTextCol: {
+    flex: 1,
+  },
+  voucherPromoTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  voucherPromoSub: {
+    fontSize: 11,
+    color: "#166534",
+    marginTop: 2,
+    lineHeight: 15,
+  },
   safe: { flex: 1, backgroundColor: "#F8FAFC" },
   mainTabBody: { flex: 1 },
   scrollContent: { paddingBottom: 36 },

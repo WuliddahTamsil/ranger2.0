@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Image,
   StyleSheet,
   RefreshControl,
   useWindowDimensions,
@@ -907,6 +906,8 @@ const styles = StyleSheet.create({
   heroBanner: {
     borderRadius: 20,
     padding: 18,
+    position: "relative",
+    overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,

@@ -15,6 +15,7 @@ import {
   fetchMyRedemptions,
 } from "../services/geoversePointService";
 import { subscribeToUserRealtime } from "../../../services/userRealtime";
+import { formatNumberSafe, rp } from "../../../utils/formatters";
 
 interface GeoversePointContextType {
   wallet: PointWalletUI | null;
@@ -171,12 +172,12 @@ export const GeoversePointProvider: React.FC<{ children: React.ReactNode }> = ({
   // Formatters & helpers
   const formatPoint = useCallback((pts?: number | null): string => {
     const val = pts != null ? Math.floor(pts) : 0;
-    return `${val.toLocaleString("id-ID")} Pts`;
+    return `${formatNumberSafe(val)} Pts`;
   }, []);
 
   const formatRupiah = useCallback((amt?: number | null): string => {
     const val = amt != null ? Math.floor(amt) : 0;
-    return `Rp ${val.toLocaleString("id-ID")}`;
+    return rp(val);
   }, []);
 
   const pointToRupiah = useCallback(

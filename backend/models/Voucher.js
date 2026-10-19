@@ -21,7 +21,7 @@ const voucherSchema = new mongoose.Schema(
     },
     service: {
       type: String,
-      enum: ["ALL", "MARKETPLACE", "RIDE", "SEND", "LAUNDRY", "CATERING", "KANYAAH_SHOP", "SHOP"],
+      enum: ["ALL", "MARKETPLACE", "RIDE", "SEND", "LAUNDRY", "CATERING", "KANYAAH_SHOP", "SHOP", "HOMESTAY"],
       default: "ALL",
       index: true,
     },
@@ -29,10 +29,15 @@ const voucherSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
+      index: true,
+    },
+    merchantName: {
+      type: String,
+      default: "",
     },
     discountType: {
       type: String,
-      enum: ["FIXED", "PERCENTAGE"],
+      enum: ["FIXED", "PERCENTAGE", "FREE_SHIPPING"],
       default: "FIXED",
     },
     discountValue: {
@@ -51,8 +56,8 @@ const voucherSchema = new mongoose.Schema(
     },
     pointsCost: {
       type: Number,
-      required: true,
-      min: 1,
+      default: 0,
+      min: 0,
     },
     validFrom: {
       type: Date,

@@ -198,7 +198,9 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
     }
   });
 
-  const totalActualPoints = totalActualRupiah; // 1 Point = Rp 1
+  // Sesuai ketentuan client: Rp 1.000 = 10 Poin GEOVERSE (1 Poin = Rp 100)
+  // Nominal rupiah berdasarkan harga pengepul langsung masuk ke saldo aplikasi
+  const totalActualPoints = Math.round((totalActualRupiah / 1000) * 10);
 
   const handleSubmitWeighing = async () => {
     if (totalActualKg <= 0) {
@@ -392,11 +394,13 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
                   </View>
 
                   <View style={styles.subtotalCol}>
-                    <Text style={styles.subtotalLabel}>Koin Diterbitkan:</Text>
+                    <Text style={styles.subtotalLabel}>Saldo Masuk:</Text>
                     <Text style={[styles.subtotalPoint, isFilled && { color: "#15803D" }]}>
-                      +{subtotalRp.toLocaleString("id-ID")} Pts
+                      {rp(subtotalRp)}
                     </Text>
-                    <Text style={styles.subtotalVal}>({rp(subtotalRp)})</Text>
+                    <Text style={styles.subtotalVal}>
+                      (+{Math.round((subtotalRp / 1000) * 10)} Poin Reward)
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -507,19 +511,19 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
             <Text style={styles.totalVal}>{totalActualKg.toFixed(1)} kg</Text>
           </View>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total Nilai Rupiah:</Text>
-            <Text style={styles.totalVal}>{rp(totalActualRupiah)}</Text>
+            <Text style={styles.totalLabel}>Saldo Masuk Aplikasi (Harga Pengepul):</Text>
+            <Text style={[styles.totalVal, { color: "#15803D", fontWeight: "800" }]}>{rp(totalActualRupiah)}</Text>
           </View>
           <View style={styles.totalDivider} />
           <View style={styles.totalRow}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Sparkles size={18} color="#FBBF24" />
-              <Text style={styles.pointRewardLabel}>Poin GEOVERSE Siap Diterbitkan:</Text>
+              <Text style={styles.pointRewardLabel}>Poin Reward GEOVERSE (Rp 1.000 = 10 Poin):</Text>
             </View>
             <Text style={styles.pointRewardVal}>+{totalActualPoints.toLocaleString("id-ID")} Pts</Text>
           </View>
           <Text style={styles.note}>
-            *Koin poin akan otomatis terbit dan masuk ke akun nasabah setelah dikonfirmasi.
+            *Nominal rupiah dari harga pengepul langsung masuk ke saldo dompet aplikasi. Poin reward komunitas terbit otomatis sebagai bonus peduli lingkungan.
           </Text>
 
           {deposit.method === "PICKUP" && totalActualKg > 20 && (

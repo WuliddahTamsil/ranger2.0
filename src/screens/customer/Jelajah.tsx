@@ -11,6 +11,7 @@ import {
   Image,
   Modal,
   Alert,
+  Linking,
 } from "react-native";
 import {
   Search,
@@ -37,6 +38,13 @@ interface JelajahProps {
   onOpenLaundry: () => void;
   onOpenKos: () => void;
   onOpenRide?: () => void;
+  onOpenSend?: () => void;
+  onOpenShop?: () => void;
+  onOpenRecycle?: () => void;
+  onOpenPoint?: () => void;
+  onOpenVouchers?: () => void;
+  onOpenInfoHub?: () => void;
+  onNavigate?: (screen: string) => void;
 }
 
 export const Jelajah: React.FC<JelajahProps> = ({
@@ -47,6 +55,13 @@ export const Jelajah: React.FC<JelajahProps> = ({
   onOpenLaundry,
   onOpenKos,
   onOpenRide,
+  onOpenSend,
+  onOpenShop,
+  onOpenRecycle,
+  onOpenPoint,
+  onOpenVouchers,
+  onOpenInfoHub,
+  onNavigate,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -59,6 +74,97 @@ export const Jelajah: React.FC<JelajahProps> = ({
     "Kos Dekat Kantor PGE",
     "Batik Kamojang",
     "Kopi Lokal",
+  ];
+
+  const allServices = [
+    {
+      id: "mart",
+      name: "Kanyaah Mart",
+      img: require("../../../assets/kanyaah-mart.png"),
+      bg: "#E8F5EE",
+      onPress: onOpenMarketplace,
+    },
+    {
+      id: "catering",
+      name: "Kanyaah Catering",
+      img: require("../../../assets/kanyaah-catering.png"),
+      bg: "#FFEDD5",
+      onPress: onOpenCatering,
+    },
+    {
+      id: "laundry",
+      name: "Kanyaah Laundry",
+      img: require("../../../assets/kanyaah-laundry.png"),
+      bg: "#E0F2FE",
+      onPress: onOpenLaundry,
+    },
+    {
+      id: "homestay",
+      name: "Kanyaah Homestay",
+      img: require("../../../assets/kanyaah-homestay.png"),
+      bg: "#F3E8FF",
+      onPress: onOpenKos,
+    },
+    {
+      id: "ride",
+      name: "Kanyaah Ride",
+      img: require("../../../assets/kanyaah-ride.png"),
+      bg: "#DCFCE7",
+      onPress: onOpenRide,
+    },
+    {
+      id: "send",
+      name: "GEOVERSE Delivery",
+      img: require("../../../assets/kanyaah-send.png"),
+      bg: "#FFF4D8",
+      onPress: onOpenSend || (() => Alert.alert("GEOVERSE Delivery", "Layanan kurir pengiriman barang siap melayani Anda di kawasan Kamojang.")),
+    },
+    {
+      id: "shop",
+      name: "Kanyaah Shop",
+      img: require("../../../assets/kanyaah-shop.png"),
+      bg: "#FDF2F8",
+      onPress: onOpenShop,
+    },
+    {
+      id: "recycle",
+      name: "Kanyaah Recycle",
+      img: require("../../../assets/kanyaah-recycle.png"),
+      bg: "#EAF8F0",
+      onPress: onOpenRecycle,
+    },
+    {
+      id: "point",
+      name: "GEOVERSE Point",
+      img: require("../../../assets/kanyaah-point.png"),
+      bg: "#FEF9C3",
+      onPress: onOpenPoint,
+    },
+    {
+      id: "voucher",
+      name: "Voucher",
+      icon: Tag,
+      iconColor: "#E91E63",
+      bg: "#FFE4EF",
+      onPress: onOpenVouchers || (() => Alert.alert("Voucher & Promo", "Voucher PG 2.0 aktif. Klaim di checkout pesanan.")),
+    },
+    {
+      id: "info_hub",
+      name: "Info Hub PGE",
+      icon: Flame,
+      iconColor: "#0284C7",
+      bg: "#E0F2FE",
+      onPress: onOpenInfoHub || (() => Alert.alert("Info Hub PGE", "Pusat informasi dan pengumuman resmi kawasan Kamojang.")),
+    },
+    {
+      id: "bantuan",
+      name: "Bantuan & CS",
+      img: require("../../../assets/kanyaah-more.png"),
+      bg: "#F1F5F9",
+      onPress: () => {
+        Linking.openURL("https://wa.me/6287805987309?text=Halo%20Admin%20GEOVERSE%2C%20saya%20butuh%20bantuan%20layanan.").catch(() => {});
+      },
+    },
   ];
 
   const handleOpenProductDetail = (p: Product) => {
@@ -106,70 +212,29 @@ export const Jelajah: React.FC<JelajahProps> = ({
         {/* Layanan Utama Section */}
         <Text style={styles.sectionLabel}>SEMUA LAYANAN</Text>
         <View style={styles.servicesGrid}>
-          {/* Marketplace */}
-          <TouchableOpacity style={styles.serviceCard} onPress={onOpenMarketplace}>
-            <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5EE" }]}>
-              <Store size={22} color="#1B7A4E" />
-            </View>
-            <Text style={styles.serviceLabel}>Kanyaah Mart</Text>
-          </TouchableOpacity>
-
-          {/* Catering */}
-          <TouchableOpacity style={styles.serviceCard} onPress={onOpenCatering}>
-            <View style={[styles.serviceIconBg, { backgroundColor: "#FFEDD5" }]}>
-              <Coffee size={22} color="#EA580C" />
-            </View>
-            <Text style={styles.serviceLabel}>Kanyaah Catering</Text>
-          </TouchableOpacity>
-
-          {/* Laundry */}
-          <TouchableOpacity style={styles.serviceCard} onPress={onOpenLaundry}>
-            <View style={[styles.serviceIconBg, { backgroundColor: "#E0F2FE" }]}>
-              <Wind size={22} color="#0284C7" />
-            </View>
-            <Text style={styles.serviceLabel}>Kanyaah Laundry</Text>
-          </TouchableOpacity>
-
-          {/* Kos */}
-          <TouchableOpacity style={styles.serviceCard} onPress={onOpenKos}>
-            <View style={[styles.serviceIconBg, { backgroundColor: "#F3E8FF" }]}>
-              <Building size={22} color="#9333EA" />
-            </View>
-            <Text style={styles.serviceLabel}>Kanyaah Homestay</Text>
-          </TouchableOpacity>
-
-          {/* Ride -> Kanyaah Ride */}
-          <TouchableOpacity
-            style={styles.serviceCard}
-            onPress={onOpenRide}
-          >
-            <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5EE" }]}>
-              <Bike size={22} color="#1B7A4E" />
-            </View>
-            <Text style={styles.serviceLabel}>Kanyaah Ride</Text>
-          </TouchableOpacity>
-
-          {/* Delivery */}
-          <TouchableOpacity 
-            style={styles.serviceCard}
-            onPress={() => Alert.alert("GEOVERSE Delivery", "Layanan kurir pengiriman barang siap melayani Anda di kawasan Kamojang.")}
-          >
-            <View style={[styles.serviceIconBg, { backgroundColor: "#FFF4D8" }]}>
-              <Truck size={22} color="#D97706" />
-            </View>
-            <Text style={styles.serviceLabel}>GEOVERSE Delivery</Text>
-          </TouchableOpacity>
-
-          {/* Voucher */}
-          <TouchableOpacity 
-            style={styles.serviceCard}
-            onPress={() => Alert.alert("Voucher & Promo", "Voucher PG 2.0 aktif. Klaim di checkout pesanan.")}
-          >
-            <View style={[styles.serviceIconBg, { backgroundColor: "#FFE4EF" }]}>
-              <Tag size={22} color="#E91E63" />
-            </View>
-            <Text style={styles.serviceLabel}>Voucher</Text>
-          </TouchableOpacity>
+          {allServices.map((service) => (
+            <TouchableOpacity
+              key={service.id}
+              style={styles.serviceCard}
+              onPress={service.onPress}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.serviceIconBg, { backgroundColor: service.bg }]}>
+                {service.img ? (
+                  <Image
+                    source={service.img}
+                    style={styles.serviceIconImg}
+                    resizeMode="contain"
+                  />
+                ) : service.icon ? (
+                  <service.icon size={22} color={service.iconColor} />
+                ) : null}
+              </View>
+              <Text style={styles.serviceLabel} numberOfLines={2}>
+                {service.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* Popular Searches */}
@@ -338,6 +403,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     paddingVertical: 12,
+    paddingHorizontal: 4,
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
@@ -349,11 +415,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  serviceIconImg: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+  },
   serviceLabel: {
     fontSize: 10,
     fontWeight: "700",
     color: "#374151",
     textAlign: "center",
+    lineHeight: 13,
   },
   popularWrap: {
     flexDirection: "row",

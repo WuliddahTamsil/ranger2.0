@@ -11,6 +11,7 @@ import {
   Alert,
   Platform,
   Switch,
+  Image,
 } from "react-native";
 import {
   ArrowLeft,
@@ -637,8 +638,12 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       >
         {/* Banner Supporting Text */}
         <View style={styles.bannerBox}>
-          <View style={styles.bannerIconBox}>
-            <Bike size={24} color="#1B7A4E" />
+          <View style={[styles.bannerIconBox, { backgroundColor: "transparent" }]}>
+            <Image
+              source={require("../../../assets/kanyaah-ride.png")}
+              style={{ width: 44, height: 44, borderRadius: 12 }}
+              resizeMode="contain"
+            />
           </View>
           <View style={styles.bannerTextWrap}>
             <Text style={styles.bannerTitle}>Kanyaah Ride</Text>
@@ -668,20 +673,32 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                {activeRideOrder?.status === "SEARCHING_DRIVER" && (
+                {activeRideOrder && ["SEARCHING_DRIVER", "DRIVER_ASSIGNED", "DRIVER_ON_THE_WAY", "DRIVER_ARRIVED"].includes(activeRideOrder.status) && (
                   <TouchableOpacity
-                    style={{
-                      backgroundColor: "#FEE2E2",
-                      paddingHorizontal: 10,
-                      paddingVertical: 7,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: "#FCA5A5",
-                    }}
+                    style={[
+                      {
+                        backgroundColor: "#FEE2E2",
+                        paddingHorizontal: 10,
+                        paddingVertical: 7,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: "#FCA5A5",
+                      },
+                      Platform.OS === "web" && ({ cursor: "pointer" } as any),
+                    ]}
                     onPress={async () => {
-                      if (activeRideOrder?._id) {
-                        await cancelRide(activeRideOrder._id, "Dibatalkan oleh pelanggan");
-                        setActiveRideOrder(null);
+                      if (!activeRideOrder) return;
+                      if (Platform.OS === "web") {
+                        const confirmed = window.confirm("Batalkan pesanan Kanyaah Ride aktif?");
+                        if (!confirmed) return;
+                      }
+                      const orderTargetId = activeRideOrder._id || (activeRideOrder as any).orderCode;
+                      await cancelRide(orderTargetId, "Dibatalkan oleh pelanggan");
+                      setActiveRideOrder(null);
+                      await AsyncStorage.removeItem("selected_ride_tracking_id").catch(() => {});
+                      if (Platform.OS === "web") {
+                        window.alert("Pesanan perjalanan Anda telah dibatalkan.");
+                      } else {
                         Alert.alert("Pesanan Dibatalkan", "Pesanan sebelumnya telah dibatalkan. Anda dapat memesan kembali sekarang.");
                       }
                     }}
@@ -879,7 +896,11 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
             activeOpacity={0.8}
           >
             <View style={[styles.vehicleIconBg, { backgroundColor: "#E8F5EE" }]}>
-              <Bike size={26} color="#1B7A4E" />
+              <Image
+                source={require("../../../assets/kanyaah-ride.png")}
+                style={{ width: 38, height: 38, borderRadius: 10 }}
+                resizeMode="contain"
+              />
             </View>
 
             <View style={styles.vehicleInfoCol}>

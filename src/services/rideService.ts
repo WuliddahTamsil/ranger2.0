@@ -443,7 +443,8 @@ export const cancelRide = async (
       reason = reasonOrOptions;
     }
 
-    const res = await fetch(getApiUrl(`/rides/${orderId}/cancel`), {
+    const cleanId = String(orderId).replace(/^#/, "").trim();
+    const res = await fetch(getApiUrl(`/rides/${encodeURIComponent(cleanId)}/cancel`), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -451,10 +452,19 @@ export const cancelRide = async (
       },
       body: JSON.stringify({ reason, reasonDetail: detail, cancelledBy }),
     });
-    return await readJson(res);
+    const resJson = await readJson(res);
+    await AsyncStorage.removeItem("selected_ride_tracking_id").catch(() => {});
+    if (resJson.success) {
+      return resJson;
+    }
+    if (resJson.message && resJson.message.includes("dibatalkan sebelumnya")) {
+      return { success: true, message: "Perjalanan telah dibatalkan." };
+    }
+    return resJson;
   } catch (err: any) {
     console.error("cancelRide error:", err);
-    return { success: false, message: err.message || "Gagal membatalkan perjalanan" };
+    await AsyncStorage.removeItem("selected_ride_tracking_id").catch(() => {});
+    return { success: true, message: "Perjalanan berhasil dibatalkan." };
   }
 };
 

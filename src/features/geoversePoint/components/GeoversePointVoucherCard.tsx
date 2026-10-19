@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ticket, Sparkles, CheckCircle2 } from "lucide-react-native";
 import { PointVoucherUI } from "../types/pointTypes";
+import { formatNumberSafe, formatDateSafe } from "../../../utils/formatters";
 
 interface GeoversePointVoucherCardProps {
   voucher: PointVoucherUI;
@@ -60,13 +61,17 @@ export const GeoversePointVoucherCard: React.FC<GeoversePointVoucherCardProps> =
           {voucher.title}
         </Text>
         <Text style={styles.discountDesc} numberOfLines={2}>
-          Potongan {voucher.discountType === "FIXED" ? `Rp ${voucher.discountValue.toLocaleString("id-ID")}` : `${voucher.discountValue}%`}
-          {voucher.minTransaction > 0 ? ` · Min. Belanja Rp ${voucher.minTransaction.toLocaleString("id-ID")}` : ""}
+          {voucher.discountType === "FREE_SHIPPING"
+            ? `Gratis Ongkos Kirim s/d Rp ${formatNumberSafe(voucher.discountValue)}`
+            : voucher.discountType === "PERCENTAGE"
+            ? `Diskon ${voucher.discountValue}%${voucher.maxDiscount ? ` (Maks. Rp ${formatNumberSafe(voucher.maxDiscount)})` : ""}`
+            : `Potongan Rp ${formatNumberSafe(voucher.discountValue)}`}
+          {voucher.minTransaction > 0 ? ` · Min. Belanja Rp ${formatNumberSafe(voucher.minTransaction)}` : ""}
         </Text>
 
         <View style={styles.footerRow}>
           <Text style={styles.expiryText} numberOfLines={2}>
-            Berlaku s/d {new Date(voucher.validUntil).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+            Berlaku s/d {formatDateSafe(voucher.validUntil)}
           </Text>
 
           {isClaimed ? (

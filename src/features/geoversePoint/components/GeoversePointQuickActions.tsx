@@ -21,13 +21,13 @@ export const GeoversePointQuickActions: React.FC<GeoversePointQuickActionsProps>
       label: "Tukar Voucher",
       icon: Ticket,
       color: "#D97706",
-      bg: "#FEF3C7",
+      bg: "#FFFBEB",
       border: "#FDE68A",
       onPress: onRedeemVoucher,
     },
     {
       id: "cash",
-      label: "Tarik Rupiah",
+      label: "Tarik Tunai",
       icon: Banknote,
       color: "#059669",
       bg: "#ECFDF5",
@@ -36,20 +36,20 @@ export const GeoversePointQuickActions: React.FC<GeoversePointQuickActionsProps>
     },
     {
       id: "history",
-      label: "Riwayat",
+      label: "Mutasi Poin",
       icon: Clock,
       color: "#0284C7",
-      bg: "#E0F2FE",
+      bg: "#F0F9FF",
       border: "#BAE6FD",
       onPress: onViewHistory,
     },
     {
       id: "guide",
-      label: "Cara Kerja",
+      label: "Panduan",
       icon: Sparkles,
-      color: "#7C3AED",
-      bg: "#F5F3FF",
-      border: "#DDD6FE",
+      color: "#6366F1",
+      bg: "#EEF2FF",
+      border: "#C7D2FE",
       onPress: onHowItWorks,
     },
   ];
@@ -63,7 +63,7 @@ export const GeoversePointQuickActions: React.FC<GeoversePointQuickActionsProps>
             key={item.id}
             style={styles.actionItem}
             onPress={item.onPress}
-            activeOpacity={0.75}
+            activeOpacity={0.72}
             accessibilityLabel={item.label}
           >
             <View
@@ -72,9 +72,9 @@ export const GeoversePointQuickActions: React.FC<GeoversePointQuickActionsProps>
                 { backgroundColor: item.bg, borderColor: item.border },
               ]}
             >
-              <IconComponent size={22} color={item.color} />
+              <IconComponent size={20} color={item.color} />
             </View>
-            <Text style={styles.actionLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
+            <Text style={styles.actionLabel} numberOfLines={2}>
               {item.label}
             </Text>
           </TouchableOpacity>
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
+    borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 8,
     borderWidth: 1,
@@ -98,28 +98,28 @@ const styles = StyleSheet.create({
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 2,
   },
   actionItem: {
     flex: 1,
     minWidth: 0,
     alignItems: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
   iconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 7,
   },
   actionLabel: {
-    fontSize: 10.5,
-    fontWeight: "600",
-    color: "#334155",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1E293B",
     textAlign: "center",
     lineHeight: 14,
   },

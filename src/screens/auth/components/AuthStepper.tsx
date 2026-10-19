@@ -2,31 +2,101 @@ import React from "react";
 import { Text, View, StyleSheet } from "react-native";
 import { authColors } from "../authStyles";
 
-export const AuthStepper: React.FC<{ current: number; labels: string[] }> = ({ current, labels }) => (
-  <View style={styles.wrap}>
-    {labels.map((label, index) => (
-      <React.Fragment key={label}>
-        <View style={styles.item}>
-          <View style={[styles.circle, index <= current && styles.circleActive]}>
-            <Text style={[styles.number, index <= current && styles.numberActive]}>{index + 1}</Text>
-          </View>
-          <Text numberOfLines={1} style={[styles.label, index === current && styles.labelActive]}>{label}</Text>
+interface AuthStepperProps {
+  current: number;
+  labels: string[] | readonly string[];
+}
+
+export const AuthStepper: React.FC<AuthStepperProps> = ({ current, labels }) => {
+  if (labels.length <= 1) return null;
+
+  const currentLabel = labels[current] || "";
+  const percent = Math.round(((current + 1) / labels.length) * 100);
+
+  return (
+    <View style={styles.container}>
+      {/* Step Info Row */}
+      <View style={styles.headerRow}>
+        <View style={styles.stepBadge}>
+          <Text style={styles.stepBadgeText}>
+            Langkah {current + 1} dari {labels.length}
+          </Text>
         </View>
-        {index < labels.length - 1 && <View style={[styles.line, index < current && styles.lineActive]} />}
-      </React.Fragment>
-    ))}
-  </View>
-);
+        <Text style={styles.stepTitle}>{currentLabel}</Text>
+        <Text style={styles.percentText}>{percent}%</Text>
+      </View>
+
+      {/* Modern Segmented Progress Bar */}
+      <View style={styles.segmentsRow}>
+        {labels.map((_, index) => {
+          const isCompleted = index <= current;
+          return (
+            <View
+              key={index}
+              style={[
+                styles.segment,
+                isCompleted ? styles.segmentActive : styles.segmentInactive,
+              ]}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: "row", alignItems: "flex-start", marginTop: 24, marginBottom: 7, paddingHorizontal: 2 },
-  item: { alignItems: "center", width: 66 },
-  circle: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#D5DEE9" },
-  circleActive: { backgroundColor: authColors.primary, borderColor: authColors.primary },
-  number: { color: "#6B7280", fontSize: 12, fontWeight: "800" },
-  numberActive: { color: "#FFFFFF" },
-  label: { color: "#9AA7BA", fontSize: 10, marginTop: 6, textAlign: "center" },
-  labelActive: { color: authColors.primary, fontWeight: "800" },
-  line: { flex: 1, height: 3, backgroundColor: "#E6ECF2", marginTop: 14, borderRadius: 2 },
-  lineActive: { backgroundColor: authColors.primary },
+  container: {
+    width: "100%",
+    marginTop: 18,
+    marginBottom: 14,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  stepBadge: {
+    backgroundColor: authColors.primaryLight,
+    borderWidth: 1,
+    borderColor: authColors.primaryBorder,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  stepBadgeText: {
+    color: authColors.primaryDark,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  stepTitle: {
+    flex: 1,
+    marginHorizontal: 8,
+    color: authColors.ink,
+    fontSize: 12.5,
+    fontWeight: "600",
+  },
+  percentText: {
+    color: authColors.muted,
+    fontSize: 11.5,
+    fontWeight: "700",
+  },
+  segmentsRow: {
+    flexDirection: "row",
+    gap: 6,
+    height: 5,
+    width: "100%",
+  },
+  segment: {
+    flex: 1,
+    height: 5,
+    borderRadius: 3,
+  },
+  segmentActive: {
+    backgroundColor: authColors.primary,
+  },
+  segmentInactive: {
+    backgroundColor: authColors.line,
+  },
 });

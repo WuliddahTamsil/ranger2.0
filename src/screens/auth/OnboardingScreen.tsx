@@ -1,23 +1,25 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
-import { Platform, Pressable, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ArrowRight } from "lucide-react-native";
 import { Nav } from "../../types";
 import { OnboardingVisual, OnboardingVisualKind } from "./components/OnboardingVisual";
+import { authColors } from "./authStyles";
 
 const SLIDES: Array<{ title: string; desc: string; visual: OnboardingVisualKind }> = [
   {
-    title: "Belanja Lokal, Dukung UMKM",
+    title: "Belanja Lokal,\nDukung UMKM Kamojang",
     desc: "Jelajahi aneka produk berkualitas dari para pelaku UMKM lokal dan jadilah bagian dari pertumbuhan ekonomi masyarakat.",
     visual: "local",
   },
   {
-    title: "Semua Layanan\ndi Satu Tempat",
-    desc: "Marketplace, catering, laundry, dan kos tersedia dalam satu aplikasi. Praktis dan mudah!",
+    title: "Semua Layanan Komunitas\ndalam Satu Platform",
+    desc: "Kanyaah Ride, Send, Katering, Laundry, Kos/Homestay, dan Bank Sampah terintegrasi secara praktis dan transparan.",
     visual: "ecosystem",
   },
   {
-    title: "Bergabung &\nBerpenghasilan",
-    desc: "Daftar sebagai driver atau mitra GEOVERSE 2.0 dan mulai berpenghasilan dari komunitas Anda sendiri.",
+    title: "Tumbuh Bersama\nEkosistem GEOVERSE 2.0",
+    desc: "Daftar sebagai driver atau mitra usaha lokal binaan untuk memperluas jangkauan dan meningkatkan penghasilan Anda.",
     visual: "mobility",
   },
 ];
@@ -34,15 +36,17 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
-      <View style={[styles.backgroundArcTop, { pointerEvents: "none" }]} />
-      <View style={[styles.backgroundArcBottom, { pointerEvents: "none" }]} />
-
+      {/* Top Action */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigate("login")} activeOpacity={0.7}>
+        <View style={styles.pgeBadge}>
+          <Text style={styles.pgeBadgeText}>GEOVERSE 2.0 • PGE KAMOJANG</Text>
+        </View>
+        <TouchableOpacity onPress={() => navigate("login")} activeOpacity={0.7} style={styles.skipBtn}>
           <Text style={styles.skipText}>Lewati</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Main Content */}
       <View style={styles.content}>
         <View style={styles.visualFrame}>
           <OnboardingVisual kind={currentSlide.visual} />
@@ -53,12 +57,25 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
         </View>
       </View>
 
+      {/* Bottom Footer */}
       <View style={styles.footer}>
         <View style={styles.pagination} accessibilityLabel={`Halaman ${slide + 1} dari ${SLIDES.length}`}>
-          {SLIDES.map((_, index) => <View key={index} style={[styles.indicator, index === slide ? styles.indicatorActive : styles.indicatorInactive]} />)}
+          {SLIDES.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.indicator,
+                index === slide ? styles.indicatorActive : styles.indicatorInactive,
+              ]}
+            />
+          ))}
         </View>
-        <Pressable onPress={next} style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}>
-          <Text style={styles.buttonText}>{isLast ? "Mulai sekarang" : "Lanjut"} {"\u2192"}</Text>
+        <Pressable
+          onPress={next}
+          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+        >
+          <Text style={styles.buttonText}>{isLast ? "Mulai Sekarang" : "Lanjutkan"}</Text>
+          <ArrowRight size={17} color="#FFFFFF" />
         </Pressable>
       </View>
     </ResponsiveSafeAreaView>
@@ -66,35 +83,135 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F7F9F8", overflow: "hidden" },
-  backgroundArcTop: { position: "absolute", width: 330, height: 180, borderRadius: 180, borderWidth: 1, borderColor: "rgba(8, 122, 75, 0.055)", top: -108, right: -128, transform: [{ rotate: "-18deg" }] },
-  backgroundArcBottom: { position: "absolute", width: 420, height: 220, borderRadius: 220, borderWidth: 1, borderColor: "rgba(20, 34, 56, 0.04)", bottom: -150, left: -168, transform: [{ rotate: "16deg" }] },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", paddingHorizontal: 22, paddingTop: 12 },
-  skipText: { color: "#667085", fontSize: 13, fontWeight: "600" },
-  content: { flex: 1, justifyContent: "center", paddingHorizontal: 22 },
-  visualFrame: { width: "100%", height: 218, maxWidth: 360, alignSelf: "center", justifyContent: "center", marginBottom: 34 },
-  copy: { width: "100%", maxWidth: 480, alignSelf: "center", alignItems: "center" },
-  title: { color: "#142238", fontSize: 30, lineHeight: 36, fontWeight: "800", letterSpacing: -0.55, marginBottom: 13, textAlign: "center" },
-  desc: { color: "#667085", fontSize: 15, lineHeight: 23, maxWidth: 480, textAlign: "center" },
-  footer: { paddingHorizontal: 22, paddingBottom: 24, paddingTop: 12, alignItems: "center" },
-  pagination: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, height: 10, marginBottom: 21 },
-  indicator: { height: 4, borderRadius: 2 },
-  indicatorActive: { width: 24, backgroundColor: "#087A4B" },
-  indicatorInactive: { width: 5, backgroundColor: "#CDD6D1" },
-  button: {
+  container: {
+    flex: 1,
+    backgroundColor: authColors.background,
+  },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  pgeBadge: {
+    backgroundColor: authColors.primaryLight,
+    borderWidth: 1,
+    borderColor: authColors.primaryBorder,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  pgeBadgeText: {
+    color: authColors.primaryDark,
+    fontSize: 10.5,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  skipBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  skipText: {
+    color: authColors.muted,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  visualFrame: {
     width: "100%",
-    alignSelf: "stretch",
-    backgroundColor: "#087A4B",
-    minHeight: 52,
-    borderRadius: 11,
+    height: 220,
+    maxWidth: 360,
+    alignSelf: "center",
+    justifyContent: "center",
+    marginBottom: 28,
+  },
+  copy: {
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
+    alignItems: "center",
+  },
+  title: {
+    color: authColors.ink,
+    fontSize: 26,
+    lineHeight: 33,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  desc: {
+    color: authColors.muted,
+    fontSize: 14,
+    lineHeight: 22,
+    maxWidth: 440,
+    textAlign: "center",
+  },
+  footer: {
+    paddingHorizontal: 24,
+    paddingBottom: 28,
+    paddingTop: 12,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
+  },
+  pagination: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    elevation: 3,
+    gap: 7,
+    height: 10,
+    marginBottom: 20,
+  },
+  indicator: {
+    height: 4,
+    borderRadius: 2,
+  },
+  indicatorActive: {
+    width: 24,
+    backgroundColor: authColors.primary,
+  },
+  indicatorInactive: {
+    width: 6,
+    backgroundColor: authColors.line,
+  },
+  button: {
+    width: "100%",
+    backgroundColor: authColors.primary,
+    minHeight: 50,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     ...Platform.select({
-      web: { boxShadow: "0px 4px 8px rgba(7, 91, 58, 0.14)" as any },
-      default: { shadowColor: "#075B3A", shadowOpacity: 0.14, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+      web: {
+        boxShadow: "0 4px 12px rgba(5, 150, 105, 0.22)",
+      } as any,
+      default: {
+        shadowColor: "#059669",
+        shadowOpacity: 0.22,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 3,
+      },
     }),
   },
-  buttonPressed: { opacity: 0.88, transform: [{ scale: 0.995 }] },
-  buttonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700", letterSpacing: 0.1 },
+  buttonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.995 }],
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 14.5,
+    fontWeight: "700",
+    letterSpacing: 0.1,
+  },
 });

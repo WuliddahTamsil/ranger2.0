@@ -246,7 +246,7 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
         contentContainerStyle={[styles.scrollContent, isLarge && { maxWidth: 880, alignSelf: "center", width: "100%" }]}
       >
         {/* Map Section if in Delivery Stage */}
-        {["DRIVER_ASSIGNED", "DRIVER_HEADING_TO_STORE", "DRIVER_ON_THE_WAY_TO_STORE", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED"].includes(order.orderStatus) && (
+        {["DRIVER_ASSIGNED", "DRIVER_HEADING_TO_STORE", "DRIVER_ON_THE_WAY_TO_STORE", "DRIVER_AT_STORE", "PICKED_UP", "DELIVERING", "ARRIVED"].includes(order.orderStatus) ? (
           <View style={styles.mapCard}>
             <NativeMapComponent
               initialRegion={{
@@ -283,7 +283,7 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
               style={{ height: 220, borderRadius: 16 }}
             />
           </View>
-        )}
+        ) : null}
 
         {/* Driver Card if Assigned */}
         {order.driverName ? (
@@ -300,7 +300,7 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
         ) : null}
 
         {/* Substitution Alert Banner if waiting approval */}
-        {order.orderStatus === "WAITING_SUBSTITUTION" && (
+        {order.orderStatus === "WAITING_SUBSTITUTION" ? (
           <View style={styles.substitutionBanner}>
             <AlertTriangle size={20} color="#D97706" />
             <View style={{ flex: 1 }}>
@@ -310,7 +310,7 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
               </Text>
             </View>
           </View>
-        )}
+        ) : null}
 
         {/* Order Status Timeline */}
         <OrderStatusTimeline currentStatus={order.orderStatus} isCancelled={isCancelled} />
@@ -350,7 +350,7 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
         </View>
 
         {/* Proof of Delivery / Pickup Photos if available */}
-        {(order.pickupProofUrl || order.deliveryProofUrl) && (
+        {(Boolean(order.pickupProofUrl) || Boolean(order.deliveryProofUrl)) ? (
           <View style={styles.sectionCard}>
             <Text style={styles.cardHeading}>Dokumentasi Serah Terima Kurir</Text>
             <View style={styles.proofsRow}>
@@ -368,7 +368,7 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
               ) : null}
             </View>
           </View>
-        )}
+        ) : null}
 
         {/* Delivery Details */}
         <View style={styles.sectionCard}>
@@ -406,19 +406,19 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
             <Text style={styles.calcVal}>{rp(order.serviceFee)}</Text>
           </View>
 
-          {order.voucherDiscount > 0 && (
+          {Number(order.voucherDiscount) > 0 ? (
             <View style={styles.calcRow}>
               <Text style={[styles.calcLabel, { color: "#15803D" }]}>Diskon Voucher</Text>
               <Text style={[styles.calcVal, { color: "#15803D" }]}>-{rp(order.voucherDiscount)}</Text>
             </View>
-          )}
+          ) : null}
 
-          {order.pointDiscount > 0 && (
+          {Number(order.pointDiscount) > 0 ? (
             <View style={styles.calcRow}>
               <Text style={[styles.calcLabel, { color: "#F59E0B" }]}>Diskon Point</Text>
               <Text style={[styles.calcVal, { color: "#F59E0B" }]}>-{rp(order.pointDiscount)}</Text>
             </View>
-          )}
+          ) : null}
 
           <View style={styles.calcDivider} />
 
@@ -430,7 +430,7 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
 
         {/* Actions: Cancel, Review, Complaint */}
         <View style={styles.actionsSection}>
-          {isCompleted && !order.rating && (
+          {isCompleted && !order.rating ? (
             <TouchableOpacity
               style={styles.ratingBtn}
               onPress={() => setRatingModalVisible(true)}
@@ -439,9 +439,9 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
               <Star size={16} color="#FFFFFF" fill="#FFFFFF" />
               <Text style={styles.ratingBtnText}>Beri Ulasan & Bintang Toko</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
 
-          {canCancel && (
+          {canCancel ? (
             <TouchableOpacity
               style={styles.cancelOrderBtn}
               onPress={() => setCancelModalVisible(true)}
@@ -450,9 +450,9 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
               <RotateCcw size={16} color="#DC2626" />
               <Text style={styles.cancelOrderText}>Batalkan Pesanan Ini</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
 
-          {isCompleted && (
+          {isCompleted ? (
             <TouchableOpacity
               style={styles.complaintBtn}
               onPress={() => setComplaintModalVisible(true)}
@@ -461,7 +461,7 @@ export const ShopOrderDetailScreen: React.FC<ShopOrderDetailScreenProps> = ({
               <AlertTriangle size={15} color="#4B5563" />
               <Text style={styles.complaintBtnText}>Ajukan Komplain / Refund</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       </ScrollView>
 

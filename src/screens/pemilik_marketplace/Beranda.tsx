@@ -40,6 +40,7 @@ import {
   Check,
   Minus,
   Edit3,
+  Tag,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { rp } from "../../utils/formatters";
@@ -68,6 +69,7 @@ import { Riwayat } from "./Riwayat";
 import { Pendapatan } from "./Pendapatan";
 import { Profile } from "./Profile";
 import { FullPageProductForm, ProductFormData } from "../../components/FullPageProductForm";
+import { MerchantVoucherManagementModal } from "../../components/MerchantVoucherManagementModal";
 import { ToastBanner, ToastType, ConfirmDialog } from "../../components/CustomDialog";
 
 interface ProductItem {
@@ -91,6 +93,7 @@ interface MarketplaceHomeProps extends Nav {
 
 export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount }) => {
   const [currentTab, setCurrentTab] = useState<number>(0);
+  const [voucherModalVisible, setVoucherModalVisible] = useState(false);
 
   // In-App Toast Notification State (Eliminates browser native alerts)
   const [toastConfig, setToastConfig] = useState<{
@@ -977,6 +980,24 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
             <Text style={styles.quickActionLabel}>Pendapatan</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Banner Promo & Voucher Toko */}
+        <TouchableOpacity
+          style={styles.voucherPromoBanner}
+          onPress={() => setVoucherModalVisible(true)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.voucherPromoIcon}>
+            <Tag size={20} color="#1B7A4E" />
+          </View>
+          <View style={styles.voucherPromoTextCol}>
+            <Text style={styles.voucherPromoTitle}>Promo & Voucher Toko</Text>
+            <Text style={styles.voucherPromoSub}>
+              Atur voucher gratis ongkir & diskon harga untuk memikat pembeli
+            </Text>
+          </View>
+          <ChevronRight size={18} color="#1B7A4E" />
+        </TouchableOpacity>
 
         {/* Needs attention products */}
         {needsAttention.length > 0 && (
@@ -2115,11 +2136,51 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
         onConfirm={confirmDialogConfig.onConfirm}
         onCancel={() => setConfirmDialogConfig((prev) => ({ ...prev, visible: false }))}
       />
+      <MerchantVoucherManagementModal
+        visible={voucherModalVisible}
+        onClose={() => setVoucherModalVisible(false)}
+        merchantId={authAccount?.id}
+        merchantName={authAccount?.name || "Toko Marketplace"}
+        service="MARKETPLACE"
+      />
     </ResponsiveSafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  voucherPromoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 20,
+    gap: 12,
+  },
+  voucherPromoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  voucherPromoTextCol: {
+    flex: 1,
+  },
+  voucherPromoTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1B7A4E",
+  },
+  voucherPromoSub: {
+    fontSize: 11,
+    color: "#166534",
+    marginTop: 2,
+    lineHeight: 15,
+  },
   container: {
     flex: 1,
     backgroundColor: "#F7FAF8",

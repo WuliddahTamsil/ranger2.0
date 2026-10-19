@@ -24,25 +24,29 @@ export interface PointWalletUI {
   _id: string;
   userId: string;
   balancePoint: number;
-  lifetimeEarned: number;
-  lifetimeRedeemed: number;
+  lifetimeEarned?: number;
+  totalEarnedPoint?: number;
+  lifetimeRedeemed?: number;
+  totalRedeemedPoint?: number;
   totalKgDeposited: number;
   depositCount: number;
   totalCo2ReductionKg: number;
+  status?: string;
   updatedAt?: string;
 }
 
 export interface PointLedgerUI {
   _id: string;
-  ledgerId: string;
+  ledgerId?: string;
   userId: string;
   type: LedgerType;
   sourceType: LedgerSourceType;
   sourceId: string;
   points: number;
-  balanceBefore: number;
+  balanceBefore?: number;
   balanceAfter: number;
   status: LedgerStatus;
+  description?: string;
   notes?: string;
   createdAt: string;
 }
@@ -54,6 +58,7 @@ export type RedemptionStatus =
   | "REVIEWING"
   | "APPROVED"
   | "PAID"
+  | "COMPLETED"
   | "REJECTED"
   | "CANCELLED";
 
@@ -64,8 +69,8 @@ export interface PointRedemptionUI {
   bankSampahId?: any;
   type: RedemptionType;
   points: number;
-  rupiahValue: number;
-  fee: number;
+  rupiahValue?: number;
+  fee?: number;
   payoutDestination?: {
     channel: string;
     accountNumber: string;
@@ -76,7 +81,8 @@ export interface PointRedemptionUI {
   voucherDetails?: {
     title: string;
     service: string;
-    discountValue: number;
+    discountValue?: number;
+    description?: string;
   };
   status: RedemptionStatus;
   rejectionReason?: string;
@@ -86,17 +92,19 @@ export interface PointRedemptionUI {
 
 export interface PointVoucherUI {
   _id: string;
-  voucherCode: string;
+  voucherCode?: string;
   title: string;
   description?: string;
   service: string;
-  discountType: "FIXED" | "PERCENTAGE";
+  merchantName?: string;
+  discountType: "FIXED" | "PERCENTAGE" | "FREE_SHIPPING";
   discountValue: number;
   minTransaction: number;
   maxDiscount?: number | null;
   pointsCost: number;
   validFrom?: string;
   validUntil: string;
+  isActive?: boolean;
   usageLimit?: number;
   usedCount?: number;
   userUsageLimit?: number;

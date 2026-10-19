@@ -64,7 +64,7 @@ import {
 import { useRecycle } from "../../context/RecycleContext";
 import { useGeoversePoint } from "../../features/geoversePoint";
 import { fetchCustomerRides } from "../../services/rideService";
-import { rp } from "../../utils/formatters";
+import { rp, formatNumberSafe, formatDateSafe } from "../../utils/formatters";
 import { RESTAURANTS, LAUNDRIES, KOS_LIST } from "../../constants/mockData";
 import { Nav, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -453,7 +453,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           detail: `${order.items?.length || 0} produk`,
           status: order.status,
           statusColor: order.status === "Selesai" ? "green" : order.status.toLowerCase().includes("batal") ? "red" : "orange",
-          date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+          date: formatDateSafe(order.createdAt),
           total: order.totalAmount,
           deliveryFee: order.deliveryFee,
           serviceFee: order.serviceFee,
@@ -492,7 +492,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           detail: `${order.storeName || "Dapur Catering"} • ${order.portions} porsi`,
           status: order.status,
           statusColor: order.status === "Selesai" ? "green" : order.status === "Dibatalkan" ? "red" : "orange",
-          date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+          date: formatDateSafe(order.createdAt),
           total: order.totalAmount,
           deliveryFee: order.deliveryFee,
           serviceFee: order.serviceFee,
@@ -544,7 +544,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             : order.status === "TRIP_STARTED" ? "Dalam Perjalanan"
             : order.status === "COMPLETED" ? "Selesai" : "Dibatalkan",
           statusColor: order.status === "COMPLETED" ? "green" : order.status === "CANCELLED" ? "red" : "orange",
-          date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+          date: formatDateSafe(order.createdAt),
           createdAt: order.createdAt || new Date().toISOString(),
           total: order.totalAmount,
           paymentMethod: order.paymentMethod,
@@ -597,7 +597,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             detail: `${storeName} • ${itemCount} barang`,
             status: statusLabel,
             statusColor: isCompleted ? "green" : isCancelled ? "red" : "orange",
-            date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+            date: formatDateSafe(order.createdAt),
             createdAt: order.createdAt || new Date().toISOString(),
             total: order.totalAmount || 0,
             deliveryFee: order.deliveryFee || 0,
@@ -651,7 +651,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             detail: `${order.sender?.address || "Asal"} → ${order.recipient?.address || "Tujuan"}`,
             status: statusLabel,
             statusColor: isCompleted ? "green" : isCancelled ? "red" : "orange",
-            date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+            date: formatDateSafe(order.createdAt),
             createdAt: order.createdAt || new Date().toISOString(),
             total: order.pricing?.totalFare || order.totalAmount || 0,
             paymentMethod: order.paymentMethod || "QRIS",
@@ -691,7 +691,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             detail: `${order.storeName || order.laundryName || "Mitra Laundry"} • ${order.totalWeight ? `${order.totalWeight} kg` : "Kiloan"}`,
             status: statusLabel,
             statusColor: isCompleted ? "green" : isCancelled ? "red" : "orange",
-            date: new Date(order.createdAt).toLocaleDateString("id-ID"),
+            date: formatDateSafe(order.createdAt),
             createdAt: order.createdAt || new Date().toISOString(),
             total: order.totalPrice || order.totalAmount || 0,
             paymentMethod: order.paymentMethod || "QRIS",
@@ -1032,6 +1032,13 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             onOpenLaundry={() => navigate("c_laundry")}
             onOpenKos={() => navigate("c_kos")}
             onOpenRide={() => navigate("c_ride")}
+            onOpenSend={() => navigate("c_send")}
+            onOpenShop={() => navigate("c_shop_home")}
+            onOpenRecycle={() => navigate("c_recycle_home")}
+            onOpenPoint={() => navigate("c_point_home")}
+            onOpenVouchers={() => navigate("c_point_vouchers")}
+            onOpenInfoHub={() => setPgeInfoHubVisible(true)}
+            onNavigate={(screen) => navigate(screen as any)}
           />
         );
       case 2:
@@ -1153,20 +1160,24 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             onPress={() => navigate("c_point_home")}
             activeOpacity={0.8}
           >
-            <View style={styles.walletBarIconBox}>
-              <WalletCards size={18} color="#0D7A53" />
+            <View style={[styles.walletBarIconBox, { backgroundColor: "#FEF9C3", overflow: "hidden" }]}>
+              <Image
+                source={require("../../../assets/kanyaah-point.png")}
+                style={{ width: 36, height: 36, borderRadius: 12 }}
+                resizeMode="cover"
+              />
             </View>
             <View style={styles.walletBarTextCol}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                 <Text style={styles.walletBarBalance}>
-                  {pointBalance.toLocaleString("id-ID")} Pts
+                  {formatNumberSafe(pointBalance)} Pts
                 </Text>
                 <View style={styles.walletPlusCircle}>
                   <Plus size={10} color="#0D7A53" />
                 </View>
               </View>
               <Text style={styles.walletBarSub}>
-                ≈ Rp{rupiahEquivalent.toLocaleString("id-ID")} · Buka Dompet
+                ≈ {rp(rupiahEquivalent)} · Buka Dompet
               </Text>
             </View>
           </TouchableOpacity>
@@ -1224,7 +1235,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.launcherBadge}>
                   <Text style={styles.launcherBadgeText}>1RB!</Text>
                 </View>
-                <Bike size={24} color="#15803D" />
+                <Image
+                  source={require("../../../assets/kanyaah-ride.png")}
+                  style={styles.launcherRideImg}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Ride</Text>
             </TouchableOpacity>
@@ -1239,7 +1254,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.launcherBadge}>
                   <Text style={styles.launcherBadgeText}>5RB!</Text>
                 </View>
-                <Package size={24} color="#D97706" />
+                <Image
+                  source={require("../../../assets/kanyaah-send.png")}
+                  style={styles.launcherRideImg}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Send</Text>
             </TouchableOpacity>
@@ -1254,7 +1273,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.launcherBadge}>
                   <Text style={styles.launcherBadgeText}>-75%</Text>
                 </View>
-                <Coffee size={24} color="#DC2626" />
+                <Image
+                  source={require("../../../assets/kanyaah-catering.png")}
+                  style={styles.launcherRideImg}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.launcherLabel} numberOfLines={1}>Katering</Text>
             </TouchableOpacity>
@@ -1269,7 +1292,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.launcherBadge}>
                   <Text style={styles.launcherBadgeText}>30MIN</Text>
                 </View>
-                <ShoppingBag size={24} color="#DB2777" />
+                <Image
+                  source={require("../../../assets/kanyaah-shop.png")}
+                  style={styles.launcherRideImg}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Shop</Text>
             </TouchableOpacity>
@@ -1287,7 +1314,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.launcherBadge}>
                   <Text style={styles.launcherBadgeText}>BERSIH</Text>
                 </View>
-                <Wind size={24} color="#0284C7" />
+                <Image
+                  source={require("../../../assets/kanyaah-laundry.png")}
+                  style={styles.launcherRideImg}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.launcherLabel} numberOfLines={1}>Laundry</Text>
             </TouchableOpacity>
@@ -1302,7 +1333,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.launcherBadge}>
                   <Text style={styles.launcherBadgeText}>POIN!</Text>
                 </View>
-                <Recycle size={24} color="#0D7A53" />
+                <Image
+                  source={require("../../../assets/kanyaah-recycle.png")}
+                  style={styles.launcherRideImg}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.launcherLabel} numberOfLines={1}>Recycle</Text>
             </TouchableOpacity>
@@ -1317,7 +1352,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.launcherBadge}>
                   <Text style={styles.launcherBadgeText}>REWARD</Text>
                 </View>
-                <Sparkles size={24} color="#CA8A04" />
+                <Image
+                  source={require("../../../assets/kanyaah-point.png")}
+                  style={styles.launcherRideImg}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.launcherLabel} numberOfLines={1}>Point</Text>
             </TouchableOpacity>
@@ -1331,7 +1370,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.launcherBadge}>
                   <Text style={styles.launcherBadgeText}>LAINNYA</Text>
                 </View>
-                <MoreHorizontal size={28} color="#475569" />
+                <Image
+                  source={require("../../../assets/kanyaah-more.png")}
+                  style={styles.launcherRideImg}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.launcherLabel} numberOfLines={1}>
                 {launcherExpanded ? "Tutup" : "Lainnya"}
@@ -1347,11 +1390,15 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 onPress={() => navigate("c_marketplace")}
                 activeOpacity={0.75}
               >
-                <View style={[styles.launcherSquircle, { backgroundColor: "#E0F2FE" }]}>
+                <View style={[styles.launcherSquircle, { backgroundColor: "#FFE4E6" }]}>
                   <View style={styles.launcherBadge}>
                     <Text style={styles.launcherBadgeText}>UMKM</Text>
                   </View>
-                  <Store size={24} color="#0284C7" />
+                  <Image
+                    source={require("../../../assets/kanyaah-mart.png")}
+                    style={styles.launcherRideImg}
+                    resizeMode="cover"
+                  />
                 </View>
                 <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Mart</Text>
               </TouchableOpacity>
@@ -1365,7 +1412,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   <View style={styles.launcherBadge}>
                     <Text style={styles.launcherBadgeText}>NYAMAN</Text>
                   </View>
-                  <Building2 size={24} color="#9333EA" />
+                  <Image
+                    source={require("../../../assets/kanyaah-homestay.png")}
+                    style={styles.launcherRideImg}
+                    resizeMode="cover"
+                  />
                 </View>
                 <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Homestay</Text>
               </TouchableOpacity>
@@ -1451,7 +1502,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   {recentlyDeliveredOrder.deliveryProofTimestamp
                     ? recentlyDeliveredOrder.deliveryProofTimestamp
                     : recentlyDeliveredOrder.deliveredAt
-                    ? new Date(recentlyDeliveredOrder.deliveredAt).toLocaleDateString("id-ID", { hour: "2-digit", minute: "2-digit" })
+                    ? formatDateSafe(recentlyDeliveredOrder.deliveredAt)
                     : "Tercatat di sistem"}
                 </Text>
                 <TouchableOpacity
@@ -1603,7 +1654,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={[styles.promoBadgePill, { backgroundColor: "#0D7A53" }]}>
                   <Text style={styles.promoBadgeText}>KANYAAH SHOP</Text>
                 </View>
-                <ShoppingBag size={18} color="#0D7A53" />
+                <Image
+                  source={require("../../../assets/kanyaah-shop.png")}
+                  style={{ width: 22, height: 22, borderRadius: 6 }}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.promoCardTitle}>Belanja kebutuhan harian lebih mudah</Text>
               <Text style={styles.promoCardDesc} numberOfLines={2}>
@@ -1625,7 +1680,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={[styles.promoBadgePill, { backgroundColor: "#059669" }]}>
                   <Text style={styles.promoBadgeText}>BANK SAMPAH</Text>
                 </View>
-                <Recycle size={18} color="#059669" />
+                <Image
+                  source={require("../../../assets/kanyaah-recycle.png")}
+                  style={{ width: 22, height: 22, borderRadius: 6 }}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.promoCardTitle}>Kumpulkan Point dari setor sampah</Text>
               <Text style={styles.promoCardDesc} numberOfLines={2}>
@@ -1647,7 +1706,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={[styles.promoBadgePill, { backgroundColor: "#D97706" }]}>
                   <Text style={styles.promoBadgeText}>KANYAAH SEND</Text>
                 </View>
-                <Package size={18} color="#D97706" />
+                <Image
+                  source={require("../../../assets/kanyaah-send.png")}
+                  style={{ width: 22, height: 22, borderRadius: 6 }}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.promoCardTitle}>Kirim barang dengan driver terdekat</Text>
               <Text style={styles.promoCardDesc} numberOfLines={2}>
@@ -1669,7 +1732,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={[styles.promoBadgePill, { backgroundColor: "#EA580C" }]}>
                   <Text style={styles.promoBadgeText}>KANYAAH CATERING</Text>
                 </View>
-                <Coffee size={18} color="#EA580C" />
+                <Image
+                  source={require("../../../assets/kanyaah-catering.png")}
+                  style={{ width: 22, height: 22, borderRadius: 6 }}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.promoCardTitle}>Dukung UMKM lokal di sekitar kamu</Text>
               <Text style={styles.promoCardDesc} numberOfLines={2}>
@@ -1690,7 +1757,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={[styles.promoBadgePill, { backgroundColor: "#15803D" }]}>
                   <Text style={styles.promoBadgeText}>KANYAAH RIDE</Text>
                 </View>
-                <Bike size={18} color="#15803D" />
+                <Image
+                  source={require("../../../assets/kanyaah-ride.png")}
+                  style={{ width: 22, height: 22, borderRadius: 6 }}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.promoCardTitle}>Bepergian lebih mudah dan aman</Text>
               <Text style={styles.promoCardDesc} numberOfLines={2}>
@@ -1712,7 +1783,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={[styles.promoBadgePill, { backgroundColor: "#0284C7" }]}>
                   <Text style={styles.promoBadgeText}>KANYAAH LAUNDRY</Text>
                 </View>
-                <Wind size={18} color="#0284C7" />
+                <Image
+                  source={require("../../../assets/kanyaah-laundry.png")}
+                  style={{ width: 22, height: 22, borderRadius: 6 }}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.promoCardTitle}>Pakaian bersih tanpa repot</Text>
               <Text style={styles.promoCardDesc} numberOfLines={2}>
@@ -1734,7 +1809,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={[styles.promoBadgePill, { backgroundColor: "#9333EA" }]}>
                   <Text style={styles.promoBadgeText}>KANYAAH HOMESTAY</Text>
                 </View>
-                <Building2 size={18} color="#9333EA" />
+                <Image
+                  source={require("../../../assets/kanyaah-homestay.png")}
+                  style={{ width: 22, height: 22, borderRadius: 6 }}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.promoCardTitle}>Temukan tempat tinggal nyaman</Text>
               <Text style={styles.promoCardDesc} numberOfLines={2}>
@@ -1756,7 +1835,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={[styles.promoBadgePill, { backgroundColor: "#CA8A04" }]}>
                   <Text style={styles.promoBadgeText}>GEOVERSE POINT</Text>
                 </View>
-                <Sparkles size={18} color="#CA8A04" />
+                <Image
+                  source={require("../../../assets/kanyaah-point.png")}
+                  style={{ width: 22, height: 22, borderRadius: 6 }}
+                  resizeMode="cover"
+                />
               </View>
               <Text style={styles.promoCardTitle}>Kumpulkan poin, dapatkan reward</Text>
               <Text style={styles.promoCardDesc} numberOfLines={2}>
@@ -2216,6 +2299,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               <Text style={styles.searchSectionLabel}>Pintasan Layanan</Text>
               <View style={styles.searchShortcutGrid}>
                 {[
+                  { label: "Kanyaah Mart", icon: Store, color: "#E11D48", bg: "#FFE4E6", route: "c_marketplace" },
                   { label: "Kanyaah Shop", icon: ShoppingBag, color: "#DB2777", bg: "#FDF2F8", route: "c_shop_home" },
                   { label: "Kanyaah Catering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5", route: "c_catering" },
                   { label: "Kanyaah Laundry", icon: Wind, color: "#16A34A", bg: "#F0FDF4", route: "c_laundry" },
@@ -2237,7 +2321,63 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                       activeOpacity={0.8}
                     >
                       <View style={[styles.searchShortcutIconBox, { backgroundColor: s.bg }]}>
-                        <Icon size={18} color={s.color} />
+                        {s.label === "Kanyaah Ride" ? (
+                          <Image
+                            source={require("../../../assets/kanyaah-ride.png")}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                            resizeMode="contain"
+                          />
+                        ) : s.label === "Kanyaah Send" ? (
+                          <Image
+                            source={require("../../../assets/kanyaah-send.png")}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                            resizeMode="contain"
+                          />
+                        ) : s.label === "Kanyaah Laundry" ? (
+                          <Image
+                            source={require("../../../assets/kanyaah-laundry.png")}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                            resizeMode="contain"
+                          />
+                        ) : s.label === "GEOVERSE Point" ? (
+                          <Image
+                            source={require("../../../assets/kanyaah-point.png")}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                            resizeMode="contain"
+                          />
+                        ) : s.label === "Bank Sampah" ? (
+                          <Image
+                            source={require("../../../assets/kanyaah-recycle.png")}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                            resizeMode="contain"
+                          />
+                        ) : s.label === "Kos Kamojang" ? (
+                          <Image
+                            source={require("../../../assets/kanyaah-homestay.png")}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                            resizeMode="contain"
+                          />
+                        ) : s.label === "Kanyaah Shop" ? (
+                          <Image
+                            source={require("../../../assets/kanyaah-shop.png")}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                            resizeMode="contain"
+                          />
+                        ) : s.label === "Kanyaah Catering" ? (
+                          <Image
+                            source={require("../../../assets/kanyaah-catering.png")}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                            resizeMode="contain"
+                          />
+                        ) : s.label === "Kanyaah Mart" ? (
+                          <Image
+                            source={require("../../../assets/kanyaah-mart.png")}
+                            style={{ width: 22, height: 22, borderRadius: 6 }}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <Icon size={18} color={s.color} />
+                        )}
                       </View>
                       <Text style={styles.searchShortcutText} numberOfLines={1}>
                         {s.label}
@@ -2884,6 +3024,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
+  },
+  launcherRideImg: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
   },
   launcherBadge: {
     position: "absolute",

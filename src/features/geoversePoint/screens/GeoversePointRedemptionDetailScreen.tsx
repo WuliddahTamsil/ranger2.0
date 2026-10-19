@@ -25,6 +25,7 @@ import { Nav } from "../../../types";
 import { useGeoversePoint } from "../hooks/useGeoversePoint";
 import { fetchRedemptionDetail, cancelRedemption } from "../services/geoversePointService";
 import { PointRedemptionUI } from "../types/pointTypes";
+import { formatDateSafe } from "../../../utils/formatters";
 
 interface GeoversePointRedemptionDetailScreenProps extends Nav {
   redemptionId?: string;
@@ -217,7 +218,7 @@ export const GeoversePointRedemptionDetailScreen: React.FC<
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Tanggal Pengajuan</Text>
                 <Text style={styles.detailValue}>
-                  {new Date(redemption.createdAt).toLocaleString("id-ID")}
+                  {formatDateSafe(redemption.createdAt)}
                 </Text>
               </View>
 

@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from "react-native";
-import { Eye, EyeOff, ArrowRight, Sparkles } from "lucide-react-native";
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, Image } from "react-native";
+import { Eye, EyeOff, ArrowRight, Sparkles, ShieldCheck } from "lucide-react-native";
 import { PointWalletUI } from "../types/pointTypes";
-import { GEOVERSE_POINT_THEME } from "../constants/pointConstants";
+import { formatNumberSafe } from "../../../utils/formatters";
 
 interface GeoversePointHeroCardProps {
   wallet: PointWalletUI | null;
@@ -15,7 +15,6 @@ interface GeoversePointHeroCardProps {
 export const GeoversePointHeroCard: React.FC<GeoversePointHeroCardProps> = ({
   wallet,
   pointToRupiah,
-  formatPoint,
   formatRupiah,
   onViewLedger,
 }) => {
@@ -23,32 +22,39 @@ export const GeoversePointHeroCard: React.FC<GeoversePointHeroCardProps> = ({
   const { width } = useWindowDimensions();
   const isCompact = width < 380;
 
-  const balancePoints = wallet?.balancePoint || 0;
+  const balancePoints = Number(wallet?.balancePoint) || 0;
   const rupiahValue = pointToRupiah(balancePoints);
 
   return (
     <View style={styles.cardContainer}>
-      {/* Decorative gradient / background accent */}
-      <View style={styles.topAccentBar} />
+      {/* Decorative ambient background rings */}
+      <View style={styles.ambientCircleOne} />
+      <View style={styles.ambientCircleTwo} />
 
       <View style={styles.innerCard}>
+        {/* Top Meta Row */}
         <View style={styles.headerRow}>
           <View style={styles.badgeRow}>
-            <View style={styles.badgeDot} />
-            <Text style={styles.badgeText} numberOfLines={1} ellipsizeMode="tail">
-              SALDO GEOVERSE POINT
+            <Image
+              source={require("../../../../assets/kanyaah-point.png")}
+              style={{ width: 16, height: 16, borderRadius: 4 }}
+              resizeMode="cover"
+            />
+            <Text style={styles.badgeText} numberOfLines={1}>
+              DOMPET GEOVERSE POINT
             </Text>
           </View>
+
           <TouchableOpacity
             style={styles.eyeBtn}
             onPress={() => setShowBalance(!showBalance)}
             accessibilityLabel={showBalance ? "Sembunyikan Saldo" : "Tampilkan Saldo"}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
           >
             {showBalance ? (
-              <Eye size={16} color="#475569" />
+              <Eye size={14} color="#E2E8F0" />
             ) : (
-              <EyeOff size={16} color="#475569" />
+              <EyeOff size={14} color="#E2E8F0" />
             )}
             {!isCompact && (
               <Text style={styles.eyeText}>{showBalance ? "Sembunyikan" : "Tampilkan"}</Text>
@@ -56,36 +62,44 @@ export const GeoversePointHeroCard: React.FC<GeoversePointHeroCardProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Main Balance Display */}
+        {/* Balance Display Row */}
         <View style={styles.balanceRow}>
-          <Text style={[styles.pointsText, isCompact && styles.pointsTextCompact]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
-            {showBalance ? formatPoint(balancePoints) : "••••••••"}
+          <Text
+            style={[styles.pointsText, isCompact && styles.pointsTextCompact]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {showBalance ? formatNumberSafe(balancePoints) : "••••••••"}
           </Text>
-          {balancePoints > 0 && showBalance && (
-            <View style={styles.sparkleChip}>
-              <Sparkles size={13} color="#D97706" />
-              <Text style={styles.sparkleChipText}>Aktif</Text>
+          <Text style={styles.pointsUnitText}>Pts</Text>
+
+          {showBalance && (
+            <View style={styles.verifiedChip}>
+              <ShieldCheck size={11} color="#34D399" />
+              <Text style={styles.verifiedChipText}>Aktif</Text>
             </View>
           )}
         </View>
 
-        {/* Rupiah Equivalent */}
+        {/* Bottom Conversion & Action Row */}
         <View style={styles.footerRow}>
           <View style={styles.rupiahContainer}>
-            <Text style={styles.rupiahLabel} numberOfLines={1}>Estimasi nilai tukar:</Text>
-            <Text style={styles.rupiahValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+            <Text style={styles.rupiahLabel}>Estimasi Nilai Tukar:</Text>
+            <Text style={styles.rupiahValue} numberOfLines={1}>
               {showBalance ? formatRupiah(rupiahValue) : "Rp ••••••"}
+              <Text style={styles.rateNote}> • 1 Pts = Rp 1</Text>
             </Text>
           </View>
 
           <TouchableOpacity
             style={styles.ledgerBtn}
             onPress={onViewLedger}
-            activeOpacity={0.8}
+            activeOpacity={0.82}
             accessibilityLabel="Lihat Mutasi Poin"
           >
-            <Text style={styles.ledgerBtnText} numberOfLines={1}>Lihat Mutasi</Text>
-            <ArrowRight size={14} color="#15803D" />
+            <Text style={styles.ledgerBtnText}>Mutasi</Text>
+            <ArrowRight size={13} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -95,137 +109,160 @@ export const GeoversePointHeroCard: React.FC<GeoversePointHeroCardProps> = ({
 
 const styles = StyleSheet.create({
   cardContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    backgroundColor: "#062E20",
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(52, 211, 153, 0.22)",
+    position: "relative",
     overflow: "hidden",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowColor: "#062E20",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 6,
     marginBottom: 16,
   },
-  topAccentBar: {
-    height: 4,
-    backgroundColor: GEOVERSE_POINT_THEME.primary,
+  ambientCircleOne: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    top: -70,
+    right: -50,
+  },
+  ambientCircleTwo: {
+    position: "absolute",
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "rgba(245, 158, 11, 0.08)",
+    bottom: -40,
+    left: 20,
   },
   innerCard: {
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingVertical: 20,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   badgeRow: {
-    flex: 1,
-    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-  },
-  badgeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "#16A34A",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
   },
   badgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#64748B",
-    letterSpacing: 0.8,
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#FBBF24",
+    letterSpacing: 0.6,
   },
   eyeBtn: {
-    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-    backgroundColor: "#F1F5F9",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.14)",
   },
   eyeText: {
     fontSize: 11,
-    color: "#475569",
-    fontWeight: "500",
+    color: "#E2E8F0",
+    fontWeight: "600",
   },
   balanceRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "baseline",
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   pointsText: {
-    flexShrink: 1,
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#0F172A",
-    letterSpacing: -0.5,
+    fontSize: 34,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: -0.8,
   },
   pointsTextCompact: {
-    fontSize: 25,
+    fontSize: 28,
   },
-  sparkleChip: {
+  pointsUnitText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#A7F3D0",
+  },
+  verifiedChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: "#FEF3C7",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
+    backgroundColor: "rgba(52, 211, 153, 0.15)",
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#FDE68A",
+    borderColor: "rgba(52, 211, 153, 0.35)",
+    marginLeft: 4,
   },
-  sparkleChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#B45309",
+  verifiedChipText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#34D399",
   },
   footerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 12,
+    paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "rgba(255, 255, 255, 0.12)",
   },
   rupiahContainer: {
     flex: 1,
     minWidth: 0,
-    flexDirection: "column",
-    marginRight: 10,
+    marginRight: 12,
   },
   rupiahLabel: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#94A3B8",
+    fontWeight: "500",
+    marginBottom: 2,
   },
   rupiahValue: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#15803D",
-    marginTop: 1,
+    color: "#F1F5F9",
+  },
+  rateNote: {
+    fontSize: 11,
+    fontWeight: "400",
+    color: "#64748B",
   },
   ledgerBtn: {
-    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#ECFDF5",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
+    gap: 5,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "rgba(255, 255, 255, 0.22)",
   },
   ledgerBtnText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#15803D",
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });

@@ -38,6 +38,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // Only handle http and https requests (ignore chrome-extension, etc.)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return;
+  }
+
   // Bypass API requests and websockets so dynamic backend calls always remain live
   if (
     url.pathname.startsWith('/api') ||
@@ -53,8 +58,8 @@ self.addEventListener('fetch', (event) => {
         if (networkResponse && networkResponse.status === 200) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+            cache.put(event.request, responseClone).catch(() => {});
+          }).catch(() => {});
         }
         return networkResponse;
       })

@@ -449,7 +449,7 @@ export default function App() {
       case "c_send_delivery_detail":
         return <SendDeliveryDetailScreen navigate={navigate} />;
 
-      // Kanyaah Recycle Screens
+      // Kanyaah Recycle Screens (Modern Responsive UI)
       case "c_recycle_home":
         return <KanyahRecycleHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_recycle_banks":

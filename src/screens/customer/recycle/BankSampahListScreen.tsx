@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -21,6 +22,9 @@ import {
   Filter,
   Sparkles,
   Recycle,
+  ShieldCheck,
+  Building2,
+  Navigation,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
@@ -30,6 +34,9 @@ import { rp } from "../../../utils/formatters";
 import { checkBankOperationalStatus } from "../../../utils/bankOperationalUtils";
 
 export const BankSampahListScreen: React.FC<Nav> = ({ navigate }) => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   const { setSelectedBank } = useRecycle();
   const [banks, setBanks] = useState<WasteBankUI[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,208 +82,203 @@ export const BankSampahListScreen: React.FC<Nav> = ({ navigate }) => {
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       {/* Top Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigate("c_recycle_home")}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={20} color="#111827" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleCol}>
-          <Text style={styles.headerTitle}>Pilih Bank Sampah</Text>
-          <Text style={styles.headerSub}>Mitra resmi terverifikasi GEOVERSE</Text>
-        </View>
-      </View>
-
-      {/* Search Input */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Search size={18} color="#9CA3AF" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Cari nama bank sampah atau lokasi..."
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-      </View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterScrollWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
+      <View style={styles.headerWrapper}>
+        <View style={styles.header}>
           <TouchableOpacity
-            style={[styles.filterChip, activeFilter === "nearby" && styles.filterChipActive]}
-            onPress={() => setActiveFilter("nearby")}
+            style={styles.backBtn}
+            onPress={() => navigate("c_recycle_home")}
             activeOpacity={0.7}
           >
-            <MapPin size={13} color={activeFilter === "nearby" ? "#FFFFFF" : "#4B5563"} />
-            <Text style={[styles.filterChipText, activeFilter === "nearby" && styles.filterChipTextActive]}>
-              Terdekat
-            </Text>
+            <ArrowLeft size={18} color="#1E293B" />
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterChip, activeFilter === "best_price" && styles.filterChipActive]}
-            onPress={() => setActiveFilter("best_price")}
-            activeOpacity={0.7}
-          >
-            <Sparkles size={13} color={activeFilter === "best_price" ? "#FFFFFF" : "#4B5563"} />
-            <Text style={[styles.filterChipText, activeFilter === "best_price" && styles.filterChipTextActive]}>
-              Harga Terbaik
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterChip, activeFilter === "pickup" && styles.filterChipActive]}
-            onPress={() => setActiveFilter("pickup")}
-            activeOpacity={0.7}
-          >
-            <Truck size={13} color={activeFilter === "pickup" ? "#FFFFFF" : "#4B5563"} />
-            <Text style={[styles.filterChipText, activeFilter === "pickup" && styles.filterChipTextActive]}>
-              Bisa Pickup
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterChip, activeFilter === "open" && styles.filterChipActive]}
-            onPress={() => setActiveFilter("open")}
-            activeOpacity={0.7}
-          >
-            <Clock size={13} color={activeFilter === "open" ? "#FFFFFF" : "#4B5563"} />
-            <Text style={[styles.filterChipText, activeFilter === "open" && styles.filterChipTextActive]}>
-              Buka Sekarang
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      {/* Bank List */}
-      <ScrollView
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#15803D"]} />}
-      >
-        {loading ? (
-          <ActivityIndicator size="large" color="#15803D" style={{ marginTop: 40 }} />
-        ) : filteredBanks.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Recycle size={48} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>Tidak ada Bank Sampah ditemukan</Text>
-            <Text style={styles.emptySub}>Coba ubah filter pencarian atau kata kunci lokasi Anda.</Text>
+          <View style={styles.headerTitleCol}>
+            <Text style={styles.headerTitle}>Pilih Mitra Bank Sampah</Text>
+            <Text style={styles.headerSub}>Mitra resmi berlisensi & terverifikasi GEOVERSE</Text>
           </View>
-        ) : (
-          filteredBanks.map((bank) => {
-            const bStatus = checkBankOperationalStatus(bank.openingHours);
-            return (
-              <TouchableOpacity
-                key={bank._id}
-                style={styles.bankCard}
-                onPress={() => {
-                  setSelectedBank(bank);
-                  navigate("c_recycle_bank_detail");
-                }}
-                activeOpacity={0.85}
-              >
-                {/* Header row */}
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardBankName}>{bank.name}</Text>
-                    <View style={styles.ratingDistanceRow}>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 3,
-                          paddingHorizontal: 6,
-                          paddingVertical: 2,
-                          borderRadius: 6,
-                          backgroundColor: bStatus.isOpen ? "#DCFCE7" : "#FEE2E2",
-                          marginRight: 4,
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 5,
-                            height: 5,
-                            borderRadius: 2.5,
-                            backgroundColor: bStatus.isOpen ? "#15803D" : "#DC2626",
-                          }}
-                        />
-                        <Text
-                          style={{
-                            fontSize: 9.5,
-                            fontWeight: "800",
-                            color: bStatus.isOpen ? "#15803D" : "#DC2626",
-                          }}
-                        >
-                          {bStatus.isOpen ? "Buka" : "Tutup"}
+        </View>
+      </View>
+
+      {/* Main Content Area */}
+      <View style={[styles.mainWrapper, isWide && styles.mainWrapperWide]}>
+        {/* Search Input */}
+        <View style={styles.searchSection}>
+          <View style={styles.searchBar}>
+            <Search size={16} color="#059669" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Cari nama bank sampah atau lokasi..."
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
+        </View>
+
+        {/* Filter Tabs */}
+        <View style={styles.filterRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScroll}
+          >
+            <TouchableOpacity
+              style={[styles.filterChip, activeFilter === "nearby" && styles.filterChipActive]}
+              onPress={() => setActiveFilter("nearby")}
+              activeOpacity={0.75}
+            >
+              <Navigation size={12} color={activeFilter === "nearby" ? "#FFFFFF" : "#64748B"} />
+              <Text style={[styles.filterChipText, activeFilter === "nearby" && styles.filterChipTextActive]}>
+                Terdekat
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterChip, activeFilter === "best_price" && styles.filterChipActive]}
+              onPress={() => setActiveFilter("best_price")}
+              activeOpacity={0.75}
+            >
+              <Sparkles size={12} color={activeFilter === "best_price" ? "#FFFFFF" : "#64748B"} />
+              <Text style={[styles.filterChipText, activeFilter === "best_price" && styles.filterChipTextActive]}>
+                Harga Terbaik
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterChip, activeFilter === "pickup" && styles.filterChipActive]}
+              onPress={() => setActiveFilter("pickup")}
+              activeOpacity={0.75}
+            >
+              <Truck size={12} color={activeFilter === "pickup" ? "#FFFFFF" : "#64748B"} />
+              <Text style={[styles.filterChipText, activeFilter === "pickup" && styles.filterChipTextActive]}>
+                Layanan Pickup
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterChip, activeFilter === "open" && styles.filterChipActive]}
+              onPress={() => setActiveFilter("open")}
+              activeOpacity={0.75}
+            >
+              <Clock size={12} color={activeFilter === "open" ? "#FFFFFF" : "#64748B"} />
+              <Text style={[styles.filterChipText, activeFilter === "open" && styles.filterChipTextActive]}>
+                Buka Sekarang
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {/* Bank List */}
+        <ScrollView
+          contentContainerStyle={[styles.listContent, isWide && styles.listContentWide]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#059669"]} />}
+        >
+          {loading ? (
+            <ActivityIndicator size="large" color="#059669" style={{ marginTop: 40 }} />
+          ) : filteredBanks.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Recycle size={40} color="#94A3B8" />
+              <Text style={styles.emptyTitle}>Tidak ada mitra Bank Sampah ditemukan</Text>
+              <Text style={styles.emptySub}>Coba sesuaikan kata kunci pencarian atau ganti filter.</Text>
+            </View>
+          ) : (
+            <View style={[styles.cardGrid, isWide && styles.cardGridWide]}>
+              {filteredBanks.map((bank) => {
+                const bStatus = checkBankOperationalStatus(bank.openingHours);
+                return (
+                  <TouchableOpacity
+                    key={bank._id}
+                    style={[styles.bankCard, isWide && styles.bankCardWide]}
+                    onPress={() => {
+                      setSelectedBank(bank);
+                      navigate("c_recycle_bank_detail");
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    {/* Header Row */}
+                    <View style={styles.cardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                          <Text style={styles.cardBankName}>{bank.name}</Text>
+                          <ShieldCheck size={14} color="#059669" />
+                        </View>
+                        <View style={styles.ratingDistanceRow}>
+                          <View
+                            style={[
+                              styles.openStatusTag,
+                              { backgroundColor: bStatus.isOpen ? "#ECFDF5" : "#FEF2F2" },
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.openStatusDot,
+                                { backgroundColor: bStatus.isOpen ? "#10B981" : "#EF4444" },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.openStatusText,
+                                { color: bStatus.isOpen ? "#059669" : "#DC2626" },
+                              ]}
+                            >
+                              {bStatus.isOpen ? "Buka" : "Tutup"}
+                            </Text>
+                          </View>
+
+                          <View style={styles.ratingBadge}>
+                            <Star size={11} color="#EAB308" fill="#EAB308" />
+                            <Text style={styles.ratingText}>{bank.rating?.toFixed(1) || "5.0"}</Text>
+                          </View>
+
+                          <Text style={styles.metaDot}>•</Text>
+                          <Navigation size={10} color="#059669" />
+                          <Text style={styles.distanceText}>
+                            {bank.distanceKm !== undefined && bank.distanceKm !== null
+                              ? `${bank.distanceKm.toFixed(1)} km`
+                              : "Area Kamojang"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {bank.acceptsPickup && (
+                        <View style={styles.pickupPill}>
+                          <Truck size={10} color="#059669" />
+                          <Text style={styles.pickupPillText}>Pickup Ready</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Operational info & Address */}
+                    <View style={styles.infoRow}>
+                      <Clock size={12} color="#64748B" />
+                      <Text style={styles.infoText}>{bStatus.hoursText}</Text>
+                    </View>
+
+                    <Text style={styles.addressText} numberOfLines={2}>
+                      {bank.address}
+                    </Text>
+
+                    {/* Price & Action Row */}
+                    <View style={styles.priceHighlightRow}>
+                      <View>
+                        <Text style={styles.highlightLabel}>Harga Sampah Hingga</Text>
+                        <Text style={styles.highlightPrice}>
+                          {bank.maxPrice ? `${rp(bank.maxPrice)}/kg` : "Rp 6.500/kg"}
                         </Text>
                       </View>
-                      <View style={styles.ratingBadge}>
-                        <Star size={12} color="#EAB308" fill="#EAB308" />
-                        <Text style={styles.ratingText}>{bank.rating?.toFixed(1) || "5.0"}</Text>
-                        <Text style={styles.ratingCount}>({bank.ratingCount || 12})</Text>
+
+                      <View style={styles.btnDetailMini}>
+                        <Text style={styles.btnDetailMiniText}>Pilih Bank</Text>
+                        <ChevronRight size={13} color="#059669" />
                       </View>
-                      <Text style={styles.dot}>•</Text>
-                      <MapPin size={12} color="#6B7280" />
-                      <Text style={styles.distanceText}>
-                        {bank.distanceKm !== undefined && bank.distanceKm !== null
-                          ? `${bank.distanceKm.toFixed(1)} km`
-                          : "Ring 1 Kamojang"}
-                      </Text>
                     </View>
-                  </View>
-
-                  {bank.acceptsPickup && (
-                    <View style={styles.pickupPill}>
-                      <Truck size={11} color="#047857" />
-                      <Text style={styles.pickupPillText}>Layanan Pickup</Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Operating hours & address */}
-                <View style={styles.infoRow}>
-                  <Clock size={13} color="#6B7280" />
-                  <Text style={styles.infoText}>{bStatus.hoursText}</Text>
-                </View>
-
-              <Text style={styles.addressText} numberOfLines={2}>
-                {bank.address}
-              </Text>
-
-              {/* Price Highlight & Categories */}
-              <View style={styles.priceHighlightRow}>
-                <View style={styles.highlightBadge}>
-                  <Text style={styles.highlightLabel}>Harga Hingga</Text>
-                  <Text style={styles.highlightPrice}>
-                    {bank.maxPrice ? `${rp(bank.maxPrice)}/kg` : "Rp 6.500/kg"}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.btnDetail}
-                  onPress={() => {
-                    setSelectedBank(bank);
-                    navigate("c_recycle_bank_detail");
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.btnDetailText}>Lihat Detail</Text>
-                  <ChevronRight size={14} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          );
-        })
-      )}
-      </ScrollView>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      </View>
     </ResponsiveSafeAreaView>
   );
 };
@@ -284,22 +286,29 @@ export const BankSampahListScreen: React.FC<Nav> = ({ navigate }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
+  },
+  headerWrapper: {
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    maxWidth: 1140,
+    width: "100%",
+    alignSelf: "center",
   },
   backBtn: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: 10,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -309,40 +318,53 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: -0.3,
   },
   headerSub: {
     fontSize: 11,
-    color: "#6B7280",
+    color: "#64748B",
     marginTop: 1,
   },
-  searchContainer: {
+  mainWrapper: {
+    flex: 1,
+    maxWidth: 1140,
+    width: "100%",
+    alignSelf: "center",
+  },
+  mainWrapperWide: {
+    paddingHorizontal: 16,
+  },
+  searchSection: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 6,
-    backgroundColor: "#FFFFFF",
+    paddingBottom: 8,
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     gap: 8,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
-    color: "#111827",
+    fontSize: 12,
+    color: "#0F172A",
     padding: 0,
   },
-  filterScrollWrapper: {
-    backgroundColor: "#FFFFFF",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+  filterRow: {
+    paddingBottom: 8,
   },
   filterScroll: {
     paddingHorizontal: 16,
@@ -351,42 +373,57 @@ const styles = StyleSheet.create({
   filterChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
   },
   filterChipActive: {
-    backgroundColor: "#15803D",
-    borderColor: "#15803D",
+    backgroundColor: "#059669",
+    borderColor: "#059669",
   },
   filterChipText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
-    color: "#4B5563",
+    color: "#475569",
   },
   filterChipTextActive: {
     color: "#FFFFFF",
   },
   listContent: {
-    padding: 16,
+    paddingHorizontal: 16,
     paddingBottom: 40,
+  },
+  listContentWide: {
+    paddingHorizontal: 0,
+  },
+  cardGrid: {
+    width: "100%",
+  },
+  cardGridWide: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
   },
   bankCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    padding: 15,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    shadowColor: "#000000",
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
     elevation: 2,
+  },
+  bankCardWide: {
+    width: "48.8%",
+    marginBottom: 0,
   },
   cardHeader: {
     flexDirection: "row",
@@ -395,9 +432,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   cardBankName: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#111827",
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
   },
   ratingDistanceRow: {
     flexDirection: "row",
@@ -405,98 +442,110 @@ const styles = StyleSheet.create({
     marginTop: 4,
     gap: 5,
   },
+  openStatusTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginRight: 2,
+  },
+  openStatusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  openStatusText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
   ratingBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
   },
   ratingText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#111827",
+    color: "#0F172A",
   },
-  ratingCount: {
-    fontSize: 11,
-    color: "#9CA3AF",
-  },
-  dot: {
-    fontSize: 11,
-    color: "#9CA3AF",
+  metaDot: {
+    fontSize: 10,
+    color: "#CBD5E1",
   },
   distanceText: {
-    fontSize: 12,
-    color: "#4B5563",
-    fontWeight: "500",
+    fontSize: 11,
+    color: "#059669",
+    fontWeight: "600",
   },
   pickupPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#D1FAE5",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    gap: 3,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingVertical: 3,
+    paddingHorizontal: 7,
     borderRadius: 6,
   },
   pickupPillText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "700",
-    color: "#047857",
+    color: "#059669",
   },
   infoRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 6,
+    gap: 4,
+    marginTop: 4,
   },
   infoText: {
     fontSize: 11,
-    color: "#6B7280",
+    color: "#64748B",
   },
   addressText: {
-    fontSize: 12,
-    color: "#4B5563",
-    marginTop: 4,
-    lineHeight: 16,
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 3,
+    lineHeight: 15,
   },
   priceHighlightRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-  },
-  highlightBadge: {
-    backgroundColor: "#FEF3C7",
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    borderTopColor: "#F1F5F9",
   },
   highlightLabel: {
     fontSize: 9,
-    fontWeight: "700",
-    color: "#92400E",
-    textTransform: "uppercase",
+    fontWeight: "600",
+    color: "#64748B",
   },
   highlightPrice: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#B45309",
-  },
-  btnDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#15803D",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-  },
-  btnDetailText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: "#D97706",
+    marginTop: 1,
+  },
+  btnDetailMini: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  btnDetailMiniText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#059669",
   },
   emptyContainer: {
     alignItems: "center",
@@ -504,16 +553,16 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
-    color: "#374151",
-    marginTop: 12,
+    color: "#334155",
+    marginTop: 10,
   },
   emptySub: {
-    fontSize: 12,
-    color: "#6B7280",
+    fontSize: 11,
+    color: "#94A3B8",
     textAlign: "center",
-    marginTop: 4,
-    paddingHorizontal: 30,
+    marginTop: 3,
+    paddingHorizontal: 24,
   },
 });

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Linking,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -22,15 +23,20 @@ import {
   AlertCircle,
   Package,
   Layers,
+  ShieldCheck,
+  Navigation,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { useRecycle } from "../../../context/RecycleContext";
 import { getWasteBankById, getWasteBankPrices } from "../../../services/recycleService";
 import { WasteCategoryPriceUI } from "../../../types/recycleTypes";
-import { rp } from "../../../utils/formatters";
+import { rp, formatNumberSafe } from "../../../utils/formatters";
 import { checkBankOperationalStatus } from "../../../utils/bankOperationalUtils";
 
 export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   const { selectedBank, updateDraftDeposit, resetDraftDeposit } = useRecycle();
   const [prices, setPrices] = useState<WasteCategoryPriceUI[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,25 +108,33 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => navigate("c_recycle_banks")} activeOpacity={0.7}>
-          <ArrowLeft size={20} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>Detail Bank Sampah</Text>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleCall} activeOpacity={0.7}>
-          <Phone size={18} color="#15803D" />
-        </TouchableOpacity>
+      <View style={styles.headerWrapper}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => navigate("c_recycle_banks")} activeOpacity={0.7}>
+            <ArrowLeft size={18} color="#1E293B" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle} numberOfLines={1}>Profil Mitra</Text>
+            <Text style={styles.headerSub}>Terverifikasi GEOVERSE</Text>
+          </View>
+          <TouchableOpacity style={styles.headerBtn} onPress={handleCall} activeOpacity={0.7}>
+            <Phone size={16} color="#059669" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, isWide && styles.scrollContentWide]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Closed Alert Banner */}
         {!opStatus.isOpen && (
-          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#FEF2F2", borderColor: "#FCA5A5", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 14 }}>
-            <AlertCircle size={20} color="#DC2626" />
+          <View style={styles.closedBanner}>
+            <AlertCircle size={18} color="#DC2626" />
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={{ fontSize: 13, fontWeight: "800", color: "#B91C1C" }}>Bank Sampah Sedang Tutup</Text>
-              <Text style={{ fontSize: 11, color: "#991B1B", marginTop: 2 }}>
-                {opStatus.reason || `Layanan setor sampah hanya dapat diakses pada jam operasional (${opStatus.hoursText}).`}
+              <Text style={styles.closedBannerTitle}>Bank Sampah Sedang Tutup</Text>
+              <Text style={styles.closedBannerSub}>
+                {opStatus.reason || `Layanan setor sampah hanya dapat diakses pada jam buka (${opStatus.hoursText}).`}
               </Text>
             </View>
           </View>
@@ -130,41 +144,36 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
         <View style={styles.profileCard}>
           <View style={styles.profileIconRow}>
             <View style={styles.bankAvatar}>
-              <Building2 size={32} color="#15803D" />
+              <Building2 size={24} color="#059669" />
             </View>
             <View style={styles.profileMeta}>
-              <Text style={styles.bankName}>{selectedBank.name}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <Text style={styles.bankName}>{selectedBank.name}</Text>
+                <ShieldCheck size={15} color="#059669" />
+              </View>
               <View style={styles.ratingRow}>
-                <Star size={14} color="#EAB308" fill="#EAB308" />
+                <Star size={12} color="#EAB308" fill="#EAB308" />
                 <Text style={styles.ratingVal}>{selectedBank.rating?.toFixed(1) || "5.0"}</Text>
                 <Text style={styles.ratingCount}>({selectedBank.ratingCount || 15} ulasan)</Text>
               </View>
             </View>
             <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 8,
-                backgroundColor: opStatus.isOpen ? "#DCFCE7" : "#FEE2E2",
-              }}
+              style={[
+                styles.statusPill,
+                { backgroundColor: opStatus.isOpen ? "#ECFDF5" : "#FEF2F2" },
+              ]}
             >
               <View
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: opStatus.isOpen ? "#15803D" : "#DC2626",
-                }}
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: opStatus.isOpen ? "#10B981" : "#EF4444" },
+                ]}
               />
               <Text
-                style={{
-                  fontSize: 10,
-                  fontWeight: "800",
-                  color: opStatus.isOpen ? "#15803D" : "#DC2626",
-                }}
+                style={[
+                  styles.statusText,
+                  { color: opStatus.isOpen ? "#059669" : "#DC2626" },
+                ]}
               >
                 {opStatus.isOpen ? "Buka" : "Tutup"}
               </Text>
@@ -173,36 +182,36 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
 
           <View style={styles.divider} />
 
-          {/* Info details */}
+          {/* Info Details */}
           <View style={styles.detailRow}>
-            <MapPin size={16} color="#6B7280" style={styles.detailIcon} />
+            <MapPin size={15} color="#64748B" style={styles.detailIcon} />
             <Text style={styles.detailText}>{selectedBank.address}</Text>
           </View>
 
           <View style={styles.detailRow}>
-            <Clock size={16} color="#15803D" style={styles.detailIcon} />
-            <Text style={[styles.detailText, { color: "#15803D", fontWeight: "700" }]}>
+            <Clock size={15} color="#059669" style={styles.detailIcon} />
+            <Text style={[styles.detailText, { color: "#059669", fontWeight: "600" }]}>
               {opStatus.hoursText}
             </Text>
           </View>
 
           <View style={styles.detailRow}>
-            <Phone size={16} color="#6B7280" style={styles.detailIcon} />
-            <Text style={styles.detailText}>{selectedBank.phone}</Text>
+            <Phone size={15} color="#64748B" style={styles.detailIcon} />
+            <Text style={styles.detailText}>{selectedBank.phone || "Hubungi via aplikasi"}</Text>
           </View>
 
           {selectedBank.acceptsPickup ? (
             <View style={styles.pickupAlert}>
-              <Truck size={16} color="#047857" />
+              <Truck size={15} color="#059669" />
               <Text style={styles.pickupAlertText}>
-                Tersedia layanan penjemputan (Pickup) dari rumah oleh driver GEOVERSE.
+                Tersedia layanan penjemputan (Pickup) dari lokasi Anda oleh mitra driver GEOVERSE.
               </Text>
             </View>
           ) : (
-            <View style={[styles.pickupAlert, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}>
-              <AlertCircle size={16} color="#DC2626" />
-              <Text style={[styles.pickupAlertText, { color: "#991B1B" }]}>
-                Layanan penjemputan driver saat ini sedang nonaktif. Bank Sampah ini hanya menerima setoran antar langsung di lokasi.
+            <View style={[styles.pickupAlert, { backgroundColor: "#F8FAFC", borderColor: "#E2E8F0" }]}>
+              <AlertCircle size={15} color="#94A3B8" />
+              <Text style={[styles.pickupAlertText, { color: "#64748B" }]}>
+                Layanan penjemputan driver sedang nonaktif. Bank Sampah ini melayani setoran langsung di lokasi.
               </Text>
             </View>
           )}
@@ -212,7 +221,7 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>Katalog Harga Sampah</Text>
-            <Text style={styles.sectionSubtitle}>Dikonversi 1 Point = Rp 1 dari timbangan resmi</Text>
+            <Text style={styles.sectionSubtitle}>Dikonversi 1 Point = Rp 1 dari timbangan resmi mitra</Text>
           </View>
           <View style={styles.priceTagMini}>
             <Text style={styles.priceTagMiniText}>{prices.length} Kategori</Text>
@@ -220,98 +229,102 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="small" color="#15803D" style={{ marginVertical: 20 }} />
+          <ActivityIndicator size="small" color="#059669" style={{ marginVertical: 24 }} />
         ) : prices.length === 0 ? (
           <View style={styles.emptyPriceCard}>
-            <Package size={28} color="#9CA3AF" />
+            <Package size={28} color="#94A3B8" />
             <Text style={styles.emptyPriceText}>Daftar harga kategori belum dimuat</Text>
           </View>
         ) : (
-          prices.map((item) => (
-            <View key={item._id} style={styles.priceCard}>
-              <View style={styles.priceCardLeft}>
-                <View style={styles.categoryIconCircle}>
-                  <Layers size={18} color="#15803D" />
+          <View style={[styles.priceGrid, isWide && styles.priceGridWide]}>
+            {prices.map((item) => (
+              <View key={item._id} style={[styles.priceCard, isWide && styles.priceCardWide]}>
+                <View style={styles.priceCardLeft}>
+                  <View style={styles.categoryIconCircle}>
+                    <Layers size={16} color="#059669" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.categoryName}>{item.category}</Text>
+                    <Text style={styles.subCategoryName}>
+                      {item.subCategory || "Semua jenis"} • Min {item.minWeightKg} kg
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.categoryName}>{item.category}</Text>
-                  <Text style={styles.subCategoryName}>
-                    {item.subCategory || "Semua jenis"} • Min {item.minWeightKg} kg
-                  </Text>
+                <View style={styles.priceCardRight}>
+                  <Text style={styles.pricePerKg}>{rp(item.pricePerKg)}</Text>
+                  <Text style={styles.pointReward}>≈ {formatNumberSafe(item.pricePerKg)} Pts/kg</Text>
                 </View>
               </View>
-              <View style={styles.priceCardRight}>
-                <Text style={styles.pricePerKg}>{rp(item.pricePerKg)}</Text>
-                <Text style={styles.pointReward}>≈ {item.pricePerKg.toLocaleString("id-ID")} Pts/kg</Text>
-              </View>
-            </View>
-          ))
+            ))}
+          </View>
         )}
 
         {/* Disclaimer Card */}
         <View style={styles.disclaimerBox}>
-          <CheckCircle2 size={16} color="#15803D" style={{ marginTop: 2 }} />
+          <CheckCircle2 size={15} color="#059669" style={{ marginTop: 2 }} />
           <Text style={styles.disclaimerText}>
-            Estimasi berat pada aplikasi adalah acuan sementara. Poin GEOVERSE final akan diterbitkan sesuai dengan hasil timbang akurat oleh petugas Bank Sampah.
+            Estimasi pada aplikasi adalah acuan sementara. Saldo Poin GEOVERSE final akan diterbitkan sesuai dengan hasil timbang akurat oleh petugas Bank Sampah.
           </Text>
         </View>
       </ScrollView>
 
       {/* Sticky Bottom Actions */}
-      <View style={styles.bottomBar}>
-        {!opStatus.isOpen ? (
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: "#9CA3AF", flex: 1 }]}
-            onPress={() => {
-              Alert.alert(
-                "Bank Sampah Sedang Tutup",
-                `Bank Sampah ${selectedBank.name} sedang tutup saat ini (${opStatus.reason || `Jam operasional: ${opStatus.hoursText}`}). Layanan setor sampah hanya dapat diakses pada jam buka.`
-              );
-            }}
-            activeOpacity={0.8}
-          >
-            <Clock size={18} color="#FFFFFF" />
-            <Text style={[styles.btnPickupText, { color: "#FFFFFF" }]}>
-              Sedang Tutup (Jam Buka: {opStatus.hoursText})
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <>
+      <View style={styles.bottomBarWrapper}>
+        <View style={[styles.bottomBar, isWide && styles.bottomBarWide]}>
+          {!opStatus.isOpen ? (
             <TouchableOpacity
-              style={[styles.actionBtn, styles.btnDropOff, !selectedBank.acceptsPickup && { flex: 1.2 }]}
-              onPress={() => handleStartDeposit("DROP_OFF")}
+              style={[styles.actionBtn, { backgroundColor: "#94A3B8", flex: 1 }]}
+              onPress={() => {
+                Alert.alert(
+                  "Bank Sampah Sedang Tutup",
+                  `Bank Sampah ${selectedBank.name} sedang tutup saat ini (${opStatus.reason || `Jam buka: ${opStatus.hoursText}`}). Layanan hanya dapat diakses saat buka.`
+                );
+              }}
               activeOpacity={0.8}
             >
-              <Package size={18} color="#15803D" />
-              <Text style={styles.btnDropOffText}>Setor Langsung</Text>
+              <Clock size={16} color="#FFFFFF" />
+              <Text style={[styles.btnPickupText, { color: "#FFFFFF" }]}>
+                Sedang Tutup (Jam Buka: {opStatus.hoursText})
+              </Text>
             </TouchableOpacity>
-
-            {selectedBank.acceptsPickup ? (
+          ) : (
+            <>
               <TouchableOpacity
-                style={[styles.actionBtn, styles.btnPickup]}
-                onPress={() => handleStartDeposit("PICKUP")}
+                style={[styles.actionBtn, styles.btnDropOff, !selectedBank.acceptsPickup && { flex: 1.2 }]}
+                onPress={() => handleStartDeposit("DROP_OFF")}
                 activeOpacity={0.8}
               >
-                <Truck size={18} color="#FFFFFF" />
-                <Text style={styles.btnPickupText}>Pesan Pickup Driver</Text>
+                <Package size={16} color="#059669" />
+                <Text style={styles.btnDropOffText}>Setor Mandiri</Text>
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.btnPickup, { backgroundColor: "#F1F5F9", borderColor: "#E2E8F0" }]}
-                onPress={() => {
-                  Alert.alert(
-                    "Layanan Pickup Nonaktif",
-                    `${selectedBank.name} sedang menonaktifkan layanan penjemputan driver. Silakan gunakan tombol Setor Langsung.`
-                  );
-                }}
-                activeOpacity={0.7}
-              >
-                <Truck size={18} color="#94A3B8" />
-                <Text style={[styles.btnPickupText, { color: "#94A3B8" }]}>Pickup Nonaktif</Text>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
+
+              {selectedBank.acceptsPickup ? (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.btnPickup]}
+                  onPress={() => handleStartDeposit("PICKUP")}
+                  activeOpacity={0.8}
+                >
+                  <Truck size={16} color="#FFFFFF" />
+                  <Text style={styles.btnPickupText}>Jemput Driver</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.btnPickupDisabled]}
+                  onPress={() => {
+                    Alert.alert(
+                      "Layanan Pickup Nonaktif",
+                      `${selectedBank.name} saat ini hanya melayani setoran mandiri di lokasi.`
+                    );
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Truck size={16} color="#94A3B8" />
+                  <Text style={styles.btnPickupDisabledText}>Pickup Nonaktif</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+        </View>
       </View>
     </ResponsiveSafeAreaView>
   );
@@ -320,7 +333,12 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
+  },
+  headerWrapper: {
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
   },
   header: {
     flexDirection: "row",
@@ -328,27 +346,63 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    maxWidth: 960,
+    width: "100%",
+    alignSelf: "center",
   },
   headerBtn: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: 10,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     justifyContent: "center",
     alignItems: "center",
   },
+  headerCenter: {
+    alignItems: "center",
+  },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
-    maxWidth: "70%",
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  headerSub: {
+    fontSize: 10,
+    color: "#059669",
+    fontWeight: "600",
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 110,
+    maxWidth: 960,
+    width: "100%",
+    alignSelf: "center",
+  },
+  scrollContentWide: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  closedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FCA5A5",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  closedBannerTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#B91C1C",
+  },
+  closedBannerSub: {
+    fontSize: 11,
+    color: "#991B1B",
+    marginTop: 2,
   },
   profileCard: {
     backgroundColor: "#FFFFFF",
@@ -356,47 +410,71 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
   },
   profileIconRow: {
     flexDirection: "row",
     alignItems: "center",
   },
   bankAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: "#DCFCE7",
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#ECFDF5",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
   },
   profileMeta: {
     flex: 1,
   },
   bankName: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
+    marginTop: 3,
     gap: 4,
   },
   ratingVal: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#111827",
+    color: "#0F172A",
   },
   ratingCount: {
     fontSize: 11,
-    color: "#6B7280",
+    color: "#64748B",
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: "700",
   },
   divider: {
     height: 1,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F1F5F9",
     marginVertical: 12,
   },
   detailRow: {
@@ -411,8 +489,8 @@ const styles = StyleSheet.create({
   detailText: {
     flex: 1,
     fontSize: 12,
-    color: "#4B5563",
-    lineHeight: 18,
+    color: "#475569",
+    lineHeight: 17,
   },
   pickupAlert: {
     flexDirection: "row",
@@ -429,45 +507,58 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 11,
     color: "#065F46",
-    fontWeight: "600",
+    fontWeight: "500",
+    lineHeight: 15,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#111827",
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
   },
   sectionSubtitle: {
     fontSize: 11,
-    color: "#6B7280",
-    marginTop: 2,
+    color: "#64748B",
+    marginTop: 1,
   },
   priceTagMini: {
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#F1F5F9",
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
   },
   priceTagMiniText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#4B5563",
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  priceGrid: {
+    width: "100%",
+  },
+  priceGridWide: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
   },
   priceCard: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
+  },
+  priceCardWide: {
+    width: "48.9%",
+    marginBottom: 0,
   },
   priceCardLeft: {
     flexDirection: "row",
@@ -475,37 +566,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   categoryIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: "#DCFCE7",
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: "#ECFDF5",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
   },
   categoryName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#111827",
+    color: "#0F172A",
   },
   subCategoryName: {
-    fontSize: 11,
-    color: "#6B7280",
+    fontSize: 10,
+    color: "#64748B",
     marginTop: 2,
   },
   priceCardRight: {
     alignItems: "flex-end",
   },
   pricePerKg: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#15803D",
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#059669",
   },
   pointReward: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "600",
-    color: "#CA8A04",
-    marginTop: 2,
+    color: "#D97706",
+    marginTop: 1,
   },
   emptyPriceCard: {
     backgroundColor: "#FFFFFF",
@@ -513,70 +604,88 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
   },
   emptyPriceText: {
-    fontSize: 12,
-    color: "#9CA3AF",
+    fontSize: 11,
+    color: "#94A3B8",
     marginTop: 6,
   },
   disclaimerBox: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: "#DCFCE7",
+    borderColor: "#E2E8F0",
     borderRadius: 12,
     padding: 12,
-    marginTop: 10,
+    marginTop: 8,
     gap: 8,
   },
   disclaimerText: {
     flex: 1,
-    fontSize: 11,
-    color: "#166534",
-    lineHeight: 16,
+    fontSize: 10,
+    color: "#64748B",
+    lineHeight: 15,
   },
-  bottomBar: {
+  bottomBarWrapper: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: "row",
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    gap: 10,
+    borderTopColor: "#E2E8F0",
+  },
+  bottomBar: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 20,
+    gap: 8,
+    maxWidth: 960,
+    width: "100%",
+    alignSelf: "center",
+  },
+  bottomBarWide: {
+    paddingHorizontal: 24,
   },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 6,
   },
   btnDropOff: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: "#86EFAC",
+    borderColor: "#CBD5E1",
   },
   btnDropOffText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#15803D",
+    color: "#1E293B",
   },
   btnPickup: {
-    backgroundColor: "#15803D",
+    backgroundColor: "#059669",
   },
   btnPickupText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  btnPickupDisabled: {
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  btnPickupDisabledText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#94A3B8",
   },
   errorBox: {
     flex: 1,
@@ -591,7 +700,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backButton: {
-    backgroundColor: "#15803D",
+    backgroundColor: "#059669",
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 8,

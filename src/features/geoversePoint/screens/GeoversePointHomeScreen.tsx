@@ -59,16 +59,9 @@ export const GeoversePointHomeScreen: React.FC<Nav> = ({ navigate }) => {
     setRefreshing(false);
   };
 
-  // Automatically fetch and sync points whenever screen mounts or is displayed
+  // Fetch and sync points when screen mounts
   useEffect(() => {
     onRefresh();
-
-    // Auto-refresh interval while on the point wallet screen
-    const interval = setInterval(() => {
-      refreshWallet().catch(() => {});
-    }, 4000);
-
-    return () => clearInterval(interval);
   }, []);
 
   const handleRedeemVoucher = async (voucher: PointVoucherUI) => {
@@ -145,9 +138,16 @@ export const GeoversePointHomeScreen: React.FC<Nav> = ({ navigate }) => {
           <ArrowLeft size={22} color="#0F172A" />
         </TouchableOpacity>
 
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>GEOVERSE Point</Text>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>Loyalty Dompet Lingkungan</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+          <Image
+            source={require("../../../../assets/kanyaah-point.png")}
+            style={{ width: 34, height: 34, borderRadius: 10 }}
+            resizeMode="cover"
+          />
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>GEOVERSE Point</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>Loyalty Dompet Lingkungan</Text>
+          </View>
         </View>
 
         <View style={styles.headerActions}>

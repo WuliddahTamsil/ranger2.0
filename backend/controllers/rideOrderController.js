@@ -18,6 +18,18 @@ const emitToRideRoom = (io, orderId, event, payload) => {
     io?.to(`ride:${String(orderId)}`).emit(event, payload);
   }
 };
+const findRideOrder = async (idOrCode) => {
+  if (!idOrCode) return null;
+  const clean = String(idOrCode).replace(/^#/, "").trim();
+  if (mongoose.Types.ObjectId.isValid(clean)) {
+    const doc = await RideOrder.findById(clean);
+    if (doc) return doc;
+  }
+  return await RideOrder.findOne({
+    $or: [{ orderCode: clean }, { orderCode: `#${clean}` }, { orderCode: String(idOrCode).trim() }],
+  });
+};
+
 
 const {
   KAMOJANG_COORDINATES,
@@ -531,7 +543,7 @@ const getDriverRideOrders = async (req, res) => {
 // 6. Get single ride detail
 const getRideOrderById = async (req, res) => {
   try {
-    const order = await RideOrder.findById(req.params.id).lean();
+    let order = await findRideOrder(req.params.id); if (order && order.toObject) order = order.toObject();
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan Kanyaah Ride tidak ditemukan" });
     }
@@ -737,7 +749,7 @@ const updateRideStatus = async (req, res) => {
     const authUser = req.authUser;
     const orderId = req.params.id;
 
-    const current = await RideOrder.findById(orderId);
+    const current = await findRideOrder(orderId);
     if (!current) {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
     }
@@ -882,7 +894,7 @@ const updateDriverLocation = async (req, res) => {
       return res.status(400).json({ success: false, message: "Koordinat latitude dan longitude wajib dikirim." });
     }
 
-    const order = await RideOrder.findById(orderId);
+    const order = await findRideOrder(orderId);
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
     }
@@ -923,7 +935,7 @@ const cancelRideOrder = async (req, res) => {
     const { reason, reasonDetail } = req.body;
     const authUser = req.authUser;
 
-    const order = await RideOrder.findById(orderId);
+    const order = await findRideOrder(orderId);
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
     }
@@ -1036,7 +1048,7 @@ const rateRideOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Rating harus bernilai 1 sampai 5." });
     }
 
-    const order = await RideOrder.findById(req.params.id);
+    const order = await findRideOrder(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
     }

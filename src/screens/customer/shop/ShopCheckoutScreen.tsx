@@ -7,6 +7,7 @@ import {
   TextInput,
   StyleSheet,
   Switch,
+  Modal,
   ActivityIndicator,
   Alert,
   useWindowDimensions,
@@ -25,6 +26,10 @@ import {
   Wallet,
   Banknote,
   AlertTriangle,
+  Tag,
+  Truck,
+  Percent,
+  X,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { AuthAccount } from "../../auth/authTypes";
@@ -36,6 +41,8 @@ import { DeliverySlotSelector, DeliverySlotState } from "../../../components/sho
 import { PrescriptionUploadCard } from "../../../components/shop/PrescriptionUploadCard";
 import { MarketplaceDigitalPaymentModal } from "../../../components/MarketplaceDigitalPaymentModal";
 import { rp } from "../../../utils/formatters";
+import { validateVoucherForCheckout, fetchMerchantVouchers } from "../../../services/merchantVoucherService";
+import { fetchAvailableVouchers } from "../../../features/geoversePoint/services/geoversePointService";
 
 interface ShopCheckoutScreenProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -82,7 +89,15 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
   const [deliverySlot, setDeliverySlot] = useState<DeliverySlotState>({ type: "INSTANT" });
   const [driverNotes, setDriverNotes] = useState("");
   const [voucherCodeInput, setVoucherCodeInput] = useState("");
-  const [appliedVoucher, setAppliedVoucher] = useState<{ code: string; discount: number } | null>(null);
+  const [appliedVoucher, setAppliedVoucher] = useState<{
+    code: string;
+    title: string;
+    discountType: "FIXED" | "PERCENTAGE" | "FREE_SHIPPING";
+    discount: number;
+  } | null>(null);
+  const [voucherModalVisible, setVoucherModalVisible] = useState(false);
+  const [availableVouchersList, setAvailableVouchersList] = useState<any[]>([]);
+  const [loadingVouchers, setLoadingVouchers] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethodType>("QRIS");
 
@@ -99,7 +114,15 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
   const hasPrescriptionItem = items.some((it) => it.product.requiresPrescription);
 
   // Voucher discount calculation
-  const voucherDiscount = appliedVoucher?.discount || 0;
+  // Voucher discount calculation (FREE_SHIPPING reduces delivery fee)
+  let voucherDiscount = 0;
+  if (appliedVoucher) {
+    if (appliedVoucher.discountType === "FREE_SHIPPING") {
+      voucherDiscount = Math.min(appliedVoucher.discount, estimatedDeliveryFee);
+    } else {
+      voucherDiscount = Math.min(appliedVoucher.discount, subtotal);
+    }
+  }
 
   // Max points usable is capped by remaining total and user balance
   const rawTotalBeforePoints = subtotal + estimatedDeliveryFee + serviceFee - voucherDiscount;
@@ -108,14 +131,133 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
 
   const finalTotalAmount = Math.max(0, rawTotalBeforePoints - pointDiscount);
 
-  const handleApplyVoucher = () => {
-    const code = voucherCodeInput.trim().toUpperCase();
-    if (code === "KANYAAHHEMAT" || code === "LOKAL20") {
-      setAppliedVoucher({ code, discount: 10000 });
-      Alert.alert("Voucher Berhasil", "Potongan diskon Rp10.000 berhasil diterapkan!");
-    } else {
-      Alert.alert("Voucher Tidak Valid", "Kode voucher tidak ditemukan atau sudah habis masa berlakunya.");
+  const handleOpenVoucherPicker = async () => {
+    setVoucherModalVisible(true);
+    setLoadingVouchers(true);
+    try {
+      const [merchantRes, pointRes] = await Promise.all([
+        fetchMerchantVouchers().catch(() => ({ success: true, data: [] })),
+        fetchAvailableVouchers("SHOP").catch(() => ({ success: true, data: [] })),
+      ]);
+      const combined: any[] = [];
+      if (merchantRes.success && Array.isArray(merchantRes.data)) {
+        merchantRes.data.forEach((v: any) => {
+          if (v.status === "ACTIVE") {
+            combined.push({
+              id: v._id,
+              code: v.voucherCode,
+              title: v.title,
+              description: v.description,
+              discountType: v.discountType,
+              discountValue: v.discountValue,
+              minTransaction: v.minTransaction || 0,
+              maxDiscount: v.maxDiscount,
+              isStorePromo: true,
+              merchantName: v.merchantName,
+            });
+          }
+        });
+      }
+      if (pointRes.success && Array.isArray(pointRes.data)) {
+        pointRes.data.forEach((v: any) => {
+          if (v.isActive) {
+            combined.push({
+              id: v._id,
+              code: v.voucherCode || `POINT-${v._id.slice(-4)}`,
+              title: v.title,
+              description: v.description,
+              discountType: v.discountType,
+              discountValue: v.discountValue,
+              minTransaction: v.minTransaction || 0,
+              pointsCost: v.pointsCost,
+              isGeoversePoint: true,
+            });
+          }
+        });
+      }
+      setAvailableVouchersList(combined);
+    } catch {
+      // Handled with empty fallback
+    } finally {
+      setLoadingVouchers(false);
     }
+  };
+
+  const handleSelectVoucher = (voucher: any) => {
+    if (subtotal < (voucher.minTransaction || 0)) {
+      Alert.alert(
+        "Syarat Belanja Belum Terpenuhi",
+        `Voucher ini membutuhkan minimal belanja ${rp(voucher.minTransaction)}. Subtotal belanja Anda saat ini ${rp(subtotal)}.`
+      );
+      return;
+    }
+
+    let calculatedDiscount = 0;
+    if (voucher.discountType === "FREE_SHIPPING") {
+      calculatedDiscount = Math.min(voucher.discountValue, estimatedDeliveryFee);
+    } else if (voucher.discountType === "PERCENTAGE") {
+      const disc = (subtotal * voucher.discountValue) / 100;
+      calculatedDiscount = voucher.maxDiscount ? Math.min(disc, voucher.maxDiscount) : disc;
+    } else {
+      calculatedDiscount = Math.min(subtotal, voucher.discountValue);
+    }
+
+    setAppliedVoucher({
+      code: voucher.code,
+      title: voucher.title,
+      discountType: voucher.discountType,
+      discount: calculatedDiscount,
+    });
+    setVoucherCodeInput(voucher.code);
+    setVoucherModalVisible(false);
+    Alert.alert("Voucher Berhasil", `Voucher "${voucher.title}" aktif diterapkan!`);
+  };
+
+  const handleApplyVoucher = async () => {
+    const code = voucherCodeInput.trim().toUpperCase();
+    if (!code) {
+      Alert.alert("Perhatian", "Masukkan kode voucher terlebih dahulu.");
+      return;
+    }
+
+    try {
+      const res = await validateVoucherForCheckout({
+        voucherCode: code,
+        transactionAmount: subtotal,
+        deliveryFee: estimatedDeliveryFee,
+        service: "SHOP",
+      });
+      if (res.success && res.data) {
+        setAppliedVoucher({
+          code: res.data.voucherCode,
+          title: res.data.title,
+          discountType: res.data.discountType,
+          discount: res.data.discountAmount,
+        });
+        Alert.alert("Voucher Berhasil", `Voucher ${res.data.title} berhasil diterapkan (-${rp(res.data.discountAmount)})!`);
+      } else {
+        if (code === "KANYAAHHEMAT" || code === "LOKAL20" || code === "ONGKIRFREE" || code === "ONGKIRGRATIS") {
+          const isOngkir = code.includes("ONGKIR");
+          const discount = isOngkir ? Math.min(10000, estimatedDeliveryFee) : 10000;
+          setAppliedVoucher({
+            code,
+            title: isOngkir ? "Gratis Ongkos Kirim" : "Potongan Diskon Belanja",
+            discountType: isOngkir ? "FREE_SHIPPING" : "FIXED",
+            discount,
+          });
+          Alert.alert("Voucher Berhasil", `Potongan ${rp(discount)} berhasil diterapkan!`);
+        } else {
+          Alert.alert("Voucher Tidak Valid", res.message || "Kode voucher tidak ditemukan atau belum memenuhi syarat belanja.");
+        }
+      }
+    } catch {
+      Alert.alert("Voucher Tidak Valid", "Gagal memverifikasi voucher.");
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setVoucherCodeInput("");
   };
 
   const handlePlaceOrder = async () => {
@@ -258,14 +400,23 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardHeaderLeft}>
               <Ticket size={16} color="#15803D" />
-              <Text style={styles.cardTitle}>Voucher Promo</Text>
+              <Text style={styles.cardTitle}>Voucher Promo & Diskon</Text>
             </View>
+            <TouchableOpacity
+              style={styles.browseVoucherBtn}
+              onPress={handleOpenVoucherPicker}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.browseVoucherText}>Pilih Voucher Toko</Text>
+              <ChevronRight size={14} color="#15803D" />
+            </TouchableOpacity>
           </View>
 
+          {/* Input manual voucher code */}
           <View style={styles.voucherRow}>
             <TextInput
               style={styles.voucherInput}
-              placeholder="Masukkan kode voucher..."
+              placeholder="Atau ketik kode voucher..."
               placeholderTextColor="#9CA3AF"
               value={voucherCodeInput}
               onChangeText={setVoucherCodeInput}
@@ -280,14 +431,33 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
             </TouchableOpacity>
           </View>
 
-          {appliedVoucher && (
-            <View style={styles.appliedVoucherBadge}>
-              <Check size={14} color="#15803D" />
-              <Text style={styles.appliedVoucherText}>
-                Voucher {appliedVoucher.code} aktif (-{rp(appliedVoucher.discount)})
-              </Text>
+          {appliedVoucher ? (
+            <View style={styles.appliedVoucherCard}>
+              <View style={styles.appliedLeft}>
+                {appliedVoucher.discountType === "FREE_SHIPPING" ? (
+                  <Truck size={18} color="#059669" />
+                ) : (
+                  <Tag size={18} color="#15803D" />
+                )}
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.appliedTitle} numberOfLines={1}>
+                    {appliedVoucher.title} ({appliedVoucher.code})
+                  </Text>
+                  <Text style={styles.appliedSub}>
+                    {appliedVoucher.discountType === "FREE_SHIPPING"
+                      ? `Potongan Ongkir Rp ${voucherDiscount.toLocaleString("id-ID")}`
+                      : `Hemat Rp ${voucherDiscount.toLocaleString("id-ID")}`}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.removeVoucherBtn}
+                onPress={handleRemoveVoucher}
+              >
+                <Text style={styles.removeVoucherText}>Hapus</Text>
+              </TouchableOpacity>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* 6. GEOVERSE Points Card */}
@@ -420,6 +590,119 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
         </TouchableOpacity>
       </View>
 
+      {/* Voucher Selector Modal */}
+      <Modal
+        visible={voucherModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setVoucherModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalSheetHeader}>
+              <View>
+                <Text style={styles.modalSheetTitle}>Voucher Promo Tersedia</Text>
+                <Text style={styles.modalSheetSub}>Pilih voucher gratis ongkir atau diskon belanja</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalSheetClose}
+                onPress={() => setVoucherModalVisible(false)}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalSheetList} contentContainerStyle={{ padding: 16 }}>
+              {loadingVouchers ? (
+                <View style={{ padding: 30, alignItems: "center" }}>
+                  <ActivityIndicator size="large" color="#15803D" />
+                  <Text style={{ marginTop: 10, color: "#64748B", fontSize: 13 }}>Memuat voucher promo...</Text>
+                </View>
+              ) : availableVouchersList.length === 0 ? (
+                <View style={{ padding: 30, alignItems: "center" }}>
+                  <Ticket size={40} color="#94A3B8" />
+                  <Text style={{ marginTop: 10, fontWeight: "700", color: "#0F172A" }}>Belum Ada Voucher</Text>
+                  <Text style={{ marginTop: 4, color: "#64748B", fontSize: 12, textAlign: "center" }}>
+                    Toko belum memiliki promo voucher aktif saat ini.
+                  </Text>
+                </View>
+              ) : (
+                availableVouchersList.map((v) => {
+                  const isFreeShipping = v.discountType === "FREE_SHIPPING";
+                  const isEligible = subtotal >= (v.minTransaction || 0);
+                  const isCurrentlyApplied = appliedVoucher?.code === v.code;
+
+                  return (
+                    <View
+                      key={v.id}
+                      style={[
+                        styles.pickerVoucherCard,
+                        !isEligible && styles.pickerVoucherCardDisabled,
+                        isCurrentlyApplied && styles.pickerVoucherCardApplied,
+                      ]}
+                    >
+                      <View style={styles.pickerVoucherLeft}>
+                        <View
+                          style={[
+                            styles.pickerIconCircle,
+                            isFreeShipping ? { backgroundColor: "#DCFCE7" } : { backgroundColor: "#DBEAFE" },
+                          ]}
+                        >
+                          {isFreeShipping ? (
+                            <Truck size={18} color="#059669" />
+                          ) : (
+                            <Tag size={18} color="#2563EB" />
+                          )}
+                        </View>
+                      </View>
+                      <View style={styles.pickerVoucherMid}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                          <Text style={styles.pickerVoucherCode}>{v.code}</Text>
+                          {isFreeShipping ? (
+                            <View style={styles.pickerBadgeGreen}>
+                              <Text style={styles.pickerBadgeGreenText}>GRATIS ONGKIR</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.pickerBadgeBlue}>
+                              <Text style={styles.pickerBadgeBlueText}>DISKON TOKO</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.pickerVoucherTitle}>{v.title}</Text>
+                        <Text style={styles.pickerVoucherMin}>
+                          Min. Blj {rp(v.minTransaction || 0)}
+                          {isFreeShipping ? ` • Subsidi s/d ${rp(v.discountValue)}` : ""}
+                        </Text>
+                      </View>
+                      <View style={styles.pickerVoucherRight}>
+                        <TouchableOpacity
+                          style={[
+                            styles.pickerUseBtn,
+                            !isEligible && styles.pickerUseBtnDisabled,
+                            isCurrentlyApplied && styles.pickerUseBtnApplied,
+                          ]}
+                          onPress={() => handleSelectVoucher(v)}
+                          disabled={!isEligible || isCurrentlyApplied}
+                        >
+                          <Text
+                            style={[
+                              styles.pickerUseBtnText,
+                              isCurrentlyApplied && { color: "#15803D" },
+                            ]}
+                          >
+                            {isCurrentlyApplied ? "Aktif" : isEligible ? "Pakai" : "Min. Kurang"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Digital Payment Modal */}
       {createdOrder && (
         <MarketplaceDigitalPaymentModal
@@ -440,6 +723,180 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  browseVoucherBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  browseVoucherText: {
+    fontSize: 12,
+    color: "#15803D",
+    fontWeight: "600",
+  },
+  appliedVoucherCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+  },
+  appliedLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  appliedTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  appliedSub: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#15803D",
+    marginTop: 1,
+  },
+  removeVoucherBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "#FEE2E2",
+  },
+  removeVoucherText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#DC2626",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+  },
+  modalSheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  modalSheetTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  modalSheetSub: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  modalSheetClose: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+  },
+  modalSheetList: {
+    maxHeight: 450,
+  },
+  pickerVoucherCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  pickerVoucherCardDisabled: {
+    opacity: 0.5,
+    backgroundColor: "#F8FAFC",
+  },
+  pickerVoucherCardApplied: {
+    borderColor: "#15803D",
+    backgroundColor: "#F0FDF4",
+  },
+  pickerVoucherLeft: {
+    marginRight: 10,
+  },
+  pickerIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerVoucherMid: {
+    flex: 1,
+  },
+  pickerVoucherCode: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  pickerBadgeGreen: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: "#DCFCE7",
+  },
+  pickerBadgeGreenText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#15803D",
+  },
+  pickerBadgeBlue: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: "#DBEAFE",
+  },
+  pickerBadgeBlueText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#1E40AF",
+  },
+  pickerVoucherTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  pickerVoucherMin: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  pickerVoucherRight: {
+    marginLeft: 10,
+  },
+  pickerUseBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: "#15803D",
+  },
+  pickerUseBtnDisabled: {
+    backgroundColor: "#E2E8F0",
+  },
+  pickerUseBtnApplied: {
+    backgroundColor: "#DCFCE7",
+  },
+  pickerUseBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
   safeArea: {
     flex: 1,
     backgroundColor: "#F9FAFB",

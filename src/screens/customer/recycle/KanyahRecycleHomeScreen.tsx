@@ -10,9 +10,8 @@ import {
   Image,
   Modal,
   TextInput,
-  AppState,
-  AppStateStatus,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -40,6 +39,11 @@ import {
   History,
   Info,
   Search,
+  ArrowRight,
+  ShieldCheck,
+  ChevronDown,
+  Layers,
+  Zap,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { AuthAccount } from "../../auth/authTypes";
@@ -49,16 +53,28 @@ import {
   getWasteBanks,
   getCustomerDeposits,
 } from "../../../services/recycleService";
-import { subscribeToUserRealtime } from "../../../services/userRealtime";
 import { WasteBankUI, WasteDepositUI } from "../../../types/recycleTypes";
-import { rp } from "../../../utils/formatters";
+import { rp, formatNumberSafe, formatDateSafe } from "../../../utils/formatters";
 
 interface Props extends Nav {
   authAccount?: AuthAccount | null;
 }
 
 export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount }) => {
-  const { wallet: recycleWallet, refreshWallet: refreshRecycleWallet, walletLoading, setSelectedBank, setSelectedDeposit, updateDraftDeposit } = useRecycle();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isDesktop = width >= 1024;
+  const isWide = width >= 768;
+
+  const {
+    wallet: recycleWallet,
+    refreshWallet: refreshRecycleWallet,
+    walletLoading,
+    setSelectedBank,
+    setSelectedDeposit,
+    updateDraftDeposit,
+  } = useRecycle();
+
   const { wallet: pointWallet, refreshWallet: refreshPointWallet } = useGeoversePoint();
   const wallet = pointWallet || recycleWallet;
   const [nearbyBanks, setNearbyBanks] = useState<WasteBankUI[]>([]);
@@ -67,9 +83,10 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
   const [refreshing, setRefreshing] = useState(false);
 
   // Address & Location state
-  const initialAddr = authAccount?.address && authAccount.address !== "BGR" && authAccount.address.length > 5
-    ? authAccount.address
-    : "Jl. Kamojang No. 12, Samarang, Garut";
+  const initialAddr =
+    authAccount?.address && authAccount.address !== "BGR" && authAccount.address.length > 5
+      ? authAccount.address
+      : "Jl. Kamojang No. 12, Samarang, Garut";
   const [userAddress, setUserAddress] = useState(initialAddr);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number }>({ lat: -7.145, lng: 107.789 });
   const [addressModalVisible, setAddressModalVisible] = useState(false);
@@ -83,30 +100,42 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
     { label: "Sumur Bandung", address: "Jl. Merdeka No. 64, Sumur Bandung", lat: -6.912, lng: 107.610, bankName: "Bank Sampah Merdeka Bersih" },
   ];
 
-  // Dynamically include any other registered bank addresses
-  const allServiceLocations = [...baseLocations];
-  (nearbyBanks || []).forEach((b) => {
-    if (!b || !b.address) return;
-    const bAddr = String(b.address);
-    const bName = String(b.name || "Bank Sampah");
-    if (!allServiceLocations.some((l) => (l.address || "").toLowerCase().includes(bAddr.toLowerCase()) || bAddr.toLowerCase().includes((l.address || "").toLowerCase()))) {
-      allServiceLocations.push({
-        label: `${bName} (${bAddr.split(",")[0] || bAddr})`,
-        address: bAddr,
-        lat: Number(b.latitude) || -7.145,
-        lng: Number(b.longitude) || 107.789,
-        bankName: bName,
-      });
-    }
-  });
+  // Dynamically include any other registered bank addresses (memoized to avoid rerender overhead)
+  const allServiceLocations = useMemo(() => {
+    const list = [...baseLocations];
+    (nearbyBanks || []).forEach((b) => {
+      if (!b || !b.address) return;
+      const bAddr = String(b.address);
+      const bName = String(b.name || "Bank Sampah");
+      if (
+        !list.some(
+          (l) =>
+            (l.address || "").toLowerCase().includes(bAddr.toLowerCase()) ||
+            bAddr.toLowerCase().includes((l.address || "").toLowerCase())
+        )
+      ) {
+        list.push({
+          label: `${bName} (${bAddr.split(",")[0] || bAddr})`,
+          address: bAddr,
+          lat: Number(b.latitude) || -7.145,
+          lng: Number(b.longitude) || 107.789,
+          bankName: bName,
+        });
+      }
+    });
+    return list;
+  }, [nearbyBanks]);
 
-  const queryLower = (searchLocationQuery || "").toLowerCase();
-  const filteredPresetLocations = allServiceLocations.filter(
-    (p) =>
-      (p.label || "").toLowerCase().includes(queryLower) ||
-      (p.address || "").toLowerCase().includes(queryLower) ||
-      (p.bankName && p.bankName.toLowerCase().includes(queryLower))
-  );
+  const filteredPresetLocations = useMemo(() => {
+    const queryLower = (searchLocationQuery || "").toLowerCase().trim();
+    if (!queryLower) return allServiceLocations;
+    return allServiceLocations.filter(
+      (p) =>
+        (p.label || "").toLowerCase().includes(queryLower) ||
+        (p.address || "").toLowerCase().includes(queryLower) ||
+        (p.bankName && p.bankName.toLowerCase().includes(queryLower))
+    );
+  }, [allServiceLocations, searchLocationQuery]);
 
   const loadData = async (coords = userCoords) => {
     try {
@@ -131,74 +160,16 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
 
   useEffect(() => {
     let isMounted = true;
-
-    // Load initial data
     loadData(userCoords);
     refreshRecycleWallet().catch(() => {});
-    refreshPointWallet().catch(() => {});
-
-    // React Native AppState listener: refresh when user returns to foreground safely without crashing
-    const appStateSub = AppState.addEventListener("change", (nextState: AppStateStatus) => {
-      if (nextState === "active" && isMounted) {
-        loadData(userCoords);
-        refreshRecycleWallet().catch(() => {});
-        refreshPointWallet().catch(() => {});
-      }
-    });
-
-    // Web-only window focus listener (strictly guarded)
-    const onWebFocus = () => {
-      if (isMounted) {
-        loadData(userCoords);
-      }
-    };
-    if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.addEventListener === "function") {
-      window.addEventListener("focus", onWebFocus);
-    }
-
-    // Subscribe to websocket events for instant updates (zero battery drain/cpu churn)
-    let unsubscribeSocket: (() => void) | undefined;
-    subscribeToUserRealtime(
-      () => {
-        if (isMounted) {
-          loadData(userCoords);
-          refreshRecycleWallet().catch(() => {});
-          refreshPointWallet().catch(() => {});
-        }
-      },
-      () => {
-        if (isMounted) {
-          loadData(userCoords);
-        }
-      }
-    ).then((unsub) => {
-      unsubscribeSocket = unsub;
-    }).catch(() => {});
-
-    // Light background sync interval (every 30s instead of aggressive 3s spam)
-    const interval = setInterval(() => {
-      if (isMounted) {
-        loadData(userCoords);
-      }
-    }, 30000);
-
     return () => {
       isMounted = false;
-      clearInterval(interval);
-      appStateSub.remove();
-      if (Platform.OS === "web" && typeof window !== "undefined" && typeof window.removeEventListener === "function") {
-        window.removeEventListener("focus", onWebFocus);
-      }
-      if (unsubscribeSocket) {
-        unsubscribeSocket();
-      }
     };
   }, [authAccount?.id, userCoords.lat, userCoords.lng]);
 
   const onRefresh = () => {
     setRefreshing(true);
     refreshRecycleWallet().catch(() => {});
-    refreshPointWallet().catch(() => {});
     loadData(userCoords);
   };
 
@@ -225,10 +196,9 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
 
   const balance = Number(wallet?.balancePoint) || 0;
   const totalKg = Number(wallet?.totalKgDeposited) || 0;
-  const co2Kg = Number(wallet?.totalCo2ReductionKg) || (totalKg * 1.85);
+  const co2Kg = Number(wallet?.totalCo2ReductionKg) || totalKg * 1.85;
   const treesCount = Math.floor(co2Kg / 22);
 
-  // Active deposit in progress (if any)
   const activeDeposit = recentDeposits.find(
     (d) => !["COMPLETED", "CANCELLED", "REJECTED"].includes(d.status)
   );
@@ -260,335 +230,361 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
     return exactMatch || nearbyBanks[0];
   }, [nearbyBanks, userAddress]);
 
-  return (
-    <ResponsiveSafeAreaView style={styles.container}>
-      {/* Header Bar */}
-      <View style={styles.headerBar}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigate("c_home")}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={19} color="#1F2937" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleCol}>
-          <View style={styles.titleRow}>
-            <View style={styles.headerBadgeIcon}>
-              <Recycle size={15} color="#15803D" />
+  // Sub-components for clean responsive composition
+  const locationSelectorCard = (
+    <TouchableOpacity
+      style={styles.locationSelectorCard}
+      onPress={() => {
+        setSearchLocationQuery("");
+        setAddressModalVisible(true);
+      }}
+      activeOpacity={0.75}
+    >
+      <View style={styles.locationIconBox}>
+        <MapPin size={15} color="#059669" />
+      </View>
+      <View style={styles.locationInfoCol}>
+        <Text style={styles.locationOverline}>LOKASI PENYETORAN</Text>
+        <Text style={styles.locationCurrentAddress} numberOfLines={1}>
+          {userAddress}
+        </Text>
+      </View>
+      <View style={styles.locationChangeButton}>
+        <Text style={styles.locationChangeButtonText}>Ubah</Text>
+        <ChevronRight size={13} color="#059669" />
+      </View>
+    </TouchableOpacity>
+  );
+
+  const heroWalletCard = (
+    <View style={styles.heroWalletContainer}>
+      <View style={styles.heroGradientBg}>
+        <View style={styles.heroSubtleCircleOne} />
+        <View style={styles.heroSubtleCircleTwo} />
+
+        <View style={styles.heroContentTop}>
+          <View style={styles.heroPointsCol}>
+            <View style={styles.heroPointBadge}>
+              <Image
+                source={require("../../../../assets/kanyaah-point.png")}
+                style={{ width: 14, height: 14, borderRadius: 3 }}
+                resizeMode="cover"
+              />
+              <Text style={styles.heroPointBadgeLabel}>SALDO GEOVERSE POINT</Text>
             </View>
-            <Text style={styles.headerTitle}>KANYAAH RECYCLE</Text>
+            <View style={styles.heroBalanceMainRow}>
+              <Text style={styles.heroBalanceNumber}>{formatNumberSafe(balance)}</Text>
+              <Text style={styles.heroBalanceUnit}>Pts</Text>
+            </View>
+            <Text style={styles.heroRupiahConversion}>
+              ≈ {rp(balance)} <Text style={styles.heroConversionSub}>• 1 Pts = Rp 1</Text>
+            </Text>
           </View>
-          <Text style={styles.headerSubtitle}>Tukar Sampah Jadi Saldo & Koin Poin</Text>
+
+          <View style={styles.heroWeightWidget}>
+            <View style={styles.heroWeightIconCircle}>
+              <Leaf size={14} color="#059669" />
+            </View>
+            <Text style={styles.heroWeightVal}>{totalKg.toFixed(1)} kg</Text>
+            <Text style={styles.heroWeightLabel}>Total Disetor</Text>
+          </View>
         </View>
+
+        {/* Docked Action Bar: Quick Primary Interactions */}
+        <View style={styles.actionDock}>
+          <TouchableOpacity
+            style={styles.actionDockItem}
+            onPress={() => navigate("c_recycle_banks")}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.actionDockIconBg, { backgroundColor: "#ECFDF5" }]}>
+              <Image
+                source={require("../../../../assets/kanyaah-recycle.png")}
+                style={{ width: 22, height: 22, borderRadius: 6 }}
+                resizeMode="cover"
+              />
+            </View>
+            <Text style={styles.actionDockTitle}>Setor Sampah</Text>
+            <Text style={styles.actionDockSub}>Pilih Mitra</Text>
+          </TouchableOpacity>
+
+          <View style={styles.actionDockDivider} />
+
+          <TouchableOpacity
+            style={styles.actionDockItem}
+            onPress={() => navigate("c_recycle_redemption")}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.actionDockIconBg, { backgroundColor: "#FFFBEB" }]}>
+              <Image
+                source={require("../../../../assets/kanyaah-point.png")}
+                style={{ width: 20, height: 20, borderRadius: 5 }}
+                resizeMode="cover"
+              />
+            </View>
+            <Text style={styles.actionDockTitle}>Tukar Poin</Text>
+            <Text style={styles.actionDockSub}>Voucher & Hadiah</Text>
+          </TouchableOpacity>
+
+          <View style={styles.actionDockDivider} />
+
+          <TouchableOpacity
+            style={styles.actionDockItem}
+            onPress={() => navigate("c_recycle_ledger")}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.actionDockIconBg, { backgroundColor: "#F0F9FF" }]}>
+              <WalletCards size={18} color="#0284C7" />
+            </View>
+            <Text style={styles.actionDockTitle}>Buku Tabungan</Text>
+            <Text style={styles.actionDockSub}>Mutasi & Log</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+
+  const activeBannerCard = activeDeposit ? (
+    <TouchableOpacity
+      style={[
+        styles.activeBannerCard,
+        activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" && styles.activeBannerCardAlert,
+      ]}
+      onPress={() => {
+        setSelectedDeposit(activeDeposit);
+        if (activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION") {
+          navigate("c_recycle_weighing_result");
+        } else {
+          navigate("c_recycle_tracking");
+        }
+      }}
+      activeOpacity={0.85}
+    >
+      <View style={styles.activeBannerLeft}>
+        <View
+          style={[
+            styles.activeBannerIconContainer,
+            activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" && styles.activeBannerIconContainerAlert,
+          ]}
+        >
+          <Scale
+            size={16}
+            color={activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" ? "#D97706" : "#059669"}
+          />
+        </View>
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text
+            style={[
+              styles.activeBannerHeadline,
+              activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" && styles.activeBannerHeadlineAlert,
+            ]}
+          >
+            {activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION"
+              ? "Timbangan Menunggu Konfirmasi!"
+              : "Setoran Sampah Sedang Berjalan"}
+          </Text>
+          <Text style={styles.activeBannerSubtitle}>
+            Tiket #{activeDeposit.depositCode} • Ketuk untuk pantau
+          </Text>
+        </View>
+      </View>
+      <ChevronRight
+        size={16}
+        color={activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" ? "#D97706" : "#64748B"}
+      />
+    </TouchableOpacity>
+  ) : null;
+
+  const nearestBankCard = nearestBank ? (
+    <View style={styles.partnerCard}>
+      <View style={styles.partnerCardHeader}>
+        <View style={styles.partnerStatusTag}>
+          <View style={styles.partnerLiveDot} />
+          <Text style={styles.partnerStatusTagText}>Mitra Bank Sampah Terdekat</Text>
+        </View>
+        {nearestBank.distanceKm != null && (
+          <View style={styles.partnerDistanceBadge}>
+            <Navigation size={10} color="#059669" />
+            <Text style={styles.partnerDistanceBadgeText}>
+              {Number(nearestBank.distanceKm || 0).toFixed(1)} km
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.partnerInfoRow}>
+        <View style={styles.partnerIconBox}>
+          <Building2 size={20} color="#059669" />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Text style={styles.partnerNameText}>{nearestBank.name}</Text>
+            <ShieldCheck size={14} color="#059669" />
+          </View>
+          <Text style={styles.partnerAddressText} numberOfLines={1}>
+            {nearestBank.address}
+          </Text>
+
+          <View style={styles.partnerMetaTagsRow}>
+            <View style={styles.partnerMetaItem}>
+              <Clock size={11} color="#64748B" />
+              <Text style={styles.partnerMetaItemText}>{nearestBank.openingHours}</Text>
+            </View>
+            {(nearestBank.maxPrice || 0) > 0 && (
+              <View style={styles.partnerPriceBadge}>
+                <Sparkles size={10} color="#B45309" />
+                <Text style={styles.partnerPriceBadgeText}>
+                  Hingga {rp(nearestBank.maxPrice || 0)}/kg
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+
+      {/* Accepted Categories Chips */}
+      {nearestBank.acceptedCategories && nearestBank.acceptedCategories.length > 0 && (
+        <View style={styles.categoryChipsContainer}>
+          {nearestBank.acceptedCategories.slice(0, 4).map((catName, idx) => (
+            <View key={`${catName}-${idx}`} style={styles.categoryChipItem}>
+              <Text style={styles.categoryChipItemText}>{catName}</Text>
+            </View>
+          ))}
+          {nearestBank.acceptedCategories.length > 4 && (
+            <View style={[styles.categoryChipItem, styles.categoryChipItemMore]}>
+              <Text style={styles.categoryChipItemMoreText}>
+                +{nearestBank.acceptedCategories.length - 4} jenis
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Direct Action Row */}
+      <View style={styles.partnerActionRow}>
         <TouchableOpacity
-          style={styles.walletHeaderBtn}
-          onPress={() => navigate("c_recycle_wallet")}
+          style={styles.partnerPrimaryButton}
+          onPress={() => handleStartDepositToBank(nearestBank)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.partnerPrimaryButtonText}>Setor ke Bank Ini</Text>
+          <ArrowRight size={15} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.partnerSecondaryButton}
+          onPress={() => navigate("c_recycle_banks")}
           activeOpacity={0.7}
         >
-          <WalletCards size={18} color="#15803D" />
+          <Text style={styles.partnerSecondaryButtonText}>Lihat Semua</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  ) : null;
+
+  const impactSection = (
+    <View style={styles.sectionBlock}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Kontribusi Lingkungan</Text>
+        <View style={styles.ecoLevelBadge}>
+          <Leaf size={11} color="#059669" />
+          <Text style={styles.ecoLevelBadgeText}>Eco Hero</Text>
+        </View>
+      </View>
+
+      <View style={styles.impactCardsRow}>
+        <View style={styles.modernImpactCard}>
+          <View style={[styles.modernImpactIconBox, { backgroundColor: "#ECFDF5" }]}>
+            <Wind size={16} color="#059669" />
+          </View>
+          <Text style={styles.modernImpactValue}>
+            {co2Kg.toFixed(1)} <Text style={styles.modernImpactUnit}>kg</Text>
+          </Text>
+          <Text style={styles.modernImpactLabel}>Emisi CO₂ Dicegah</Text>
+        </View>
+
+        <View style={styles.modernImpactCard}>
+          <View style={[styles.modernImpactIconBox, { backgroundColor: "#F0FDF4" }]}>
+            <TreeDeciduous size={16} color="#15803D" />
+          </View>
+          <Text style={styles.modernImpactValue}>
+            {treesCount} <Text style={styles.modernImpactUnit}>pohon</Text>
+          </Text>
+          <Text style={styles.modernImpactLabel}>Pohon Diselamatkan</Text>
+        </View>
+
+        <View style={styles.modernImpactCard}>
+          <View style={[styles.modernImpactIconBox, { backgroundColor: "#F0FDFA" }]}>
+            <Scale size={16} color="#0D9488" />
+          </View>
+          <Text style={styles.modernImpactValue}>
+            {totalKg.toFixed(1)} <Text style={styles.modernImpactUnit}>kg</Text>
+          </Text>
+          <Text style={styles.modernImpactLabel}>Diverted dari TPA</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const guideSection = (
+    <View style={styles.guideCardContainer}>
+      <Text style={styles.guideCardTitle}>Cara Kerja Kanyaah Recycle</Text>
+      <View style={styles.guideStepsRow}>
+        <View style={styles.guideStepColumn}>
+          <View style={styles.guideStepNumberBadge}>
+            <Text style={styles.guideStepNumberText}>1</Text>
+          </View>
+          <Text style={styles.guideStepTitle}>Pilih Mitra</Text>
+          <Text style={styles.guideStepDesc}>Pilih bank sampah & jenis anorganik</Text>
+        </View>
+
+        <View style={styles.guideStepConnector} />
+
+        <View style={styles.guideStepColumn}>
+          <View style={styles.guideStepNumberBadge}>
+            <Text style={styles.guideStepNumberText}>2</Text>
+          </View>
+          <Text style={styles.guideStepTitle}>Penyetoran</Text>
+          <Text style={styles.guideStepDesc}>Antar langsung atau gunakan pickup</Text>
+        </View>
+
+        <View style={styles.guideStepConnector} />
+
+        <View style={styles.guideStepColumn}>
+          <View style={styles.guideStepNumberBadge}>
+            <Text style={styles.guideStepNumberText}>3</Text>
+          </View>
+          <Text style={styles.guideStepTitle}>Terima Poin</Text>
+          <Text style={styles.guideStepDesc}>Timbang resmi & poin langsung cair</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const recentTransactionsSection = (
+    <View style={styles.sectionBlock}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Riwayat Setoran</Text>
+        <TouchableOpacity onPress={() => navigate("c_recycle_ledger")}>
+          <Text style={styles.seeAllLinkText}>Lihat Semua</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Address & Location Bar (Interactive Entry) */}
-      <TouchableOpacity
-        style={styles.locationBar}
-        onPress={() => {
-          setSearchLocationQuery("");
-          setAddressModalVisible(true);
-        }}
-        activeOpacity={0.8}
-      >
-        <View style={styles.locationIconBg}>
-          <MapPin size={15} color="#15803D" />
-        </View>
-        <View style={styles.locationTextCol}>
-          <Text style={styles.locationLabel}>Lokasi Penyetoran Anda</Text>
-          <Text style={styles.locationVal} numberOfLines={1}>
-            {userAddress}
+      {recentDeposits.length === 0 ? (
+        <View style={styles.emptyActivityCard}>
+          <Clock size={24} color="#94A3B8" />
+          <Text style={styles.emptyActivityTitle}>Belum Ada Riwayat Setoran</Text>
+          <Text style={styles.emptyActivitySub}>
+            Mulai setorkan sampah anorganikmu ke mitra terdekat untuk mengumpulkan saldo poin.
           </Text>
         </View>
-        <View style={styles.changeLocationPill}>
-          <Text style={styles.changeLocationText}>Ubah</Text>
-          <ChevronRight size={12} color="#15803D" />
-        </View>
-      </TouchableOpacity>
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#15803D"]} />}
-      >
-        {/* Nearest Connected Bank Sampah Card (Highlight) */}
-        {nearestBank && (
-          <View style={styles.connectedBankCard}>
-            <View style={styles.connectedHeaderRow}>
-              <View style={styles.connectedStatusTag}>
-                <View style={styles.livePulseDot} />
-                <Text style={styles.connectedStatusText}>TERHUBUNG BANK SAMPAH TERDEKAT</Text>
-              </View>
-              {nearestBank.distanceKm != null && (
-                <View style={styles.distanceBadge}>
-                  <Navigation size={11} color="#15803D" />
-                  <Text style={styles.distanceBadgeText}>{Number(nearestBank.distanceKm || 0).toFixed(1)} km</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.connectedBody}>
-              <View style={styles.connectedIconCircle}>
-                <Building2 size={22} color="#15803D" />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.connectedBankName}>{nearestBank.name}</Text>
-                <Text style={styles.connectedBankAddress} numberOfLines={1}>
-                  {nearestBank.address}
-                </Text>
-                <View style={styles.connectedMetaRow}>
-                  <View style={styles.metaItem}>
-                    <Clock size={11} color="#4B5563" />
-                    <Text style={styles.metaItemText}>{nearestBank.openingHours}</Text>
-                  </View>
-                  {(nearestBank.maxPrice || 0) > 0 && (
-                    <View style={styles.metaItemHighlight}>
-                      <Sparkles size={11} color="#B45309" />
-                      <Text style={styles.metaItemHighlightText}>Maks {rp(nearestBank.maxPrice || 0)}/kg</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            </View>
-
-            {/* Quick Categories Chips */}
-            {nearestBank.acceptedCategories && nearestBank.acceptedCategories.length > 0 && (
-              <View style={styles.categoryPillsWrap}>
-                {nearestBank.acceptedCategories.slice(0, 4).map((catName, idx) => (
-                  <View key={`${catName}-${idx}`} style={styles.categoryMiniPill}>
-                    <Text style={styles.categoryMiniPillText}>{catName}</Text>
-                  </View>
-                ))}
-                {nearestBank.acceptedCategories.length > 4 && (
-                  <View style={[styles.categoryMiniPill, styles.categoryMiniPillMore]}>
-                    <Text style={styles.categoryMiniPillMoreText}>+{nearestBank.acceptedCategories.length - 4} jenis</Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Direct Connect Action Button */}
-            <TouchableOpacity
-              style={styles.connectDepositBtn}
-              onPress={() => handleStartDepositToBank(nearestBank)}
-              activeOpacity={0.88}
-            >
-              <View style={styles.connectDepositBtnLeft}>
-                <Recycle size={18} color="#FFFFFF" />
-                <Text style={styles.connectDepositBtnText}>Setor Sampah Sekarang</Text>
-              </View>
-              <View style={styles.connectDepositBtnArrow}>
-                <ChevronRight size={16} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Active Deposit Notification Banner */}
-        {activeDeposit && (
-          <TouchableOpacity
-            style={[
-              styles.activeBanner,
-              activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" && styles.activeBannerHighlight,
-            ]}
-            onPress={() => {
-              setSelectedDeposit(activeDeposit);
-              if (activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION") {
-                navigate("c_recycle_weighing_result");
-              } else {
-                navigate("c_recycle_tracking");
-              }
-            }}
-            activeOpacity={0.85}
-          >
-            <View style={styles.activeBannerLeft}>
-              <View
-                style={[
-                  styles.activeBannerIconBox,
-                  activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" && styles.activeBannerIconBoxAmber,
-                ]}
-              >
-                <Scale
-                  size={18}
-                  color={activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" ? "#B45309" : "#0D9488"}
-                />
-              </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text
-                  style={[
-                    styles.activeBannerTitle,
-                    activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" && styles.activeBannerTitleAmber,
-                  ]}
-                >
-                  {activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION"
-                    ? "Timbangan Menunggu Konfirmasi!"
-                    : "Setoran Sedang Berjalan"}
-                </Text>
-                <Text style={styles.activeBannerSub}>
-                  Kode: {activeDeposit.depositCode} • Ketuk untuk pantau
-                </Text>
-              </View>
-            </View>
-            <View style={styles.activeBannerArrow}>
-              <ChevronRight
-                size={16}
-                color={activeDeposit.status === "WAITING_CUSTOMER_CONFIRMATION" ? "#B45309" : "#0D9488"}
-              />
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Hero Card: Saldo GEOVERSE Point & Setoran */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroGlow} />
-          <View style={styles.heroGlowSmall} />
-          <View style={styles.heroTop}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.pointHeaderLabelRow}>
-                <Coins size={14} color="#FDE047" />
-                <Text style={styles.heroBalanceLabel}>Saldo GEOVERSE Point</Text>
-              </View>
-              <View style={styles.heroBalanceRow}>
-                <Text style={styles.heroBalanceVal}>{balance.toLocaleString("id-ID")}</Text>
-                <Text style={styles.heroPointUnit}>Pts</Text>
-              </View>
-              <Text style={styles.heroRupiahVal}>≈ {rp(balance)} (1 Point = Rp 1)</Text>
-            </View>
-            <View style={styles.heroBadgeKg}>
-              <View style={styles.heroBadgeKgIcon}>
-                <Leaf size={14} color="#15803D" />
-              </View>
-              <Text style={styles.heroBadgeKgText}>{totalKg.toFixed(1)} kg</Text>
-              <Text style={styles.heroBadgeKgSub}>Sampah Disetor</Text>
-            </View>
-          </View>
-
-          {/* Quick Action Shortcuts */}
-          <View style={styles.actionGridContainer}>
-            <TouchableOpacity
-              style={styles.actionGridItem}
-              onPress={() => navigate("c_recycle_banks")}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.actionGridIconBg, { backgroundColor: "#DCFCE7" }]}>
-                <Recycle size={18} color="#15803D" />
-              </View>
-              <Text style={styles.actionGridLabelPrimary} numberOfLines={1}>Setor Sampah</Text>
-            </TouchableOpacity>
-
-            <View style={styles.actionGridDivider} />
-
-            <TouchableOpacity
-              style={styles.actionGridItem}
-              onPress={() => navigate("c_recycle_redemption")}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.actionGridIconBg, { backgroundColor: "#FEF3C7" }]}>
-                <Coins size={18} color="#B45309" />
-              </View>
-              <Text style={styles.actionGridLabel} numberOfLines={1}>Tukar Poin</Text>
-            </TouchableOpacity>
-
-            <View style={styles.actionGridDivider} />
-
-            <TouchableOpacity
-              style={styles.actionGridItem}
-              onPress={() => navigate("c_recycle_ledger")}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.actionGridIconBg, { backgroundColor: "#F1F5F9" }]}>
-                <History size={18} color="#475569" />
-              </View>
-              <Text style={styles.actionGridLabel} numberOfLines={1}>Riwayat</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Environmental Impact Section */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Dampak Lingkungan Anda</Text>
-          <View style={styles.pillGreen}>
-            <Leaf size={12} color="#15803D" />
-            <Text style={styles.pillGreenText}>Eco Hero</Text>
-          </View>
-        </View>
-
-        <View style={styles.impactGrid}>
-          <View style={[styles.impactCard, { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }]}>
-            <View style={[styles.impactIconBg, { backgroundColor: "#DCFCE7" }]}>
-              <Wind size={18} color="#16A34A" />
-            </View>
-            <Text style={styles.impactValue}>{co2Kg.toFixed(1)} kg</Text>
-            <Text style={styles.impactLabel}>Emisi CO₂ Dicegah</Text>
-          </View>
-
-          <View style={[styles.impactCard, { backgroundColor: "#FEFCE8", borderColor: "#FEF08A" }]}>
-            <View style={[styles.impactIconBg, { backgroundColor: "#FEF08A" }]}>
-              <TreeDeciduous size={18} color="#CA8A04" />
-            </View>
-            <Text style={styles.impactValue}>{treesCount}</Text>
-            <Text style={styles.impactLabel}>Pohon Diselamatkan</Text>
-          </View>
-
-          <View style={[styles.impactCard, { backgroundColor: "#F0F9FF", borderColor: "#BAE6FD" }]}>
-            <View style={[styles.impactIconBg, { backgroundColor: "#E0F2FE" }]}>
-              <Scale size={18} color="#0284C7" />
-            </View>
-            <Text style={styles.impactValue}>{totalKg.toFixed(1)} kg</Text>
-            <Text style={styles.impactLabel}>Diverted dari TPA</Text>
-          </View>
-        </View>
-
-        {/* Flow Cara Kerja Kanyah Recycle */}
-        <View style={styles.guideCard}>
-          <Text style={styles.guideTitle}>Cara Kerja Kanyaah Recycle</Text>
-          <View style={styles.guideSteps}>
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumber}><Text style={styles.stepNumberText}>1</Text></View>
-              <Text style={styles.stepTitle}>Pilih Lokasi</Text>
-              <Text style={styles.stepText}>Bank Sampah & jenis sampah</Text>
-            </View>
-            <View style={styles.stepDivider} />
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumber}><Text style={styles.stepNumberText}>2</Text></View>
-              <Text style={styles.stepTitle}>Setor</Text>
-              <Text style={styles.stepText}>Antar langsung / Dijemput</Text>
-            </View>
-            <View style={styles.stepDivider} />
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumber}><Text style={styles.stepNumberText}>3</Text></View>
-              <Text style={styles.stepTitle}>Terima Poin</Text>
-              <Text style={styles.stepText}>Timbang & cairkan koin</Text>
-            </View>
-          </View>
-        </View>
-
-
-        {/* Recent Transactions / Riwayat */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Riwayat Setoran</Text>
-          <TouchableOpacity onPress={() => navigate("c_recycle_ledger")}>
-            <Text style={styles.seeAllText}>Buku Tabungan</Text>
-          </TouchableOpacity>
-        </View>
-
-        {recentDeposits.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Clock size={28} color="#9CA3AF" />
-            <Text style={styles.emptyText}>Belum ada riwayat setoran sampah</Text>
-          </View>
-        ) : (
-          recentDeposits.map((item) => (
+      ) : (
+        recentDeposits.map((item) => {
+          const hasPoint = Number(item.finalPoint || 0) > 0;
+          return (
             <TouchableOpacity
               key={item._id}
-              style={styles.depositRow}
+              style={styles.transactionCard}
               onPress={() => {
                 setSelectedDeposit(item);
                 if (item.status === "WAITING_CUSTOMER_CONFIRMATION") {
@@ -597,63 +593,164 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
                   navigate("c_recycle_tracking");
                 }
               }}
-              activeOpacity={0.8}
+              activeOpacity={0.75}
             >
-              <View style={[styles.depositIconBg, { backgroundColor: Number(item.finalPoint || 0) > 0 ? "#DCFCE7" : "#F3F4F6" }]}>
-                <Recycle size={18} color={Number(item.finalPoint || 0) > 0 ? "#15803D" : "#6B7280"} />
+              <View style={[styles.transactionIconBg, { backgroundColor: hasPoint ? "#ECFDF5" : "#F1F5F9" }]}>
+                <Recycle size={16} color={hasPoint ? "#059669" : "#64748B"} />
               </View>
-              <View style={styles.depositCol}>
-                <Text style={styles.depositCode}>{item.depositCode}</Text>
-                <Text style={styles.depositMeta}>
-                  {item.method === "PICKUP" ? "Pickup" : "Antar Langsung"} • {new Date(item.createdAt || Date.now()).toLocaleDateString("id-ID")}
+
+              <View style={styles.transactionDetailsCol}>
+                <Text style={styles.transactionCodeText}>#{item.depositCode}</Text>
+                <Text style={styles.transactionMetaText}>
+                  {item.method === "PICKUP" ? "Dijemput Driver" : "Antar Mandiri"} •{" "}
+                  {formatDateSafe(item.createdAt)}
                 </Text>
               </View>
-              <View style={styles.depositRight}>
-                <Text style={[styles.depositPoint, { color: Number(item.finalPoint || 0) > 0 ? "#15803D" : "#4B5563" }]}>
-                  {Number(item.finalPoint || 0) > 0 ? `+${Number(item.finalPoint).toLocaleString("id-ID")} Pts` : (item.status || "Proses")}
-                </Text>
-                <ChevronRight size={14} color="#9CA3AF" />
+
+              <View style={styles.transactionStatusCol}>
+                {hasPoint ? (
+                  <Text style={styles.transactionPointGreen}>
+                    +{formatNumberSafe(item.finalPoint)} Pts
+                  </Text>
+                ) : (
+                  <View style={styles.transactionStatusBadge}>
+                    <Text style={styles.transactionStatusBadgeText}>
+                      {item.status === "REQUESTED" || (item.status as string) === "PENDING"
+                        ? "Menunggu"
+                        : item.status === "ACCEPTED"
+                        ? "Dijemput"
+                        : item.status}
+                    </Text>
+                  </View>
+                )}
+                <ChevronRight size={14} color="#94A3B8" style={{ marginTop: 2 }} />
               </View>
             </TouchableOpacity>
-          ))
+          );
+        })
+      )}
+    </View>
+  );
+
+  return (
+    <ResponsiveSafeAreaView style={styles.container}>
+      {/* Sleek Responsive Header */}
+      <View style={styles.headerBarWrapper}>
+        <View style={styles.headerBar}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigate("c_home")}
+            activeOpacity={0.7}
+          >
+            <ArrowLeft size={18} color="#1E293B" />
+          </TouchableOpacity>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Image
+              source={require("../../../../assets/kanyaah-recycle.png")}
+              style={{ width: 34, height: 34, borderRadius: 10 }}
+              resizeMode="cover"
+            />
+            <View style={styles.headerCenterCol}>
+              <View style={styles.headerBadgePill}>
+                <View style={styles.headerBadgeDot} />
+                <Text style={styles.headerBadgeText}>GEOVERSE RECYCLE</Text>
+              </View>
+              <Text style={styles.headerTitle}>Kanyaah Recycle</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.headerActionBtn}
+            onPress={() => navigate("c_recycle_ledger")}
+            activeOpacity={0.7}
+          >
+            <History size={18} color="#059669" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          isWide && styles.scrollContentWide,
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#059669"]} />}
+      >
+        {isWide ? (
+          /* ========================================================== */
+          /* WIDE SCREEN LAYOUT: 2-COLUMN BALANCED DASHBOARD (Tablet/PC)*/
+          /* ========================================================== */
+          <View style={styles.wideGridRow}>
+            {/* Left Column: Wallet, Actions, Bank Partner */}
+            <View style={styles.wideColumnLeft}>
+              {locationSelectorCard}
+              {heroWalletCard}
+              {activeBannerCard}
+              {nearestBankCard}
+            </View>
+
+            {/* Right Column: Sustainability Impact, Guide, Ledger */}
+            <View style={styles.wideColumnRight}>
+              {impactSection}
+              {guideSection}
+              {recentTransactionsSection}
+            </View>
+          </View>
+        ) : (
+          /* ========================================================== */
+          /* MOBILE STREAM LAYOUT: Single fluid column                  */
+          /* ========================================================== */
+          <View style={styles.mobileColumn}>
+            {locationSelectorCard}
+            {heroWalletCard}
+            {activeBannerCard}
+            {nearestBankCard}
+            {impactSection}
+            {guideSection}
+            {recentTransactionsSection}
+          </View>
         )}
 
-        {/* Address & Area Selection Modal */}
+        {/* Address Selection Modal (Responsive: Bottom Sheet on Mobile, Centered Dialog on Tablet/Desktop) */}
         <Modal
           visible={addressModalVisible}
           transparent
-          animationType="slide"
+          animationType={isWide ? "fade" : "slide"}
           onRequestClose={() => {
             setAddressModalVisible(false);
             setSearchLocationQuery("");
           }}
         >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalSheet}>
-              <View style={styles.modalHeader}>
+          <View style={[styles.modalOverlay, isWide && styles.modalOverlayWide]}>
+            <View style={[styles.modalSheetContainer, isWide && styles.modalDialogWide]}>
+              {!isWide && <View style={styles.modalDragHandle} />}
+
+              <View style={styles.modalHeaderRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle}>Pilih Lokasi Penyetoran</Text>
-                  <Text style={styles.modalSub}>
-                    Pilih wilayah layanan aktif mitra Bank Sampah resmi
+                  <Text style={styles.modalSheetTitle}>Pilih Wilayah Penyetoran</Text>
+                  <Text style={styles.modalSheetSub}>
+                    Pilih wilayah layanan aktif mitra Bank Sampah resmi GEOVERSE
                   </Text>
                 </View>
                 <TouchableOpacity
-                  style={styles.modalCloseBtn}
+                  style={styles.modalSheetCloseBtn}
                   onPress={() => {
                     setAddressModalVisible(false);
                     setSearchLocationQuery("");
                   }}
                 >
-                  <X size={18} color="#6B7280" />
+                  <X size={16} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
               {/* Search Available Location */}
-              <View style={styles.searchLocationBox}>
-                <Search size={16} color="#15803D" />
+              <View style={styles.modalSearchBox}>
+                <Search size={15} color="#059669" />
                 <TextInput
-                  style={styles.searchLocationInput}
-                  placeholder="Cari wilayah layanan (Pakuan, Garut, Dago...)"
+                  style={styles.modalSearchInput}
+                  placeholder="Cari wilayah (Pakuan, Garut, Dago...)"
                   placeholderTextColor="#94A3B8"
                   value={searchLocationQuery}
                   onChangeText={setSearchLocationQuery}
@@ -665,18 +762,18 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
                 ) : null}
               </View>
 
-              <Text style={styles.presetSectionLabel}>
-                Daftar Wilayah Layanan ({filteredPresetLocations.length}):
+              <Text style={styles.modalListSectionTitle}>
+                Wilayah Layanan Tersedia ({filteredPresetLocations.length}):
               </Text>
 
-              <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-                <View style={styles.presetList}>
+              <ScrollView style={{ maxHeight: isWide ? 360 : 300 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalLocationList}>
                   {filteredPresetLocations.length === 0 ? (
                     <View style={styles.emptyLocationBox}>
-                      <MapPin size={22} color="#94A3B8" />
+                      <MapPin size={20} color="#94A3B8" />
                       <Text style={styles.emptyLocationTitle}>Wilayah Tidak Ditemukan</Text>
                       <Text style={styles.emptyLocationSub}>
-                        Penyetoran hanya dapat dilakukan pada wilayah layanan mitra yang tersedia.
+                        Penyetoran saat ini hanya aktif pada wilayah mitra terdaftar.
                       </Text>
                     </View>
                   ) : (
@@ -687,24 +784,24 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
                       return (
                         <TouchableOpacity
                           key={`preset-${idx}`}
-                          style={[styles.presetItem, isSelected && styles.presetItemActive]}
+                          style={[styles.modalLocationItem, isSelected && styles.modalLocationItemActive]}
                           onPress={() => {
                             handleSaveAddress(p.address, { lat: p.lat, lng: p.lng });
                             setSearchLocationQuery("");
                           }}
                           activeOpacity={0.7}
                         >
-                          <View style={[styles.presetDot, isSelected && styles.presetDotActive]} />
+                          <View style={[styles.modalLocationDot, isSelected && styles.modalLocationDotActive]} />
                           <View style={{ flex: 1 }}>
-                            <Text style={[styles.presetLabel, isSelected && styles.presetLabelActive]}>
+                            <Text style={[styles.modalLocationLabel, isSelected && styles.modalLocationLabelActive]}>
                               {p.label}
                             </Text>
-                            <Text style={styles.presetAddressText} numberOfLines={1}>
+                            <Text style={styles.modalLocationAddress} numberOfLines={1}>
                               {p.address}
                             </Text>
                           </View>
                           {isSelected ? (
-                            <CheckCircle2 size={16} color="#15803D" />
+                            <CheckCircle2 size={16} color="#059669" />
                           ) : (
                             <ChevronRight size={14} color="#CBD5E1" />
                           )}
@@ -727,294 +824,322 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FAFC",
   },
+  // Responsive Header Wrapper
+  headerBarWrapper: {
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
   headerBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: "#F1F5F9",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitleCol: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  headerBadgeIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    backgroundColor: "#DCFCE7",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#15803D",
-    letterSpacing: 0.5,
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    color: "#64748B",
-    marginTop: 1,
-  },
-  walletHeaderBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: "#DCFCE7",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-    maxWidth: 1000,
+    maxWidth: 1140,
     width: "100%",
     alignSelf: "center",
   },
-  // Location & Address Bar
-  locationBar: {
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerCenterCol: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  headerBadgePill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F0FDF4",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#DCFCE7",
+    gap: 4,
   },
-  locationIconBg: {
-    width: 32,
-    height: 32,
+  headerBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
+  },
+  headerBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#059669",
+    letterSpacing: 0.8,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: -0.3,
+    marginTop: 1,
+  },
+  headerActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // Scroll Content & Responsive Layout
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+    maxWidth: 1140,
+    width: "100%",
+    alignSelf: "center",
+  },
+  scrollContentWide: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  mobileColumn: {
+    width: "100%",
+  },
+  wideGridRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 20,
+    width: "100%",
+  },
+  wideColumnLeft: {
+    flex: 1.1,
+  },
+  wideColumnRight: {
+    flex: 1,
+  },
+  sectionBlock: {
+    marginBottom: 16,
+  },
+  // Location Selector Bar
+  locationSelectorCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  locationIconBox: {
+    width: 30,
+    height: 30,
     borderRadius: 8,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#ECFDF5",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
   },
-  locationTextCol: {
+  locationInfoCol: {
     flex: 1,
   },
-  locationLabel: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#15803D",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
+  locationOverline: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#059669",
+    letterSpacing: 0.6,
   },
-  locationVal: {
+  locationCurrentAddress: {
     fontSize: 12,
     fontWeight: "600",
     color: "#1E293B",
     marginTop: 1,
   },
-  changeLocationPill: {
+  locationChangeButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F8FAFC",
     paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    gap: 2,
-  },
-  changeLocationText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#15803D",
-  },
-  // Connected Nearest Bank Card
-  connectedBankCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: "#86EFAC",
-    shadowColor: "#15803D",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  connectedHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  connectedStatusTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-  },
-  livePulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#16A34A",
-  },
-  connectedStatusText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#15803D",
-    letterSpacing: 0.4,
-  },
-  distanceBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#DCFCE7",
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-  },
-  distanceBadgeText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#15803D",
-  },
-  connectedBody: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  connectedIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#DCFCE7",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  connectedBankName: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  connectedBankAddress: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  connectedMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  metaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  metaItemText: {
-    fontSize: 11,
-    color: "#475569",
-    fontWeight: "500",
-  },
-  metaItemHighlight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#FEF3C7",
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-  },
-  metaItemHighlightText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#B45309",
-  },
-  categoryPillsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginBottom: 14,
-  },
-  categoryMiniPill: {
-    backgroundColor: "#F8FAFC",
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    gap: 2,
+    marginLeft: 8,
   },
-  categoryMiniPillText: {
-    fontSize: 10,
+  locationChangeButtonText: {
+    fontSize: 11,
     fontWeight: "600",
-    color: "#475569",
+    color: "#059669",
   },
-  categoryMiniPillMore: {
-    backgroundColor: "#F1F5F9",
-    borderColor: "#CBD5E1",
+  // Hero Wallet Container (Fintech ESG Aesthetic)
+  heroWalletContainer: {
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: "#064E3B",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  categoryMiniPillMoreText: {
+  heroGradientBg: {
+    backgroundColor: "#064E3B",
+    padding: 18,
+    position: "relative",
+    overflow: "hidden",
+  },
+  heroSubtleCircleOne: {
+    position: "absolute",
+    right: -40,
+    top: -40,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+  },
+  heroSubtleCircleTwo: {
+    position: "absolute",
+    left: -30,
+    bottom: -30,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+  },
+  heroContentTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  heroPointsCol: {
+    flex: 1,
+  },
+  heroPointBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 4,
+  },
+  heroPointBadgeLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#A7F3D0",
+    letterSpacing: 0.6,
   },
-  connectDepositBtn: {
+  heroBalanceMainRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#15803D",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    alignItems: "baseline",
+    gap: 4,
   },
-  connectDepositBtnLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  connectDepositBtnText: {
-    fontSize: 13,
+  heroBalanceNumber: {
+    fontSize: 28,
     fontWeight: "800",
     color: "#FFFFFF",
+    letterSpacing: -0.5,
   },
-  connectDepositBtnArrow: {
-    width: 24,
-    height: 24,
+  heroBalanceUnit: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FBBF24",
+  },
+  heroRupiahConversion: {
+    fontSize: 11,
+    color: "#D1FAE5",
+    marginTop: 2,
+    fontWeight: "500",
+  },
+  heroConversionSub: {
+    color: "rgba(209, 250, 229, 0.7)",
+  },
+  heroWeightWidget: {
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    minWidth: 84,
+  },
+  heroWeightIconCircle: {
+    marginBottom: 2,
+  },
+  heroWeightVal: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#065F46",
+  },
+  heroWeightLabel: {
+    fontSize: 9,
+    fontWeight: "600",
+    color: "#64748B",
+    marginTop: 1,
+  },
+  // Docked Action Bar
+  actionDock: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  actionDockItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 2,
+  },
+  actionDockIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 5,
   },
-  // Active Deposit Banner
-  activeBanner: {
+  actionDockTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
+  actionDockSub: {
+    fontSize: 9,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  actionDockDivider: {
+    width: 1,
+    height: 26,
+    backgroundColor: "#F1F5F9",
+  },
+  // Active Order Notification Banner
+  activeBannerCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#F0FDFA",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#99F6E4",
+    borderColor: "#A7F3D0",
     borderRadius: 14,
     padding: 12,
     marginBottom: 14,
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  activeBannerHighlight: {
+  activeBannerCardAlert: {
     backgroundColor: "#FFFBEB",
     borderColor: "#FDE68A",
   },
@@ -1023,371 +1148,368 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  activeBannerIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#CCFBF1",
+  activeBannerIconContainer: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: "#ECFDF5",
     justifyContent: "center",
     alignItems: "center",
   },
-  activeBannerIconBoxAmber: {
+  activeBannerIconContainerAlert: {
     backgroundColor: "#FEF3C7",
   },
-  activeBannerTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#0F766E",
+  activeBannerHeadline: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#065F46",
   },
-  activeBannerTitleAmber: {
+  activeBannerHeadlineAlert: {
     color: "#B45309",
   },
-  activeBannerSub: {
+  activeBannerSubtitle: {
     fontSize: 11,
-    color: "#475569",
+    color: "#64748B",
     marginTop: 2,
   },
-  activeBannerArrow: {
-    paddingLeft: 8,
+  // Nearest Bank Partner Card
+  partnerCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  // Hero Point Card
-  heroCard: {
-    backgroundColor: "#166534",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 20,
-    overflow: "hidden",
-    position: "relative",
-    shadowColor: "#166534",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  heroGlow: {
-    position: "absolute",
-    right: -40,
-    top: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-  },
-  heroGlowSmall: {
-    position: "absolute",
-    left: -20,
-    bottom: -20,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-  },
-  heroTop: {
+  partnerCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
+    alignItems: "center",
+    marginBottom: 12,
   },
-  pointHeaderLabelRow: {
+  partnerStatusTag: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 4,
+    flex: 1,
   },
-  heroBalanceLabel: {
-    fontSize: 12,
-    color: "#BBF7D0",
+  partnerLiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#10B981",
+  },
+  partnerStatusTagText: {
+    fontSize: 11,
     fontWeight: "700",
+    color: "#059669",
   },
-  heroBalanceRow: {
+  partnerDistanceBadge: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     gap: 4,
+    backgroundColor: "#ECFDF5",
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 8,
   },
-  heroBalanceVal: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: -0.5,
+  partnerDistanceBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#059669",
   },
-  heroPointUnit: {
+  partnerInfoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  partnerIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  partnerNameText: {
     fontSize: 14,
-    fontWeight: "800",
-    color: "#FDE047",
+    fontWeight: "700",
+    color: "#0F172A",
   },
-  heroRupiahVal: {
-    fontSize: 12,
-    color: "#E2E8F0",
+  partnerAddressText: {
+    fontSize: 11,
+    color: "#64748B",
     marginTop: 2,
   },
-  heroBadgeKg: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    minWidth: 90,
-  },
-  heroBadgeKgIcon: {
-    marginBottom: 2,
-  },
-  heroBadgeKgText: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#15803D",
-  },
-  heroBadgeKgSub: {
-    fontSize: 9,
-    color: "#475569",
-    fontWeight: "600",
-    marginTop: 1,
-  },
-  // Hero Micro-Actions Grid
-  actionGridContainer: {
+  partnerMetaTagsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  actionGridItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 4,
-  },
-  actionGridIconBg: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  actionGridLabelPrimary: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#15803D",
-  },
-  actionGridLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#334155",
-  },
-  actionGridDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: "#E2E8F0",
-  },
-  // Section Headers
-  sectionHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     marginTop: 6,
-    marginBottom: 12,
+    gap: 6,
+    flexWrap: "wrap",
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  seeAllText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#15803D",
-  },
-  pillGreen: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#DCFCE7",
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 20,
-  },
-  pillGreenText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#15803D",
-  },
-  impactGrid: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 18,
-  },
-  impactCard: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 10,
-    alignItems: "center",
-  },
-  impactIconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  impactValue: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  impactLabel: {
-    fontSize: 9,
-    color: "#64748B",
-    textAlign: "center",
-    marginTop: 2,
-    lineHeight: 12,
-  },
-  guideCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  guideTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#1E293B",
-    marginBottom: 12,
-  },
-  guideSteps: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-  },
-  stepItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  stepNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#DCFCE7",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  stepNumberText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#15803D",
-  },
-  stepTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0F172A",
-    textAlign: "center",
-    marginBottom: 2,
-  },
-  stepText: {
-    fontSize: 9,
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 12,
-  },
-  stepDivider: {
-    width: 14,
-    height: 1,
-    backgroundColor: "#CBD5E1",
-    marginTop: 12,
-  },
-  bankCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  bankCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  bankInfo: {
-    flex: 1,
-  },
-  bankName: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  bankMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 3,
-    gap: 4,
-  },
-  bankDistance: {
-    fontSize: 11,
-    color: "#475569",
-    fontWeight: "600",
-  },
-  metaDot: {
-    fontSize: 11,
-    color: "#94A3B8",
-  },
-  bankHours: {
-    fontSize: 11,
-    color: "#64748B",
-  },
-  pickupBadge: {
+  partnerMetaItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: "#D1FAE5",
+    backgroundColor: "#F8FAFC",
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: 6,
   },
-  pickupBadgeText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#047857",
+  partnerMetaItemText: {
+    fontSize: 10,
+    color: "#64748B",
+    fontWeight: "500",
   },
-  bankBottomRow: {
+  partnerPriceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#FFFBEB",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
+  partnerPriceBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#B45309",
+  },
+  categoryChipsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 12,
+  },
+  categoryChipItem: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 6,
+  },
+  categoryChipItemText: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: "#475569",
+  },
+  categoryChipItemMore: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
+  },
+  categoryChipItemMoreText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  partnerActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  partnerPrimaryButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#059669",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 6,
+  },
+  partnerPrimaryButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  partnerSecondaryButton: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  partnerSecondaryButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  // Section Headers
+  sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    paddingTop: 8,
     marginTop: 4,
+    marginBottom: 10,
   },
-  bankAddressCol: {
-    flex: 1,
-    marginRight: 10,
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
   },
-  bankAddress: {
-    fontSize: 11,
-    color: "#64748B",
+  seeAllLinkText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#059669",
   },
-  btnDetailMini: {
+  ecoLevelBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: 4,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingVertical: 2,
+    paddingHorizontal: 7,
+    borderRadius: 12,
   },
-  btnDetailMiniText: {
-    fontSize: 11,
+  ecoLevelBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#059669",
+  },
+  // Impact Cards Grid
+  impactCardsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  },
+  modernImpactCard: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  modernImpactIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  modernImpactValue: {
+    fontSize: 13,
     fontWeight: "800",
-    color: "#15803D",
+    color: "#0F172A",
   },
-  depositRow: {
+  modernImpactUnit: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  modernImpactLabel: {
+    fontSize: 9,
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: 2,
+    lineHeight: 12,
+  },
+  // Guide / Onboarding Card
+  guideCardContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  guideCardTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1E293B",
+    marginBottom: 12,
+  },
+  guideStepsRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  guideStepColumn: {
+    flex: 1,
+    alignItems: "center",
+  },
+  guideStepNumberBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#ECFDF5",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  guideStepNumberText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#059669",
+  },
+  guideStepTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0F172A",
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  guideStepDesc: {
+    fontSize: 9,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 12,
+  },
+  guideStepConnector: {
+    width: 12,
+    height: 1,
+    backgroundColor: "#CBD5E1",
+    marginTop: 11,
+  },
+  // Activity / Transaction Rows
+  emptyActivityCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 16,
+  },
+  emptyActivityTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
+    marginTop: 6,
+  },
+  emptyActivitySub: {
+    fontSize: 11,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  transactionCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
@@ -1397,110 +1519,140 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
-  depositIconBg: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  transactionIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginRight: 10,
   },
-  depositCol: {
+  transactionDetailsCol: {
     flex: 1,
   },
-  depositCode: {
+  transactionCodeText: {
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#0F172A",
   },
-  depositMeta: {
+  transactionMetaText: {
+    fontSize: 10,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  transactionStatusCol: {
+    alignItems: "flex-end",
+  },
+  transactionPointGreen: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#059669",
+  },
+  transactionStatusBadge: {
+    backgroundColor: "#F1F5F9",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
+  transactionStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  // Address Modal (Responsive: Bottom Sheet on Mobile, Centered Dialog on Tablet/Desktop)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.55)",
+    justifyContent: "flex-end",
+  },
+  modalOverlayWide: {
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalSheetContainer: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 18,
+    paddingBottom: 32,
+    maxHeight: "85%",
+  },
+  modalDialogWide: {
+    borderRadius: 20,
+    maxWidth: 540,
+    width: "100%",
+    padding: 24,
+    paddingBottom: 24,
+    maxHeight: "80%",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalDragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+    alignSelf: "center",
+    marginBottom: 14,
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 14,
+  },
+  modalSheetTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  modalSheetSub: {
     fontSize: 11,
     color: "#64748B",
     marginTop: 2,
   },
-  depositRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  depositPoint: {
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  emptyCard: {
-    backgroundColor: "#FFFFFF",
+  modalSheetCloseBtn: {
+    width: 28,
+    height: 28,
     borderRadius: 14,
-    padding: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginBottom: 16,
-  },
-  emptyText: {
-    fontSize: 12,
-    color: "#94A3B8",
-    marginTop: 8,
-  },
-  // Modal Styles
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 32,
-    maxHeight: "85%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  modalSub: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  modalCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
   },
-  searchLocationBox: {
+  modalSearchBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    marginBottom: 14,
+    marginBottom: 12,
     gap: 8,
   },
-  searchLocationInput: {
+  modalSearchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     color: "#0F172A",
     padding: 0,
+  },
+  modalListSectionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#475569",
+    marginBottom: 8,
+  },
+  modalLocationList: {
+    gap: 6,
   },
   emptyLocationBox: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 24,
+    paddingVertical: 20,
     paddingHorizontal: 16,
     backgroundColor: "#F8FAFC",
     borderRadius: 10,
@@ -1508,27 +1660,18 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   emptyLocationTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#475569",
-    marginTop: 6,
+    marginTop: 4,
   },
   emptyLocationSub: {
-    fontSize: 11,
+    fontSize: 10,
     color: "#94A3B8",
     textAlign: "center",
     marginTop: 2,
   },
-  presetSectionLabel: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#475569",
-    marginBottom: 8,
-  },
-  presetList: {
-    gap: 8,
-  },
-  presetItem: {
+  modalLocationItem: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F8FAFC",
@@ -1538,29 +1681,30 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 8,
   },
-  presetItemActive: {
-    backgroundColor: "#F0FDF4",
-    borderColor: "#86EFAC",
+  modalLocationItemActive: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
   },
-  presetDot: {
-    width: 8,
-    height: 8,
+  modalLocationDot: {
+    width: 7,
+    height: 7,
     borderRadius: 4,
     backgroundColor: "#CBD5E1",
   },
-  presetDotActive: {
-    backgroundColor: "#15803D",
+  modalLocationDotActive: {
+    backgroundColor: "#059669",
   },
-  presetLabel: {
+  modalLocationLabel: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#334155",
   },
-  presetLabelActive: {
-    color: "#15803D",
+  modalLocationLabelActive: {
+    color: "#059669",
+    fontWeight: "700",
   },
-  presetAddressText: {
-    fontSize: 11,
+  modalLocationAddress: {
+    fontSize: 10,
     color: "#64748B",
     marginTop: 1,
   },

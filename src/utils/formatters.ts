@@ -1,6 +1,39 @@
+export const formatNumberSafe = (n: any): string => {
+  if (n === undefined || n === null) return "0";
+  const num = Number(n);
+  if (isNaN(num) || !isFinite(num)) return "0";
+  try {
+    return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  } catch {
+    return String(Math.round(num) || 0);
+  }
+};
+
+const ID_MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+const ID_DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+export const formatDateSafe = (dateVal: any, includeTime = false): string => {
+  if (!dateVal) return "Hari ini";
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return "Hari ini";
+    const day = d.getDate();
+    const month = ID_MONTHS_SHORT[d.getMonth()] || "";
+    const year = d.getFullYear();
+    if (includeTime) {
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      return `${day} ${month} ${year}, ${hh}:${mm} WIB`;
+    }
+    return `${day} ${month} ${year}`;
+  } catch {
+    return "Hari ini";
+  }
+};
+
 export const rp = (n: any): string => {
   if (n === undefined || n === null || isNaN(Number(n))) return "Rp 0";
-  return "Rp " + Number(n).toLocaleString("id-ID");
+  return "Rp " + formatNumberSafe(n);
 };
 
 export const uImg = (id: string, w = 400, h = 300): string =>

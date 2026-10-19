@@ -5,6 +5,8 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  Pressable,
+  Modal,
   StyleSheet,
   ActivityIndicator,
   Alert,
@@ -28,6 +30,7 @@ import {
   Banknote,
   ChevronRight,
   AlertTriangle,
+  X,
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -42,7 +45,6 @@ import {
   submitRideComplaint,
   RideOrderData,
 } from "../../services/rideService";
-import { Modal } from "react-native";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { SafeCallModal } from "../../components/SafeCallModal";
 import { DigitalPaymentModal } from "../../components/DigitalPaymentModal";
@@ -62,6 +64,9 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
   const [currentRide, setCurrentRide] = useState<RideOrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [selectedCancelReason, setSelectedCancelReason] = useState("Ingin mengubah alamat penjemputan / tujuan");
+  const [customCancelReason, setCustomCancelReason] = useState("");
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [safeCallVisible, setSafeCallVisible] = useState(false);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
@@ -234,57 +239,95 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
   ]);
 
   // Cancel ride handler with tiered cancellation policy
-  const handleCancelRide = () => {
+  const handleCancelRide = async () => {
     if (!currentRide) return;
 
     if (currentRide.status === "TRIP_STARTED") {
-      Alert.alert(
-        "Tidak Dapat Membatalkan",
-        "Perjalanan sudah dimulai bersama driver dan tidak dapat dibatalkan dari aplikasi penumpang."
-      );
+      if (Platform.OS === "web") {
+        window.alert(
+          "Perjalanan sudah dimulai bersama driver dan tidak dapat dibatalkan dari aplikasi penumpang."
+        );
+      } else {
+        Alert.alert(
+          "Tidak Dapat Membatalkan",
+          "Perjalanan sudah dimulai bersama driver dan tidak dapat dibatalkan dari aplikasi penumpang."
+        );
+      }
       return;
     }
 
-    let policyMessage = "Apakah Anda yakin ingin membatalkan perjalanan ini?";
-    if (currentRide.status === "SEARCHING_DRIVER") {
-      policyMessage = "Driver belum ditugaskan. Pembatalan ini GRATIS tanpa biaya.";
-    } else if (currentRide.status === "DRIVER_ASSIGNED" || currentRide.status === "DRIVER_ON_THE_WAY") {
-      policyMessage = "Driver sudah menerima order dan dalam perjalanan. Pembatalan dikenakan biaya kompensasi Rp 3.000.";
-    } else if (currentRide.status === "DRIVER_ARRIVED") {
-      policyMessage = "Driver sudah tiba di titik penjemputan. Pembatalan dikenakan biaya kompensasi Rp 5.000.";
+    if (Platform.OS === "web") {
+      const feeNote =
+        currentRide.status === "SEARCHING_DRIVER"
+          ? "Driver belum ditugaskan. Pembatalan ini GRATIS tanpa biaya."
+          : currentRide.status === "DRIVER_ARRIVED"
+          ? "Driver sudah tiba di titik jemput. Pembatalan dikenakan biaya Rp 5.000."
+          : "Driver sedang menuju lokasi penjemputan. Pembatalan dikenakan biaya Rp 3.000.";
+
+      const confirmed = window.confirm(
+        `Batalkan Perjalanan Kanyaah Ride?\n\n${feeNote}\n\nTekan OK untuk membatalkan pesanan sekarang.`
+      );
+      if (confirmed) {
+        await executeCancelRide("Dibatalkan oleh pelanggan via Web");
+        return;
+      }
+      return;
     }
 
-    Alert.alert(
-      "Batalkan Perjalanan?",
-      policyMessage,
-      [
-        { text: "Kembali", style: "cancel" },
-        {
-          text: "Ya, Batalkan",
-          style: "destructive",
-          onPress: async () => {
-            setIsCancelling(true);
-            try {
-              const res = await cancelRide(currentRide._id, {
-                reason: "Dibatalkan oleh customer",
-                cancelledBy: "CUSTOMER",
-              });
-              if (res.success && res.data) {
-                setCurrentRide(res.data);
-                const feeText = res.data.cancellation?.fee ? ` Biaya pembatalan: Rp ${res.data.cancellation.fee.toLocaleString("id-ID")}.` : "";
-                Alert.alert("Perjalanan Dibatalkan", `Pesanan Anda telah dibatalkan.${feeText}`);
-              } else {
-                Alert.alert("Gagal Membatalkan", res.message || "Periksa koneksi lalu coba lagi.");
-              }
-            } catch (err: any) {
-              Alert.alert("Gagal", err.message || "Terjadi kesalahan.");
-            } finally {
-              setIsCancelling(false);
-            }
-          },
-        },
-      ]
-    );
+    setCancelModalVisible(true);
+  };
+
+  const executeCancelRide = async (overrideReason?: string) => {
+    if (!currentRide) return;
+    setIsCancelling(true);
+    try {
+      const reasonToSubmit =
+        overrideReason ||
+        (selectedCancelReason === "Lainnya" && customCancelReason.trim()
+          ? customCancelReason.trim()
+          : selectedCancelReason || "Dibatalkan oleh pelanggan");
+
+      const orderTargetId = currentRide._id || (currentRide as any).orderCode;
+      const res = await cancelRide(orderTargetId, {
+        reason: reasonToSubmit,
+        cancelledBy: "CUSTOMER",
+      });
+
+      if (res.success) {
+        const updated = res.data || {
+          ...currentRide,
+          status: "CANCELLED" as const,
+          cancelReason: reasonToSubmit,
+        };
+        setCurrentRide(updated);
+        setCancelModalVisible(false);
+        await AsyncStorage.removeItem("selected_ride_tracking_id").catch(() => {});
+        const feeText = updated.cancellation?.fee
+          ? ` Biaya pembatalan: Rp ${updated.cancellation.fee.toLocaleString("id-ID")}.`
+          : "";
+        if (Platform.OS === "web") {
+          window.alert(`Pesanan Anda telah dibatalkan.${feeText}`);
+        } else {
+          Alert.alert("Perjalanan Dibatalkan", `Pesanan Anda telah dibatalkan.${feeText}`);
+        }
+      } else {
+        const errorMsg = res.message || "Gagal membatalkan pesanan. Silakan coba lagi.";
+        if (Platform.OS === "web") {
+          window.alert(errorMsg);
+        } else {
+          Alert.alert("Gagal Membatalkan", errorMsg);
+        }
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || "Terjadi kesalahan saat membatalkan perjalanan.";
+      if (Platform.OS === "web") {
+        window.alert(errorMsg);
+      } else {
+        Alert.alert("Gagal", errorMsg);
+      }
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   // Submit Complaint handler
@@ -858,18 +901,22 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
 
         {/* Cancel Button (Available before trip starts) */}
         {(isSearching || status === "DRIVER_ASSIGNED" || status === "DRIVER_ON_THE_WAY" || status === "DRIVER_ARRIVED") && (
-          <TouchableOpacity
-            style={styles.cancelTripBtn}
-            onPress={handleCancelRide}
+          <Pressable
+            style={({ pressed }) => [
+              styles.cancelTripBtn,
+              pressed && { opacity: 0.75 },
+              Platform.OS === "web" && ({ cursor: "pointer", userSelect: "none" } as any),
+            ]}
+            onPress={() => void handleCancelRide()}
             disabled={isCancelling}
-            activeOpacity={0.8}
+            accessibilityRole="button"
           >
             {isCancelling ? (
               <ActivityIndicator color="#DC2626" />
             ) : (
               <Text style={styles.cancelTripBtnText}>Batalkan Perjalanan</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
         )}
 
         {/* Complaint / Report issue button for completed or cancelled trips */}
@@ -884,11 +931,28 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           </TouchableOpacity>
         )}
 
+        {/* Action Buttons if cancelled: Order Again or Return Home */}
+        {isCancelled && (
+          <TouchableOpacity
+            style={[styles.backHomeBtn, { backgroundColor: "#1B7A4E", marginBottom: 10 }]}
+            onPress={() => {
+              AsyncStorage.removeItem("selected_ride_tracking_id").catch(() => {});
+              navigate("c_ride");
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.backHomeBtnText, { color: "#FFFFFF" }]}>Pesan Perjalanan Baru</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Return to Home button if completed or cancelled */}
         {(isCompleted || isCancelled) && (
           <TouchableOpacity
             style={styles.backHomeBtn}
-            onPress={() => navigate("c_home")}
+            onPress={() => {
+              AsyncStorage.removeItem("selected_ride_tracking_id").catch(() => {});
+              navigate("c_home");
+            }}
             activeOpacity={0.85}
           >
             <Text style={styles.backHomeBtnText}>Kembali ke Beranda</Text>
@@ -897,6 +961,115 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Friendly In-App Cancellation Modal */}
+      <Modal
+        visible={cancelModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isCancelling && setCancelModalVisible(false)}
+      >
+        <View style={styles.cancelModalBackdrop}>
+          <View style={styles.cancelModalCard}>
+            <View style={styles.cancelModalHeader}>
+              <View style={styles.cancelIconWrap}>
+                <AlertTriangle size={24} color="#DC2626" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.cancelModalTitle}>Batalkan Perjalanan?</Text>
+                <Text style={styles.cancelModalSubtitle}>
+                  {currentRide?.status === "SEARCHING_DRIVER"
+                    ? "Driver belum ditugaskan. Pembatalan ini GRATIS tanpa biaya."
+                    : currentRide?.status === "DRIVER_ARRIVED"
+                    ? "Driver sudah tiba di titik jemput. Pembatalan dikenakan biaya Rp 5.000."
+                    : "Driver sedang menuju lokasi. Pembatalan dikenakan biaya Rp 3.000."}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => !isCancelling && setCancelModalVisible(false)}
+                style={styles.cancelModalCloseBtn}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.cancelReasonLabel}>Pilih Alasan Pembatalan:</Text>
+            <View style={styles.reasonList}>
+              {[
+                "Ingin mengubah alamat penjemputan / tujuan",
+                "Waktu tunggu driver terlalu lama",
+                "Salah pilih kendaraan atau metode bayar",
+                "Menemukan tumpangan alternatif",
+                "Lainnya",
+              ].map((reasonItem) => (
+                <TouchableOpacity
+                  key={reasonItem}
+                  style={[
+                    styles.reasonChip,
+                    selectedCancelReason === reasonItem && styles.reasonChipActive,
+                  ]}
+                  onPress={() => setSelectedCancelReason(reasonItem)}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.reasonRadio,
+                      selectedCancelReason === reasonItem && styles.reasonRadioActive,
+                    ]}
+                  >
+                    {selectedCancelReason === reasonItem && (
+                      <View style={styles.reasonRadioInner} />
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.reasonText,
+                      selectedCancelReason === reasonItem && styles.reasonTextActive,
+                    ]}
+                  >
+                    {reasonItem}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {selectedCancelReason === "Lainnya" && (
+              <TextInput
+                style={styles.customReasonInput}
+                placeholder="Tuliskan alasan pembatalan Anda..."
+                placeholderTextColor="#94A3B8"
+                value={customCancelReason}
+                onChangeText={setCustomCancelReason}
+                multiline
+              />
+            )}
+
+            <View style={styles.cancelModalActionRow}>
+              <TouchableOpacity
+                style={styles.cancelModalKeepBtn}
+                onPress={() => setCancelModalVisible(false)}
+                disabled={isCancelling}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelModalKeepText}>Lanjutkan</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.cancelModalConfirmBtn, isCancelling && { opacity: 0.7 }]}
+                onPress={() => void executeCancelRide()}
+                disabled={isCancelling}
+                activeOpacity={0.8}
+              >
+                {isCancelling ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.cancelModalConfirmText}>Ya, Batalkan</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Realtime Chat Modal with Driver */}
       {currentRide && (
@@ -1041,6 +1214,154 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
 };
 
 const styles = StyleSheet.create({
+  cancelModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  cancelModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+  },
+  cancelModalCard: {
+    width: "90%",
+    maxWidth: 440,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  cancelModalHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  cancelIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelModalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  cancelModalSubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  cancelModalCloseBtn: {
+    padding: 4,
+  },
+  cancelReasonLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 8,
+  },
+  reasonList: {
+    gap: 6,
+    marginBottom: 14,
+  },
+  reasonChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  reasonChipActive: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  reasonRadio: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#94A3B8",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  reasonRadioActive: {
+    borderColor: "#DC2626",
+  },
+  reasonRadioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#DC2626",
+  },
+  reasonText: {
+    fontSize: 12,
+    color: "#475569",
+    flex: 1,
+  },
+  reasonTextActive: {
+    color: "#991B1B",
+    fontWeight: "700",
+  },
+  customReasonInput: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 12,
+    color: "#0F172A",
+    height: 60,
+    textAlignVertical: "top",
+    marginBottom: 14,
+  },
+  cancelModalActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 6,
+  },
+  cancelModalKeepBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+  cancelModalKeepText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  cancelModalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DC2626",
+  },
+  cancelModalConfirmText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",

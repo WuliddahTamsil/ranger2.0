@@ -31,7 +31,12 @@ async function runTests() {
   console.log("🧪 RUNNING GEOVERSE POINT 12 UNIT TESTS");
   console.log("==================================================\n");
 
-  await mongoose.connect(MONGO_URI);
+  try {
+    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 60000 });
+  } catch (connErr) {
+    console.warn("Retrying mongoose connect...", connErr.message);
+    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 60000 });
+  }
 
   const testUserId = new mongoose.Types.ObjectId();
   const unauthorizedUserId = new mongoose.Types.ObjectId();

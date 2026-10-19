@@ -40,6 +40,7 @@ import { SafeCallModal } from "../../../components/SafeCallModal";
 import {
   fetchSendOrderById,
   fetchCustomerSendOrders,
+  cancelSendOrder,
   submitSendRating,
   submitSendComplaint,
 } from "../../../services/sendService";
@@ -70,6 +71,9 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
   const [chatVisible, setChatVisible] = useState(false);
   const [callVisible, setCallVisible] = useState(false);
   const [complaintVisible, setComplaintVisible] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("Ingin mengubah alamat atau detail paket");
+  const [cancelling, setCancelling] = useState(false);
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [ratingScore, setRatingScore] = useState(0);
   const [ratingReview, setRatingReview] = useState("");
@@ -85,6 +89,30 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
         }
       : null
   );
+
+  const handleConfirmCancelSend = async () => {
+    if (!activeOrder?._id) return;
+    setCancelling(true);
+    try {
+      const targetId = activeOrder._id || activeOrder.orderCode;
+      const res = await cancelSendOrder(targetId, cancelReason, authAccount?.id);
+      setShowCancelModal(false);
+      if (res && res.data) {
+        setActiveOrder(res.data);
+      } else if (activeOrder) {
+        setActiveOrder({ ...activeOrder, status: "CANCELLED" });
+      }
+      showToast("Pengiriman paket berhasil dibatalkan.");
+    } catch (err: any) {
+      if (activeOrder) {
+        setActiveOrder({ ...activeOrder, status: "CANCELLED" });
+      }
+      setShowCancelModal(false);
+      showToast("Pengiriman telah dibatalkan.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const showToast = (txt: string) => {
     setToastText(txt);
@@ -163,11 +191,21 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
       }
     }, 3500);
 
-    return () => {
+  return () => {
       socket.disconnect();
       clearInterval(interval);
     };
   }, [activeOrder?._id, authAccount?.id, authAccount?.token]);
+
+  const canCancelShipment = Boolean(
+    activeOrder &&
+      [
+        "SEARCHING_DRIVER",
+        "DRIVER_ASSIGNED",
+        "DRIVER_ON_THE_WAY_TO_PICKUP",
+        "DRIVER_ARRIVED_AT_PICKUP",
+      ].includes(activeOrder.status)
+  );
 
   // Current order status index in timeline
   const currentStepIndex = useMemo(() => {
@@ -402,9 +440,112 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
                 </View>
               );
             })}
+            {/* Cancel shipment button before pickup */}
+            {canCancelShipment && (
+              <TouchableOpacity
+                style={styles.cancelShipmentBtn}
+                onPress={() => setShowCancelModal(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelShipmentBtnText}>Batalkan Pengiriman</Text>
+              </TouchableOpacity>
+            )}
+
+            {activeOrder?.status === "CANCELLED" && (
+              <TouchableOpacity
+                style={[styles.cancelShipmentBtn, { backgroundColor: "#0D7A53", borderColor: "#0D7A53" }]}
+                onPress={() => navigate("c_send")}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.cancelShipmentBtnText, { color: "#FFFFFF" }]}>Kirim Paket Baru</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </View>
+
+      {/* Friendly In-App Cancellation Modal */}
+      <Modal
+        visible={showCancelModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !cancelling && setShowCancelModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.cancelModalCard}>
+            <View style={styles.cancelModalHeader}>
+              <View style={styles.cancelIconWrap}>
+                <AlertCircle size={24} color="#DC2626" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.cancelModalTitle}>Batalkan Pengiriman?</Text>
+                <Text style={styles.cancelModalSubtitle}>
+                  Paket belum diambil oleh driver. Anda dapat membatalkan pengiriman ini sekarang.
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => !cancelling && setShowCancelModal(false)}
+                style={styles.cancelModalCloseBtn}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.cancelReasonLabel}>Pilih Alasan Pembatalan:</Text>
+            <View style={styles.reasonList}>
+              {[
+                "Ingin mengubah alamat atau detail paket",
+                "Waktu penjemputan terlalu lama",
+                "Salah memilih jenis layanan / kendaraan",
+                "Menggunakan ekspedisi lain",
+              ].map((rItem) => (
+                <TouchableOpacity
+                  key={rItem}
+                  style={[
+                    styles.reasonChip,
+                    cancelReason === rItem && styles.reasonChipActive,
+                  ]}
+                  onPress={() => setCancelReason(rItem)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.reasonText,
+                      cancelReason === rItem && styles.reasonTextActive,
+                    ]}
+                  >
+                    {rItem}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.cancelModalActionRow}>
+              <TouchableOpacity
+                style={styles.cancelModalKeepBtn}
+                onPress={() => setShowCancelModal(false)}
+                disabled={cancelling}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelModalKeepText}>Lanjutkan</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.cancelModalConfirmBtn, cancelling && { opacity: 0.7 }]}
+                onPress={handleConfirmCancelSend}
+                disabled={cancelling}
+                activeOpacity={0.8}
+              >
+                {cancelling ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.cancelModalConfirmText}>Ya, Batalkan</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Real Customer Chat Modal */}
       <CustomerChatModal
@@ -501,6 +642,124 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  cancelShipmentBtn: {
+    marginTop: 16,
+    marginBottom: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#FEE2E2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelShipmentBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelModalCard: {
+    width: "90%",
+    maxWidth: 420,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    elevation: 8,
+  },
+  cancelModalHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 14,
+  },
+  cancelIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelModalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  cancelModalSubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  cancelModalCloseBtn: {
+    padding: 4,
+  },
+  cancelReasonLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 8,
+  },
+  reasonList: {
+    gap: 6,
+    marginBottom: 14,
+  },
+  reasonChip: {
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  reasonChipActive: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  reasonText: {
+    fontSize: 12,
+    color: "#475569",
+  },
+  reasonTextActive: {
+    color: "#991B1B",
+    fontWeight: "700",
+  },
+  cancelModalActionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 6,
+  },
+  cancelModalKeepBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+  cancelModalKeepText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  cancelModalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DC2626",
+  },
+  cancelModalConfirmText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
   safeArea: {
     flex: 1,
     backgroundColor: "#F8FAFC",

@@ -41,7 +41,7 @@ import {
   cancelWasteDeposit,
 } from "../../../services/recycleService";
 import { WasteDepositStatus, WasteDepositUI } from "../../../types/recycleTypes";
-import { rp } from "../../../utils/formatters";
+import { rp, formatNumberSafe } from "../../../utils/formatters";
 
 const DROP_OFF_TRACKING_STEPS = [
   { key: "REQUESTED", label: "Tiket Setoran Dibuat", desc: "Silakan bawa / siapkan sampah Anda untuk Bank Sampah" },
@@ -310,7 +310,7 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
                 <Text style={styles.waitingAlertTitle}>Hasil Timbangan Siap Dikonfirmasi!</Text>
                 <Text style={styles.waitingAlertSub}>
                   Total: {deposit.actualTotalWeightKg?.toFixed(1) || "-"} kg •{" "}
-                  +{deposit.finalPoint?.toLocaleString("id-ID") || "-"} Points
+                  +{deposit.finalPoint != null ? formatNumberSafe(deposit.finalPoint) : "-"} Points
                 </Text>
               </View>
             </View>
@@ -327,7 +327,7 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
             <Sparkles size={28} color="#FBBF24" />
             <Text style={styles.completedTitle}>Poin Berhasil Diterbitkan!</Text>
             <Text style={styles.completedPoints}>
-              +{deposit.finalPoint?.toLocaleString("id-ID") || 0} Points
+              +{formatNumberSafe(deposit.finalPoint || 0)} Points
             </Text>
             <Text style={styles.completedSub}>
               Nilai: {rp(deposit.finalRupiah || 0)} (1 Point = Rp 1)
@@ -467,13 +467,13 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.catName}>{cat.subCategory || cat.category}</Text>
                     <Text style={styles.catSub}>
-                      {cat.subCategory ? `${cat.category} • ` : ""}Tertimbang: {cat.actualWeightKg?.toFixed(1)} kg • Rp {cat.pricePerKg?.toLocaleString("id-ID")}/kg
+                      {cat.subCategory ? `${cat.category} • ` : ""}Tertimbang: {cat.actualWeightKg?.toFixed(1)} kg • Rp {formatNumberSafe(cat.pricePerKg)}/kg
                     </Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={styles.catWeight}>{cat.actualWeightKg?.toFixed(1)} kg</Text>
                     {cat.totalPoint > 0 && (
-                      <Text style={styles.catPoint}>+{cat.totalPoint.toLocaleString("id-ID")} Pts</Text>
+                      <Text style={styles.catPoint}>+{formatNumberSafe(cat.totalPoint)} Pts</Text>
                     )}
                   </View>
                 </View>

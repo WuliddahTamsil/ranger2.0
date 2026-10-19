@@ -1,5 +1,18 @@
 const mongoose = require("mongoose");
 const SendOrder = require("../models/SendOrder");
+const findSendOrder = async (idOrCode) => {
+  if (!idOrCode) return null;
+  const clean = String(idOrCode).replace(/^#/, "").trim();
+  if (mongoose.Types.ObjectId.isValid(clean)) {
+    const doc = await SendOrder.findById(clean);
+    if (doc) return doc;
+  }
+  return await SendOrder.findOne({
+    $or: [{ orderCode: clean }, { orderCode: `#${clean}` }, { orderCode: String(idOrCode).trim() }],
+  });
+};
+
+
 const SendComplaint = require("../models/SendComplaint");
 const SendPricingConfig = require("../models/SendPricingConfig");
 const User = require("../models/User");
@@ -739,7 +752,7 @@ const updateDriverLocation = async (req, res) => {
       return res.status(400).json({ success: false, message: "Koordinat latitude & longitude wajib diisi." });
     }
 
-    const order = await SendOrder.findById(req.params.id);
+    const order = await findSendOrder(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, message: "Order tidak ditemukan." });
     }
@@ -1188,7 +1201,7 @@ const cancelOrder = async (req, res) => {
     const requesterId = String(req.authUser._id);
     const { reason = "Dibatalkan oleh pengguna" } = req.body;
 
-    const order = await SendOrder.findById(req.params.id);
+    const order = await findSendOrder(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, message: "Order tidak ditemukan." });
     }

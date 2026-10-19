@@ -887,9 +887,9 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                 </Text>
               </View>
 
-              {kostData?.stars ? (
+              {Number(kostData?.stars) > 0 ? (
                 <View style={styles.heroStarsBadge}>
-                  {[...Array(kostData.stars)].map((_, i) => (
+                  {[...Array(Math.max(0, Math.min(5, Math.floor(Number(kostData?.stars) || 0))))].map((_, i) => (
                     <Star key={i} size={11} color="#FBBF24" fill="#FBBF24" />
                   ))}
                 </View>
