@@ -69,6 +69,14 @@ import {
   HardDrive,
   Layers,
   Flame,
+  Recycle,
+  Bike,
+  Package,
+  Tag,
+  Coins,
+  Percent,
+  Gift,
+  Award,
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { AuthAccount, ROLE_LABELS } from "../auth/authTypes";
@@ -84,6 +92,7 @@ import { useTimeGreeting } from "../../utils/timeGreeting";
 import { getApiUrl } from "../../services/api";
 import { AdminHomeHeroSection } from "../../components/AdminHomeHeroSection";
 import { AdminPgeInfoHubSection } from "../../components/AdminPgeInfoHubSection";
+import { MerchantVoucherManagementModal } from "../../components/MerchantVoucherManagementModal";
 
 interface AdminHomeProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -102,6 +111,8 @@ const getRoleMeta = (role: string) => {
       return { label: "Pemilik Toko", icon: ShoppingBag, color: "#7C3AED", bg: "#F5F3FF", border: "#DDD6FE" };
     case "pemilik_shop":
       return { label: "Pemilik Kanyaah Shop", icon: ShoppingBag, color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" };
+    case "bank_sampah":
+      return { label: "Mitra Bank Sampah", icon: Recycle, color: "#047857", bg: "#ECFDF5", border: "#A7F3D0" };
     case "driver":
       return { label: "Driver GEOVERSE", icon: Truck, color: "#0284C7", bg: "#F0F9FF", border: "#BAE6FD" };
     case "customer":
@@ -171,8 +182,9 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   // Notifications Sheet Modal
   const [notifModalVisible, setNotifModalVisible] = useState(false);
 
-  // Sub-Tab State for CMS (Tab 4: Hero Slider vs PGE Info Hub)
-  const [adminCmsSubTab, setAdminCmsSubTab] = useState<"HERO" | "INFO_HUB">("HERO");
+  // Sub-Tab State for CMS (Tab 4: Hero Slider vs PGE Info Hub vs Voucher & Poin)
+  const [adminCmsSubTab, setAdminCmsSubTab] = useState<"HERO" | "INFO_HUB" | "VOUCHER_POINT">("HERO");
+  const [showPlatformVoucherModal, setShowPlatformVoucherModal] = useState<boolean>(false);
 
   // Fullscreen Preview Image Modal State
   const [previewImageModal, setPreviewImageModal] = useState<{
@@ -1164,6 +1176,154 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           </View>
         </TouchableOpacity>
 
+        {/* Kanyaah Shop */}
+        <TouchableOpacity
+          style={styles.serviceCard}
+          onPress={() =>
+            setSelectedServiceForMonitoring({
+              key: "shop",
+              title: "Kanyaah Shop",
+              role: "pemilik_shop",
+              serviceName: "Kanyaah Shop",
+              icon: ShoppingBag,
+              color: "#2563EB",
+              bg: "#EFF6FF",
+              border: "#BFDBFE",
+              desc: "Layanan belanja minimarket, apotek, dan kebutuhan retail harian",
+              unitLabel: "Order",
+            })
+          }
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View style={[styles.serviceIconBg, { backgroundColor: "#EFF6FF" }]}>
+              <ShoppingBag size={20} color="#2563EB" />
+            </View>
+            <ChevronRight size={16} color="#9CA3AF" />
+          </View>
+          <Text style={styles.serviceCardTitle}>Kanyaah Shop</Text>
+          <Text style={[styles.serviceCardAmount, { color: "#2563EB" }]}>
+            {rp(stats?.breakdown?.shop?.total || 0)}
+          </Text>
+          <Text style={styles.serviceCardSub}>
+            {stats?.breakdown?.shop?.count || 0} Order Belanja Retail
+          </Text>
+          <View style={styles.serviceCardActionHint}>
+            <Text style={[styles.serviceCardActionHintText, { color: "#2563EB" }]}>Pantau Detail ➜</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Kanyaah Recycle / Bank Sampah */}
+        <TouchableOpacity
+          style={styles.serviceCard}
+          onPress={() =>
+            setSelectedServiceForMonitoring({
+              key: "waste",
+              title: "Kanyaah Recycle",
+              role: "bank_sampah",
+              serviceName: "Bank Sampah",
+              icon: Recycle,
+              color: "#047857",
+              bg: "#ECFDF5",
+              border: "#A7F3D0",
+              desc: "Bank sampah & tabungan daur ulang warga bernilai rupiah & poin",
+              unitLabel: "Setoran",
+            })
+          }
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View style={[styles.serviceIconBg, { backgroundColor: "#ECFDF5" }]}>
+              <Recycle size={20} color="#047857" />
+            </View>
+            <ChevronRight size={16} color="#9CA3AF" />
+          </View>
+          <Text style={styles.serviceCardTitle}>Kanyaah Recycle</Text>
+          <Text style={[styles.serviceCardAmount, { color: "#047857" }]}>
+            {rp(stats?.breakdown?.waste?.total || 0)}
+          </Text>
+          <Text style={styles.serviceCardSub}>
+            {stats?.breakdown?.waste?.count || 0} Setoran ({stats?.breakdown?.waste?.totalKg || 0} Kg Sampah)
+          </Text>
+          <View style={styles.serviceCardActionHint}>
+            <Text style={[styles.serviceCardActionHintText, { color: "#047857" }]}>Pantau Detail ➜</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Kanyaah Ride */}
+        <TouchableOpacity
+          style={styles.serviceCard}
+          onPress={() =>
+            setSelectedServiceForMonitoring({
+              key: "ride",
+              title: "Kanyaah Ride",
+              role: "driver",
+              serviceName: "Ride",
+              icon: Bike,
+              color: "#0D7A53",
+              bg: "#E8F5E9",
+              border: "#A7F3D0",
+              desc: "Layanan ojek motor & antar jemput warga sekitar Kamojang",
+              unitLabel: "Trip Ride",
+            })
+          }
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View style={[styles.serviceIconBg, { backgroundColor: "#E8F5E9" }]}>
+              <Bike size={20} color="#0D7A53" />
+            </View>
+            <ChevronRight size={16} color="#9CA3AF" />
+          </View>
+          <Text style={styles.serviceCardTitle}>Kanyaah Ride</Text>
+          <Text style={[styles.serviceCardAmount, { color: "#0D7A53" }]}>
+            {rp(stats?.breakdown?.ride?.total || 0)}
+          </Text>
+          <Text style={styles.serviceCardSub}>
+            {stats?.breakdown?.ride?.count || 0} Perjalanan
+          </Text>
+          <View style={styles.serviceCardActionHint}>
+            <Text style={[styles.serviceCardActionHintText, { color: "#0D7A53" }]}>Pantau Detail ➜</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Kanyaah Send */}
+        <TouchableOpacity
+          style={styles.serviceCard}
+          onPress={() =>
+            setSelectedServiceForMonitoring({
+              key: "send",
+              title: "Kanyaah Send",
+              role: "driver",
+              serviceName: "Send",
+              icon: Package,
+              color: "#D97706",
+              bg: "#FFFBEB",
+              border: "#FDE68A",
+              desc: "Pengiriman barang, titip dokumen & paket kilat lokal",
+              unitLabel: "Paket",
+            })
+          }
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View style={[styles.serviceIconBg, { backgroundColor: "#FFFBEB" }]}>
+              <Package size={20} color="#D97706" />
+            </View>
+            <ChevronRight size={16} color="#9CA3AF" />
+          </View>
+          <Text style={styles.serviceCardTitle}>Kanyaah Send</Text>
+          <Text style={[styles.serviceCardAmount, { color: "#D97706" }]}>
+            {rp(stats?.breakdown?.send?.total || 0)}
+          </Text>
+          <Text style={styles.serviceCardSub}>
+            {stats?.breakdown?.send?.count || 0} Kiriman Paket
+          </Text>
+          <View style={styles.serviceCardActionHint}>
+            <Text style={[styles.serviceCardActionHintText, { color: "#D97706" }]}>Pantau Detail ➜</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Driver GEOVERSE (Full Width 5th Card) */}
         <TouchableOpacity
           style={styles.serviceCardFull}
@@ -1435,13 +1595,16 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     const marketCount = mitraAccounts.filter((m) => m.role === "pemilik_marketplace").length;
     const shopCount = mitraAccounts.filter((m) => m.role === "pemilik_shop").length;
     const driverCount = mitraAccounts.filter((m) => m.role === "driver").length;
+    const wasteCount = mitraAccounts.filter((m) => m.role === "bank_sampah").length;
 
     const custPct = Math.round((totalCustCount / grandTotalUsers) * 100);
     const kostPct = Math.round((kostCount / grandTotalUsers) * 100);
     const catPct = Math.round((cateringCount / grandTotalUsers) * 100);
     const laundryPct = Math.round((laundryCount / grandTotalUsers) * 100);
     const marketPct = Math.round((marketCount / grandTotalUsers) * 100);
-    const driverPct = Math.max(100 - custPct - kostPct - catPct - laundryPct - marketPct - Math.round((shopCount / grandTotalUsers) * 100), 0);
+    const shopPct = Math.round((shopCount / grandTotalUsers) * 100);
+    const wastePct = Math.round((wasteCount / grandTotalUsers) * 100);
+    const driverPct = Math.max(100 - custPct - kostPct - catPct - laundryPct - marketPct - shopPct - wastePct, 0);
 
     return (
       <View style={styles.tabContentWrap}>
@@ -1470,6 +1633,8 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             <View style={[styles.pipelineSegment, { width: `${Math.max(kostPct, 5)}%`, backgroundColor: "#10B981" }]} />
             <View style={[styles.pipelineSegment, { width: `${Math.max(marketPct, 5)}%`, backgroundColor: "#7C3AED" }]} />
             <View style={[styles.pipelineSegment, { width: `${Math.max(laundryPct, 5)}%`, backgroundColor: "#2563EB" }]} />
+            <View style={[styles.pipelineSegment, { width: `${Math.max(shopPct, 4)}%`, backgroundColor: "#0284C7" }]} />
+            <View style={[styles.pipelineSegment, { width: `${Math.max(wastePct, 4)}%`, backgroundColor: "#047857" }]} />
             <View style={[styles.pipelineSegment, { width: `${Math.max(driverPct, 5)}%`, backgroundColor: "#0284C7" }]} />
           </View>
 
@@ -1518,6 +1683,24 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               </View>
               <Text style={styles.demographicVal}>{laundryCount} Mitra</Text>
               <Text style={[styles.demographicPct, { color: "#2563EB" }]}>{laundryPct}% Total</Text>
+            </View>
+
+            <View style={[styles.demographicCard, { backgroundColor: "#EFF6FF", borderColor: "#BAE6FD" }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <ShoppingBag size={13} color="#0284C7" />
+                <Text style={[styles.demographicTitle, { color: "#075985" }]}>Shop</Text>
+              </View>
+              <Text style={styles.demographicVal}>{shopCount} Mitra</Text>
+              <Text style={[styles.demographicPct, { color: "#0284C7" }]}>{shopPct}% Total</Text>
+            </View>
+
+            <View style={[styles.demographicCard, { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <Recycle size={13} color="#047857" />
+                <Text style={[styles.demographicTitle, { color: "#065F46" }]}>Recycle</Text>
+              </View>
+              <Text style={styles.demographicVal}>{wasteCount} Mitra</Text>
+              <Text style={[styles.demographicPct, { color: "#047857" }]}>{wastePct}% Total</Text>
             </View>
 
             <View style={[styles.demographicCard, { backgroundColor: "#F0F9FF", borderColor: "#BAE6FD" }]}>
@@ -1576,6 +1759,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             { key: "pemilik_catering", label: `Catering (${mitraAccounts.filter((m) => m.role === "pemilik_catering").length})`, icon: Utensils },
             { key: "pemilik_marketplace", label: `Marketplace (${mitraAccounts.filter((m) => m.role === "pemilik_marketplace").length})`, icon: ShoppingBag },
             { key: "pemilik_shop", label: `Kanyaah Shop (${mitraAccounts.filter((m) => m.role === "pemilik_shop").length})`, icon: ShoppingBag },
+            { key: "bank_sampah", label: `Bank Sampah (${mitraAccounts.filter((m) => m.role === "bank_sampah").length})`, icon: Recycle },
             { key: "driver", label: `Driver (${mitraAccounts.filter((m) => m.role === "driver").length})`, icon: Truck },
           ].map((item) => {
             const IconComp = item.icon;
@@ -2209,13 +2393,151 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                     PGE Info Hub
                   </Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    paddingVertical: 9,
+                    borderRadius: 11,
+                    backgroundColor: adminCmsSubTab === "VOUCHER_POINT" ? "#FFFFFF" : "transparent",
+                    shadowColor: adminCmsSubTab === "VOUCHER_POINT" ? "#000" : "transparent",
+                    shadowOpacity: adminCmsSubTab === "VOUCHER_POINT" ? 0.08 : 0,
+                    shadowRadius: 3,
+                    elevation: adminCmsSubTab === "VOUCHER_POINT" ? 2 : 0,
+                  }}
+                  onPress={() => setAdminCmsSubTab("VOUCHER_POINT")}
+                  activeOpacity={0.8}
+                >
+                  <Tag size={14} color={adminCmsSubTab === "VOUCHER_POINT" ? "#0D7A53" : "#64748B"} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: adminCmsSubTab === "VOUCHER_POINT" ? "700" : "600",
+                      color: adminCmsSubTab === "VOUCHER_POINT" ? "#0D7A53" : "#64748B",
+                    }}
+                  >
+                    Voucher & Poin
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
 
             {adminCmsSubTab === "HERO" ? (
               <AdminHomeHeroSection onPreviewCustomer={() => navigate("c_home")} />
-            ) : (
+            ) : adminCmsSubTab === "INFO_HUB" ? (
               <AdminPgeInfoHubSection onPreviewCustomer={() => navigate("c_home")} />
+            ) : (
+              <View style={{ paddingHorizontal: 16, paddingTop: 10, gap: 16 }}>
+                {/* 1. Master Voucher Platform Management Card */}
+                <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 18, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#ECFDF5", alignItems: "center", justifyContent: "center" }}>
+                      <Tag size={20} color="#0D7A53" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>Master Voucher & Promo Platform</Text>
+                      <Text style={{ fontSize: 12, color: "#64748B" }}>Kupon diskon gratis ongkir & belanja hemat warga</Text>
+                    </View>
+                    <View style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#166534" }}>Platform Live</Text>
+                    </View>
+                  </View>
+
+                  <Text style={{ fontSize: 13, color: "#475569", lineHeight: 20, marginBottom: 16 }}>
+                    Kelola voucher resmi GEOVERSE yang dapat digunakan oleh seluruh warga saat berbelanja di Kanyaah Shop, Marketplace UMKM, Dapur Catering, dan Laundry.
+                  </Text>
+
+                  {/* Feature Pillars */}
+                  <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+                    <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                      <Truck size={16} color="#0284C7" />
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E293B", marginTop: 4 }}>Gratis Ongkir</Text>
+                      <Text style={{ fontSize: 11, color: "#64748B" }}>Subsidi ongkir kurir</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                      <Percent size={16} color="#D97706" />
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E293B", marginTop: 4 }}>Diskon % / Rp</Text>
+                      <Text style={{ fontSize: 11, color: "#64748B" }}>Potongan nominal</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 10, padding: 10, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                      <Coins size={16} color="#0D7A53" />
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E293B", marginTop: 4 }}>Tukar Poin</Text>
+                      <Text style={{ fontSize: 11, color: "#64748B" }}>Redeem GEO Poin</Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      backgroundColor: "#0D7A53",
+                      borderRadius: 12,
+                      paddingVertical: 13,
+                    }}
+                    onPress={() => setShowPlatformVoucherModal(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Tag size={16} color="#FFFFFF" />
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#FFFFFF" }}>Buka Manajer Voucher Platform</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* 2. GEOVERSE Points & Rewards Governance Card */}
+                <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 18, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
+                      <Coins size={20} color="#D97706" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>Sistem GEOVERSE Point & Reward</Text>
+                      <Text style={{ fontSize: 12, color: "#64748B" }}>Aturan loyalitas digital & buku tabungan mutasi</Text>
+                    </View>
+                    <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#B45309" }}>1 Poin = Rp 10</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ gap: 10, marginTop: 4 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#F8FAFC", padding: 10, borderRadius: 10 }}>
+                      <Sparkles size={16} color="#0D7A53" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E293B" }}>Akumulasi Belanja</Text>
+                        <Text style={{ fontSize: 11, color: "#64748B" }}>Dapatkan 1 Poin per setiap kelipatan Rp 1.000 transaksi belanja warga</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#F8FAFC", padding: 10, borderRadius: 10 }}>
+                      <Recycle size={16} color="#047857" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E293B" }}>Integrasi Bank Sampah</Text>
+                        <Text style={{ fontSize: 11, color: "#64748B" }}>Setoran sampah daur ulang otomatis dikonversi jadi rupiah & tabungan poin</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#F8FAFC", padding: 10, borderRadius: 10 }}>
+                      <CheckCircle2 size={16} color="#2563EB" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E293B" }}>Audit & Keamanan Poin</Text>
+                        <Text style={{ fontSize: 11, color: "#64748B" }}>Semua pencairan kas dikunci dengan proteksi ledger digital & saldo escrow</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Embedded Modal Manager */}
+                <MerchantVoucherManagementModal
+                  visible={showPlatformVoucherModal}
+                  onClose={() => setShowPlatformVoucherModal(false)}
+                  service="PLATFORM"
+                  merchantName="Platform GEOVERSE"
+                />
+              </View>
             )}
           </View>
         );
@@ -2833,6 +3155,16 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                     ? stats?.breakdown?.catering?.total || 5804000
                     : service.key === "marketplace"
                     ? stats?.breakdown?.marketplace?.total || 466000
+                    : service.key === "shop"
+                    ? stats?.breakdown?.shop?.total || 0
+                    : service.key === "waste"
+                    ? stats?.breakdown?.waste?.total || 0
+                    : service.key === "ride"
+                    ? stats?.breakdown?.ride?.total || 0
+                    : service.key === "send"
+                    ? stats?.breakdown?.send?.total || 0
+                    : service.key === "driver"
+                    ? stats?.breakdown?.transport?.total || 0
                     : 150000;
 
                 const serviceCount =
@@ -2844,6 +3176,16 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                     ? stats?.breakdown?.catering?.count || 16
                     : service.key === "marketplace"
                     ? stats?.breakdown?.marketplace?.count || 8
+                    : service.key === "shop"
+                    ? stats?.breakdown?.shop?.count || 0
+                    : service.key === "waste"
+                    ? stats?.breakdown?.waste?.count || 0
+                    : service.key === "ride"
+                    ? stats?.breakdown?.ride?.count || 0
+                    : service.key === "send"
+                    ? stats?.breakdown?.send?.count || 0
+                    : service.key === "driver"
+                    ? stats?.breakdown?.transport?.count || 0
                     : 4;
 
                 const avgPerOrder = serviceCount > 0 ? Math.round(serviceAmount / serviceCount) : 0;
@@ -2851,6 +3193,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                 const serviceTx = transactions
                   .filter((t) =>
                     (t.service || "").toLowerCase().includes(service.serviceName.toLowerCase()) ||
+                    (t.title || "").toLowerCase().includes(service.title.toLowerCase()) ||
                     (t.type || "").toLowerCase().includes(service.key)
                   )
                   .slice(0, 4);

@@ -804,6 +804,7 @@ const getSystemStats = async (req, res) => {
     const WasteDeposit = require("../models/WasteDeposit");
     const RideOrder = require("../models/RideOrder");
     const SendOrder = require("../models/SendOrder");
+    const ShopOrder = require("../models/ShopOrder");
 
     const [
       totalMitra,
@@ -822,13 +823,14 @@ const getSystemStats = async (req, res) => {
       bookings,
       wasteDeposits,
       rideOrders,
-      sendOrders
+      sendOrders,
+      shopOrders
     ] = await Promise.all([
-      User.countDocuments({ role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos"] } }),
+      User.countDocuments({ role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos", "bank_sampah"] } }),
       User.countDocuments({ role: "driver" }),
       User.countDocuments({ role: "customer" }),
       User.countDocuments({ status: "pending", role: { $ne: "customer", $ne: "admin" } }),
-      User.countDocuments({ status: "verified", role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos", "driver"] } }),
+      User.countDocuments({ status: "verified", role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos", "driver", "bank_sampah"] } }),
       User.countDocuments({ status: "rejected", role: { $ne: "customer", $ne: "admin" } }),
       Kost.find().select("rooms"),
       LaundryStore.find().select("services"),
@@ -841,6 +843,7 @@ const getSystemStats = async (req, res) => {
       WasteDeposit.find({ status: { $ne: "CANCELLED" } }).select("finalRupiah estimatedRupiah actualTotalWeightKg estimatedTotalWeightKg createdAt depositCode status"),
       RideOrder.find({ status: { $ne: "CANCELLED" } }).select("fare totalFare createdAt orderCode status"),
       SendOrder.find({ status: { $ne: "CANCELLED" } }).select("fare totalFare createdAt orderCode status"),
+      ShopOrder.find({ status: { $ne: "CANCELLED" } }).select("totalAmount finalAmount createdAt orderCode status"),
     ]);
 
     const totalKostRooms = kostList.reduce((acc, curr) => acc + (curr.rooms ? curr.rooms.length : 0), 0);
@@ -894,6 +897,7 @@ const getSystemStats = async (req, res) => {
       ...wasteDeposits.map(w => ({ amount: Number(w.finalRupiah || w.estimatedRupiah || 0), date: new Date(w.createdAt) })),
       ...rideOrders.map(r => ({ amount: Number(r.fare || r.totalFare || 0), date: new Date(r.createdAt) })),
       ...sendOrders.map(s => ({ amount: Number(s.fare || s.totalFare || 0), date: new Date(s.createdAt) })),
+      ...shopOrders.map(sh => ({ amount: Number(sh.finalAmount || sh.totalAmount || 0), date: new Date(sh.createdAt) })),
     ];
 
     const monthlyRevenue = last6Months.map(m => {
@@ -932,7 +936,11 @@ const getSystemStats = async (req, res) => {
 
     const sumAmounts = (arr) => arr.reduce((acc, curr) => acc + Number(curr.totalAmount || curr.dpAmount || 0), 0);
     const wasteTotalRupiah = wasteDeposits.reduce((acc, curr) => acc + Number(curr.finalRupiah || curr.estimatedRupiah || 0), 0);
-    const transportTotalFare = [...rideOrders, ...sendOrders].reduce((acc, curr) => acc + Number(curr.fare || curr.totalFare || 0), 0);
+    const wasteTotalKg = wasteDeposits.reduce((acc, curr) => acc + Number(curr.actualTotalWeightKg || curr.estimatedTotalWeightKg || 0), 0);
+    const rideTotalFare = rideOrders.reduce((acc, curr) => acc + Number(curr.fare || curr.totalFare || 0), 0);
+    const sendTotalFare = sendOrders.reduce((acc, curr) => acc + Number(curr.fare || curr.totalFare || 0), 0);
+    const shopTotalAmount = shopOrders.reduce((acc, curr) => acc + Number(curr.finalAmount || curr.totalAmount || 0), 0);
+    const transportTotalFare = rideTotalFare + sendTotalFare;
 
     return res.status(200).json({
       success: true,
@@ -961,7 +969,10 @@ const getSystemStats = async (req, res) => {
           laundry: { count: laundryOrders.length, total: sumAmounts(laundryOrders), stores: laundryStoreList.length, services: totalLaundryServices },
           catering: { count: cateringOrders.length, total: sumAmounts(cateringOrders), menus: cateringProductsCount },
           marketplace: { count: marketplaceOrders.length, total: sumAmounts(marketplaceOrders), items: marketplaceProductsCount },
-          waste: { count: wasteDeposits.length, total: wasteTotalRupiah },
+          shop: { count: shopOrders.length, total: shopTotalAmount },
+          waste: { count: wasteDeposits.length, total: wasteTotalRupiah, totalKg: Math.round(wasteTotalKg * 10) / 10 },
+          ride: { count: rideOrders.length, total: rideTotalFare },
+          send: { count: sendOrders.length, total: sendTotalFare },
           transport: { count: rideOrders.length + sendOrders.length, total: transportTotalFare },
         },
       },
@@ -982,8 +993,9 @@ const getAllPlatformTransactions = async (req, res) => {
     const WasteDeposit = require("../models/WasteDeposit");
     const RideOrder = require("../models/RideOrder");
     const SendOrder = require("../models/SendOrder");
+    const ShopOrder = require("../models/ShopOrder");
 
-    const [marketplaceOrders, cateringOrders, laundryOrders, bookings, wasteDeposits, rideOrders, sendOrders] = await Promise.all([
+    const [marketplaceOrders, cateringOrders, laundryOrders, bookings, wasteDeposits, rideOrders, sendOrders, shopOrders] = await Promise.all([
       MarketplaceOrder.find().sort({ createdAt: -1 }).limit(30),
       CateringOrder.find().sort({ createdAt: -1 }).limit(30),
       LaundryOrder.find().sort({ createdAt: -1 }).limit(30),
@@ -991,6 +1003,7 @@ const getAllPlatformTransactions = async (req, res) => {
       WasteDeposit.find().populate("customerId", "name").sort({ createdAt: -1 }).limit(30),
       RideOrder.find().sort({ createdAt: -1 }).limit(30),
       SendOrder.find().sort({ createdAt: -1 }).limit(30),
+      ShopOrder.find().sort({ createdAt: -1 }).limit(30),
     ]);
 
     const allTx = [
@@ -1038,6 +1051,17 @@ const getAllPlatformTransactions = async (req, res) => {
         date: m.createdAt,
         type: "marketplace",
       })),
+      ...shopOrders.map(sh => ({
+        id: sh._id,
+        code: sh.orderCode || "SHOP-ORD",
+        service: "Kanyaah Shop",
+        title: `Shop - ${sh.storeName || "Toko Mitra"} (${sh.items?.length || 1} produk)`,
+        customer: sh.customerName || "Customer",
+        amount: Number(sh.finalAmount || sh.totalAmount || 0),
+        status: sh.status,
+        date: sh.createdAt,
+        type: "shop",
+      })),
       ...wasteDeposits.map(w => ({
         id: w._id,
         code: w.depositCode || "WST-DEP",
@@ -1052,24 +1076,24 @@ const getAllPlatformTransactions = async (req, res) => {
       ...rideOrders.map(r => ({
         id: r._id,
         code: r.orderCode || "RIDE-ORD",
-        service: "Transportasi",
+        service: "Kanyaah Ride",
         title: `Kanyaah Ride - Antar Jemput Warga`,
         customer: r.customerName || "Penumpang",
         amount: Number(r.fare || r.totalFare || 0),
         status: r.status,
         date: r.createdAt,
-        type: "transport",
+        type: "ride",
       })),
       ...sendOrders.map(s => ({
         id: s._id,
         code: s.orderCode || "SEND-ORD",
-        service: "Transportasi",
+        service: "Kanyaah Send",
         title: `Kanyaah Send - Pengiriman Barang/Paket`,
         customer: s.customerName || "Pengirim",
         amount: Number(s.fare || s.totalFare || 0),
         status: s.status,
         date: s.createdAt,
-        type: "transport",
+        type: "send",
       })),
     ];
 
