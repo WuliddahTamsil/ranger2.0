@@ -124,10 +124,12 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
     }
   }
 
-  // Max points usable is capped by remaining total and user balance
+  // Max points usable is capped by remaining total and user balance (100 Point = Rp 1)
   const rawTotalBeforePoints = subtotal + estimatedDeliveryFee + serviceFee - voucherDiscount;
-  const maxPointsUsable = Math.min(userPoints, Math.max(0, rawTotalBeforePoints));
-  const pointDiscount = usePoints ? maxPointsUsable : 0;
+  const pointsNeededToCoverTotal = Math.ceil(Math.max(0, rawTotalBeforePoints) * 100);
+  const maxPointsUsable = Math.min(userPoints, pointsNeededToCoverTotal);
+  const pointDiscount = usePoints ? Math.floor(maxPointsUsable * 0.01) : 0;
+  const pointsToDebit = usePoints ? maxPointsUsable : 0;
 
   const finalTotalAmount = Math.max(0, rawTotalBeforePoints - pointDiscount);
 
@@ -297,7 +299,9 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
         substitutionPolicy,
         voucherCode: appliedVoucher?.code || "",
         usePoints,
-        pointsToUse: pointDiscount,
+        pointsToUse: pointsToDebit,
+        pointsUsed: pointsToDebit,
+        pointDiscount,
         paymentMethod: selectedPayment,
       };
 
@@ -470,7 +474,7 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
               <View>
                 <Text style={styles.pointTitle}>Tukar GEOVERSE Point</Text>
                 <Text style={styles.pointSub}>
-                  Saldo: {userPoints.toLocaleString("id-ID")} Pts (Hemat {rp(maxPointsUsable)})
+                  Saldo: {userPoints.toLocaleString("id-ID")} Pts {maxPointsUsable > 0 ? `(Hemat ${rp(Math.floor(maxPointsUsable * 0.01))} dg ${maxPointsUsable.toLocaleString("id-ID")} Pts)` : "(100 Poin = Rp 1)"}
                 </Text>
               </View>
             </View>

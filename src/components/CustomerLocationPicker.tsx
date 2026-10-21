@@ -28,6 +28,7 @@ export interface CustomerLocationValue {
   latitude: number;
   longitude: number;
   detectedAddress?: string;
+  placeName?: string;
 }
 
 export interface CustomerLocationPickerProps {
@@ -77,6 +78,9 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
   });
   const [detectedAddress, setDetectedAddress] = useState(
     initialLocation?.detectedAddress || fallbackLocation?.detectedAddress || ""
+  );
+  const [selectedPlaceName, setSelectedPlaceName] = useState(
+    initialLocation?.placeName || fallbackLocation?.placeName || ""
   );
   const [webMapQuery, setWebMapQuery] = useState(
     `${initialRegion.latitude},${initialRegion.longitude}`
@@ -129,7 +133,8 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
       });
       setPin({ latitude: lat, longitude: lon });
       setDetectedAddress(initialLocation.detectedAddress || "");
-      setSearchText("");
+      setSelectedPlaceName(initialLocation.placeName || "");
+      setSearchText(initialLocation.placeName || "");
       setWebMapQuery(`${lat},${lon}`);
     } else if (
       fallbackLocation?.latitude != null &&
@@ -147,13 +152,15 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
       });
       setPin({ latitude: lat, longitude: lon });
       setDetectedAddress(fallbackLocation.detectedAddress || "");
-      setSearchText("");
+      setSelectedPlaceName(fallbackLocation.placeName || "");
+      setSearchText(fallbackLocation.placeName || "");
       setWebMapQuery(`${lat},${lon}`);
     } else {
       // Auto-detect GPS location when modal opens without fixed coords
       setRegion(initialRegion);
       setPin({ latitude: initialRegion.latitude, longitude: initialRegion.longitude });
       setDetectedAddress("");
+      setSelectedPlaceName("");
       setSearchText("");
       setWebMapQuery(`${initialRegion.latitude},${initialRegion.longitude}`);
       void useCurrentLocation();
@@ -166,21 +173,27 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
       if (result?.formattedAddress) {
         setDetectedAddress(result.formattedAddress);
       }
+      if (result?.placeName) {
+        setSelectedPlaceName(result.placeName);
+      }
     } catch {
       // Reverse geocoding is best effort; coordinates remain valid
     }
   };
 
-  const movePin = (latitude: number, longitude: number) => {
+  const movePin = (latitude: number, longitude: number, skipReverse = false) => {
     setPin({ latitude, longitude });
     setRegion((current) => ({ ...current, latitude, longitude }));
     setWebMapQuery(`${latitude},${longitude}`);
-    void reverseGeocode(latitude, longitude);
+    if (!skipReverse) {
+      void reverseGeocode(latitude, longitude);
+    }
   };
 
   const handleMapPress = (event: MapPressEvent) => {
     const coordinate = event?.nativeEvent?.coordinate;
     if (coordinate) {
+      setSelectedPlaceName("");
       movePin(coordinate.latitude, coordinate.longitude);
     }
   };
@@ -225,10 +238,11 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
 
   const selectSuggestion = (item: PlaceSuggestion) => {
     const address = item.formattedAddress || [item.name, item.subtitle].filter(Boolean).join(", ");
+    setSelectedPlaceName(item.name);
     setSearchText(item.name);
     setSuggestions([]);
     setShowSuggestions(false);
-    movePin(item.latitude, item.longitude);
+    movePin(item.latitude, item.longitude, true);
     setRegion((current) => ({
       ...current,
       latitude: item.latitude,
@@ -261,7 +275,8 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
         return;
       }
 
-      movePin(match.latitude, match.longitude);
+      setSelectedPlaceName(match.placeName || query);
+      movePin(match.latitude, match.longitude, true);
       setRegion((current) => ({
         ...current,
         latitude: match.latitude,
@@ -282,7 +297,8 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
     try {
       const userLoc = await getCurrentUserCoordinates();
       if (userLoc) {
-        movePin(userLoc.latitude, userLoc.longitude);
+        setSelectedPlaceName(userLoc.placeName || "Lokasi Saya");
+        movePin(userLoc.latitude, userLoc.longitude, true);
         setRegion((current) => ({
           ...current,
           latitude: userLoc.latitude,
@@ -307,7 +323,12 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
     }
   };
 
-  const confirmLocation = () => onConfirm({ ...pin, detectedAddress });
+  const confirmLocation = () =>
+    onConfirm({
+      ...pin,
+      detectedAddress,
+      placeName: selectedPlaceName || undefined,
+    });
   const googleMapsUrl = `https://maps.google.com/maps?q=${encodeURIComponent(webMapQuery)}&z=17&output=embed`;
 
   return (
@@ -403,7 +424,10 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
               onRegionChangeComplete={setRegion}
               onPress={handleMapPress}
               pin={pin}
-              onPinDragEnd={(coord: { latitude: number; longitude: number }) => movePin(coord.latitude, coord.longitude)}
+              onPinDragEnd={(coord: { latitude: number; longitude: number }) => {
+                setSelectedPlaceName("");
+                movePin(coord.latitude, coord.longitude);
+              }}
               style={styles.mapComponent}
             />
             <View style={styles.mapBadge}>
@@ -420,7 +444,7 @@ export const CustomerLocationPicker: React.FC<CustomerLocationPickerProps> = ({
             <View style={styles.locationSummary}>
               <View style={styles.pinIcon}><MapPin size={18} color="#1B7A4E" /></View>
               <View style={styles.summaryCopy}>
-                <Text style={styles.summaryTitle}>{badgeText}</Text>
+                <Text style={styles.summaryTitle}>{selectedPlaceName || badgeText}</Text>
                 <Text style={styles.summaryAddress} numberOfLines={2}>
                   {detectedAddress || "Alamat akan terdeteksi setelah pin dipindahkan"}
                 </Text>

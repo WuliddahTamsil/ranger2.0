@@ -395,8 +395,11 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
   const serviceFee = 5000;
   const subtotal = selectedMenu ? selectedMenu.price * portions : 0;
   const rawTotal = subtotal + deliveryFee + serviceFee;
-  const maxPointsUsable = Math.min(userPoints, rawTotal);
-  const pointDiscount = usePoints ? maxPointsUsable : 0;
+  // 100 Point = Rp 1
+  const pointsNeededToCoverTotal = Math.ceil(rawTotal * 100);
+  const maxPointsUsable = Math.min(userPoints, pointsNeededToCoverTotal);
+  const pointDiscount = usePoints ? Math.floor(maxPointsUsable * 0.01) : 0;
+  const pointsToDebit = usePoints ? maxPointsUsable : 0;
   const total = Math.max(0, rawTotal - pointDiscount);
   const dpPercent = paymentOption === "dp30" ? 30 : paymentOption === "dp50" ? 50 : 100;
   const plannedDeposit = Math.round((total * dpPercent) / 100);
@@ -449,7 +452,7 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
         addressSnapshot: addressSnapshot || null,
         paymentOption,
         paymentMethod: total === 0 ? "gopay" : paymentMethod,
-        pointsUsed: pointDiscount,
+        pointsUsed: pointsToDebit,
         pointDiscount,
         cateringDate: poDate,
         cateringTime: deliveryTime,
@@ -575,7 +578,7 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Tukar GEOVERSE Point</Text>
                   <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
-                    Saldo: {userPoints.toLocaleString("id-ID")} Pts {rawTotal > 0 ? `(Hemat ${formatRupiah(maxPointsUsable)})` : "(1 Poin = Rp 1)"}
+                    Saldo: {userPoints.toLocaleString("id-ID")} Pts {maxPointsUsable > 0 ? `(Hemat ${formatRupiah(Math.floor(maxPointsUsable * 0.01))} dg ${maxPointsUsable.toLocaleString("id-ID")} Pts)` : "(100 Poin = Rp 1)"}
                   </Text>
                 </View>
               </View>

@@ -86,8 +86,11 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const totalBill = order?.totalAmount || (laundryPrice > 0 ? laundryPrice + deliveryPickup + deliveryDrop + serviceFee : 0);
 
   const userPoints = wallet?.balancePoint || 0;
-  const maxPointsUsable = Math.min(userPoints, totalBill);
-  const pointDiscount = usePoints ? maxPointsUsable : 0;
+  // 100 Point = Rp 1
+  const pointsNeededToCoverBill = Math.ceil(totalBill * 100);
+  const maxPointsUsable = Math.min(userPoints, pointsNeededToCoverBill);
+  const pointDiscount = usePoints ? Math.floor(maxPointsUsable * 0.01) : 0;
+  const pointsToDebit = usePoints ? maxPointsUsable : 0;
   const finalPayableTotal = Math.max(0, totalBill - pointDiscount);
 
   const loadData = async () => {
@@ -326,7 +329,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
 
       const orderId = order._id || order.id || "temp";
       const resolvedMethod = finalPayableTotal === 0 ? "GEOVERSE_POINT" : selectedPaymentMethod;
-      await payLaundryOrder(orderId, resolvedMethod, finalUrl, pointDiscount);
+      await payLaundryOrder(orderId, resolvedMethod, finalUrl, pointsToDebit);
       setIsPaymentModalOpen(false);
       Alert.alert(
         finalPayableTotal === 0 ? "Lunas dengan Point" : "Bukti Terkirim",
@@ -810,7 +813,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }}>Tukar GEOVERSE Point</Text>
                       <Text style={{ fontSize: 11, color: "#4B5563" }}>
-                        Saldo: <Text style={{ fontWeight: "700", color: "#0D7A53" }}>{userPoints.toLocaleString("id-ID")} pts</Text> (1 pt = Rp 1)
+                        Saldo: <Text style={{ fontWeight: "700", color: "#0D7A53" }}>{userPoints.toLocaleString("id-ID")} pts</Text> (100 pt = Rp 1)
                       </Text>
                     </View>
                   </View>
@@ -873,7 +876,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                     Lunas 100% dengan GEOVERSE Point!
                   </Text>
                   <Text style={{ fontSize: 12, color: "#15803D", textAlign: "center", marginTop: 4 }}>
-                    Seluruh tagihan cucian sebesar Rp {totalBill.toLocaleString("id-ID")} berhasil tercover oleh poin Anda ({pointDiscount.toLocaleString("id-ID")} pts). Anda tidak perlu melakukan transfer bank atau upload bukti bayar.
+                    Seluruh tagihan cucian sebesar Rp {totalBill.toLocaleString("id-ID")} berhasil tercover oleh poin Anda ({pointsToDebit.toLocaleString("id-ID")} pts). Anda tidak perlu melakukan transfer bank atau upload bukti bayar.
                   </Text>
                 </View>
               ) : (
@@ -1077,7 +1080,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                   <>
                     <Text style={styles.btnSubmitPaymentText}>
                       {finalPayableTotal === 0
-                        ? `Konfirmasi Pelunasan Poin (${pointDiscount.toLocaleString("id-ID")} pts)`
+                        ? `Konfirmasi Pelunasan Poin (${pointsToDebit.toLocaleString("id-ID")} pts)`
                         : "Kirim Bukti Pembayaran ke Toko"}
                     </Text>
                     <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />

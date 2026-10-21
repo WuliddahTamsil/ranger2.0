@@ -29,6 +29,8 @@ import {
   Clock,
   Copy,
   Check,
+  Camera,
+  Maximize2,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import { AuthAccount } from "../../auth/authTypes";
@@ -46,6 +48,7 @@ import {
 } from "../../../services/sendService";
 import { io } from "socket.io-client";
 import { API_BASE_URL } from "../../../services/api";
+import { subscribeToUserRealtime } from "../../../services/userRealtime";
 import { rp } from "../../../utils/formatters";
 
 interface SendTrackingScreenProps extends Nav {
@@ -80,6 +83,38 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
   const [submittingRating, setSubmittingRating] = useState(false);
   const [copiedPin, setCopiedPin] = useState(false);
   const [toastText, setToastText] = useState<string | null>(null);
+  const [selectedProofImage, setSelectedProofImage] = useState<string | null>(null);
+
+  const deliveryProofUrl = useMemo(() => {
+    return activeOrder?.deliveryProofUrls?.[0] || (activeOrder as any)?.deliveryProofUrl || null;
+  }, [activeOrder]);
+
+  const deliveryTimeFormatted = useMemo(() => {
+    const raw =
+      (activeOrder as any)?.deliveryProofTimestamp ||
+      (activeOrder as any)?.deliveredAt ||
+      (activeOrder as any)?.completedAt ||
+      activeOrder?.updatedAt;
+    if (!raw) return "Baru saja (WIB)";
+    try {
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) return String(raw);
+      return (
+        new Intl.DateTimeFormat("id-ID", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+          timeZone: "Asia/Jakarta",
+        }).format(d) + " WIB"
+      );
+    } catch {
+      return String(raw);
+    }
+  }, [activeOrder]);
 
   const [driverCoord, setDriverCoord] = useState<{ latitude: number; longitude: number } | null>(
     activeOrder?.driverLocation?.latitude
@@ -139,47 +174,116 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
     }
   }, [activeOrder?._id, authAccount?.id]);
 
-  // Socket and Polling for live tracking
+  // Socket and Realtime status listener for zero-delay live tracking
   useEffect(() => {
     if (!activeOrder?._id || activeOrder._id === "mock_active_order") return;
 
+    let isMounted = true;
     const socketUrl = API_BASE_URL.replace(/\/api\/?$/, "");
-    const socket = io(socketUrl, { transports: ["websocket", "polling"] });
-    socket.emit("join_send_room", { orderId: activeOrder._id, token: authAccount?.token });
+    const socket = io(socketUrl, {
+      transports: ["websocket", "polling"],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      timeout: 8000,
+      autoConnect: true,
+    });
+
+    const handleJoin = () => {
+      try {
+        if (activeOrder._id) {
+          socket.emit("join_send_room", { orderId: activeOrder._id, token: authAccount?.token });
+        }
+        if (activeOrder.orderCode) {
+          socket.emit("join_send_room", { orderId: activeOrder.orderCode, token: authAccount?.token });
+        }
+        if (authAccount?.token) {
+          socket.emit("join_user_room", { token: authAccount.token });
+        }
+      } catch {}
+    };
+
+    socket.on("connect", handleJoin);
+    if (socket.connected) {
+      handleJoin();
+    }
+
+    socket.on("connect_error", () => {});
+    socket.on("error", () => {});
 
     // Live GPS updates from driver
-    socket.on("send:driver_location_updated", (payload) => {
+    socket.on("send:driver_location_updated", (payload: any) => {
+      if (!isMounted) return;
       if (payload?.latitude && payload?.longitude) {
         setDriverCoord({ latitude: Number(payload.latitude), longitude: Number(payload.longitude) });
       }
     });
 
-    // Order status lifecycle
+    // Instant status updates from driver
     const onStatusUpdate = (updatedOrder: any) => {
-      if (updatedOrder) {
-        setActiveOrder(updatedOrder);
+      if (!isMounted || !updatedOrder) return;
+      const incomingId = String(updatedOrder._id || updatedOrder.id || "");
+      const incomingCode = String(updatedOrder.orderCode || "");
+      const currentId = String(activeOrder._id || "");
+      const currentCode = String(activeOrder.orderCode || "");
+
+      const isMatch =
+        !incomingId ||
+        incomingId === currentId ||
+        (incomingCode && currentCode && incomingCode.replace(/^#/, "") === currentCode.replace(/^#/, ""));
+
+      if (isMatch) {
+        setActiveOrder({ ...activeOrder, ...updatedOrder });
+        if (updatedOrder.driverLocation?.latitude && updatedOrder.driverLocation?.longitude) {
+          setDriverCoord({
+            latitude: Number(updatedOrder.driverLocation.latitude),
+            longitude: Number(updatedOrder.driverLocation.longitude),
+          });
+        }
         if (updatedOrder.status === "COMPLETED") {
           setRatingModalVisible(true);
         }
       }
     };
 
+    socket.on("send:driver_assigned", onStatusUpdate);
     socket.on("send:pickup_verified", onStatusUpdate);
     socket.on("send:package_picked_up", onStatusUpdate);
     socket.on("send:delivery_verified", onStatusUpdate);
     socket.on("send:order_completed", onStatusUpdate);
     socket.on("send:status_updated", onStatusUpdate);
+    socket.on("order_status_updated", onStatusUpdate);
 
-    // Backup polling every 3.5 seconds
+    // Also connect to user realtime channel for instant dual notification
+    let unsubscribeRealtime: () => void = () => undefined;
+    void subscribeToUserRealtime(
+      async () => {
+        if (!isMounted) return;
+        try {
+          const res = await fetchSendOrderById(activeOrder._id, authAccount?.id);
+          if (res.success && res.data && isMounted) {
+            setActiveOrder({ ...activeOrder, ...res.data });
+          }
+        } catch {}
+      },
+      (orderUpdate) => {
+        if (!isMounted || !orderUpdate) return;
+        onStatusUpdate(orderUpdate);
+      }
+    ).then((unsub) => {
+      if (isMounted) unsubscribeRealtime = unsub;
+      else unsub();
+    });
+
+    // Backup polling every 2 seconds for safety
     const interval = setInterval(async () => {
       try {
         const res = await fetchSendOrderById(activeOrder._id, authAccount?.id);
-        if (res.success && res.data) {
-          setActiveOrder(res.data);
+        if (res.success && res.data && isMounted) {
+          setActiveOrder({ ...activeOrder, ...res.data });
           if (res.data.driverLocation?.latitude) {
             setDriverCoord({
-              latitude: res.data.driverLocation.latitude,
-              longitude: res.data.driverLocation.longitude,
+              latitude: Number(res.data.driverLocation.latitude),
+              longitude: Number(res.data.driverLocation.longitude),
             });
           }
           if (res.data.status === "COMPLETED" && !res.data.rating) {
@@ -189,13 +293,15 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
       } catch (e) {
         // silent catch
       }
-    }, 3500);
+    }, 2000);
 
-  return () => {
+    return () => {
+      isMounted = false;
       socket.disconnect();
+      unsubscribeRealtime();
       clearInterval(interval);
     };
-  }, [activeOrder?._id, authAccount?.id, authAccount?.token]);
+  }, [activeOrder?._id, activeOrder?.orderCode, authAccount?.id, authAccount?.token]);
 
   const canCancelShipment = Boolean(
     activeOrder &&
@@ -377,23 +483,65 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
             </View>
           </View>
 
-          {/* Pickup PIN Card (Crucial Security) */}
-          <View style={styles.pinCard}>
-            <View style={styles.pinHeaderRow}>
-              <KeyRound size={16} color="#059669" />
-              <Text style={styles.pinTitle}>KODE PIN PENJEMPUTAN</Text>
-            </View>
-            <Text style={styles.pinDesc}>
-              Tunjukkan 6 digit kode ini kepada driver saat driver tiba untuk serah terima paket:
-            </Text>
-            <View style={styles.pinDisplayBox}>
-              <Text style={styles.pinCodeText}>{pickupPin}</Text>
-              <TouchableOpacity style={styles.copyPinBtn} onPress={handleCopyPin}>
-                {copiedPin ? <Check size={14} color="#059669" /> : <Copy size={14} color="#059669" />}
-                <Text style={styles.copyPinBtnText}>{copiedPin ? "Tersalin" : "Salin PIN"}</Text>
+          {/* Delivery Proof Photo Card (Show when available) */}
+          {deliveryProofUrl ? (
+            <View style={styles.deliveryProofCard}>
+              <View style={styles.deliveryProofHeader}>
+                <View style={styles.deliveryProofTitleRow}>
+                  <Camera size={16} color="#059669" />
+                  <Text style={styles.deliveryProofTitle}>BUKTI FOTO PENGANTARAN</Text>
+                </View>
+                <View style={styles.verifiedBadge}>
+                  <CheckCircle2 size={12} color="#059669" />
+                  <Text style={styles.verifiedBadgeText}>TERVERIFIKASI</Text>
+                </View>
+              </View>
+              <Text style={styles.deliveryProofSub}>
+                Foto bukti serah terima paket yang diambil oleh driver di lokasi tujuan:
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={styles.deliveryProofImgWrapper}
+                onPress={() => setSelectedProofImage(deliveryProofUrl)}
+              >
+                <Image
+                  source={{ uri: deliveryProofUrl }}
+                  style={styles.deliveryProofImg}
+                  resizeMode="cover"
+                />
+                <View style={styles.zoomHintBadge}>
+                  <Maximize2 size={12} color="#FFFFFF" />
+                  <Text style={styles.zoomHintText}>Ketuk untuk Memperbesar</Text>
+                </View>
               </TouchableOpacity>
+              <View style={styles.deliveryProofMetaRow}>
+                <Clock size={13} color="#059669" />
+                <Text style={styles.deliveryProofMetaText}>
+                  Waktu Aktual: {deliveryTimeFormatted}
+                </Text>
+              </View>
             </View>
-          </View>
+          ) : null}
+
+          {/* Pickup PIN Card (Crucial Security) - Hide when delivery is completed */}
+          {activeOrder?.status !== "COMPLETED" && activeOrder?.status !== "DELIVERED" && (
+            <View style={styles.pinCard}>
+              <View style={styles.pinHeaderRow}>
+                <KeyRound size={16} color="#059669" />
+                <Text style={styles.pinTitle}>KODE PIN PENJEMPUTAN</Text>
+              </View>
+              <Text style={styles.pinDesc}>
+                Tunjukkan 6 digit kode ini kepada driver saat driver tiba untuk serah terima paket:
+              </Text>
+              <View style={styles.pinDisplayBox}>
+                <Text style={styles.pinCodeText}>{pickupPin}</Text>
+                <TouchableOpacity style={styles.copyPinBtn} onPress={handleCopyPin}>
+                  {copiedPin ? <Check size={14} color="#059669" /> : <Copy size={14} color="#059669" />}
+                  <Text style={styles.copyPinBtnText}>{copiedPin ? "Tersalin" : "Salin PIN"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* Status Timeline */}
           <View style={styles.timelineSection}>
@@ -634,6 +782,34 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Fullscreen Delivery Proof Photo Modal */}
+      <Modal
+        visible={Boolean(selectedProofImage)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedProofImage(null)}
+      >
+        <View style={styles.photoModalBackdrop}>
+          <TouchableOpacity
+            style={styles.photoModalCloseBtn}
+            onPress={() => setSelectedProofImage(null)}
+          >
+            <X size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          {selectedProofImage && (
+            <Image
+              source={{ uri: selectedProofImage }}
+              style={styles.photoModalImage}
+              resizeMode="contain"
+            />
+          )}
+          <View style={styles.photoModalFooter}>
+            <Text style={styles.photoModalFooterTitle}>Bukti Foto Serah Terima Kanyaah Send</Text>
+            <Text style={styles.photoModalFooterSub}>{deliveryTimeFormatted}</Text>
           </View>
         </View>
       </Modal>
@@ -1127,5 +1303,128 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  deliveryProofCard: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  deliveryProofHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  deliveryProofTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  deliveryProofTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#166534",
+    letterSpacing: 0.5,
+  },
+  verifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  verifiedBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  deliveryProofSub: {
+    fontSize: 12,
+    color: "#15803D",
+    marginBottom: 10,
+    lineHeight: 17,
+  },
+  deliveryProofImgWrapper: {
+    width: "100%",
+    height: 180,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#E2E8F0",
+  },
+  deliveryProofImg: {
+    width: "100%",
+    height: "100%",
+  },
+  zoomHintBadge: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.65)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  zoomHintText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  deliveryProofMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+  },
+  deliveryProofMetaText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  photoModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  photoModalCloseBtn: {
+    position: "absolute",
+    top: 48,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 20,
+  },
+  photoModalImage: {
+    width: "100%",
+    height: "75%",
+    borderRadius: 12,
+  },
+  photoModalFooter: {
+    position: "absolute",
+    bottom: 36,
+    alignItems: "center",
+  },
+  photoModalFooterTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  photoModalFooterSub: {
+    fontSize: 12,
+    color: "#94A3B8",
+    marginTop: 4,
   },
 });

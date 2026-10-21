@@ -26,6 +26,9 @@ import {
   User,
   Package,
 } from "lucide-react-native";
+import { NativeMapComponent, MapMarkerItem } from "./NativeMapComponent";
+import { findKnownPoiByText } from "../utils/geocoding";
+import { fetchDrivingRoute } from "../services/routeService";
 
 export interface LiveOrderTrackingMapProps {
   storeName?: string;
@@ -42,8 +45,8 @@ export interface LiveOrderTrackingMapProps {
   onToggleFullscreen?: () => void;
   marketplaceMode?: boolean;
   orderType?: "Catering" | "Marketplace" | "Laundry" | "Kanyaah Ride" | "Kanyaah Send" | string;
-  pickupCoordinates?: { latitude?: number; longitude?: number };
-  destinationCoordinates?: { latitude?: number; longitude?: number };
+  pickupCoordinates?: { latitude?: number; longitude?: number; address?: string; placeName?: string };
+  destinationCoordinates?: { latitude?: number; longitude?: number; address?: string; placeName?: string };
   driverCoordinates?: { latitude?: number; longitude?: number };
   distance?: string;
   isNavigating?: boolean;
@@ -207,11 +210,130 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     }
   }, [activeMode, driverQuery, pickupQuery, destinationQuery, driverCoordinates]);
 
+  // Resolving pickup coordinates with reliable fallback & known POI lookup
+  const pickupPos = useMemo(() => {
+    if (
+      pickupCoordinates?.latitude &&
+      pickupCoordinates?.longitude &&
+      !isNaN(pickupCoordinates.latitude) &&
+      !isNaN(pickupCoordinates.longitude) &&
+      (pickupCoordinates.latitude !== 0 || pickupCoordinates.longitude !== 0)
+    ) {
+      return { latitude: Number(pickupCoordinates.latitude), longitude: Number(pickupCoordinates.longitude) };
+    }
+
+    // Attempt lookup in known POIs via placeName, storeName, or address
+    const matchedPoi =
+      findKnownPoiByText(pickupCoordinates?.placeName) ||
+      findKnownPoiByText(pickupCoordinates?.address) ||
+      findKnownPoiByText(storeName) ||
+      findKnownPoiByText(storeAddress);
+
+    if (matchedPoi) {
+      return { latitude: matchedPoi.latitude, longitude: matchedPoi.longitude };
+    }
+
+    return { latitude: -6.5888, longitude: 106.8068 }; // Default: Sekolah Vokasi IPB Bogor
+  }, [pickupCoordinates, storeName, storeAddress]);
+
+  // Resolving destination coordinates with reliable fallback & known POI lookup
+  const destPos = useMemo(() => {
+    if (
+      destinationCoordinates?.latitude &&
+      destinationCoordinates?.longitude &&
+      !isNaN(destinationCoordinates.latitude) &&
+      !isNaN(destinationCoordinates.longitude) &&
+      (destinationCoordinates.latitude !== 0 || destinationCoordinates.longitude !== 0)
+    ) {
+      return { latitude: Number(destinationCoordinates.latitude), longitude: Number(destinationCoordinates.longitude) };
+    }
+
+    // Attempt lookup in known POIs via placeName or customerAddress
+    const matchedPoi =
+      findKnownPoiByText(destinationCoordinates?.placeName) ||
+      findKnownPoiByText(destinationCoordinates?.address) ||
+      findKnownPoiByText(customerAddress);
+
+    if (matchedPoi) {
+      return { latitude: matchedPoi.latitude, longitude: matchedPoi.longitude };
+    }
+
+    // Default: Mall Botani Square Bogor (-6.6008, 106.8062) or slight offset
+    return { latitude: -6.6008, longitude: 106.8062 };
+  }, [destinationCoordinates, customerAddress, pickupPos]);
+
+  // Asynchronous real road-route fetching between pickup and destination
+  const [roadRouteCoords, setRoadRouteCoords] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (
+      pickupPos.latitude &&
+      pickupPos.longitude &&
+      destPos.latitude &&
+      destPos.longitude &&
+      (pickupPos.latitude !== destPos.latitude || pickupPos.longitude !== destPos.longitude)
+    ) {
+      void fetchDrivingRoute(pickupPos, destPos)
+        .then((res) => {
+          if (active && res?.coordinates && res.coordinates.length >= 2) {
+            setRoadRouteCoords(res.coordinates);
+          }
+        })
+        .catch(() => {
+          if (active) setRoadRouteCoords(null);
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [pickupPos.latitude, pickupPos.longitude, destPos.latitude, destPos.longitude]);
+
+  // Resolving driver location with real coordinates or animated journey interpolation
+  const driverPos = useMemo(() => {
+    if (
+      driverCoordinates?.latitude &&
+      driverCoordinates?.longitude &&
+      !isNaN(driverCoordinates.latitude) &&
+      !isNaN(driverCoordinates.longitude) &&
+      (driverCoordinates.latitude !== 0 || driverCoordinates.longitude !== 0)
+    ) {
+      return { latitude: Number(driverCoordinates.latitude), longitude: Number(driverCoordinates.longitude) };
+    }
+    const p = effectiveNavigating ? navProgress : 0.35;
+    if (activeMode === "store") {
+      const startLat = pickupPos.latitude - 0.008;
+      const startLng = pickupPos.longitude - 0.006;
+      return {
+        latitude: Number((startLat + (pickupPos.latitude - startLat) * p).toFixed(6)),
+        longitude: Number((startLng + (pickupPos.longitude - startLng) * p).toFixed(6)),
+      };
+    } else {
+      return {
+        latitude: Number((pickupPos.latitude + (destPos.latitude - pickupPos.latitude) * p).toFixed(6)),
+        longitude: Number((pickupPos.longitude + (destPos.longitude - pickupPos.longitude) * p).toFixed(6)),
+      };
+    }
+  }, [driverCoordinates, pickupPos, destPos, effectiveNavigating, navProgress, activeMode]);
+
+  // Interactive route coordinates for polyline (uses real road geometry when available)
+  const routeCoords = useMemo(() => {
+    if (activeMode === "store") {
+      return [driverPos, pickupPos];
+    } else if (activeMode === "customer") {
+      return roadRouteCoords && roadRouteCoords.length >= 2 ? roadRouteCoords : [driverPos, destPos];
+    } else {
+      return roadRouteCoords && roadRouteCoords.length >= 2 ? roadRouteCoords : [driverPos, pickupPos, destPos];
+    }
+  }, [activeMode, driverPos, pickupPos, destPos, roadRouteCoords]);
+
   // Clean labels for guidance display
-  const effectivePickupName = isWaste
+  const effectivePickupName = pickupCoordinates?.placeName
+    ? pickupCoordinates.placeName
+    : isWaste
     ? (storeName || "Rumah Customer (Jemput Sampah)")
     : isRide
-    ? "Titik Jemput Penumpang"
+    ? (storeName && !storeName.includes("Titik Penjemputan") && !storeName.includes("Titik Jemput") ? storeName : (findKnownPoiByText(storeAddress)?.placeName || "Titik Jemput Penumpang"))
     : isSend
     ? "Titik Pengirim"
     : isCatering
@@ -220,8 +342,61 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
 
   const effectivePickupAddress = storeAddress || storeName || "Lokasi penjemputan";
   const effectiveDestAddress = customerAddress || "Lokasi tujuan";
-  const pickupShort = effectivePickupAddress.split(",")[0] || "Lokasi Jemput";
-  const destShort = effectiveDestAddress.split(",")[0] || "Lokasi Tujuan";
+  const pickupShort =
+    pickupCoordinates?.placeName ||
+    (storeName && !storeName.includes("Titik Penjemputan") && !storeName.includes("Titik Jemput") ? storeName : null) ||
+    findKnownPoiByText(effectivePickupAddress)?.placeName ||
+    effectivePickupAddress.split(",")[0] ||
+    "Lokasi Jemput";
+  const destShort =
+    destinationCoordinates?.placeName ||
+    findKnownPoiByText(effectiveDestAddress)?.placeName ||
+    effectiveDestAddress.split(",")[0] ||
+    "Lokasi Tujuan";
+
+  // Markers for NativeMapComponent
+  const mapMarkers = useMemo((): MapMarkerItem[] => {
+    const list: MapMarkerItem[] = [];
+
+    // Pickup Point
+    list.push({
+      id: "pickup",
+      coordinate: pickupPos,
+      title: effectivePickupName,
+      description: effectivePickupAddress,
+      type: "pickup",
+      pinColor: "#10B981",
+    });
+
+    // Destination Point (if in customer or overview mode)
+    if (activeMode === "customer" || activeMode === "overview") {
+      const dropoffTitle =
+        destinationCoordinates?.placeName ||
+        findKnownPoiByText(customerAddress)?.placeName ||
+        (isWaste ? "Bank Sampah" : isRide ? "Tujuan Penumpang" : isSend ? "Penerima Paket" : "Tujuan Pengantaran");
+
+      list.push({
+        id: "dropoff",
+        coordinate: destPos,
+        title: dropoffTitle,
+        description: effectiveDestAddress,
+        type: "dropoff",
+        pinColor: "#E11D48",
+      });
+    }
+
+    // Driver Current / Simulated Point
+    list.push({
+      id: "driver",
+      coordinate: driverPos,
+      title: driverName || "Driver Rangers",
+      description: `${driverVehicle} • Navigasi: ${effectiveNavigating ? `${simulatedSpeed} km/j` : "Standby"}`,
+      type: "driver",
+      pinColor: "#0284C7",
+    });
+
+    return list;
+  }, [pickupPos, destPos, driverPos, effectivePickupName, effectivePickupAddress, effectiveDestAddress, customerAddress, destinationCoordinates, isWaste, isRide, isSend, activeMode, driverName, driverVehicle, effectiveNavigating, simulatedSpeed]);
 
   // Guidance telemetry
   const guidanceData = useMemo(() => {
@@ -375,37 +550,16 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     <View style={styles.wrapper}>
       {/* 1. Map Container */}
       <View style={[styles.mapContainer, { height }]}>
-        {Platform.OS === "web" ? (
-          <iframe
-            key={`${activeMode}-${refreshKey}`}
-            title="Google Maps Navigasi"
-            src={googleMapsUrl}
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-              display: "block",
-            } as any}
-            loading="lazy"
-            onLoad={() => setMapLoaded(true)}
-          />
-        ) : (
-          <View style={styles.nativeFallback}>
-            <Compass size={36} color="#0D7A53" />
-            <Text style={styles.fallbackTitle}>Google Maps Aktif</Text>
-            <Text style={styles.fallbackSub}>
-              {guidanceData.targetName} • {guidanceData.distance}
-            </Text>
-          </View>
-        )}
-
-        {/* Loading Overlay */}
-        {!mapLoaded && Platform.OS === "web" && (
-          <View style={styles.loaderOverlay}>
-            <ActivityIndicator size="small" color="#0D7A53" />
-            <Text style={styles.loaderText}>Memuat peta Google Maps...</Text>
-          </View>
-        )}
+        <NativeMapComponent
+          key={`live-tracking-map-${activeMode}-${refreshKey}`}
+          markers={mapMarkers}
+          routeCoordinates={routeCoords}
+          routeColor="#059669"
+          fitToRoute={true}
+          showRouteLine={routeCoords.length >= 2}
+          interactive={true}
+          style={{ width: "100%", height: "100%" }}
+        />
 
         {/* Live Tracking / Navigation Active Indicator */}
         {(orderStatus === "Menuju Pickup" ||
@@ -414,7 +568,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           orderStatus === "Dikirim" ||
           orderStatus === "Sampai Pickup" ||
           effectiveNavigating) && (
-          <View style={[styles.mapLiveBadge, effectiveNavigating && styles.mapLiveBadgeNavigating]}>
+          <View style={[styles.mapLiveBadge, effectiveNavigating && styles.mapLiveBadgeNavigating]} pointerEvents="none">
             <View style={[styles.mapLiveDot, effectiveNavigating && styles.mapLiveDotNavigating]} />
             <Text style={styles.mapLiveText}>
               {effectiveNavigating ? `NAVIGASI AKTIF • ${simulatedSpeed} KM/J` : "LIVE TRACKING AKTIF"}
@@ -425,6 +579,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
         {/* Driver Motorcycle Indicator Overlay - only shown when navigation is active */}
         {effectiveNavigating && (
           <View
+            pointerEvents="none"
             style={[
               styles.motorcycleMarkerOverlay,
               {
@@ -513,7 +668,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             ]}
             numberOfLines={1}
           >
-            {isWaste ? "Ke Customer" : isRide ? "Ke Penumpang" : isSend ? "Ke Pengirim" : isCatering ? "Ke Dapur" : "Ke Toko"}
+            {isWaste ? "Customer" : isRide ? "Jemput" : isSend ? "Pengirim" : isCatering ? "Dapur" : "Toko"}
           </Text>
         </TouchableOpacity>
 
@@ -537,7 +692,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
             ]}
             numberOfLines={1}
           >
-            {isWaste ? "Bank Sampah" : isRide ? "Ke Tujuan" : isSend ? "Ke Penerima" : isCatering ? "Ke Pemesan" : "Ke Customer"}
+            {isWaste ? "Bank Sampah" : isRide ? "Tujuan" : isSend ? "Penerima" : isCatering ? "Pemesan" : "Tujuan"}
           </Text>
         </TouchableOpacity>
 
@@ -1013,9 +1168,10 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   segmentTabText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: "700",
     color: "#475569",
+    paddingHorizontal: 2,
   },
   segmentTabTextActive: {
     color: "#FFFFFF",

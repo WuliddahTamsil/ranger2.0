@@ -3,10 +3,11 @@
  * Central business rules and configuration for GEOVERSE Point
  */
 
-let dynamicPointRate = Number(process.env.GEOVERSE_POINT_RATE) || 1;
+let dynamicPointRate = Number(process.env.GEOVERSE_POINT_RATE) || 0.01;
 
 module.exports = {
   // Conversion configuration (authoritative on backend, configurable)
+  // 100 Point = Rp 1 (1 Point = Rp 0.01)
   get POINT_TO_RUPIAH_RATE() {
     return dynamicPointRate;
   },
@@ -22,22 +23,23 @@ module.exports = {
 
   // Presets to satisfy Client Decision D13
   POINT_CONVERSION_RATIO_PRESETS: {
+    HUNDRED_TO_ONE: { name: "100 Poin = Rp 1", rate: 0.01, description: "100 GEOVERSE Point = Rp 1" },
     ONE_TO_ONE: { name: "1 Rupiah = 1 Poin", rate: 1, description: "Setara langsung nilai rupiah" },
     TEN_PER_THOUSAND: { name: "Rp 1.000 = 10 Poin", rate: 100, description: "1 Poin = Rp 100" },
     ONE_PER_HUNDRED: { name: "Rp 100 = 1 Poin", rate: 100, description: "1 Poin = Rp 100" },
   },
 
   convertRupiahToPoints(rupiahAmount, pointRate = dynamicPointRate) {
-    const r = Number(pointRate) || 1;
+    const r = Number(pointRate) || dynamicPointRate || 0.01;
     return Math.floor((Number(rupiahAmount) || 0) / r);
   },
 
   convertPointsToRupiah(pointsAmount, pointRate = dynamicPointRate) {
-    const r = Number(pointRate) || 1;
+    const r = Number(pointRate) || dynamicPointRate || 0.01;
     return Math.round((Number(pointsAmount) || 0) * r);
   },
 
-  MIN_CASH_REDEMPTION_POINTS: 10000, // Min 10,000 points (Rp 10.000) for cash withdrawal
+  MIN_CASH_REDEMPTION_POINTS: 10000, // Min 10,000 points (Rp 100) for cash withdrawal
 
   // Supported redemption channels
   REDEMPTION_TYPES: ["VOUCHER", "CASH", "BANK_TRANSFER", "E_WALLET"],

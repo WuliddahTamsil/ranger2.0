@@ -13,21 +13,15 @@ export const subscribeToUserRealtime = async (
     const token = await getStoredAuthToken();
     if (!token) return () => undefined;
 
-    // Guard: Don't connect socket to emulator localhost on physical devices or invalid URL
-    if (
-      !SOCKET_URL ||
-      SOCKET_URL.includes("10.0.2.2") ||
-      SOCKET_URL.includes("localhost") ||
-      SOCKET_URL.includes("127.0.0.1")
-    ) {
-      // In dev APK builds without public URL, skip socket to prevent Android crash
+    if (!SOCKET_URL) {
       return () => undefined;
     }
 
     const socket: Socket = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
-      reconnectionAttempts: 3,
-      timeout: 5000,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      timeout: 8000,
       autoConnect: true,
     });
 
@@ -47,11 +41,16 @@ export const subscribeToUserRealtime = async (
       }
     };
 
-    socket.on("connect", () => {
+    const handleJoin = () => {
       try {
         socket.emit("join_user_room", { token });
       } catch {}
-    });
+    };
+
+    socket.on("connect", handleJoin);
+    if (socket.connected) {
+      handleJoin();
+    }
 
     socket.on("connect_error", () => {
       // Suppress unhandled connect_error to prevent crash on Android

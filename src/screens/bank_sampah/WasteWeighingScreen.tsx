@@ -198,9 +198,8 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
     }
   });
 
-  // Sesuai ketentuan client: Rp 1.000 = 10 Poin GEOVERSE (1 Poin = Rp 100)
-  // Nominal rupiah berdasarkan harga pengepul langsung masuk ke saldo aplikasi
-  const totalActualPoints = Math.round((totalActualRupiah / 1000) * 10);
+  // Sesuai ketentuan: 100 Poin = Rp 1 (1 Poin = Rp 0.01)
+  const totalActualPoints = Math.round(totalActualRupiah * 100);
 
   const handleSubmitWeighing = async () => {
     if (totalActualKg <= 0) {

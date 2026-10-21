@@ -77,6 +77,14 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
   const [key, setKey] = useState(1);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
+  // Safety timer: ensure loading indicator dismisses within 2 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMapReady(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Aggregate markers
   const allMarkers = useMemo(() => {
     const list: MapMarkerItem[] = [...markers];
@@ -284,7 +292,18 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    (function() {
+    if (typeof L === 'undefined') {
+      var fallbackScript = document.createElement('script');
+      fallbackScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+      document.head.appendChild(fallbackScript);
+    }
+  </script>
+  <script>
+    (function initLeafletMap() {
+      if (typeof L === 'undefined') {
+        setTimeout(initLeafletMap, 60);
+        return;
+      }
       try {
         var map = L.map('map', {
           zoomControl: ${interactive ? "true" : "false"},
@@ -297,10 +316,11 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
           crossOrigin: true
         });
 
-        googleRoadmap.on('tileerror', function(error, tile) {
-          if (tile && !tile.__hasFallback) {
-            tile.__hasFallback = true;
-            tile.src = 'https://tile.openstreetmap.org/' + error.coords.z + '/' + error.coords.x + '/' + error.coords.y + '.png';
+        googleRoadmap.on('tileerror', function(e) {
+          var img = e.tile;
+          if (img && !img.__hasFallback && e.coords) {
+            img.__hasFallback = true;
+            img.src = 'https://tile.openstreetmap.org/' + e.coords.z + '/' + e.coords.x + '/' + e.coords.y + '.png';
           }
         });
 
@@ -376,6 +396,7 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
           leafletMarkers.push(marker);
         });
 
+        var boundsToFit = null;
         if (${shouldDrawRoute} && routeData.length >= 2) {
           var routeLatLngs = routeData.map(function(point) {
             return [Number(point.latitude), Number(point.longitude)];
@@ -389,16 +410,41 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
           }).addTo(map);
 
           var routeBoundsGroup = new L.featureGroup(leafletMarkers.concat([polyline]));
-          map.fitBounds(routeBoundsGroup.getBounds().pad(0.2));
+          boundsToFit = routeBoundsGroup.getBounds();
+          if (boundsToFit && boundsToFit.isValid && boundsToFit.isValid()) {
+            map.fitBounds(boundsToFit.pad(0.25));
+          }
         } else if (${shouldFitRoute} && routeData.length >= 2) {
-          var routeBounds = L.latLngBounds(routeData.map(function(point) {
+          boundsToFit = L.latLngBounds(routeData.map(function(point) {
             return [Number(point.latitude), Number(point.longitude)];
           }));
-          map.fitBounds(routeBounds.pad(0.2));
+          if (boundsToFit && boundsToFit.isValid && boundsToFit.isValid()) {
+            map.fitBounds(boundsToFit.pad(0.25));
+          }
         } else if (leafletMarkers.length > 1) {
           var markerGroup = new L.featureGroup(leafletMarkers);
-          map.fitBounds(markerGroup.getBounds().pad(0.25));
+          boundsToFit = markerGroup.getBounds();
+          if (boundsToFit && boundsToFit.isValid && boundsToFit.isValid()) {
+            map.fitBounds(boundsToFit.pad(0.25));
+          }
+        } else if (leafletMarkers.length === 1) {
+          map.setView([${centerLat}, ${centerLng}], 16);
         }
+
+        setTimeout(function() {
+          try {
+            map.invalidateSize();
+            if (boundsToFit && boundsToFit.isValid && boundsToFit.isValid()) {
+              map.fitBounds(boundsToFit.pad(0.25));
+            }
+          } catch(e) {}
+        }, 150);
+
+        setTimeout(function() {
+          try {
+            map.invalidateSize();
+          } catch(e) {}
+        }, 500);
 
         ${
           interactive

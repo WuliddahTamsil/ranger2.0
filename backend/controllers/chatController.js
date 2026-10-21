@@ -78,11 +78,16 @@ const sendChatMessage = async (req, res) => {
       return res.status(403).json({ success: false, message: "Conversation tidak sesuai dengan order." });
     }
 
-    const normalizedTarget = normalizeRole(target) || (participant.role === "driver" ? "customer" : "owner");
+    let normalizedTarget = normalizeRole(target) || (participant.role === "driver" ? "customer" : "owner");
+    if (record.orderType === "send" || record.orderType === "ride") {
+      normalizedTarget = participant.role === "driver" ? "customer" : "driver";
+    }
     const receiverId = resolveReceiverId(participant, normalizedTarget);
     if (!receiverId) return res.status(409).json({ success: false, message: "Penerima chat belum tersedia untuk order ini." });
 
-    const channel = resolveChatChannel(participant.role, normalizedTarget);
+    const channel = (record.orderType === "send" || record.orderType === "ride")
+      ? "customer_driver"
+      : resolveChatChannel(participant.role, normalizedTarget);
 
     const message = await ChatMessage.create({
       conversationId: conversation._id,
@@ -143,10 +148,15 @@ const getChatMessages = async (req, res) => {
     if (result.error) return res.status(result.status).json({ success: false, message: result.error });
 
     const callerRole = normalizeRole(req.query.role || result.participant.role);
-    const targetRole = req.query.target ? normalizeRole(req.query.target) : undefined;
+    let targetRole = req.query.target ? normalizeRole(req.query.target) : undefined;
+    if (result.record.orderType === "send" || result.record.orderType === "ride") {
+      targetRole = callerRole === "driver" ? "customer" : "driver";
+    }
     let requestedChannel = req.query.channel;
 
-    if (!requestedChannel && targetRole) {
+    if (result.record.orderType === "send" || result.record.orderType === "ride") {
+      requestedChannel = "customer_driver";
+    } else if (!requestedChannel && targetRole) {
       requestedChannel = resolveChatChannel(callerRole, targetRole);
     }
 
@@ -169,10 +179,13 @@ const getChatMessages = async (req, res) => {
               // Backward compatibility for legacy or unmigrated messages
               ...(requestedChannel === "customer_driver"
                 ? [
-                    { channel: { $in: [null, "general"] }, sender: "customer", target: "driver" },
-                    { channel: { $in: [null, "general"] }, sender: "driver", target: "customer" },
+                    { channel: { $in: [null, "general", "driver_owner"] }, sender: "customer", target: "driver" },
+                    { channel: { $in: [null, "general", "driver_owner"] }, sender: "driver" },
                     { channel: { $exists: false }, sender: "customer", target: "driver" },
-                    { channel: { $exists: false }, sender: "driver", target: "customer" },
+                    { channel: { $exists: false }, sender: "driver" },
+                    ...(result.record.orderType === "send" || result.record.orderType === "ride"
+                      ? [{ channel: "driver_owner" }]
+                      : []),
                   ]
                 : []),
               ...(requestedChannel === "driver_owner"

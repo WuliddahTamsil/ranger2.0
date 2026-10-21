@@ -31,6 +31,8 @@ import {
   ChevronRight,
   AlertTriangle,
   X,
+  Check,
+  Compass,
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -51,6 +53,7 @@ import { DigitalPaymentModal } from "../../components/DigitalPaymentModal";
 import { NativeMapComponent, MapMarkerItem } from "../../components/NativeMapComponent";
 import { fetchDrivingRoute } from "../../services/routeService";
 import { rp } from "../../utils/formatters";
+import { findKnownPoiByText } from "../../utils/geocoding";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 
 interface CustomerRideTrackingScreenProps extends Nav {
@@ -148,20 +151,27 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
   const [routeCoords, setRouteCoords] = useState<Array<{ latitude: number; longitude: number }> | null>(null);
 
   useEffect(() => {
-    const pLat = currentRide?.pickup?.latitude;
-    const pLng = currentRide?.pickup?.longitude;
-    const dLat = currentRide?.destination?.latitude;
-    const dLng = currentRide?.destination?.longitude;
+    const pickupPoi =
+      currentRide?.pickup?.latitude && currentRide?.pickup?.longitude
+        ? { latitude: Number(currentRide.pickup.latitude), longitude: Number(currentRide.pickup.longitude) }
+        : findKnownPoiByText(currentRide?.pickup?.placeName) ||
+          findKnownPoiByText(currentRide?.pickup?.address) || { latitude: -6.5888, longitude: 106.8068 };
 
-    if (!pLat || !pLng || !dLat || !dLng) {
+    const destPoi =
+      currentRide?.destination?.latitude && currentRide?.destination?.longitude
+        ? { latitude: Number(currentRide.destination.latitude), longitude: Number(currentRide.destination.longitude) }
+        : findKnownPoiByText(currentRide?.destination?.placeName) ||
+          findKnownPoiByText(currentRide?.destination?.address) || { latitude: -6.6008, longitude: 106.8062 };
+
+    if (!pickupPoi || !destPoi) {
       setRouteCoords(null);
       return;
     }
 
     let active = true;
     void fetchDrivingRoute(
-      { latitude: Number(pLat), longitude: Number(pLng) },
-      { latitude: Number(dLat), longitude: Number(dLng) }
+      { latitude: pickupPoi.latitude, longitude: pickupPoi.longitude },
+      { latitude: destPoi.latitude, longitude: destPoi.longitude }
     )
       .then((route) => {
         if (active && route?.coordinates) {
@@ -176,39 +186,64 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
   }, [
     currentRide?.pickup?.latitude,
     currentRide?.pickup?.longitude,
+    currentRide?.pickup?.address,
+    currentRide?.pickup?.placeName,
     currentRide?.destination?.latitude,
     currentRide?.destination?.longitude,
+    currentRide?.destination?.address,
+    currentRide?.destination?.placeName,
   ]);
 
   // Comprehensive Markers for Live Tracking
   const trackingMarkers: MapMarkerItem[] = React.useMemo(() => {
     const list: MapMarkerItem[] = [];
-    if (currentRide?.pickup?.latitude && currentRide?.pickup?.longitude) {
+
+    const pickupPoi =
+      currentRide?.pickup?.latitude && currentRide?.pickup?.longitude
+        ? { latitude: Number(currentRide.pickup.latitude), longitude: Number(currentRide.pickup.longitude) }
+        : findKnownPoiByText(currentRide?.pickup?.placeName) ||
+          findKnownPoiByText(currentRide?.pickup?.address) || { latitude: -6.5888, longitude: 106.8068 };
+
+    const destPoi =
+      currentRide?.destination?.latitude && currentRide?.destination?.longitude
+        ? { latitude: Number(currentRide.destination.latitude), longitude: Number(currentRide.destination.longitude) }
+        : findKnownPoiByText(currentRide?.destination?.placeName) ||
+          findKnownPoiByText(currentRide?.destination?.address) || { latitude: -6.6008, longitude: 106.8062 };
+
+    if (pickupPoi) {
       list.push({
         id: "pickup",
         coordinate: {
-          latitude: Number(currentRide.pickup.latitude),
-          longitude: Number(currentRide.pickup.longitude),
+          latitude: pickupPoi.latitude,
+          longitude: pickupPoi.longitude,
         },
-        title: currentRide.pickup.placeName || "Titik Jemput",
-        description: currentRide.pickup.address,
+        title:
+          currentRide?.pickup?.placeName ||
+          findKnownPoiByText(currentRide?.pickup?.address)?.placeName ||
+          "Titik Jemput",
+        description: currentRide?.pickup?.address || "Lokasi Penjemputan",
         pinColor: "#16A34A",
         type: "pickup",
       });
     }
-    if (currentRide?.destination?.latitude && currentRide?.destination?.longitude) {
+
+    if (destPoi) {
       list.push({
         id: "destination",
         coordinate: {
-          latitude: Number(currentRide.destination.latitude),
-          longitude: Number(currentRide.destination.longitude),
+          latitude: destPoi.latitude,
+          longitude: destPoi.longitude,
         },
-        title: currentRide.destination.placeName || "Tujuan Perjalanan",
-        description: currentRide.destination.address,
+        title:
+          currentRide?.destination?.placeName ||
+          findKnownPoiByText(currentRide?.destination?.address)?.placeName ||
+          "Tujuan Perjalanan",
+        description: currentRide?.destination?.address || "Lokasi Tujuan",
         pinColor: "#DC2626",
         type: "dropoff",
       });
     }
+
     if (currentRide?.driverLocation?.latitude && currentRide?.driverLocation?.longitude) {
       list.push({
         id: "driver",
@@ -454,6 +489,75 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
   const driverName = currentRide.driverName || (currentRide as any).driverSnapshot?.name || "";
   const showDriverCard = (hasDriver || isCompleted) && Boolean(driverName || currentRide.driverId);
 
+  const stepIdx = isSearching
+    ? 0
+    : status === "DRIVER_ASSIGNED" || status === "DRIVER_ON_THE_WAY"
+    ? 1
+    : status === "DRIVER_ARRIVED"
+    ? 2
+    : status === "TRIP_STARTED"
+    ? 3
+    : isCompleted
+    ? 4
+    : 0;
+
+  const rideSteps = [
+    {
+      key: "SEARCHING",
+      shortLabel: "Cari",
+      title: "Mencari Driver...",
+      desc: "Mohon tunggu sebentar, sistem sedang menghubungkan ke driver terdekat.",
+      Icon: Compass,
+      color: "#D97706",
+      bgColor: "#FEF3C7",
+      borderColor: "#FDE68A",
+    },
+    {
+      key: "ON_THE_WAY",
+      shortLabel: "Menuju",
+      title: status === "DRIVER_ASSIGNED" ? "Driver Ditemukan" : "Driver Menuju Lokasi Anda",
+      desc: status === "DRIVER_ASSIGNED"
+        ? "Driver sedang bersiap menuju lokasi penjemputan Anda."
+        : "Perkiraan tiba dalam 3-5 menit. Silakan bersiap di lokasi penjemputan.",
+      Icon: status === "DRIVER_ASSIGNED" ? Bike : Navigation,
+      color: "#2563EB",
+      bgColor: "#EFF6FF",
+      borderColor: "#BFDBFE",
+    },
+    {
+      key: "ARRIVED",
+      shortLabel: "Sampai",
+      title: "Driver Telah Sampai",
+      desc: "Silakan temui driver di lokasi penjemputan.",
+      Icon: MapPin,
+      color: "#7E22CE",
+      bgColor: "#F3E8FF",
+      borderColor: "#E9D5FF",
+    },
+    {
+      key: "IN_TRIP",
+      shortLabel: "Jalan",
+      title: "Perjalanan Sedang Berlangsung",
+      desc: `Menuju ke ${currentRide.destination.placeName || currentRide.destination.address}. Selamat menikmati perjalanan!`,
+      Icon: Bike,
+      color: "#0891B2",
+      bgColor: "#ECFEFF",
+      borderColor: "#A5F3FC",
+    },
+    {
+      key: "COMPLETED",
+      shortLabel: "Selesai",
+      title: "Perjalanan Selesai",
+      desc: "Terima kasih telah menggunakan layanan Kanyaah Ride.",
+      Icon: CheckCircle,
+      color: "#15803D",
+      bgColor: "#DCFCE7",
+      borderColor: "#BBF7D0",
+    },
+  ];
+
+  const currentStep = rideSteps[stepIdx] || rideSteps[0];
+
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       {/* Top Header */}
@@ -474,88 +578,10 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* ========================================================================= */}
-        {/* STATUS BANNER */}
+        {/* STEP TITIK KE TITIK STATUS TRACKER CARD */}
         {/* ========================================================================= */}
 
-        {isSearching && (
-          <View style={[styles.statusBanner, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
-            <ActivityIndicator size="small" color="#D97706" />
-            <View style={styles.statusBannerTextCol}>
-              <Text style={[styles.statusBannerTitle, { color: "#92400E" }]}>
-                Mencari Driver Rangers...
-              </Text>
-              <Text style={[styles.statusBannerSub, { color: "#B45309" }]}>
-                Mohon tunggu sebentar, sistem sedang menghubungkan ke driver terdekat.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {status === "DRIVER_ASSIGNED" && (
-          <View style={[styles.statusBanner, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}>
-            <Bike size={22} color="#2563EB" />
-            <View style={styles.statusBannerTextCol}>
-              <Text style={[styles.statusBannerTitle, { color: "#1E40AF" }]}>Driver ditemukan</Text>
-              <Text style={[styles.statusBannerSub, { color: "#3B82F6" }]}>
-                Driver sedang bersiap menuju lokasi penjemputan Anda.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {status === "DRIVER_ON_THE_WAY" && (
-          <View style={[styles.statusBanner, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}>
-            <Navigation size={22} color="#2563EB" />
-            <View style={styles.statusBannerTextCol}>
-              <Text style={[styles.statusBannerTitle, { color: "#1E40AF" }]}>
-                Driver menuju lokasi Anda
-              </Text>
-              <Text style={[styles.statusBannerSub, { color: "#3B82F6" }]}>
-                Perkiraan tiba dalam 3-5 menit. Silakan bersiap di lokasi penjemputan.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {status === "DRIVER_ARRIVED" && (
-          <View style={[styles.statusBanner, { backgroundColor: "#F3E8FF", borderColor: "#E9D5FF" }]}>
-            <MapPin size={22} color="#7E22CE" />
-            <View style={styles.statusBannerTextCol}>
-              <Text style={[styles.statusBannerTitle, { color: "#6B21A8" }]}>Driver telah sampai</Text>
-              <Text style={[styles.statusBannerSub, { color: "#9333EA" }]}>
-                Silakan temui driver di lokasi penjemputan.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {status === "TRIP_STARTED" && (
-          <View style={[styles.statusBanner, { backgroundColor: "#ECFEFF", borderColor: "#A5F3FC" }]}>
-            <Bike size={22} color="#0891B2" />
-            <View style={styles.statusBannerTextCol}>
-              <Text style={[styles.statusBannerTitle, { color: "#155E75" }]}>
-                Perjalanan sedang berlangsung
-              </Text>
-              <Text style={[styles.statusBannerSub, { color: "#0E7490" }]}>
-                Menuju ke {currentRide.destination.placeName || currentRide.destination.address}. Selamat menikmati perjalanan!
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {isCompleted && (
-          <View style={[styles.statusBanner, { backgroundColor: "#DCFCE7", borderColor: "#BBF7D0" }]}>
-            <CheckCircle size={22} color="#15803D" />
-            <View style={styles.statusBannerTextCol}>
-              <Text style={[styles.statusBannerTitle, { color: "#14532D" }]}>Perjalanan Selesai</Text>
-              <Text style={[styles.statusBannerSub, { color: "#166534" }]}>
-                Terima kasih telah menggunakan Kanyaah Ride.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {isCancelled && (
+        {isCancelled ? (
           <View style={[styles.statusBanner, { backgroundColor: "#FEE2E2", borderColor: "#FECACA" }]}>
             <XCircle size={22} color="#DC2626" />
             <View style={styles.statusBannerTextCol}>
@@ -565,6 +591,117 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
               <Text style={[styles.statusBannerSub, { color: "#B91C1C" }]}>
                 {currentRide.cancelReason || "Pesanan telah dibatalkan."}
               </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.stepProgressCard}>
+            {/* Header: Status Title & Step Badge */}
+            <View style={styles.stepCardHeader}>
+              <View style={styles.stepHeaderLeft}>
+                <View style={[styles.stepLiveDot, { backgroundColor: currentStep.color }]} />
+                <Text style={styles.stepHeaderTitle}>STATUS PERJALANAN</Text>
+              </View>
+              <View style={[styles.stepPillBadge, { backgroundColor: currentStep.bgColor, borderColor: currentStep.borderColor }]}>
+                <Text style={[styles.stepPillBadgeText, { color: currentStep.color }]}>
+                  {isCompleted ? "Perjalanan Selesai" : `Langkah ${stepIdx + 1} dari ${rideSteps.length}`}
+                </Text>
+              </View>
+            </View>
+
+            {/* Active Status Highlight Box */}
+            <View style={[styles.activeStatusBox, { backgroundColor: currentStep.bgColor, borderColor: currentStep.borderColor }]}>
+              <View style={[styles.activeStatusIconBox, { backgroundColor: currentStep.color }]}>
+                {isSearching ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <currentStep.Icon size={18} color="#FFFFFF" />
+                )}
+              </View>
+              <View style={styles.activeStatusTextCol}>
+                <Text style={[styles.activeStatusTitle, { color: currentStep.color }]}>
+                  {currentStep.title}
+                </Text>
+                <Text style={[styles.activeStatusSub, { color: currentStep.color }]}>
+                  {currentStep.desc}
+                </Text>
+              </View>
+            </View>
+
+            {/* Titik ke Titik Connected Stepper */}
+            <View style={styles.stepperContainer}>
+              <View style={styles.stepperTrackRow}>
+                {rideSteps.map((stepItem, idx) => {
+                  const isDone = idx < stepIdx || isCompleted;
+                  const isCurrent = idx === stepIdx && !isCompleted;
+                  const isPending = idx > stepIdx;
+
+                  return (
+                    <React.Fragment key={stepItem.key}>
+                      {/* Node Circle */}
+                      <View style={styles.nodeWrapper}>
+                        <View
+                          style={[
+                            styles.nodeCircle,
+                            isDone && styles.nodeCircleDone,
+                            isCurrent && [styles.nodeCircleCurrent, { borderColor: stepItem.color }],
+                            isPending && styles.nodeCirclePending,
+                          ]}
+                        >
+                          {isDone ? (
+                            <Check size={11} color="#FFFFFF" strokeWidth={3.5} />
+                          ) : isCurrent ? (
+                            <View style={[styles.nodeInnerDot, { backgroundColor: stepItem.color }]} />
+                          ) : (
+                            <View style={styles.nodePendingDot} />
+                          )}
+                        </View>
+                        {isCurrent && (
+                          <View style={[styles.nodePulseRing, { borderColor: stepItem.color }]} />
+                        )}
+                      </View>
+
+                      {/* Connecting Line */}
+                      {idx < rideSteps.length - 1 && (
+                        <View style={styles.lineContainer}>
+                          <View
+                            style={[
+                              styles.connectorLine,
+                              idx < stepIdx || isCompleted
+                                ? styles.connectorLineDone
+                                : idx === stepIdx
+                                ? [styles.connectorLineActive, { backgroundColor: currentStep.borderColor }]
+                                : styles.connectorLinePending,
+                            ]}
+                          />
+                        </View>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+
+              {/* Step Labels */}
+              <View style={styles.stepperLabelsRow}>
+                {rideSteps.map((stepItem, idx) => {
+                  const isDone = idx < stepIdx || isCompleted;
+                  const isCurrent = idx === stepIdx && !isCompleted;
+
+                  return (
+                    <View key={stepItem.key} style={styles.stepLabelCol}>
+                      <Text
+                        style={[
+                          styles.stepLabelText,
+                          isDone && styles.stepLabelTextDone,
+                          isCurrent && [styles.stepLabelTextCurrent, { color: stepItem.color }],
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {stepItem.shortLabel}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
           </View>
         )}
@@ -658,6 +795,9 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
               <View style={[styles.routeDot, { backgroundColor: "#1B7A4E" }]} />
               <View style={styles.routeItemBody}>
                 <Text style={styles.routeLabel}>Lokasi Penjemputan</Text>
+                {currentRide.pickup.placeName && currentRide.pickup.placeName !== "Lokasi Jemput" && currentRide.pickup.placeName !== currentRide.pickup.address ? (
+                  <Text style={styles.routePlaceName}>{currentRide.pickup.placeName}</Text>
+                ) : null}
                 <Text style={styles.routeVal}>{currentRide.pickup.address}</Text>
               </View>
             </View>
@@ -666,6 +806,9 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
               <View style={[styles.routeDot, { backgroundColor: "#EA580C" }]} />
               <View style={styles.routeItemBody}>
                 <Text style={styles.routeLabel}>Lokasi Tujuan</Text>
+                {currentRide.destination.placeName && currentRide.destination.placeName !== "Tujuan Perjalanan" && currentRide.destination.placeName !== currentRide.destination.address ? (
+                  <Text style={styles.routePlaceName}>{currentRide.destination.placeName}</Text>
+                ) : null}
                 <Text style={styles.routeVal}>{currentRide.destination.address}</Text>
               </View>
             </View>
@@ -1463,6 +1606,175 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 16,
   },
+  stepProgressCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 14,
+    gap: 12,
+    elevation: 2,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  stepCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  stepHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  stepLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  stepHeaderTitle: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#64748B",
+    letterSpacing: 0.5,
+  },
+  stepPillBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  stepPillBadgeText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  activeStatusBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 12,
+  },
+  activeStatusIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activeStatusTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  activeStatusTitle: {
+    fontSize: 13.5,
+    fontWeight: "900",
+  },
+  activeStatusSub: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    lineHeight: 16,
+    opacity: 0.9,
+  },
+  stepperContainer: {
+    paddingTop: 4,
+    paddingBottom: 2,
+    gap: 6,
+  },
+  stepperTrackRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  nodeWrapper: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  nodeCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+  },
+  nodeCircleDone: {
+    backgroundColor: "#10B981",
+  },
+  nodeCircleCurrent: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 2.5,
+  },
+  nodeCirclePending: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+  },
+  nodeInnerDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  nodePendingDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#94A3B8",
+  },
+  nodePulseRing: {
+    position: "absolute",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    opacity: 0.35,
+    zIndex: 1,
+  },
+  lineContainer: {
+    flex: 1,
+    height: 3,
+    justifyContent: "center",
+  },
+  connectorLine: {
+    height: 2.5,
+    borderRadius: 1.5,
+  },
+  connectorLineDone: {
+    backgroundColor: "#10B981",
+  },
+  connectorLineActive: {
+    backgroundColor: "#93C5FD",
+  },
+  connectorLinePending: {
+    backgroundColor: "#E2E8F0",
+  },
+  stepperLabelsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  stepLabelCol: {
+    width: 44,
+    alignItems: "center",
+  },
+  stepLabelText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#94A3B8",
+    textAlign: "center",
+  },
+  stepLabelTextDone: {
+    color: "#0F172A",
+    fontWeight: "800",
+  },
+  stepLabelTextCurrent: {
+    fontWeight: "900",
+  },
   driverCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
@@ -1589,7 +1901,7 @@ const styles = StyleSheet.create({
     color: "#0284C7",
   },
   mapContainer: {
-    height: 150,
+    height: 210,
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
@@ -1640,10 +1952,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#94A3B8",
   },
-  routeVal: {
-    fontSize: 12.5,
-    fontWeight: "700",
+  routePlaceName: {
+    fontSize: 13,
+    fontWeight: "800",
     color: "#0F172A",
+  },
+  routeVal: {
+    fontSize: 11.5,
+    fontWeight: "500",
+    color: "#475569",
+    lineHeight: 16,
   },
   noteWrap: {
     backgroundColor: "#F8FAFC",

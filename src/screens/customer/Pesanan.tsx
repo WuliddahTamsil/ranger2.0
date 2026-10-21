@@ -358,36 +358,36 @@ export const Pesanan: React.FC<PesananProps> = ({
   const getServiceIcon = (type: string) => {
     const normalized = (type || "").toLowerCase();
     if (normalized.includes("shop")) {
-      return { icon: ShoppingBag, fg: "#2563EB", bg: "#DBEAFE" };
+      return { icon: ShoppingBag, fg: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" };
     } else if (normalized.includes("market") || normalized.includes("mart")) {
-      return { icon: Store, fg: "#1B7A4E", bg: "#E8F5EE" };
+      return { icon: Store, fg: "#0D7A53", bg: "#ECFDF5", border: "#A7F3D0" };
     } else if (normalized.includes("cater")) {
-      return { icon: Coffee, fg: "#EA580C", bg: "#FFEDD5" };
+      return { icon: Coffee, fg: "#EA580C", bg: "#FFF7ED", border: "#FED7AA" };
     } else if (normalized.includes("laund")) {
-      return { icon: Wind, fg: "#0284C7", bg: "#E0F2FE" };
+      return { icon: Wind, fg: "#0284C7", bg: "#F0F9FF", border: "#BAE6FD" };
     } else if (normalized.includes("kos")) {
-      return { icon: Building, fg: "#9333EA", bg: "#F3E8FF" };
+      return { icon: Building, fg: "#9333EA", bg: "#FAF5FF", border: "#E9D5FF" };
     } else if (normalized.includes("ride")) {
-      return { icon: Bike, fg: "#16A34A", bg: "#DCFCE7" };
+      return { icon: Bike, fg: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0" };
     } else if (normalized.includes("send")) {
-      return { icon: Truck, fg: "#0284C7", bg: "#E0F2FE" };
+      return { icon: Truck, fg: "#0284C7", bg: "#F0F9FF", border: "#BAE6FD" };
     } else {
-      return { icon: Package, fg: "#D97706", bg: "#FEF3C7" };
+      return { icon: Package, fg: "#D97706", bg: "#FFFBEB", border: "#FDE68A" };
     }
   };
 
   const getStatusColors = (status: string) => {
     const s = (status || "").toLowerCase();
     if (s === "dikirim" || s.includes("menuju") || s.includes("perjalanan") || s.includes("mencari") || s.includes("sampai") || s.includes("antar")) {
-      return { fg: "#2563EB", bg: "#EFF6FF" };
+      return { fg: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" };
     } else if (s.includes("batal")) {
-      return { fg: "#B91C1C", bg: "#FEE2E2" };
+      return { fg: "#DC2626", bg: "#FEF2F2", border: "#FECACA" };
     } else if (s === "selesai" || s === "aktif" || s === "lunas") {
-      return { fg: "#1B7A4E", bg: "#E8F5EE" };
+      return { fg: "#0D7A53", bg: "#ECFDF5", border: "#A7F3D0" };
     } else if (s.includes("siap") || s.includes("proses") || s.includes("kemas")) {
-      return { fg: "#0D7A53", bg: "#ECFDF5" };
+      return { fg: "#D97706", bg: "#FFFBEB", border: "#FDE68A" };
     }
-    return { fg: "#D97706", bg: "#FEF3C7" };
+    return { fg: "#0D7A53", bg: "#ECFDF5", border: "#A7F3D0" };
   };
 
   const handleOpenReview = (order: OrderItem) => {
@@ -572,32 +572,58 @@ export const Pesanan: React.FC<PesananProps> = ({
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
-      {/* Header title */}
+      {/* Modern Clean Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Pesanan Saya</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.title}>Riwayat Pesanan</Text>
+          <Text style={styles.subtitle}>Pantau status pengiriman & histori transaksi Anda</Text>
+        </View>
+        <View style={styles.headerStatsBadge}>
+          <Text style={styles.headerStatsNum}>{orders.length}</Text>
+          <Text style={styles.headerStatsLabel}>Total</Text>
+        </View>
       </View>
 
-      {/* Tabs selectors row */}
-      <View style={styles.tabsRow}>
-        {["Aktif", "Selesai", "Dibatalkan"].map((tabLabel, idx) => {
-          const active = activeTab === idx;
-          const count = 
-            idx === 0 ? orders.filter((o) => o.status !== "Selesai" && !o.status.toLowerCase().includes("batal")).length :
-            idx === 1 ? orders.filter((o) => o.status === "Selesai").length :
-            orders.filter((o) => o.status.toLowerCase().includes("batal")).length;
-
-          return (
-            <TouchableOpacity
-              key={idx}
-              style={[styles.tabBtn, active && styles.tabBtnActive]}
-              onPress={() => setActiveTab(idx)}
-            >
-              <Text style={[styles.tabBtnText, active && styles.tabBtnTextActive]}>
-                {tabLabel} ({count})
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      {/* Segmented Status Tabs (Aktif, Selesai, Dibatalkan) */}
+      <View style={styles.segmentedTabsContainer}>
+        <View style={styles.segmentedTabsTrack}>
+          {[
+            {
+              label: "Aktif",
+              idx: 0,
+              count: orders.filter((o) => o.status !== "Selesai" && !o.status.toLowerCase().includes("batal")).length,
+            },
+            {
+              label: "Selesai",
+              idx: 1,
+              count: orders.filter((o) => o.status === "Selesai").length,
+            },
+            {
+              label: "Dibatalkan",
+              idx: 2,
+              count: orders.filter((o) => o.status.toLowerCase().includes("batal")).length,
+            },
+          ].map((tab) => {
+            const active = activeTab === tab.idx;
+            return (
+              <TouchableOpacity
+                key={tab.idx}
+                style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+                onPress={() => setActiveTab(tab.idx)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.segmentBtnText, active && styles.segmentBtnTextActive]}>
+                  {tab.label}
+                </Text>
+                <View style={[styles.segmentCountBadge, active && styles.segmentCountBadgeActive]}>
+                  <Text style={[styles.segmentCountText, active && styles.segmentCountTextActive]}>
+                    {tab.count}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       {/* Category Filter Horizontal Scroll */}
@@ -656,9 +682,12 @@ export const Pesanan: React.FC<PesananProps> = ({
 
       {/* Sub Filter & Sort Row */}
       <View style={styles.subFilterBar}>
-        <Text style={styles.subFilterCountText}>
-          {currentList.length} pesanan ditemukan
-        </Text>
+        <View style={styles.subFilterCountWrap}>
+          <ShoppingBag size={13} color="#0D7A53" />
+          <Text style={styles.subFilterCountText}>
+            <Text style={styles.subFilterCountBold}>{currentList.length}</Text> Pesanan Ditemukan
+          </Text>
+        </View>
         <TouchableOpacity
           style={styles.sortBtn}
           onPress={() => setSortModalVisible(true)}
@@ -678,7 +707,7 @@ export const Pesanan: React.FC<PesananProps> = ({
       </View>
 
       {ordersLoadError ? (
-        <View style={{ marginHorizontal: 16, marginBottom: 10, padding: 12, borderRadius: 12, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" }}>
+        <View style={{ marginHorizontal: 16, marginBottom: 12, padding: 12, borderRadius: 12, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" }}>
           <Text style={{ color: "#9A3412", fontSize: 12, lineHeight: 17 }}>{orders.length ? "Pesanan belum berhasil diperbarui. Data terakhir tetap ditampilkan." : ordersLoadError}</Text>
           {onRetryOrders ? <TouchableOpacity onPress={onRetryOrders} style={{ alignSelf: "flex-start", marginTop: 8 }}><Text style={{ color: "#C2410C", fontSize: 12, fontWeight: "700" }}>Coba lagi</Text></TouchableOpacity> : null}
         </View>
@@ -727,32 +756,20 @@ export const Pesanan: React.FC<PesananProps> = ({
                 }
               }}
             >
-              <View style={styles.cardHeader}>
-                <View style={[styles.serviceIconBg, { backgroundColor: config.bg }]}>
-                  <IconComp size={20} color={config.fg} />
-                </View>
-
-                <View style={styles.cardHeaderBody}>
-                  <Text style={styles.orderTitle} numberOfLines={1}>
-                    {item.orderCode ? item.orderCode : `#${item.id}`} · {item.type}
-                  </Text>
-                  <Text style={styles.itemName} numberOfLines={1}>
-                    {item.item}
-                  </Text>
-                  <Text style={styles.itemDetail} numberOfLines={item.type.toLowerCase().includes("ride") ? 2 : 1}>
-                    {item.detail}
+              {/* Tier 1 Header: Service Chip (Left) & Status Badges (Right) */}
+              <View style={styles.cardHeaderTopRow}>
+                <View style={[styles.serviceChip, { backgroundColor: config.bg, borderColor: config.border }]}>
+                  <IconComp size={12} color={config.fg} />
+                  <Text style={[styles.serviceChipText, { color: config.fg }]} numberOfLines={1}>
+                    {item.type}
                   </Text>
                 </View>
 
-                <View style={styles.cardHeaderRight}>
-                  <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                    <Text style={[styles.statusBadgeText, { color: statusStyle.fg }]}>
-                      {item.status}
-                    </Text>
-                  </View>
+                <View style={styles.cardHeaderRightBadges}>
                   {item.type.toLowerCase().includes("market") && (
                     <View style={[styles.paymentMethodPill, {
-                      backgroundColor: ((item as any).paymentMethod === "cod" || item.paymentStatus === "Lunas") ? "#ECFDF5" : "#FEF3C7"
+                      backgroundColor: ((item as any).paymentMethod === "cod" || item.paymentStatus === "Lunas") ? "#ECFDF5" : "#FEF3C7",
+                      borderColor: ((item as any).paymentMethod === "cod" || item.paymentStatus === "Lunas") ? "#A7F3D0" : "#FDE68A",
                     }]}>
                       <Text style={[styles.paymentMethodPillText, {
                         color: ((item as any).paymentMethod === "cod" || item.paymentStatus === "Lunas") ? "#059669" : "#D97706"
@@ -765,18 +782,60 @@ export const Pesanan: React.FC<PesananProps> = ({
                       </Text>
                     </View>
                   )}
-                  <TouchableOpacity
-                    style={styles.invoiceHintPill}
-                    onPress={() => handleOpenInvoice(item)}
-                    activeOpacity={0.7}
-                  >
-                    <FileText size={10} color="#0D7A53" />
-                    <Text style={styles.invoiceHintText}>Lihat Faktur</Text>
-                  </TouchableOpacity>
+
+                  <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
+                    <Text style={[styles.statusBadgeText, { color: statusStyle.fg }]} numberOfLines={1}>
+                      {item.status}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.cardDivider} />
+              {/* Tier 2: Order Code & Order Date */}
+              <View style={styles.cardHeaderSubRow}>
+                <Text style={styles.orderCodeText} numberOfLines={1}>
+                  {item.orderCode ? item.orderCode : `#${item.id}`}
+                </Text>
+                <View style={styles.cardTimeRow}>
+                  <Clock size={11} color="#94A3B8" />
+                  <Text style={styles.cardTimeText} numberOfLines={1}>
+                    {item.date || "Hari ini"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.cardSubDivider} />
+
+              {/* Card Body */}
+              <View style={styles.cardBody}>
+                <View style={styles.cardMainInfo}>
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {item.item}
+                  </Text>
+                  <Text style={styles.itemDetail} numberOfLines={item.type.toLowerCase().includes("ride") ? 2 : 1}>
+                    {item.detail}
+                  </Text>
+                </View>
+
+                {/* Ride route preview if coordinates/places available */}
+                {item.type.toLowerCase().includes("ride") && (item.pickup || item.destination) ? (
+                  <View style={styles.rideMiniRouteBox}>
+                    <View style={styles.rideMiniRouteRow}>
+                      <View style={[styles.miniRouteDot, { backgroundColor: "#2563EB" }]} />
+                      <Text style={styles.miniRouteText} numberOfLines={1}>
+                        {item.pickup?.placeName || item.pickup?.address || "Titik Penjemputan"}
+                      </Text>
+                    </View>
+                    <View style={styles.miniRouteLine} />
+                    <View style={styles.rideMiniRouteRow}>
+                      <View style={[styles.miniRouteDot, { backgroundColor: "#EA580C" }]} />
+                      <Text style={styles.miniRouteText} numberOfLines={1}>
+                        {item.destination?.placeName || item.destination?.address || "Titik Tujuan"}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
 
               {/* Complaint Banner for Marketplace */}
               {item.type.toLowerCase().includes("market") && (item as any).complaint && (item as any).complaint.status && (item as any).complaint.status !== "None" && (
@@ -858,371 +917,389 @@ export const Pesanan: React.FC<PesananProps> = ({
                 </View>
               )}
 
-              <View style={styles.cardFooter}>
-                <View style={styles.cardPriceRow}>
-                  <View style={styles.dateCol}>
-                    <Text style={styles.dateLabel}>Tanggal Pesanan</Text>
-                    <Text style={styles.dateText}>{item.date}</Text>
-                  </View>
-                  <View style={styles.priceCol}>
-                    <Text style={styles.totalLabel}>Total Bayar</Text>
-                    <Text style={styles.totalValue}>{rp(item.total)}</Text>
-                  </View>
-                </View>
-
-                {isCompleted && item.deliveryProofUrl ? (
-                  <TouchableOpacity
-                    style={styles.cardProofBanner}
-                    onPress={() => {
-                      if (item.type.toLowerCase().includes("cater")) {
-                        setActiveCateringTrackingOrderId(String(item.id));
-                        if (onOpenCateringTracking) {
-                          onOpenCateringTracking(item);
-                        } else if (navigate) {
-                          navigate("c_catering_tracking");
-                        }
-                      } else {
-                        handleOpenTracking(item);
+              {/* Delivery Proof Thumbnail Banner */}
+              {isCompleted && item.deliveryProofUrl ? (
+                <TouchableOpacity
+                  style={styles.cardProofBanner}
+                  onPress={() => {
+                    if (item.type.toLowerCase().includes("cater")) {
+                      setActiveCateringTrackingOrderId(String(item.id));
+                      if (onOpenCateringTracking) {
+                        onOpenCateringTracking(item);
+                      } else if (navigate) {
+                        navigate("c_catering_tracking");
                       }
-                    }}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel="Lihat bukti foto pengantaran kurir"
-                  >
-                    <Image
-                      source={{ uri: item.deliveryProofUrl }}
-                      style={styles.cardProofThumb}
-                      resizeMode="cover"
-                    />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                        <Camera size={12} color="#15803D" />
-                        <Text style={styles.cardProofTitle}>Foto Bukti Pengantaran</Text>
-                        <View style={styles.cardProofBadgeDone}>
-                          <ShieldCheck size={9} color="#15803D" />
-                          <Text style={styles.cardProofBadgeText}>Terverifikasi</Text>
-                        </View>
+                    } else {
+                      handleOpenTracking(item);
+                    }
+                  }}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Lihat bukti foto pengantaran kurir"
+                >
+                  <Image
+                    source={{ uri: item.deliveryProofUrl }}
+                    style={styles.cardProofThumb}
+                    resizeMode="cover"
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                      <Camera size={12} color="#15803D" />
+                      <Text style={styles.cardProofTitle}>Foto Bukti Pengantaran</Text>
+                      <View style={styles.cardProofBadgeDone}>
+                        <ShieldCheck size={9} color="#15803D" />
+                        <Text style={styles.cardProofBadgeText}>Terverifikasi</Text>
                       </View>
-                      <Text style={styles.cardProofSub} numberOfLines={1}>
-                        {item.deliveryProofTimestamp
-                          ? item.deliveryProofTimestamp
-                          : item.deliveredAt
-                          ? `Diserahkan: ${new Date(item.deliveredAt).toLocaleDateString("id-ID")}`
-                          : "Kurir telah mengunggah bukti serah terima"}
-                      </Text>
                     </View>
-                    <ChevronRight size={14} color="#15803D" />
-                  </TouchableOpacity>
-                ) : null}
+                    <Text style={styles.cardProofSub} numberOfLines={1}>
+                      {item.deliveryProofTimestamp
+                        ? item.deliveryProofTimestamp
+                        : item.deliveredAt
+                        ? `Diserahkan: ${new Date(item.deliveredAt).toLocaleDateString("id-ID")}`
+                        : "Kurir telah mengunggah bukti serah terima"}
+                    </Text>
+                  </View>
+                  <ChevronRight size={14} color="#15803D" />
+                </TouchableOpacity>
+              ) : null}
 
-                <View style={styles.cardActionDivider} />
+              {/* Total Price & Footer Actions */}
+              <View style={styles.cardFooterDivider} />
 
-                <View style={styles.actionBtnRow}>
-                  {isCompleted ? (
-                    // === TAB SELESAI (Completed Orders) ===
-                    <>
+              <View style={styles.cardPriceRow}>
+                <View style={styles.priceLabelBox}>
+                  <Text style={styles.totalLabel}>Total Pembayaran</Text>
+                  {item.paymentMethod ? (
+                    <Text style={styles.paymentMethodLabel}>via {item.paymentMethod.toUpperCase()}</Text>
+                  ) : null}
+                </View>
+                <Text style={styles.totalValue}>{rp(item.total)}</Text>
+              </View>
+
+              <View style={styles.actionBtnRow}>
+                {isCompleted ? (
+                  // === TAB SELESAI ===
+                  <>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionBtnInvoice]}
+                      onPress={() => handleOpenInvoice(item)}
+                      activeOpacity={0.8}
+                    >
+                      <FileText size={13} color="#0D7A53" />
+                      <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
+                    </TouchableOpacity>
+
+                    {item.type.toLowerCase().includes("shop") && (
                       <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnInvoice]}
-                        onPress={() => handleOpenInvoice(item)}
+                        style={[styles.actionBtn, styles.actionBtnShop]}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          if (navigate) {
+                            navigate("c_shop_order_detail", { orderId: item.id });
+                          } else {
+                            handleOpenInvoice(item);
+                          }
+                        }}
                         activeOpacity={0.8}
                       >
-                        <FileText size={13} color="#0D7A53" />
-                        <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
+                        <ShoppingBag size={13} color="#2563EB" />
+                        <Text style={styles.actionBtnTextShop}>Detail Order</Text>
                       </TouchableOpacity>
+                    )}
 
-                      {item.type.toLowerCase().includes("shop") && (
+                    {item.type.toLowerCase().includes("market") && (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnProof]}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          handleOpenTracking(item);
+                        }}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={item.deliveryProofUrl ? "Lihat foto bukti pengantaran" : "Lihat status pesanan"}
+                      >
+                        <ImageIcon size={13} color="#0D7A53" />
+                        <Text style={styles.actionBtnTextProof}>{item.deliveryProofUrl ? "Bukti Foto" : "Lacak Pesanan"}</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {item.type.toLowerCase().includes("cater") && (
+                      <>
                         <TouchableOpacity
                           style={[styles.actionBtn, styles.actionBtnProof]}
                           onPress={(event) => {
                             event.stopPropagation();
-                            if (navigate) {
-                              navigate("c_shop_order_detail", { orderId: item.id });
-                            } else {
-                              handleOpenInvoice(item);
+                            setActiveCateringTrackingOrderId(String(item.id));
+                            if (onOpenCateringTracking) {
+                              onOpenCateringTracking(item);
+                            } else if (navigate) {
+                              navigate("c_catering_tracking");
                             }
                           }}
                           activeOpacity={0.8}
-                        >
-                          <ShoppingBag size={13} color="#2563EB" />
-                          <Text style={[styles.actionBtnTextInvoice, { color: "#2563EB" }]}>Detail Order</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {item.type.toLowerCase().includes("market") && (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionBtnProof]}
-                          onPress={(event) => {
-                            event.stopPropagation();
-                            handleOpenTracking(item);
-                          }}
-                          activeOpacity={0.8}
                           accessibilityRole="button"
-                          accessibilityLabel={item.deliveryProofUrl ? "Lihat foto bukti pengantaran" : "Lihat status pesanan"}
+                          accessibilityLabel={item.deliveryProofUrl ? "Lihat foto bukti pengantaran kurir" : "Lacak pesanan catering"}
                         >
-                          <ImageIcon size={13} color="#0D7A53" />
-                          <Text style={styles.actionBtnTextInvoice}>{item.deliveryProofUrl ? "Bukti Foto" : "Lacak Pesanan"}</Text>
+                          <Camera size={13} color="#0D7A53" />
+                          <Text style={styles.actionBtnTextProof}>{item.deliveryProofUrl ? "Bukti Foto" : "Lacak & Bukti"}</Text>
                         </TouchableOpacity>
-                      )}
 
-                      {item.type.toLowerCase().includes("cater") && (
-                        <>
+                        {Number(item.remainingAmount || 0) > 0 && (
                           <TouchableOpacity
-                            style={[styles.actionBtn, styles.actionBtnProof]}
+                            style={[styles.actionBtn, styles.actionBtnPay]}
                             onPress={(event) => {
                               event.stopPropagation();
+                              setActiveCateringPaymentOrder(item);
+                              if (onOpenCateringQris) {
+                                onOpenCateringQris();
+                              } else if (navigate) {
+                                navigate("c_catering_qris");
+                              }
+                            }}
+                            activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel="Buka halaman pembayaran QRIS"
+                          >
+                            <QrCode size={13} color="#FFFFFF" />
+                            <Text style={styles.actionBtnTextPay}>Bayar QRIS</Text>
+                          </TouchableOpacity>
+                        )}
+                      </>
+                    )}
+
+                    {item.type.toLowerCase().includes("ride") ? (
+                      hasDriver && (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnChat]}
+                          onPress={() => handleOpenChat(item, "driver")}
+                        >
+                          <Bike size={13} color="#334155" />
+                          <Text style={styles.actionBtnTextChat}>Chat Driver</Text>
+                        </TouchableOpacity>
+                      )
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnChat]}
+                        onPress={() => handleOpenChat(item, "merchant")}
+                      >
+                        <Store size={13} color="#334155" />
+                        <Text style={styles.actionBtnTextChat}>Chat Toko</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {item.type.toLowerCase().includes("market") && (!(item as any).complaint || (item as any).complaint?.status === "None") && (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnComplaint]}
+                        onPress={() => handleOpenComplaintModal(item)}
+                        activeOpacity={0.8}
+                      >
+                        <ShieldAlert size={13} color="#D97706" />
+                        <Text style={styles.actionBtnTextComplaint}>Komplain</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {!hasReviewed ? (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnReview]}
+                        onPress={() => handleOpenReview(item)}
+                      >
+                        <Star size={13} color="#D97706" />
+                        <Text style={styles.actionBtnTextReview}>Beri Ulasan</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.reviewedBadge}>
+                        <Star size={12} color="#16A34A" />
+                        <Text style={styles.reviewedBadgeText}>Sudah Diulas</Text>
+                      </View>
+                    )}
+                  </>
+                ) : item.status.toLowerCase().includes("batal") ? (
+                  // === TAB DIBATALKAN ===
+                  <>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionBtnInvoice]}
+                      onPress={() => handleOpenInvoice(item)}
+                      activeOpacity={0.8}
+                    >
+                      <FileText size={13} color="#0D7A53" />
+                      <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
+                    </TouchableOpacity>
+
+                    {item.type.toLowerCase().includes("ride") ? (
+                      hasDriver && (
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnChat]}
+                          onPress={() => handleOpenChat(item, "driver")}
+                        >
+                          <Bike size={13} color="#334155" />
+                          <Text style={styles.actionBtnTextChat}>Chat Driver</Text>
+                        </TouchableOpacity>
+                      )
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.actionBtnChat]}
+                        onPress={() => handleOpenChat(item, "merchant")}
+                      >
+                        <Store size={13} color="#334155" />
+                        <Text style={styles.actionBtnTextChat}>Chat Toko</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                ) : (
+                  // === TAB AKTIF ===
+                  <>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.actionBtnInvoice]}
+                      onPress={() => handleOpenInvoice(item)}
+                      activeOpacity={0.8}
+                    >
+                      <FileText size={13} color="#0D7A53" />
+                      <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
+                    </TouchableOpacity>
+
+                    {item.type.toLowerCase().includes("ride") ? (
+                      <>
+                        {hasDriver && (
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnChat]}
+                            onPress={() => handleOpenChat(item, "driver")}
+                          >
+                            <Bike size={13} color="#334155" />
+                            <Text style={styles.actionBtnTextChat}>Chat Driver</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                          style={[styles.actionBtn, styles.actionBtnPrimary]}
+                          onPress={() => {
+                            if (onOpenRideTracking) {
+                              onOpenRideTracking();
+                            } else {
+                              handleOpenTracking(item);
+                            }
+                          }}
+                        >
+                          <Navigation size={13} color="#FFFFFF" />
+                          <Text style={styles.actionBtnTextPrimary}>Lacak Perjalanan</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        {hasDriver ? (
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnChat]}
+                            onPress={() => handleOpenChat(item, "driver")}
+                          >
+                            <Bike size={13} color="#334155" />
+                            <Text style={styles.actionBtnTextChat}>Chat Kurir</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnChat]}
+                            onPress={() => handleOpenChat(item, "merchant")}
+                          >
+                            <Store size={13} color="#334155" />
+                            <Text style={styles.actionBtnTextChat}>Chat Toko</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {item.type.toLowerCase().includes("market") && (item as any).paymentMethod !== "cod" && item.paymentStatus !== "Lunas" && (
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnPay]}
+                            onPress={() => handleOpenMarketplacePayment(item)}
+                            activeOpacity={0.85}
+                          >
+                            <Wallet size={13} color="#FFFFFF" />
+                            <Text style={styles.actionBtnTextPay}>Bayar</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {item.type.toLowerCase().includes("market") && item.status === "Menunggu" && (
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnCancel]}
+                            onPress={() => handleOpenCancelModal(item)}
+                            activeOpacity={0.8}
+                          >
+                            <RotateCcw size={13} color="#DC2626" />
+                            <Text style={styles.actionBtnTextCancel}>Batalkan</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                          style={[
+                            styles.actionBtn,
+                            styles.actionBtnPrimary,
+                            item.type.toLowerCase().includes("shop") && { backgroundColor: "#2563EB" },
+                          ]}
+                          onPress={() => {
+                            if (item.type.toLowerCase().includes("shop")) {
+                              if (navigate) {
+                                navigate("c_shop_order_detail", { orderId: item.id });
+                              } else {
+                                handleOpenInvoice(item);
+                              }
+                            } else if (item.type.toLowerCase().includes("cater")) {
                               setActiveCateringTrackingOrderId(String(item.id));
                               if (onOpenCateringTracking) {
                                 onOpenCateringTracking(item);
                               } else if (navigate) {
                                 navigate("c_catering_tracking");
                               }
-                            }}
-                            activeOpacity={0.8}
-                            accessibilityRole="button"
-                            accessibilityLabel={item.deliveryProofUrl ? "Lihat foto bukti pengantaran kurir" : "Lacak pesanan catering"}
-                          >
-                            <Camera size={13} color="#0D7A53" />
-                            <Text style={styles.actionBtnTextInvoice}>{item.deliveryProofUrl ? "Bukti Foto" : "Lacak & Bukti"}</Text>
-                          </TouchableOpacity>
-
-                          {Number(item.remainingAmount || 0) > 0 && (
-                            <TouchableOpacity
-                              style={[styles.actionBtn, styles.actionBtnProof]}
-                              onPress={(event) => {
-                                event.stopPropagation();
-                                setActiveCateringPaymentOrder(item);
-                                if (onOpenCateringQris) {
-                                  onOpenCateringQris();
-                                } else if (navigate) {
-                                  navigate("c_catering_qris");
-                                }
-                              }}
-                              activeOpacity={0.8}
-                              accessibilityRole="button"
-                              accessibilityLabel="Buka halaman pembayaran QRIS"
-                            >
-                              <QrCode size={13} color="#0D7A53" />
-                              <Text style={styles.actionBtnTextInvoice}>Bayar QRIS</Text>
-                            </TouchableOpacity>
-                          )}
-                        </>
-                      )}
-
-                      {item.type.toLowerCase().includes("ride") ? (
-                        hasDriver && (
-                          <TouchableOpacity
-                            style={[styles.actionBtn, styles.actionBtnOutlineGray]}
-                            onPress={() => handleOpenChat(item, "driver")}
-                          >
-                            <Bike size={13} color="#4B5563" />
-                            <Text style={styles.actionBtnTextGray}>Chat Driver</Text>
-                          </TouchableOpacity>
-                        )
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionBtnOutlineGray]}
-                          onPress={() => handleOpenChat(item, "merchant")}
+                            } else {
+                              handleOpenTracking(item);
+                            }
+                          }}
                         >
-                          <Store size={13} color="#4B5563" />
-                          <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {item.type.toLowerCase().includes("market") && (!(item as any).complaint || (item as any).complaint?.status === "None") && (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionBtnComplaint]}
-                          onPress={() => handleOpenComplaintModal(item)}
-                          activeOpacity={0.8}
-                        >
-                          <ShieldAlert size={13} color="#D97706" />
-                          <Text style={styles.actionBtnTextComplaint}>Komplain</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {!hasReviewed ? (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionBtnReview]}
-                          onPress={() => handleOpenReview(item)}
-                        >
-                          <Star size={13} color="#D97706" />
-                          <Text style={styles.actionBtnTextReview}>Beri Ulasan</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <View style={styles.reviewedBadge}>
-                          <Star size={12} color="#16A34A" />
-                          <Text style={styles.reviewedBadgeText}>Sudah Diulas</Text>
-                        </View>
-                      )}
-                    </>
-                  ) : item.status.toLowerCase().includes("batal") ? (
-                    // === TAB DIBATALKAN (Cancelled Orders) ===
-                    <>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnInvoice]}
-                        onPress={() => handleOpenInvoice(item)}
-                        activeOpacity={0.8}
-                      >
-                        <FileText size={13} color="#0D7A53" />
-                        <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
-                      </TouchableOpacity>
-
-                      {item.type.toLowerCase().includes("ride") ? (
-                        hasDriver && (
-                          <TouchableOpacity
-                            style={[styles.actionBtn, styles.actionBtnOutlineGray]}
-                            onPress={() => handleOpenChat(item, "driver")}
-                          >
-                            <Bike size={13} color="#4B5563" />
-                            <Text style={styles.actionBtnTextGray}>Chat Driver</Text>
-                          </TouchableOpacity>
-                        )
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionBtnOutlineGray]}
-                          onPress={() => handleOpenChat(item, "merchant")}
-                        >
-                          <Store size={13} color="#4B5563" />
-                          <Text style={styles.actionBtnTextGray}>Chat Toko</Text>
-                        </TouchableOpacity>
-                      )}
-                    </>
-                  ) : (
-                    // === TAB AKTIF (Active Orders in Progress) ===
-                    <>
-                      <TouchableOpacity
-                        style={[styles.actionBtn, styles.actionBtnInvoice]}
-                        onPress={() => handleOpenInvoice(item)}
-                        activeOpacity={0.8}
-                      >
-                        <FileText size={13} color="#0D7A53" />
-                        <Text style={styles.actionBtnTextInvoice}>Lihat Faktur</Text>
-                      </TouchableOpacity>
-
-                      {item.type.toLowerCase().includes("ride") ? (
-                        <>
-                          {hasDriver && (
-                            <TouchableOpacity
-                              style={[styles.actionBtn, styles.actionBtnDriver]}
-                              onPress={() => handleOpenChat(item, "driver")}
-                            >
-                              <Bike size={13} color="#1B7A4E" />
-                              <Text style={styles.actionBtnTextDriver}>Chat Driver</Text>
-                            </TouchableOpacity>
-                          )}
-
-                          <TouchableOpacity
-                            style={[styles.actionBtn, styles.actionBtnSolid]}
-                            onPress={() => {
-                              if (onOpenRideTracking) {
-                                onOpenRideTracking();
-                              } else {
-                                handleOpenTracking(item);
-                              }
-                            }}
-                          >
-                            <Navigation size={13} color="#FFFFFF" />
-                            <Text style={styles.actionBtnTextSolid}>Lacak Perjalanan</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <>
-                          {hasDriver ? (
-                            <TouchableOpacity
-                              style={[styles.actionBtn, styles.actionBtnDriver]}
-                              onPress={() => handleOpenChat(item, "driver")}
-                            >
-                              <Bike size={13} color="#1B7A4E" />
-                              <Text style={styles.actionBtnTextDriver}>Chat Kurir</Text>
-                            </TouchableOpacity>
+                          {item.type.toLowerCase().includes("cater") && Number(item.remainingAmount || 0) > 0 ? (
+                            <Wallet size={13} color="#FFFFFF" />
                           ) : (
-                            <TouchableOpacity
-                              style={[styles.actionBtn, styles.actionBtnMerchantActive]}
-                              onPress={() => handleOpenChat(item, "merchant")}
-                            >
-                              <Store size={13} color="#EA580C" />
-                              <Text style={styles.actionBtnTextMerchantActive}>Chat Toko</Text>
-                            </TouchableOpacity>
+                            <Navigation size={13} color="#FFFFFF" />
                           )}
-
-                          {item.type.toLowerCase().includes("market") && (item as any).paymentMethod !== "cod" && item.paymentStatus !== "Lunas" && (
-                            <TouchableOpacity
-                              style={[styles.actionBtn, styles.actionBtnPayNow]}
-                              onPress={() => handleOpenMarketplacePayment(item)}
-                              activeOpacity={0.85}
-                            >
-                              <Wallet size={13} color="#FFFFFF" />
-                              <Text style={styles.actionBtnTextPayNow}>Bayar</Text>
-                            </TouchableOpacity>
-                          )}
-
-                          {item.type.toLowerCase().includes("market") && item.status === "Menunggu" && (
-                            <TouchableOpacity
-                              style={[styles.actionBtn, styles.actionBtnCancel]}
-                              onPress={() => handleOpenCancelModal(item)}
-                              activeOpacity={0.8}
-                            >
-                              <RotateCcw size={13} color="#DC2626" />
-                              <Text style={styles.actionBtnTextCancel}>Batalkan</Text>
-                            </TouchableOpacity>
-                          )}
-
-                          <TouchableOpacity
-                            style={[
-                              styles.actionBtn,
-                              styles.actionBtnSolid,
-                              item.type.toLowerCase().includes("shop") && { backgroundColor: "#2563EB" },
-                            ]}
-                            onPress={() => {
-                              if (item.type.toLowerCase().includes("shop")) {
-                                if (navigate) {
-                                  navigate("c_shop_order_detail", { orderId: item.id });
-                                } else {
-                                  handleOpenInvoice(item);
-                                }
-                              } else if (item.type.toLowerCase().includes("cater")) {
-                                setActiveCateringTrackingOrderId(String(item.id));
-                                if (onOpenCateringTracking) {
-                                  onOpenCateringTracking(item);
-                                } else if (navigate) {
-                                  navigate("c_catering_tracking");
-                                }
-                              } else {
-                                handleOpenTracking(item);
-                              }
-                            }}
-                          >
-                            {item.type.toLowerCase().includes("cater") && Number(item.remainingAmount || 0) > 0 ? (
-                              <Wallet size={13} color="#FFFFFF" />
-                            ) : (
-                              <Navigation size={13} color="#FFFFFF" />
-                            )}
-                            <Text style={styles.actionBtnTextSolid}>
-                              {item.type.toLowerCase().includes("cater") && Number(item.remainingAmount || 0) > 0
-                                ? "Lunasi & Lacak"
-                                : item.type.toLowerCase().includes("shop")
-                                ? "Lacak Pesanan"
-                                : "Lacak"}
-                            </Text>
-                          </TouchableOpacity>
-                        </>
-                      )}
-                    </>
-                  )}
-                </View>
+                          <Text style={styles.actionBtnTextPrimary}>
+                            {item.type.toLowerCase().includes("cater") && Number(item.remainingAmount || 0) > 0
+                              ? "Lunasi & Lacak"
+                              : item.type.toLowerCase().includes("shop")
+                              ? "Lacak Pesanan"
+                              : "Lacak"}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </>
+                )}
               </View>
             </TouchableOpacity>
           );
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <ShoppingBag size={48} color="#9CA3AF" />
+            <View style={styles.emptyIconBg}>
+              <ShoppingBag size={34} color="#0D7A53" />
+            </View>
             <Text style={styles.emptyTitle}>
-              {ordersLoading ? "Memuat pesanan…" : activeTab === 0 ? "Belum ada pesanan aktif" : activeTab === 1 ? "Belum ada pesanan selesai" : "Belum ada pesanan dibatalkan"}
+              {ordersLoading
+                ? "Memuat riwayat pesanan…"
+                : activeTab === 0
+                ? "Belum ada pesanan aktif"
+                : activeTab === 1
+                ? "Belum ada pesanan selesai"
+                : "Belum ada pesanan dibatalkan"}
             </Text>
             <Text style={styles.emptySubtitle}>
-              {ordersLoadError && !ordersLoading ? "Riwayat belum berhasil diambil dari server. Coba lagi setelah koneksi tersedia." : "Semua orderan dari layanan yang Anda pesan akan terpantau statusnya di halaman ini."}
+              {ordersLoadError && !ordersLoading
+                ? "Riwayat belum berhasil diambil dari server. Periksa koneksi Anda dan coba lagi."
+                : "Semua pesanan dari berbagai layanan (Shop, Mart, Ride, Send, Laundry, Catering) akan tercatat rapi di sini."}
             </Text>
-            {ordersLoadError && !ordersLoading && onRetryOrders ? <TouchableOpacity onPress={onRetryOrders} style={{ marginTop: 12, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, backgroundColor: "#1B7A4E" }}><Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}>Coba lagi</Text></TouchableOpacity> : null}
+            {ordersLoadError && !ordersLoading && onRetryOrders ? (
+              <TouchableOpacity
+                onPress={onRetryOrders}
+                style={styles.emptyRetryBtn}
+                activeOpacity={0.8}
+              >
+                <RotateCcw size={14} color="#FFFFFF" />
+                <Text style={styles.emptyRetryText}>Coba Lagi</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         }
       />
@@ -1322,9 +1399,25 @@ export const Pesanan: React.FC<PesananProps> = ({
               {/* Real Interactive Google Maps (Spacious full width & 280 height) */}
               <View style={styles.mapCardWrapper}>
                 <LiveOrderTrackingMap
-                  storeName={(selectedOrder as any).storeName || selectedOrder.detail.split(" • ")[0] || "Mitra Toko"}
-                  storeAddress={(selectedOrder as any).storeAddress || ""}
-                  customerAddress={typeof selectedOrder.address === "string" ? selectedOrder.address : selectedOrder.address?.fullAddress || ""}
+                  storeName={
+                    selectedOrder.type === "Kanyaah Ride"
+                      ? (selectedOrder.pickup?.placeName || "Titik Penjemputan")
+                      : ((selectedOrder as any).storeName || selectedOrder.detail.split(" • ")[0] || "Mitra Toko")
+                  }
+                  storeAddress={
+                    selectedOrder.type === "Kanyaah Ride"
+                      ? (selectedOrder.pickup?.address || "")
+                      : ((selectedOrder as any).storeAddress || "")
+                  }
+                  customerAddress={
+                    selectedOrder.type === "Kanyaah Ride"
+                      ? (selectedOrder.destination?.address || "")
+                      : (typeof selectedOrder.address === "string" ? selectedOrder.address : selectedOrder.address?.fullAddress || "")
+                  }
+                  pickupCoordinates={selectedOrder.pickup}
+                  destinationCoordinates={selectedOrder.destination}
+                  orderType={selectedOrder.type}
+                  distance={selectedOrder.estimatedDistance ? `${selectedOrder.estimatedDistance} km` : undefined}
                   driverName={(selectedOrder as any).driverName}
                   driverVehicle={(selectedOrder as any).driverVehicle}
                   orderStatus={selectedOrder.status}
@@ -1905,128 +1998,254 @@ export const Pesanan: React.FC<PesananProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7FAF8",
+    backgroundColor: "#F8FAFC",
   },
   header: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  headerLeft: {
+    flex: 1,
   },
   title: {
     fontSize: 22,
-    fontWeight: "800",
-    color: "#111827",
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: -0.5,
   },
-  tabsRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    marginBottom: 8,
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  tabBtnActive: {
-    borderBottomColor: "#1B7A4E",
-  },
-  tabBtnText: {
+  subtitle: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#6B7280",
+    color: "#64748B",
+    marginTop: 3,
   },
-  tabBtnTextActive: {
-    color: "#1B7A4E",
+  headerStatsBadge: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  headerStatsNum: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#0D7A53",
+  },
+  headerStatsLabel: {
+    fontSize: 9,
     fontWeight: "800",
+    color: "#15803D",
+    textTransform: "uppercase",
+  },
+  segmentedTabsContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  segmentedTabsTrack: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 11,
+  },
+  segmentBtnActive: {
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  segmentBtnTextActive: {
+    color: "#0D7A53",
+    fontWeight: "900",
+  },
+  segmentCountBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 10,
+    backgroundColor: "#E2E8F0",
+  },
+  segmentCountBadgeActive: {
+    backgroundColor: "#DCFCE7",
+  },
+  segmentCountText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#64748B",
+  },
+  segmentCountTextActive: {
+    color: "#15803D",
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 28,
+    paddingBottom: 36,
     gap: 12,
   },
   orderCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    padding: 16,
-    elevation: 1,
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    borderColor: "#E2E8F0",
+    padding: 14,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  cardHeader: {
+  cardHeaderTopRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  serviceIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
+    gap: 8,
   },
-  cardHeaderBody: {
-    flex: 1,
-    gap: 2,
-  },
-  orderTitle: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#6B7280",
-  },
-  itemName: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  itemDetail: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-  cardHeaderRight: {
-    alignItems: "flex-end",
-    gap: 6,
-  },
-  invoiceHintPill: {
+  serviceChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#F0FDF4",
+    gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 3.5,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    flexShrink: 1,
   },
-  invoiceHintText: {
-    fontSize: 10,
+  serviceChipText: {
+    fontSize: 11,
     fontWeight: "800",
-    color: "#0D7A53",
+  },
+  cardHeaderRightBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 1,
+    justifyContent: "flex-end",
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    borderWidth: 1,
+    maxWidth: 150,
   },
   statusBadgeText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
   },
-  cardDivider: {
+  paymentMethodPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  paymentMethodPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  cardHeaderSubRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  orderCodeText: {
+    fontSize: 12.5,
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: 0.3,
+    flexShrink: 1,
+  },
+  cardTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  cardTimeText: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  cardSubDivider: {
     height: 1,
-    backgroundColor: "#F3F4F6",
-    marginVertical: 12,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 10,
+  },
+  cardBody: {
+    gap: 6,
+  },
+  cardMainInfo: {
+    gap: 2,
+  },
+  itemName: {
+    fontSize: 14.5,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  itemDetail: {
+    fontSize: 11.5,
+    color: "#64748B",
+    lineHeight: 16,
+  },
+  rideMiniRouteBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    padding: 8,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    gap: 3,
+  },
+  rideMiniRouteRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  miniRouteDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  miniRouteLine: {
+    width: 1.5,
+    height: 7,
+    backgroundColor: "#CBD5E1",
+    marginLeft: 2.5,
+  },
+  miniRouteText: {
+    fontSize: 11,
+    color: "#334155",
+    fontWeight: "600",
+    flex: 1,
   },
   paymentReminderBox: {
     backgroundColor: "#FFF7ED",
     borderRadius: 12,
-    padding: 11,
-    marginBottom: 4,
+    padding: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#FED7AA",
   },
   paymentReminderHeader: {
     flexDirection: "row",
@@ -2045,55 +2264,86 @@ const styles = StyleSheet.create({
   },
   paymentReminderText: {
     color: "#C2410C",
-    fontSize: 10,
+    fontSize: 10.5,
     lineHeight: 15,
-    marginTop: 4,
+    marginTop: 3,
   },
   paymentReminderDue: {
     color: "#9A3412",
     fontSize: 10,
     fontWeight: "800",
-    marginTop: 5,
+    marginTop: 4,
   },
-  cardFooter: {
+  cardProofBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F0FDF4",
+    borderRadius: 10,
+    padding: 8,
     marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  cardProofThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: "#E2E8F0",
+  },
+  cardProofTitle: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#166534",
+  },
+  cardProofBadgeDone: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  cardProofBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#15803D",
+  },
+  cardProofSub: {
+    fontSize: 10,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  cardFooterDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginTop: 10,
+    marginBottom: 8,
   },
   cardPriceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 10,
   },
-  dateCol: {
-    gap: 2,
-  },
-  dateLabel: {
-    fontSize: 10,
-    color: "#9CA3AF",
-    fontWeight: "600",
-  },
-  dateText: {
-    fontSize: 11,
-    color: "#4B5563",
-    fontWeight: "700",
-  },
-  priceCol: {
-    alignItems: "flex-end",
-    gap: 2,
+  priceLabelBox: {
+    gap: 1,
   },
   totalLabel: {
+    fontSize: 10.5,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  paymentMethodLabel: {
     fontSize: 10,
-    color: "#9CA3AF",
+    color: "#94A3B8",
     fontWeight: "600",
   },
   totalValue: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "900",
-    color: "#111827",
-  },
-  cardActionDivider: {
-    height: 1,
-    backgroundColor: "#F3F4F6",
-    marginVertical: 10,
+    color: "#0D7A53",
   },
   actionBtnRow: {
     flexDirection: "row",
@@ -2103,66 +2353,95 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   actionBtn: {
-    height: 34,
+    minHeight: 35,
     paddingHorizontal: 12,
-    borderRadius: 17,
+    paddingVertical: 6,
+    borderRadius: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
   },
-  actionBtnOutline: {
+  actionBtnInvoice: {
+    backgroundColor: "#F0FDF4",
     borderWidth: 1,
-    borderColor: "#1B7A4E",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#BBF7D0",
   },
-  actionBtnOutlineGray: {
+  actionBtnTextInvoice: {
+    color: "#0D7A53",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnPrimary: {
+    backgroundColor: "#0D7A53",
+  },
+  actionBtnTextPrimary: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnChat: {
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#E2E8F0",
   },
-  actionBtnSolid: {
-    backgroundColor: "#1B7A4E",
+  actionBtnTextChat: {
+    color: "#334155",
+    fontSize: 11,
+    fontWeight: "800",
   },
-  actionBtnDriver: {
-    backgroundColor: "#E8F5EE",
+  actionBtnShop: {
+    backgroundColor: "#EFF6FF",
     borderWidth: 1,
-    borderColor: "#A7F3D0",
+    borderColor: "#BFDBFE",
   },
-  actionBtnMerchantActive: {
-    backgroundColor: "#FFF7ED",
+  actionBtnTextShop: {
+    color: "#2563EB",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnProof: {
+    backgroundColor: "#F0FDF4",
     borderWidth: 1,
-    borderColor: "#FED7AA",
+    borderColor: "#BBF7D0",
+  },
+  actionBtnTextProof: {
+    color: "#0D7A53",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnPay: {
+    backgroundColor: "#0D7A53",
+  },
+  actionBtnTextPay: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnCancel: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  actionBtnTextCancel: {
+    color: "#DC2626",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  actionBtnComplaint: {
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  actionBtnTextComplaint: {
+    color: "#D97706",
+    fontSize: 11,
+    fontWeight: "800",
   },
   actionBtnReview: {
     backgroundColor: "#FFFBEB",
     borderWidth: 1,
     borderColor: "#FDE68A",
-  },
-  actionBtnTextOutline: {
-    color: "#1B7A4E",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  actionBtnTextGray: {
-    color: "#4B5563",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  actionBtnTextSolid: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  actionBtnTextDriver: {
-    color: "#166534",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  actionBtnTextMerchantActive: {
-    color: "#C2410C",
-    fontSize: 11,
-    fontWeight: "800",
   },
   actionBtnTextReview: {
     color: "#B45309",
@@ -2175,94 +2454,60 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: "#F0FDF4",
     paddingHorizontal: 10,
-    height: 32,
-    borderRadius: 16,
+    paddingVertical: 5,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#BBF7D0",
   },
   reviewedBadgeText: {
     color: "#16A34A",
     fontSize: 11,
-    fontWeight: "700",
-  },
-  actionBtnInvoice: {
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#86EFAC",
-  },
-  actionBtnProof: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#86EFAC",
-  },
-  cardProofBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#F0FDF4",
-    borderRadius: 10,
-    padding: 8,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-  },
-  cardProofThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 7,
-    backgroundColor: "#E2E8F0",
-  },
-  cardProofTitle: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#166534",
-  },
-  cardProofBadgeDone: {
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  cardProofBadgeText: {
-    fontSize: 8.5,
-    fontWeight: "800",
-    color: "#15803D",
-  },
-  cardProofSub: {
-    fontSize: 10,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  actionBtnInvoiceOutline: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#0D7A53",
-  },
-  actionBtnTextInvoice: {
-    color: "#0D7A53",
-    fontSize: 11,
     fontWeight: "800",
   },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 72,
-    gap: 12,
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  emptyIconBg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#C6E7D4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   },
   emptyTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
-    color: "#111827",
+    color: "#0F172A",
+    textAlign: "center",
   },
   emptySubtitle: {
-    fontSize: 11,
-    color: "#6B7280",
+    fontSize: 11.5,
+    color: "#64748B",
     textAlign: "center",
-    paddingHorizontal: 36,
-    lineHeight: 16,
+    lineHeight: 17,
+  },
+  emptyRetryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: "#0D7A53",
+  },
+  emptyRetryText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
   },
   // Full Page Layout Styles (Lacak, Ulasan, Chat)
   fullPageContainer: {
@@ -2716,17 +2961,6 @@ const styles = StyleSheet.create({
   submitReviewBtnDisabled: {
     opacity: 0.65,
   },
-  paymentMethodPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginTop: 3,
-    alignSelf: "flex-end",
-  },
-  paymentMethodPillText: {
-    fontSize: 9,
-    fontWeight: "800",
-  },
   complaintBanner: {
     borderRadius: 12,
     padding: 10,
@@ -2802,35 +3036,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#059669",
     fontWeight: "700",
-  },
-  actionBtnComplaint: {
-    borderWidth: 1,
-    borderColor: "#F59E0B",
-    backgroundColor: "#FFFBEB",
-  },
-  actionBtnTextComplaint: {
-    color: "#D97706",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  actionBtnPayNow: {
-    backgroundColor: "#0D7A53",
-    paddingHorizontal: 12,
-  },
-  actionBtnTextPayNow: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  actionBtnCancel: {
-    borderWidth: 1,
-    borderColor: "#FCA5A5",
-    backgroundColor: "#FEF2F2",
-  },
-  actionBtnTextCancel: {
-    color: "#DC2626",
-    fontSize: 11,
-    fontWeight: "800",
   },
   modalOverlay: {
     flex: 1,
@@ -3064,10 +3269,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
+  subFilterCountWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   subFilterCountText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#64748B",
+  },
+  subFilterCountBold: {
+    fontWeight: "900",
+    color: "#0F172A",
   },
   sortBtn: {
     flexDirection: "row",

@@ -23,21 +23,46 @@ const { calculateDriverRevenueSplit } = require("../services/pricingPolicyServic
 const { generateSixDigitCode, hashCode, verifyCode } = require("../utils/sendSecurity");
 const paymentGateway = require("../services/paymentGateway");
 
+const resolveDriverId = (req) => {
+  return String(
+    req.authUser?._id ||
+    req.headers["x-driver-id"] ||
+    req.headers["x-user-id"] ||
+    req.headers["x-account-id"] ||
+    req.body?.driverId ||
+    req.query?.driverId ||
+    ""
+  );
+};
+
 const emitToSendRoom = (io, orderId, event, payload) => {
   if (io && orderId) {
-    io.to(`send:${String(orderId)}`).emit(event, payload);
+    const id = (orderId && typeof orderId === "object" && orderId._id) ? String(orderId._id) : String(orderId);
+    if (id && id !== "[object Object]") {
+      io.to(`send:${id}`).emit(event, payload);
+    }
+    if (payload?.orderCode) {
+      io.to(`send:${String(payload.orderCode)}`).emit(event, payload);
+      io.to(`send:#${String(payload.orderCode).replace(/^#/, "")}`).emit(event, payload);
+    }
   }
 };
 
 const emitToUser = (io, userId, event, payload) => {
   if (io && userId) {
-    io.to(`user:${String(userId)}`).emit(event, payload);
+    const id = (userId && typeof userId === "object" && userId._id) ? String(userId._id) : String(userId);
+    if (id && id !== "[object Object]") {
+      io.to(`user:${id}`).emit(event, payload);
+    }
   }
 };
 
 const emitToDriver = (io, driverId, event, payload) => {
   if (io && driverId) {
-    io.to(`driver:${String(driverId)}`).emit(event, payload);
+    const id = (driverId && typeof driverId === "object" && driverId._id) ? String(driverId._id) : String(driverId);
+    if (id && id !== "[object Object]") {
+      io.to(`driver:${id}`).emit(event, payload);
+    }
   }
 };
 
@@ -46,10 +71,10 @@ const VALID_TRANSITIONS = {
   CREATED: ["PAYMENT_PENDING", "SEARCHING_DRIVER", "CANCELLED"],
   PAYMENT_PENDING: ["SEARCHING_DRIVER", "CANCELLED"],
   SEARCHING_DRIVER: ["DRIVER_ASSIGNED", "CANCELLED"],
-  DRIVER_ASSIGNED: ["DRIVER_ON_THE_WAY_TO_PICKUP", "DRIVER_ARRIVED_AT_PICKUP", "IN_TRANSIT", "PICKED_UP", "CANCELLED", "SEARCHING_DRIVER"],
-  DRIVER_ON_THE_WAY_TO_PICKUP: ["DRIVER_ARRIVED_AT_PICKUP", "PICKUP_VERIFICATION", "PICKED_UP", "IN_TRANSIT", "CANCELLED"],
-  DRIVER_ARRIVED_AT_PICKUP: ["PICKUP_VERIFICATION", "PICKED_UP", "IN_TRANSIT", "CANCELLED"],
-  PICKUP_VERIFICATION: ["PICKED_UP", "IN_TRANSIT", "CANCELLED"],
+  DRIVER_ASSIGNED: ["DRIVER_ON_THE_WAY_TO_PICKUP", "DRIVER_ARRIVED_AT_PICKUP", "IN_TRANSIT", "PICKED_UP", "COMPLETED", "CANCELLED", "SEARCHING_DRIVER"],
+  DRIVER_ON_THE_WAY_TO_PICKUP: ["DRIVER_ARRIVED_AT_PICKUP", "PICKUP_VERIFICATION", "PICKED_UP", "IN_TRANSIT", "COMPLETED", "CANCELLED"],
+  DRIVER_ARRIVED_AT_PICKUP: ["PICKUP_VERIFICATION", "PICKED_UP", "IN_TRANSIT", "COMPLETED", "CANCELLED"],
+  PICKUP_VERIFICATION: ["PICKED_UP", "IN_TRANSIT", "COMPLETED", "CANCELLED"],
   PICKED_UP: ["IN_TRANSIT", "ARRIVED_AT_DESTINATION", "DELIVERY_VERIFICATION", "DELIVERED", "COMPLETED", "RETURN_REQUESTED"],
   IN_TRANSIT: ["ARRIVED_AT_DESTINATION", "DELIVERY_VERIFICATION", "DELIVERED", "COMPLETED", "RETURN_REQUESTED"],
   ARRIVED_AT_DESTINATION: ["DELIVERY_VERIFICATION", "DELIVERED", "COMPLETED", "RETURN_REQUESTED"],
@@ -503,11 +528,31 @@ const getOrderById = async (req, res) => {
     const requesterId = String(req.authUser?._id || resolveDriverId(req) || "");
     const requesterRole = req.authUser?.role || "";
 
-    const order = await SendOrder.findById(id)
-      .populate("driverId", "name phone profilePhoto rating roleData")
-      .populate("customerId", "name phone profilePhoto")
-      .select("-pickupCodeSalt -deliveryOtpSalt -deliveryOtpHash")
-      .lean();
+    let order = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      order = await SendOrder.findById(id)
+        .populate("driverId", "name phone profilePhoto rating roleData")
+        .populate("customerId", "name phone profilePhoto")
+        .select("-pickupCodeSalt -deliveryOtpSalt -deliveryOtpHash")
+        .lean()
+        .catch(() => null);
+    }
+    if (!order) {
+      order = await SendOrder.findOne({ orderCode: id })
+        .populate("driverId", "name phone profilePhoto rating roleData")
+        .populate("customerId", "name phone profilePhoto")
+        .select("-pickupCodeSalt -deliveryOtpSalt -deliveryOtpHash")
+        .lean()
+        .catch(() => null);
+    }
+    if (!order && String(id).startsWith("#")) {
+      order = await SendOrder.findOne({ orderCode: String(id).replace(/^#/, "") })
+        .populate("driverId", "name phone profilePhoto rating roleData")
+        .populate("customerId", "name phone profilePhoto")
+        .select("-pickupCodeSalt -deliveryOtpSalt -deliveryOtpHash")
+        .lean()
+        .catch(() => null);
+    }
 
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan pengiriman tidak ditemukan." });
@@ -535,17 +580,6 @@ const getOrderById = async (req, res) => {
 /**
  * 5. Driver: Get Available Orders (GET /api/send/orders/available)
  */
-const resolveDriverId = (req) => {
-  return String(
-    req.authUser?._id ||
-    req.headers["x-driver-id"] ||
-    req.headers["x-user-id"] ||
-    req.headers["x-account-id"] ||
-    req.body?.driverId ||
-    req.query?.driverId ||
-    ""
-  );
-};
 
 /**
  * 5. Driver: Get Available Orders (GET /api/send/orders/available)
@@ -868,7 +902,14 @@ const verifyPickup = async (req, res) => {
 
     emitToSendRoom(req.io, order._id, "send:pickup_verified", order);
     emitToSendRoom(req.io, order._id, "send:package_picked_up", order);
+    emitToSendRoom(req.io, order._id, "send:status_updated", order);
     emitToUser(req.io, order.customerId, "send:pickup_verified", order);
+    emitToUser(req.io, order.customerId, "send:status_updated", order);
+    if (req.io) {
+      req.io.emit("send:pickup_verified", order);
+      req.io.emit("send:status_updated", order);
+      req.io.emit("order_status_updated", order);
+    }
 
     return res.status(200).json({
       success: true,
@@ -1019,7 +1060,15 @@ const verifyDelivery = async (req, res) => {
 
     emitToSendRoom(req.io, order._id, "send:delivery_verified", order);
     emitToSendRoom(req.io, order._id, "send:order_completed", order);
+    emitToSendRoom(req.io, order._id, "send:status_updated", order);
     emitToUser(req.io, order.customerId, "send:delivery_verified", order);
+    emitToUser(req.io, order.customerId, "send:order_completed", order);
+    if (req.io) {
+      req.io.emit("send:delivery_verified", order);
+      req.io.emit("send:order_completed", order);
+      req.io.emit("send:status_updated", order);
+      req.io.emit("order_status_updated", order);
+    }
 
     return res.status(200).json({
       success: true,
@@ -1042,23 +1091,40 @@ const uploadDeliveryProof = async (req, res) => {
       return res.status(400).json({ success: false, message: "URL foto bukti wajib disertakan." });
     }
 
-    const order = await SendOrder.findById(req.params.id);
+    let order = null;
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      order = await SendOrder.findById(req.params.id);
+    }
+    if (!order) {
+      order = await SendOrder.findOne({ orderCode: req.params.id });
+    }
+    if (!order && String(req.params.id).startsWith("#")) {
+      order = await SendOrder.findOne({ orderCode: String(req.params.id).replace(/^#/, "") });
+    }
     if (!order) {
       return res.status(404).json({ success: false, message: "Order tidak ditemukan." });
     }
 
-    const requesterId = String(req.authUser._id);
-    if (String(order.driverId) !== requesterId && req.authUser.role !== "admin") {
+    const requesterId = String(req.authUser?._id || resolveDriverId(req) || "");
+    const role = req.authUser?.role || "driver";
+    if (order.driverId && String(order.driverId) !== requesterId && role !== "admin") {
       return res.status(403).json({ success: false, message: "Hanya driver yang ditugaskan yang dapat mengunggah bukti." });
     }
 
     if (stage === "pickup") {
+      if (!Array.isArray(order.pickupProofUrls)) order.pickupProofUrls = [];
       order.pickupProofUrls.push(proofUrl);
     } else {
+      if (!Array.isArray(order.deliveryProofUrls)) order.deliveryProofUrls = [];
       order.deliveryProofUrls.push(proofUrl);
     }
 
     await order.save();
+    emitToSendRoom(req.io, order._id, "send:status_updated", order);
+    emitToUser(req.io, order.customerId, "send:status_updated", order);
+    if (order.driverId) {
+      emitToDriver(req.io, order.driverId, "send:status_updated", order);
+    }
     return res.status(200).json({ success: true, message: "Foto bukti berhasil disimpan.", data: order });
   } catch (error) {
     console.error("uploadDeliveryProof error:", error);
@@ -1071,7 +1137,7 @@ const uploadDeliveryProof = async (req, res) => {
  */
 const updateOrderStatus = async (req, res) => {
   try {
-    const { status, note } = req.body;
+    const { status, note, deliveryProofUrl, proofUrl } = req.body;
     const actorId = String(req.authUser?._id || resolveDriverId(req) || "");
     const actorRole = req.authUser?.role || "driver";
 
@@ -1086,7 +1152,16 @@ const updateOrderStatus = async (req, res) => {
     };
     const targetStatus = STATUS_ALIAS_MAP[status] || status;
 
-    const order = await SendOrder.findById(req.params.id);
+    let order = null;
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      order = await SendOrder.findById(req.params.id);
+    }
+    if (!order) {
+      order = await SendOrder.findOne({ orderCode: req.params.id });
+    }
+    if (!order && String(req.params.id).startsWith("#")) {
+      order = await SendOrder.findOne({ orderCode: String(req.params.id).replace(/^#/, "") });
+    }
     if (!order) {
       return res.status(404).json({ success: false, message: "Order tidak ditemukan." });
     }
@@ -1109,6 +1184,15 @@ const updateOrderStatus = async (req, res) => {
     }
 
     order.status = targetStatus;
+    const finalProofUrl = deliveryProofUrl || proofUrl;
+    if (finalProofUrl) {
+      if (!Array.isArray(order.deliveryProofUrls)) {
+        order.deliveryProofUrls = [];
+      }
+      if (!order.deliveryProofUrls.includes(finalProofUrl)) {
+        order.deliveryProofUrls.push(finalProofUrl);
+      }
+    }
     if (targetStatus === "COMPLETED" || targetStatus === "DELIVERED") {
       order.deliveredAt = order.deliveredAt || new Date();
       order.completedAt = order.completedAt || new Date();
@@ -1173,6 +1257,7 @@ const updateOrderStatus = async (req, res) => {
     }
     if (req.io) {
       req.io.emit("send:status_updated", order);
+      req.io.emit("order_status_updated", order);
     }
     if (targetStatus === "COMPLETED" || targetStatus === "DELIVERED") {
       emitToSendRoom(req.io, order._id, "send:order_completed", order);

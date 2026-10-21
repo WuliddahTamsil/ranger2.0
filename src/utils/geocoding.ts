@@ -6,6 +6,7 @@ export interface GeocodedAddress {
   street?: string;
   district?: string;
   city?: string;
+  placeName?: string;
 }
 
 export interface PlaceSuggestion {
@@ -96,12 +97,22 @@ export const LOCAL_KNOWN_POIS: Array<{
     keywords: ["sancang", "jl sancang", "jalan sancang"],
   },
   {
-    name: "Botani Square Mall Bogor",
+    name: "Mall Botani Square Bogor",
     subtitle: "Jl. Raya Pajajaran No.40, Tegallega, Kota Bogor",
-    formattedAddress: "Botani Square Mall Bogor, Jl. Raya Pajajaran No.40, Tegallega, Kota Bogor, Jawa Barat",
-    latitude: -6.6006,
-    longitude: 106.8063,
-    keywords: ["botani", "botani square", "mall botani", "pajajaran"],
+    formattedAddress: "Mall Botani Square, Jl. Raya Pajajaran No.40, Tegallega, Kota Bogor",
+    latitude: -6.6008,
+    longitude: 106.8062,
+    keywords: [
+      "mall botani square",
+      "botani square mall",
+      "botani square",
+      "mall botani",
+      "botani",
+      "botani mall",
+      "botani square bogor",
+      "pajajaran",
+      "tegallega",
+    ],
   },
   {
     name: "RS PMI Bogor",
@@ -160,12 +171,75 @@ export const LOCAL_KNOWN_POIS: Array<{
     keywords: ["stasiun bogor", "stasiun", "commuter line bogor"],
   },
   {
-    name: "Sekolah Vokasi IPB (Kampus Cilibende/Gunung Gede)",
+    name: "Sekolah Vokasi IPB (Kampus SV)",
     subtitle: "Jl. Kumbang No.14, Babakan, Kota Bogor",
-    formattedAddress: "Sekolah Vokasi IPB, Jl. Kumbang No.14, Babakan, Kota Bogor, Jawa Barat",
-    latitude: -6.5878,
+    formattedAddress: "Sekolah Vokasi IPB (Kampus SV), Jl. Kumbang No.14, Babakan, Kota Bogor",
+    latitude: -6.5888,
+    longitude: 106.8068,
+    keywords: [
+      "kampus sv",
+      "sv",
+      "sv ipb",
+      "kampus sv ipb",
+      "sekolah vokasi",
+      "sekolah vokasi ipb",
+      "vokasi ipb",
+      "vokasi",
+      "kampus vokasi",
+      "ipb cilibende",
+      "cilibende",
+      "kumbang",
+      "jl kumbang",
+      "jalan kumbang",
+    ],
+  },
+  {
+    name: "Kampus IPB Baranangsiang",
+    subtitle: "Jl. Raya Pajajaran, Tegallega, Kota Bogor",
+    formattedAddress: "Kampus IPB Baranangsiang, Jl. Raya Pajajaran, Tegallega, Kota Bogor",
+    latitude: -6.6001,
+    longitude: 106.8048,
+    keywords: ["ipb baranangsiang", "kampus ipb", "pascasarjana ipb", "ipb", "baranangsiang ipb"],
+  },
+  {
+    name: "Kampus IPB Dramaga",
+    subtitle: "Jl. Raya Dramaga, Babakan, Kec. Dramaga, Kabupaten Bogor",
+    formattedAddress: "Kampus IPB Dramaga, Babakan, Kec. Dramaga, Kabupaten Bogor, Jawa Barat",
+    latitude: -6.5583,
+    longitude: 106.7265,
+    keywords: ["ipb dramaga", "kampus dramaga", "dramaga", "kampus ipb dramaga"],
+  },
+  {
+    name: "Bogor Trade Mall (BTM)",
+    subtitle: "Jl. Ir. H. Juanda No.68, Gudang, Kota Bogor",
+    formattedAddress: "Bogor Trade Mall (BTM), Jl. Ir. H. Juanda No.68, Kota Bogor",
+    latitude: -6.6028,
+    longitude: 106.7946,
+    keywords: ["btm", "bogor trade mall", "mall btm"],
+  },
+  {
+    name: "RS Siloam Bogor",
+    subtitle: "Jl. Pajajaran No.27, Tegallega, Kota Bogor",
+    formattedAddress: "RS Siloam Bogor, Jl. Pajajaran No.27, Kota Bogor, Jawa Barat",
+    latitude: -6.6009,
     longitude: 106.8078,
-    keywords: ["vokasi ipb", "sv ipb", "ipb cilibende", "kumbang"],
+    keywords: ["rs siloam", "siloam bogor", "siloam", "rumah sakit siloam"],
+  },
+  {
+    name: "Pusat Kegiatan Rangers Kamojang",
+    subtitle: "Samarang, Garut, Jawa Barat",
+    formattedAddress: "Pusat Kegiatan Rangers Kamojang, Samarang, Garut, Jawa Barat",
+    latitude: -7.1452,
+    longitude: 107.7891,
+    keywords: ["kamojang", "basecamp", "basecamp rangers", "pusat kegiatan rangers kamojang", "rangers kamojang"],
+  },
+  {
+    name: "Kawah Kamojang & Wisata Geothermal",
+    subtitle: "Kawah Kamojang, Ibun, Samarang, Jawa Barat",
+    formattedAddress: "Kawah Kamojang & Wisata Geothermal, Samarang, Garut",
+    latitude: -7.1510,
+    longitude: 107.7915,
+    keywords: ["kawah kamojang", "wisata kamojang", "geothermal kamojang", "geothermal"],
   },
 ];
 
@@ -226,25 +300,25 @@ export const calculateMatchScore = (
   const q = query.toLowerCase().trim();
   const name = targetName.toLowerCase().trim();
   const sub = targetSubtitle.toLowerCase().trim();
-  const full = `${name} ${sub}`;
+  const full = `${name} ${sub} ${keywords.join(" ")}`.toLowerCase();
 
   if (!q) return 0;
 
   // 1. Exact match
   if (name === q) return 100;
   if (name.startsWith(q)) return 95;
-  if (name.includes(q)) return 85;
+  if (name.includes(q)) return 88;
 
   // 2. Keyword exact / prefix / substring match
   for (const kw of keywords) {
     const k = kw.toLowerCase().trim();
-    if (k === q) return 98;
-    if (k.startsWith(q)) return 90;
-    if (k.includes(q) || q.includes(k)) return 80;
+    if (k === q) return 100;
+    if (k.startsWith(q) || q.startsWith(k)) return 96;
+    if (k.includes(q) || q.includes(k)) return 92;
   }
 
   // 3. Subtitle / address match
-  if (sub.includes(q)) return 70;
+  if (sub.includes(q)) return 75;
 
   // 4. Token multi-word matching
   const qTokens = q.split(/\s+/).filter(Boolean);
@@ -257,8 +331,12 @@ export const calculateMatchScore = (
     }
   }
 
+  if (matchedTokens === qTokens.length) {
+    return 95; // All user query words matched!
+  }
+
   if (matchedTokens > 0) {
-    return 50 + (matchedTokens / qTokens.length) * 25;
+    return 50 + (matchedTokens / qTokens.length) * 35;
   }
 
   // 5. Fuzzy / typo tolerance (for queries of 3+ letters)
@@ -273,6 +351,52 @@ export const calculateMatchScore = (
   }
 
   return 0;
+};
+
+/**
+ * Fast synchronous lookup for any address text or place name against LOCAL_KNOWN_POIS.
+ * If text contains or matches a known POI, returns exact coordinates immediately.
+ */
+export const findKnownPoiByText = (
+  text?: string
+): { latitude: number; longitude: number; placeName: string; formattedAddress: string } | null => {
+  if (!text || typeof text !== "string") return null;
+  const clean = text.toLowerCase().trim();
+  if (clean.length < 2) return null;
+
+  // 1. Direct coordinate check: "lat, lng" or "-6.5888, 106.8068"
+  const coordRegex = /(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/;
+  const matchCoord = clean.match(coordRegex);
+  if (matchCoord) {
+    const lat = parseFloat(matchCoord[1]);
+    const lon = parseFloat(matchCoord[2]);
+    if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+      return { latitude: lat, longitude: lon, placeName: "Titik Lokasi", formattedAddress: text };
+    }
+  }
+
+  // 2. Score against LOCAL_KNOWN_POIS
+  let bestPoi: (typeof LOCAL_KNOWN_POIS)[0] | null = null;
+  let bestScore = 0;
+
+  for (const poi of LOCAL_KNOWN_POIS) {
+    const score = calculateMatchScore(clean, poi.name, poi.subtitle, poi.keywords);
+    if (score > bestScore) {
+      bestScore = score;
+      bestPoi = poi;
+    }
+  }
+
+  if (bestPoi && bestScore >= 55) {
+    return {
+      latitude: bestPoi.latitude,
+      longitude: bestPoi.longitude,
+      placeName: bestPoi.name,
+      formattedAddress: bestPoi.formattedAddress,
+    };
+  }
+
+  return null;
 };
 
 /**
@@ -365,8 +489,12 @@ export const normalizeSearchQuery = (raw: string): string[] => {
     [/\brs\b/gi, "Rumah Sakit"],
     [/\bstasiun\b/gi, "Stasiun"],
     [/\bst\b/gi, "Stasiun"],
+    [/\bkampus sv\b/gi, "Sekolah Vokasi IPB"],
     [/\bsv ipb\b/gi, "Sekolah Vokasi IPB"],
     [/\bvokasi ipb\b/gi, "Sekolah Vokasi IPB"],
+    [/\bsekolah vokasi\b/gi, "Sekolah Vokasi IPB"],
+    [/\bbotani square\b/gi, "Mall Botani Square Bogor"],
+    [/\bmall botani\b/gi, "Mall Botani Square Bogor"],
     [/\bjl\b/gi, "Jalan"],
     [/\bjln\b/gi, "Jalan"],
     [/\bgg\b/gi, "Gang"],
@@ -652,27 +780,32 @@ export const searchPlacesSmart = async (
   }
 
   // 5. Gojek/Grab-Style Ranking & Sorting:
-  // Strictly prioritize places closest to the user's location.
+  // Relevance ALWAYS comes first when there is a strong match difference!
   results.sort((a, b) => {
     const distA = a.distanceKm ?? 999999;
     const distB = b.distanceKm ?? 999999;
     const scoreA = a.matchScore ?? 50;
     const scoreB = b.matchScore ?? 50;
 
-    // Both are within local area (< 30km): sort strictly by distance!
-    if (distA <= 30 && distB <= 30) {
-      if (Math.abs(distA - distB) > 0.05) {
+    // If one result has significantly higher relevance (difference >= 15), relevance wins!
+    if (Math.abs(scoreA - scoreB) >= 15) {
+      return scoreB - scoreA;
+    }
+
+    // Both are within local area (< 35km): sort by closer distance
+    if (distA <= 35 && distB <= 35) {
+      if (Math.abs(distA - distB) > 0.1) {
         return distA - distB;
       }
       return scoreB - scoreA;
     }
 
-    // Local (< 30km) always beats distant locations
-    if (distA <= 30 && distB > 30) return -1;
-    if (distB <= 30 && distA > 30) return 1;
+    // Local (< 35km) always beats distant locations
+    if (distA <= 35 && distB > 35) return -1;
+    if (distB <= 35 && distA > 35) return 1;
 
-    // Both distant: balance relevance and proximity
-    if (Math.abs(scoreA - scoreB) > 25) {
+    // Both distant: relevance then distance
+    if (scoreA !== scoreB) {
       return scoreB - scoreA;
     }
     return distA - distB;
@@ -688,6 +821,17 @@ export const safeReverseGeocode = async (
   latitude: number,
   longitude: number
 ): Promise<GeocodedAddress | null> => {
+  // Check if coordinate is near any known local POI (within ~80 meters)
+  const nearbyPoi = LOCAL_KNOWN_POIS.find((poi) => {
+    return calculateDistanceKm(poi.latitude, poi.longitude, latitude, longitude) <= 0.08;
+  });
+  if (nearbyPoi) {
+    return {
+      formattedAddress: nearbyPoi.formattedAddress,
+      placeName: nearbyPoi.name,
+    };
+  }
+
   if (Platform.OS === "web") {
     try {
       const resp = await fetch(
@@ -886,7 +1030,7 @@ export const getCurrentUserCoordinates = async (): Promise<UserLocationResult | 
 export const safeForwardGeocode = async (
   query: string,
   options?: { lat?: number; lon?: number }
-): Promise<{ latitude: number; longitude: number; formattedAddress?: string } | null> => {
+): Promise<{ latitude: number; longitude: number; formattedAddress?: string; placeName?: string } | null> => {
   if (!query || !query.trim()) return null;
 
   // 1. Try smart search (Photon + POI dictionaries with Indonesia restriction)
@@ -896,6 +1040,7 @@ export const safeForwardGeocode = async (
       latitude: matches[0].latitude,
       longitude: matches[0].longitude,
       formattedAddress: matches[0].formattedAddress,
+      placeName: matches[0].name,
     };
   }
 

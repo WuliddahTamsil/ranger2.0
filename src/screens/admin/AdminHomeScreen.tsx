@@ -2571,7 +2571,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                       <Text style={{ fontSize: 12, color: "#64748B" }}>Aturan loyalitas digital & buku tabungan mutasi</Text>
                     </View>
                     <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#B45309" }}>1 Poin = Rp 10</Text>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#B45309" }}>100 Poin = Rp 1</Text>
                     </View>
                   </View>
 

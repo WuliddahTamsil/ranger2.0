@@ -181,7 +181,7 @@ const sendOrderSchema = new mongoose.Schema(
     totalAmount: { type: Number, default: 0 },
     pointDiscount: { type: Number, default: 0 },
     pointsUsed: { type: Number, default: 0 },
-    pointRate: { type: Number, default: 1 },
+    pointRate: { type: Number, default: 0.01 },
     grossAmount: { type: Number, default: 0 },
     finalAmount: { type: Number, default: 0 },
     pointRefunded: { type: Boolean, default: false },

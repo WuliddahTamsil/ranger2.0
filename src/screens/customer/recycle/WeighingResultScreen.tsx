@@ -312,7 +312,7 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
             </View>
             <Text style={styles.pointRewardVal}>+{formatNumberSafe(totalPoint)} Pts</Text>
           </View>
-          <Text style={styles.conversionNote}>*1 Point = Rp 1, langsung diterbitkan saat Anda setujui.</Text>
+          <Text style={styles.conversionNote}>*100 Point = Rp 1, langsung diterbitkan saat Anda setujui.</Text>
         </View>
 
         {/* Pickup Breakdown Card if PICKUP */}

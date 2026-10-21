@@ -367,7 +367,8 @@ export const updateSendOrderStatus = async (
   orderId: string,
   status: string,
   note?: string,
-  accountId?: string
+  accountId?: string,
+  deliveryProofUrl?: string
 ): Promise<{ success: boolean; data?: SendOrderUI; message?: string }> => {
   try {
     const headers = await getAuthHeaders(accountId);
@@ -377,12 +378,38 @@ export const updateSendOrderStatus = async (
         ...headers,
         ...(accountId ? { "x-driver-id": accountId, "x-user-id": accountId } : {}),
       },
-      body: JSON.stringify({ status, note }),
+      body: JSON.stringify({ status, note, deliveryProofUrl }),
     });
     return await parseJsonResponse(res, "Gagal memperbarui status order pengiriman");
   } catch (error: any) {
     console.error("updateSendOrderStatus error:", error);
     return { success: false, message: error.message || "Gagal memperbarui status pengiriman." };
+  }
+};
+
+/**
+ * 13b. Driver: Upload Delivery Proof Photo
+ */
+export const uploadSendDeliveryProof = async (
+  orderId: string,
+  proofUrl: string,
+  stage: "pickup" | "delivery" = "delivery",
+  accountId?: string
+): Promise<{ success: boolean; data?: any; message?: string }> => {
+  try {
+    const headers = await getAuthHeaders(accountId);
+    const res = await fetch(getApiUrl(`/send/orders/${orderId}/delivery-proof`), {
+      method: "POST",
+      headers: {
+        ...headers,
+        ...(accountId ? { "x-driver-id": accountId, "x-user-id": accountId } : {}),
+      },
+      body: JSON.stringify({ proofUrl, stage }),
+    });
+    return await parseJsonResponse(res, "Gagal mengunggah foto bukti pengantaran");
+  } catch (error: any) {
+    console.error("uploadSendDeliveryProof error:", error);
+    return { success: false, message: error.message || "Gagal menyimpan foto bukti." };
   }
 };
 

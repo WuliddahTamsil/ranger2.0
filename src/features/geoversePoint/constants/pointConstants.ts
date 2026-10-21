@@ -19,7 +19,7 @@ export const GEOVERSE_POINT_THEME = {
   borderMedium: "#CBD5E1",
 };
 
-export const DEFAULT_POINT_RATE = 1; // 1 Point = Rp 1 (authoritative from backend)
+export const DEFAULT_POINT_RATE = 0.01; // 100 Point = Rp 1 (1 Point = Rp 0.01, authoritative from backend)
 export const MIN_CASH_WITHDRAWAL_POINTS = 5000;
 
 export const WITHDRAWAL_CHANNELS = [

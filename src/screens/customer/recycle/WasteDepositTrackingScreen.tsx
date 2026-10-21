@@ -330,7 +330,7 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
               +{formatNumberSafe(deposit.finalPoint || 0)} Points
             </Text>
             <Text style={styles.completedSub}>
-              Nilai: {rp(deposit.finalRupiah || 0)} (1 Point = Rp 1)
+              Nilai: {rp(deposit.finalRupiah || 0)} (100 Point = Rp 1)
             </Text>
             <TouchableOpacity
               style={styles.btnViewWallet}

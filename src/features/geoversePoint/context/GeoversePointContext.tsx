@@ -42,7 +42,7 @@ interface GeoversePointContextType {
 }
 
 const DEFAULT_CONFIG: PointConfigUI = {
-  pointToRupiahRate: 1,
+  pointToRupiahRate: 0.01, // 100 Point = Rp 1
   minCashRedemptionPoints: 10000,
   features: {
     allowCashRedemption: true,
@@ -183,7 +183,8 @@ export const GeoversePointProvider: React.FC<{ children: React.ReactNode }> = ({
   const pointToRupiah = useCallback(
     (pts?: number | null): number => {
       const val = pts != null ? pts : 0;
-      return val * (config.pointToRupiahRate || 1);
+      const rate = typeof config.pointToRupiahRate === "number" ? config.pointToRupiahRate : 0.01;
+      return Math.round(val * rate * 100) / 100;
     },
     [config.pointToRupiahRate]
   );

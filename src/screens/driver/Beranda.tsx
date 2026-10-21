@@ -370,6 +370,8 @@ const mapSendDriverOrder = (order: any): DriverOrder => {
     storeName: "Pengirim: " + (order.sender?.name || ""),
     storeAddress: order.sender?.address || "",
     storePhone: order.sender?.phone || "",
+    recipientName: order.recipient?.name || "Penerima",
+    recipientPhone: order.recipient?.phone || "",
     ownerId: order.customerId,
     notes: order.deliveryInstructions || order.package?.notes || "",
     pickup: order.sender ? {
@@ -1306,13 +1308,16 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
                 else if (status === "Selesai") backendStatus = "COMPLETED";
                 else if (status === "Dibatalkan") backendStatus = "CANCELLED";
 
-                const res = await updateSendOrderStatus(orderId, backendStatus, undefined, authAccount?.id);
+                const res = await updateSendOrderStatus(orderId, backendStatus, undefined, authAccount?.id, deliveryProofUrl);
                 if (!res.success) {
                   Alert.alert("Gagal", res.message || "Status pengiriman gagal diperbarui");
                   return false;
                 }
                 if (res.data) {
                   const updated = mapSendDriverOrder(res.data);
+                  if (deliveryProofUrl && !updated.deliveryProofUrl) {
+                    updated.deliveryProofUrl = deliveryProofUrl;
+                  }
                   setOrders((current) => sortDriverOrders(current.map((order) => order.id === orderId ? updated : order)));
                   return updated;
                 }

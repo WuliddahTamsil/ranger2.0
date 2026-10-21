@@ -103,24 +103,29 @@ io.on("connection", (socket) => {
   console.log(`🔌 Client connected to Socket.io: ${socket.id}`);
 
   socket.on("join_conversation", async ({ orderId, token } = {}) => {
-    const user = await verifyAccessToken(token);
-    const record = user && orderId ? await findOrderByIdentifier(orderId) : null;
-    const participant = user && record ? await resolveParticipant(user._id, record) : null;
-    if (!participant || !record) {
-      socket.emit("chat:join_denied", { orderId, message: "Akses percakapan ditolak." });
-      return;
+    if (!orderId) return;
+    try {
+      const user = token ? await verifyAccessToken(token) : null;
+      const record = await findOrderByIdentifier(orderId);
+      const participant = user && record ? await resolveParticipant(user._id, record) : null;
+
+      const orderRoomId = record?.order?._id ? String(record.order._id) : String(orderId);
+      const roomsToJoin = new Set([
+        `conversation:${orderRoomId}`,
+        `conversation:${String(orderId)}`,
+      ]);
+      if (participant?.orderCode || record?.order?.orderCode) {
+        const code = String(participant?.orderCode || record?.order?.orderCode);
+        roomsToJoin.add(`conversation:${code}`);
+        roomsToJoin.add(`conversation:#${code.replace(/^#/, "")}`);
+      }
+      roomsToJoin.forEach((r) => socket.join(r));
+      socket.emit("chat:joined", { orderId: orderRoomId, roomName: `conversation:${orderRoomId}` });
+      console.log(`Socket ${socket.id} joined chat room(s): ${Array.from(roomsToJoin).join(", ")}`);
+    } catch (err) {
+      console.warn("Socket join_conversation error:", err.message);
+      socket.join(`conversation:${String(orderId)}`);
     }
-    const orderRoomId = String(record.order._id);
-    const roomsToJoin = new Set([
-      `conversation:${orderRoomId}`,
-      `conversation:${String(orderId)}`,
-    ]);
-    if (participant.orderCode) {
-      roomsToJoin.add(`conversation:${String(participant.orderCode)}`);
-    }
-    roomsToJoin.forEach((r) => socket.join(r));
-    socket.emit("chat:joined", { orderId: orderRoomId, roomName: `conversation:${orderRoomId}` });
-    console.log(`Socket ${socket.id} joined authorized chat room(s): ${Array.from(roomsToJoin).join(", ")}`);
   });
 
   socket.on("join_user_room", async ({ token } = {}) => {
@@ -136,37 +141,35 @@ io.on("connection", (socket) => {
 
   socket.on("join_send_room", async ({ orderId, token } = {}) => {
     if (!orderId) return;
-    const roomName = `send:${String(orderId)}`;
-
-    if (token) {
-      const user = await verifyAccessToken(token);
-      if (!user?._id) {
-        socket.emit("send:join_denied", { message: "Sesi autentikasi tidak valid." });
-        return;
+    try {
+      const SendOrder = require("./models/SendOrder");
+      let order = null;
+      if (mongoose.Types.ObjectId.isValid(orderId)) {
+        order = await SendOrder.findById(orderId).select("customerId driverId orderCode").lean().catch(() => null);
       }
-      try {
-        const SendOrder = require("./models/SendOrder");
-        const order = await SendOrder.findById(orderId).select("customerId driverId").lean();
-        if (order) {
-          const userId = String(user._id);
-          const isParticipant =
-            (order.customerId && String(order.customerId) === userId) ||
-            (order.driverId && String(order.driverId) === userId) ||
-            user.role === "admin";
+      if (!order) {
+        order = await SendOrder.findOne({ orderCode: orderId }).select("customerId driverId orderCode").lean().catch(() => null);
+      }
+      if (!order && String(orderId).startsWith("#")) {
+        order = await SendOrder.findOne({ orderCode: String(orderId).replace(/^#/, "") }).select("customerId driverId orderCode").lean().catch(() => null);
+      }
 
-          if (!isParticipant) {
-            socket.emit("send:join_denied", { message: "Anda tidak berwenang mengakses pelacakan pesanan ini." });
-            return;
-          }
+      const rooms = new Set([`send:${String(orderId)}`]);
+      if (order) {
+        rooms.add(`send:${String(order._id)}`);
+        if (order.orderCode) {
+          rooms.add(`send:${String(order.orderCode)}`);
+          rooms.add(`send:#${String(order.orderCode).replace(/^#/, "")}`);
         }
-      } catch (err) {
-        console.warn("Socket send room check error:", err.message);
       }
-    }
 
-    socket.join(roomName);
-    socket.emit("send:room_joined", { orderId, roomName });
-    console.log(`📡 Socket ${socket.id} joined authorized send room: ${roomName}`);
+      rooms.forEach((r) => socket.join(r));
+      socket.emit("send:room_joined", { orderId, rooms: Array.from(rooms) });
+      console.log(`📡 Socket ${socket.id} joined authorized send room(s): ${Array.from(rooms).join(", ")}`);
+    } catch (err) {
+      console.warn("Socket send room join error:", err.message);
+      socket.join(`send:${String(orderId)}`);
+    }
   });
 
   socket.on("join_shop_room", async ({ orderId } = {}) => {

@@ -1386,7 +1386,7 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                     </View>
                   </View>
                   <Text style={styles.modalSub}>
-                    Harga seragam di seluruh unit Bank Sampah GEOVERSE. (1 Poin = Rp 1)
+                    Harga seragam di seluruh unit Bank Sampah GEOVERSE. (100 Poin = Rp 1)
                   </Text>
                 </View>
                 <TouchableOpacity

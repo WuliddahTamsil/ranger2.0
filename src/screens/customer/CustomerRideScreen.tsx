@@ -59,28 +59,28 @@ import { validateKamojangRadius, validateServiceCoverage, MAX_SERVICE_RADIUS_KM 
 
 const DEFAULT_COORDS = {
   pickup: {
-    address: "Pusat Kegiatan Rangers Kamojang, Samarang, Garut",
-    placeName: "Lokasi Saya (Kamojang)",
-    latitude: -7.1452,
-    longitude: 107.7891,
+    address: "Sekolah Vokasi IPB (Kampus SV), Jl. Kumbang No.14, Babakan, Kota Bogor",
+    placeName: "Sekolah Vokasi IPB (Kampus SV)",
+    latitude: -6.5888,
+    longitude: 106.8068,
   },
   home: {
-    address: "Perumahan Kamojang Asri Blok B No. 12",
+    address: "Jalan Sancang No.12, Babakan, Kota Bogor",
     placeName: "Rumah",
-    latitude: -7.1465,
-    longitude: 107.7950,
+    latitude: -6.5925,
+    longitude: 106.8075,
   },
   office: {
-    address: "Pusat Kegiatan Rangers Kamojang",
-    placeName: "Kantor / Basecamp",
-    latitude: -7.1440,
-    longitude: 107.7985,
+    address: "Mall Botani Square, Jl. Raya Pajajaran No.40, Tegallega, Kota Bogor",
+    placeName: "Mall Botani Square",
+    latitude: -6.6008,
+    longitude: 106.8062,
   },
   saved: {
-    address: "Kawah Kamojang & Wisata Geothermal",
-    placeName: "Lokasi Wisata",
-    latitude: -7.1510,
-    longitude: 107.7915,
+    address: "Kebun Raya Bogor, Jl. Ir. H. Juanda No.13, Kota Bogor",
+    placeName: "Kebun Raya Bogor",
+    latitude: -6.5976,
+    longitude: 106.7995,
   },
 };
 const KAMOJANG_DEFAULT_COORDS = DEFAULT_COORDS;
@@ -377,7 +377,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   const handleLocationConfirmed = (val: CustomerLocationValue) => {
     const loc: RideLocation = {
       address: val.detectedAddress || `${val.latitude.toFixed(4)}, ${val.longitude.toFixed(4)}`,
-      placeName: pickerTarget === "pickup" ? "Lokasi Jemput" : "Tujuan Perjalanan",
+      placeName: val.placeName || (pickerTarget === "pickup" ? "Lokasi Jemput" : "Tujuan Perjalanan"),
       latitude: val.latitude,
       longitude: val.longitude,
     };
@@ -426,8 +426,11 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   const [usePoints, setUsePoints] = useState(false);
 
   const rawEstimatedFare = useMemo(() => fareBreakdown?.estimatedFare || 0, [fareBreakdown?.estimatedFare]);
-  const maxPointsUsable = Math.min(userPoints, rawEstimatedFare);
-  const pointDiscount = usePoints ? maxPointsUsable : 0;
+  // 100 Point = Rp 1
+  const pointsNeededToCoverFare = Math.ceil(rawEstimatedFare * 100);
+  const maxPointsUsable = Math.min(userPoints, pointsNeededToCoverFare);
+  const pointDiscount = usePoints ? Math.floor(maxPointsUsable * 0.01) : 0;
+  const pointsToDebit = usePoints ? maxPointsUsable : 0;
   const finalPayableFare = Math.max(0, rawEstimatedFare - pointDiscount);
   const estimatedFare = finalPayableFare;
 
@@ -511,6 +514,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
           latitude: pickerLocation.latitude,
           longitude: pickerLocation.longitude,
           detectedAddress: pickerLocation.address,
+          placeName: pickerLocation.placeName,
         }
       : undefined;
 
@@ -580,7 +584,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         customerNote: customerNote.trim(),
         vehicleType: "MOTOR",
         paymentMethod: finalPayableFare === 0 ? "GEOVERSE_POINT" : selectedPaymentMethod,
-        pointsUsed: pointDiscount,
+        pointsUsed: pointsToDebit,
         pointDiscount,
         estimatedDistance: calculatedDistance,
         estimatedDuration,
@@ -767,12 +771,23 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                   activeOpacity={0.8}
                 >
                   <MapPin size={16} color="#1B7A4E" />
-                  <Text
-                    style={[styles.textInput, !pickup.address && { color: "#94A3B8" }]}
-                    numberOfLines={1}
-                  >
-                    {pickup.address || "Tentukan lokasi penjemputan"}
-                  </Text>
+                  <View style={{ flex: 1, justifyContent: "center" }}>
+                    {pickup.placeName && pickup.placeName !== "Lokasi Jemput" && pickup.placeName !== pickup.address ? (
+                      <Text style={{ fontSize: 12.5, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+                        {pickup.placeName}
+                      </Text>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.textInput,
+                        !pickup.address && { color: "#94A3B8" },
+                        pickup.placeName && pickup.placeName !== "Lokasi Jemput" && pickup.placeName !== pickup.address && { fontSize: 11, color: "#64748B", fontWeight: "400" },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {pickup.address || "Tentukan lokasi penjemputan"}
+                    </Text>
+                  </View>
                   <View style={styles.mapPinActionBtn}>
                     <Text style={styles.mapPinActionText}>Ubah</Text>
                   </View>
@@ -788,12 +803,23 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                   activeOpacity={0.8}
                 >
                   <Navigation size={16} color="#EA580C" />
-                  <Text
-                    style={[styles.textInput, !destination.address && { color: "#94A3B8" }]}
-                    numberOfLines={1}
-                  >
-                    {destination.address || "Pilih lokasi tujuan di peta / cari alamat..."}
-                  </Text>
+                  <View style={{ flex: 1, justifyContent: "center" }}>
+                    {destination.placeName && destination.placeName !== "Tujuan Perjalanan" && destination.placeName !== destination.address ? (
+                      <Text style={{ fontSize: 12.5, fontWeight: "700", color: "#0F172A" }} numberOfLines={1}>
+                        {destination.placeName}
+                      </Text>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.textInput,
+                        !destination.address && { color: "#94A3B8" },
+                        destination.placeName && destination.placeName !== "Tujuan Perjalanan" && destination.placeName !== destination.address && { fontSize: 11, color: "#64748B", fontWeight: "400" },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {destination.address || "Pilih lokasi tujuan di peta / cari alamat..."}
+                    </Text>
+                  </View>
                   <View style={styles.mapPinActionBtn}>
                     <Text style={styles.mapPinActionText}>Peta</Text>
                   </View>
@@ -983,7 +1009,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Tukar GEOVERSE Point</Text>
                 <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
-                  Saldo: {userPoints.toLocaleString("id-ID")} Pts {rawEstimatedFare > 0 ? `(Hemat ${rp(maxPointsUsable)})` : "(1 Poin = Rp 1)"}
+                  Saldo: {userPoints.toLocaleString("id-ID")} Pts {maxPointsUsable > 0 ? `(Hemat ${rp(Math.floor(maxPointsUsable * 0.01))} dg ${maxPointsUsable.toLocaleString("id-ID")} Pts)` : "(100 Poin = Rp 1)"}
                 </Text>
               </View>
             </View>
@@ -1228,6 +1254,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                 latitude: pickup.latitude as number,
                 longitude: pickup.longitude as number,
                 detectedAddress: pickup.address,
+                placeName: pickup.placeName,
               }
             : undefined
         }
@@ -1394,7 +1421,8 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
     borderRadius: 12,
     paddingHorizontal: 10,
-    height: 44,
+    paddingVertical: 5,
+    minHeight: 46,
     gap: 8,
   },
   inputBoxHighlight: {

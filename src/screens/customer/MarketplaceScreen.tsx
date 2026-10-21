@@ -2,12 +2,14 @@ import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-c
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Linking,
   Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -22,6 +24,7 @@ import {
   ReceiptText,
   ShieldCheck,
   ShoppingBag,
+  Sparkles,
   Store,
   Tag,
   WalletCards,
@@ -40,6 +43,7 @@ import { CustomerAddressSelector } from "../../components/CustomerAddressSelecto
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import { consumePendingMarketplaceCart, setPendingMarketplaceCart } from "./marketplaceCartStore";
 import { MarketplaceDigitalPaymentModal } from "../../components/MarketplaceDigitalPaymentModal";
+import { useRecycle } from "../../context/RecycleContext";
 
 type MarketplaceView = "catalog" | "cart" | "checkout" | "success";
 type MarketplaceTab = "menu" | "profile" | "reviews";
@@ -206,7 +210,18 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
   const deliveryFee = cart.length > 0 ? 8000 : 0;
   const serviceFee = cart.length > 0 ? 2000 : 0;
   const discount = promoApplied ? 5000 : 0;
-  const total = Math.max(0, subtotal + deliveryFee + serviceFee + driverTip - discount);
+
+  const { wallet } = useRecycle();
+  const userPoints = wallet?.balancePoint || 0;
+  const [usePoints, setUsePoints] = useState(false);
+
+  const rawTotalBeforePoints = subtotal + deliveryFee + serviceFee + driverTip - discount;
+  // 100 Point = Rp 1
+  const pointsNeededToCoverTotal = Math.ceil(Math.max(0, rawTotalBeforePoints) * 100);
+  const maxPointsUsable = Math.min(userPoints, pointsNeededToCoverTotal);
+  const pointDiscount = usePoints ? Math.floor(maxPointsUsable * 0.01) : 0;
+  const pointsToDebit = usePoints ? maxPointsUsable : 0;
+  const total = Math.max(0, rawTotalBeforePoints - pointDiscount);
   const selectedPaymentLabel = paymentMethods.find((method) => method.id === selectedPayment)?.name || "QRIS";
 
   const addToCart = (product: Product) => {
@@ -347,6 +362,9 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
     try {
       const groups = [...ownerGroups.entries()];
       const results = await Promise.all(groups.map(([ownerId, lines], groupIndex) => {
+        const groupPointsUsed = groupIndex === 0 ? pointsToDebit : 0;
+        const groupPointDiscount = groupIndex === 0 ? pointDiscount : 0;
+
         const orderPayload = {
           ownerId,
           customerId: authAccount.id,
@@ -359,7 +377,9 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
           checkoutGroupIndex: groupIndex,
           driverTip,
           voucherId: promoApplied ? "LOKAL20" : "",
-          paymentMethod: selectedPayment,
+          paymentMethod: total === 0 ? "GEOVERSE_POINT" : selectedPayment,
+          pointsUsed: groupPointsUsed,
+          pointDiscount: groupPointDiscount,
         };
         const signature = JSON.stringify(orderPayload);
         let savedKey = checkoutKeys.current.get(ownerId);
@@ -652,6 +672,36 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
         </View>
         <TouchableOpacity style={styles.paymentSelectedCard} onPress={() => setPaymentModalVisible(true)}><View style={styles.paymentIcon}><WalletCards size={20} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{selectedPaymentLabel}</Text><Text style={styles.paymentSub}>Ketuk untuk mengganti metode pembayaran</Text></View><ChevronRight size={18} color="#6B7280" /></TouchableOpacity>
 
+        {/* Section: Tukar GEOVERSE Point */}
+        <View style={{ backgroundColor: "#FFFFFF", borderRadius: 14, padding: 14, marginVertical: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, marginRight: 8 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" }}>
+                <Sparkles size={18} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Tukar GEOVERSE Point</Text>
+                <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                  Saldo: {userPoints.toLocaleString("id-ID")} Pts {maxPointsUsable > 0 ? `(Hemat ${rp(Math.floor(maxPointsUsable * 0.01))} dg ${maxPointsUsable.toLocaleString("id-ID")} Pts)` : "(100 Poin = Rp 1)"}
+                </Text>
+              </View>
+            </View>
+
+            <Switch
+              value={usePoints}
+              onValueChange={(val) => {
+                if (val && userPoints <= 0) {
+                  Alert.alert("Point Kosong", "Setor sampah di Kanyaah Recycle untuk mengumpulkan Point!");
+                  return;
+                }
+                setUsePoints(val);
+              }}
+              trackColor={{ false: "#E2E8F0", true: "#DCFCE7" }}
+              thumbColor={usePoints ? "#16A34A" : "#94A3B8"}
+            />
+          </View>
+        </View>
+
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Ringkasan pembayaran</Text>
           <SummaryRow label="Subtotal produk" value={rp(subtotal)} />
@@ -659,6 +709,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
           <SummaryRow label="Tips driver" value={rp(driverTip)} />
           <SummaryRow label="Biaya layanan" value={rp(serviceFee)} />
           {promoApplied && <SummaryRow label="Diskon promo" value={`- ${rp(discount)}`} green />}
+          {pointDiscount > 0 && <SummaryRow label="Potongan GEOVERSE Point" value={`- ${rp(pointDiscount)}`} green />}
           <View style={styles.summaryDivider} />
           <SummaryRow label="Total pembayaran" value={rp(total)} strong />
         </View>

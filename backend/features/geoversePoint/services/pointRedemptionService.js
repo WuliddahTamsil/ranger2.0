@@ -9,7 +9,7 @@ const Voucher = require("../../../models/Voucher");
 const Notification = require("../../../models/Notification");
 const { debitPoints, reversePoints, getOrCreateWallet } = require("./pointWalletService");
 const {
-  POINT_TO_RUPIAH_RATE,
+  getPointRate,
   MIN_CASH_REDEMPTION_POINTS,
   REDEMPTION_STATUSES,
   REDEMPTION_TYPES,
@@ -93,7 +93,7 @@ async function createRedemption({
       notes:
         type === "VOUCHER"
           ? `Tukar voucher ${voucherDoc?.title}`
-          : `Tukar kas Rp ${(safePoints * POINT_TO_RUPIAH_RATE).toLocaleString("id-ID")}`,
+          : `Tukar kas Rp ${(safePoints * getPointRate()).toLocaleString("id-ID")}`,
       actorId: userId,
       idempotencyKey,
     });
@@ -107,7 +107,7 @@ async function createRedemption({
       bankSampahId: bankSampahId || undefined,
       type,
       points: safePoints,
-      rupiahValue: safePoints * POINT_TO_RUPIAH_RATE,
+      rupiahValue: Math.round(safePoints * getPointRate()),
       fee: 0,
       payoutDestination: {
         channel: payoutDestination.channel || (isInstantVoucher ? "VOUCHER_WALLET" : "CASH_AT_BANK"),

@@ -221,7 +221,7 @@ export const BankSampahDetailScreen: React.FC<Nav> = ({ navigate }) => {
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>Katalog Harga Sampah</Text>
-            <Text style={styles.sectionSubtitle}>Dikonversi 1 Point = Rp 1 dari timbangan resmi mitra</Text>
+            <Text style={styles.sectionSubtitle}>Dikonversi 100 Point = Rp 1 dari timbangan resmi mitra</Text>
           </View>
           <View style={styles.priceTagMini}>
             <Text style={styles.priceTagMiniText}>{prices.length} Kategori</Text>

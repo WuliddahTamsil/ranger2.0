@@ -14,12 +14,25 @@ export const subscribeToChatRealtime = async (
 
   const socket: Socket = io(SOCKET_URL, {
     transports: ["websocket", "polling"],
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    timeout: 8000,
     autoConnect: true,
   });
 
-  socket.on("connect", () => {
-    socket.emit("join_conversation", { orderId, token });
-  });
+  const handleJoin = () => {
+    try {
+      socket.emit("join_conversation", { orderId, token });
+    } catch {}
+  };
+
+  socket.on("connect", handleJoin);
+  if (socket.connected) {
+    handleJoin();
+  }
+
+  socket.on("connect_error", () => {});
+  socket.on("error", () => {});
   socket.on("chat:message", onMessage);
 
   return () => {

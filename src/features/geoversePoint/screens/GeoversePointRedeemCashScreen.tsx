@@ -54,7 +54,7 @@ export const GeoversePointRedeemCashScreen: React.FC<Nav> = ({ navigate }) => {
   const parsedPoints = parseInt(pointsInput.replace(/[^0-9]/g, ""), 10) || 0;
   const rupiahValue = pointToRupiah(parsedPoints);
 
-  const presetAmounts = [10000, 25000, 50000, 100000, 200000];
+  const presetAmounts = [10000, 50000, 100000, 500000, 1000000];
 
   const currentChannelObj = WITHDRAWAL_CHANNELS.find((c) => c.id === selectedChannel);
   const isCashAtBank = selectedChannel === "CASH_AT_BANK";
@@ -209,7 +209,7 @@ export const GeoversePointRedeemCashScreen: React.FC<Nav> = ({ navigate }) => {
 
             {/* Rupiah Conversion Output */}
             <View style={styles.conversionBox}>
-              <Text style={styles.conversionLabel}>Uang yang akan diterima:</Text>
+              <Text style={styles.conversionLabel}>Uang yang akan diterima (100 Pts = Rp 1):</Text>
               <Text style={styles.conversionValue}>{formatRupiah(rupiahValue)}</Text>
             </View>
 
@@ -231,7 +231,7 @@ export const GeoversePointRedeemCashScreen: React.FC<Nav> = ({ navigate }) => {
                       parsedPoints === amt && styles.presetBtnTextActive,
                     ]}
                   >
-                    {amt >= 1000 ? `${amt / 1000}k` : amt} Pts
+                    {amt >= 1000000 ? `${amt / 1000000}M` : amt >= 1000 ? `${amt / 1000}k` : amt} Pts
                   </Text>
                 </TouchableOpacity>
               ))}

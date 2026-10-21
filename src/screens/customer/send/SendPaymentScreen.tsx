@@ -117,8 +117,11 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
     10000;
 
   const isOrderActive = Boolean(activeOrder?._id);
-  const maxPointsUsable = Math.min(userPoints, rawTotalAmount);
-  const pointDiscount = !isOrderActive && usePoints ? maxPointsUsable : (activeOrder?.pricing?.pointDiscount || 0);
+  // 100 Point = Rp 1
+  const pointsNeededToCoverFare = Math.ceil(rawTotalAmount * 100);
+  const maxPointsUsable = Math.min(userPoints, pointsNeededToCoverFare);
+  const pointDiscount = !isOrderActive && usePoints ? Math.floor(maxPointsUsable * 0.01) : (activeOrder?.pricing?.pointDiscount || 0);
+  const pointsToDebit = !isOrderActive && usePoints ? maxPointsUsable : 0;
   const finalPayableAmount = Math.max(0, rawTotalAmount - pointDiscount);
   const totalAmount = isOrderActive ? (activeOrder?.pricing?.finalFare ?? rawTotalAmount) : finalPayableAmount;
   const activeMethod = String(activeOrder?.paymentMethod || selectedMethod).toUpperCase();
@@ -237,7 +240,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
         package: packageData,
         paymentMethod: finalPayableAmount === 0 ? "GEOVERSE_POINT" : selectedMethod,
         discount: fareEstimate?.discount || 0,
-        pointsUsed: pointDiscount,
+        pointsUsed: pointsToDebit,
         pointDiscount,
         idempotencyKey,
         customerId: authAccount?.id,
@@ -418,7 +421,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Tukar GEOVERSE Point</Text>
                     <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
-                      Saldo: {userPoints.toLocaleString("id-ID")} Pts {rawTotalAmount > 0 ? `(Hemat ${rp(maxPointsUsable)})` : "(1 Poin = Rp 1)"}
+                      Saldo: {userPoints.toLocaleString("id-ID")} Pts {maxPointsUsable > 0 ? `(Hemat ${rp(Math.floor(maxPointsUsable * 0.01))} dg ${maxPointsUsable.toLocaleString("id-ID")} Pts)` : "(100 Poin = Rp 1)"}
                     </Text>
                   </View>
                 </View>

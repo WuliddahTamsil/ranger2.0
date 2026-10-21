@@ -222,7 +222,7 @@ const shopOrderSchema = new mongoose.Schema(
     },
     pointRate: {
       type: Number,
-      default: 1,
+      default: 0.01,
     },
     grossAmount: {
       type: Number,

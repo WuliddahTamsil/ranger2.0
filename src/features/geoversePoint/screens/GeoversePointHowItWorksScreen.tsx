@@ -55,7 +55,7 @@ export const GeoversePointHowItWorksScreen: React.FC<Nav> = ({ navigate }) => {
       color: "#7C3AED",
       bg: "#F5F3FF",
       title: "Gunakan Poin untuk Berbagai Kebutuhan",
-      desc: "Tukarkan poin dengan voucher potongan belanja di Kanyaah Shop, Ride, Send, Catering, Laundry, atau cairkan tunai ke rekening.",
+      desc: "Tukarkan poin untuk potongan langsung di Kanyaah Ride, Send, Shop, Catering, Laundry, Marketplace, voucher, atau cairkan tunai ke rekening/e-wallet.",
     },
   ];
 
@@ -63,11 +63,11 @@ export const GeoversePointHowItWorksScreen: React.FC<Nav> = ({ navigate }) => {
     {
       icon: ShoppingBag,
       title: "Potongan Transaksi Nyata",
-      desc: "Gunakan poin saat checkout pesanan harian Anda tanpa minimal sisa saldo.",
+      desc: "Gunakan poin saat checkout pesanan harian Anda tanpa minimal sisa saldo di semua fitur.",
     },
     {
       icon: Banknote,
-      title: "Bisa Ditarik Tunai (1 Pts = Rp 1)",
+      title: "Bisa Ditarik Tunai (100 Pts = Rp 1)",
       desc: "Poin bukan sekadar angka virtual; dapat dicairkan tunai di Bank Sampah atau transfer.",
     },
     {
