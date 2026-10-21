@@ -51,6 +51,7 @@ import {
   LaundryStore,
   LaundryServiceItem,
 } from "../../services/laundryService";
+import { CustomerLocationPicker, CustomerLocationValue } from "../../components/CustomerLocationPicker";
 
 interface CustomerLaundryDetailScreenProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -74,40 +75,51 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
     coords: string;
     tag: string;
   } | null>(null);
-  const [tempMapLocation, setTempMapLocation] = useState({
-    title: "Jl. Mawar No. 12, Kamojang",
-    address: "Jl. Mawar No. 12, RT 01/RW 02, Desa Laksana, Ibun, Garut",
-    coords: "-7.1432, 107.7845",
-    tag: "Dekat Kantor PGE",
-  });
-  const [mapSearchQuery, setMapSearchQuery] = useState("");
 
-  const mapPresets = [
-    {
-      title: "Jl. Mawar No. 12, Kamojang",
-      address: "Jl. Mawar No. 12, RT 01/RW 02, Desa Laksana, Ibun, Garut",
-      coords: "-7.1432, 107.7845",
-      tag: "Dekat Kantor PGE",
-    },
-    {
-      title: "Komplek Perumahan PGE Kamojang",
-      address: "Blok B3 No. 8, Kamojang, Kec. Ibun, Garut",
-      coords: "-7.1480, 107.7910",
-      tag: "Perumahan",
-    },
-    {
-      title: "Jl. Raya Kamojang No. 20",
-      address: "Jl. Raya Kamojang No. 20, Depan Masjid Al-Ikhlas",
-      coords: "-7.1415, 107.7820",
-      tag: "Jalan Utama",
-    },
-    {
-      title: "Area Wisata Kawah Kamojang",
-      address: "Jl. Lapang Panas Bumi, Kawah Kamojang, Garut",
-      coords: "-7.1520, 107.8012",
-      tag: "Kawasan Wisata",
-    },
-  ];
+  const pickerInitialLocation = React.useMemo<CustomerLocationValue | undefined>(() => {
+    if (selectedMapPin?.coords && selectedMapPin.coords.includes(",")) {
+      const parts = selectedMapPin.coords.split(",");
+      const lat = parseFloat(parts[0]?.trim() || "");
+      const lng = parseFloat(parts[1]?.trim() || "");
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return {
+          latitude: lat,
+          longitude: lng,
+          detectedAddress: selectedMapPin.address || address,
+          placeName: selectedMapPin.title,
+        };
+      }
+    }
+    const primary = getPrimaryCustomerAddress(authAccount);
+    if (primary?.latitude != null && primary?.longitude != null) {
+      return {
+        latitude: primary.latitude,
+        longitude: primary.longitude,
+        detectedAddress: primary.fullAddress,
+        placeName: primary.label,
+      };
+    }
+    return {
+      latitude: -7.1432,
+      longitude: 107.7845,
+      detectedAddress: address || "Jl. Mawar No. 12, Kamojang, Garut",
+      placeName: "Area Kamojang",
+    };
+  }, [selectedMapPin, authAccount, address]);
+
+  const handleLocationConfirmed = (location: CustomerLocationValue) => {
+    const coordsStr = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+    const fullAddr = location.detectedAddress || location.placeName || address || "Alamat Terpilih";
+    setSelectedMapPin({
+      title: location.placeName || "Titik Jemput Laundry",
+      address: fullAddr,
+      coords: coordsStr,
+      tag: "Google Maps Akurat",
+    });
+    setAddress(fullAddr);
+    setAddressError("");
+    setIsMapModalOpen(false);
+  };
 
   useEffect(() => {
     const fetchFresh = async () => {
@@ -648,99 +660,16 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
         </View>
       </Modal>
 
-      {/* Interactive Google Maps Location Picker Modal */}
-      <Modal visible={isMapModalOpen} animationType="slide" transparent>
-        <View style={styles.mapModalOverlay}>
-          <ResponsiveSafeAreaView style={styles.mapModalSafeArea}>
-            <View style={styles.mapModalHeader}>
-              <TouchableOpacity
-                onPress={() => setIsMapModalOpen(false)}
-                style={styles.mapBackBtn}
-                activeOpacity={0.7}
-              >
-                <ArrowLeft size={22} color="#111827" />
-              </TouchableOpacity>
-
-              <View style={styles.mapHeaderTitleCol}>
-                <Text style={styles.mapHeaderTitle}>Tentukan Titik di Maps</Text>
-                <Text style={styles.mapHeaderSub}>Pilih lokasi penjemputan pakaian</Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.gpsQuickBtn}
-                onPress={() => {
-                  setTempMapLocation({
-                    title: "Lokasi GPS Anda Saat Ini",
-                    address: "Jl. Lapangan Panas Bumi No. 5, Kamojang, Garut",
-                    coords: "-7.1448, 107.7862",
-                    tag: "GPS Akurat",
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                <Crosshair size={16} color="#0D7A53" />
-                <Text style={styles.gpsQuickBtnText}>GPS</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.mapContainerSimulation}>
-              {/* Presets List */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mapPresetsRow}>
-                {mapPresets.map((preset, idx) => {
-                  const isSelected = tempMapLocation.title === preset.title;
-                  return (
-                    <TouchableOpacity
-                      key={idx}
-                      style={[styles.presetLocationChip, isSelected && styles.presetLocationChipSelected]}
-                      onPress={() => setTempMapLocation(preset)}
-                      activeOpacity={0.8}
-                    >
-                      <MapPin size={12} color={isSelected ? "#FFFFFF" : "#0D7A53"} />
-                      <Text style={[styles.presetLocationChipText, isSelected && styles.presetLocationChipTextSelected]}>
-                        {preset.title.split(",")[0]}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {/* Selected Location Card */}
-              <View style={styles.mapSelectedCard}>
-                <View style={styles.mapSelectedCardHeader}>
-                  <View style={styles.mapSelectedIconCircle}>
-                    <MapPin size={18} color="#0D7A53" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.mapSelectedCardTitle}>{tempMapLocation.title}</Text>
-                    <Text style={styles.mapSelectedCardAddress}>{tempMapLocation.address}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.coordsInfoRow}>
-                  <View style={styles.coordBadge}>
-                    <Text style={styles.coordBadgeText}>📍 {tempMapLocation.coords}</Text>
-                  </View>
-                  <Text style={styles.accuracyText}>✓ Akurat (Google Maps)</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.btnConfirmMapLocation}
-                onPress={() => {
-                  setSelectedMapPin(tempMapLocation);
-                  setAddress(tempMapLocation.address);
-                  setAddressError("");
-                  setIsMapModalOpen(false);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.btnConfirmMapLocationText}>Pasang Titik Lokasi Ini</Text>
-                <CheckCircle2 size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
-              </TouchableOpacity>
-            </View>
-          </ResponsiveSafeAreaView>
-        </View>
-      </Modal>
+      {/* Interactive Real Google Maps Location Picker */}
+      <CustomerLocationPicker
+        visible={isMapModalOpen}
+        initialLocation={pickerInitialLocation}
+        title="Tentukan Titik di Google Maps"
+        subtitle="Cari alamat atau geser pin tepat di depan rumah/kos Anda"
+        badgeText="Titik Jemput Laundry"
+        onClose={() => setIsMapModalOpen(false)}
+        onConfirm={handleLocationConfirmed}
+      />
 
       {/* Success Confirmation Modal */}
       <Modal visible={isSuccessModalOpen} transparent animationType="fade">

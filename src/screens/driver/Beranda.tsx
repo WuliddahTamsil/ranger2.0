@@ -713,6 +713,28 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
             ownerId: lnd.ownerId,
             addressSnapshot: lnd.addressSnapshot || null,
             rating: mapDriverOrderRating(lnd.rating),
+            pickup: isPickupJob ? {
+              address: lnd.pickupAddress,
+              latitude: Number(lnd.addressSnapshot?.latitude ?? (typeof lnd.pickupCoords === "string" && lnd.pickupCoords.includes(",") ? lnd.pickupCoords.split(",")[0] : -7.1432)),
+              longitude: Number(lnd.addressSnapshot?.longitude ?? (typeof lnd.pickupCoords === "string" && lnd.pickupCoords.includes(",") ? lnd.pickupCoords.split(",")[1] : 107.7845)),
+              placeName: lnd.customerName || "Rumah Customer",
+            } : {
+              address: lnd.storeName,
+              latitude: -7.1415,
+              longitude: 107.7820,
+              placeName: lnd.storeName,
+            },
+            destination: isPickupJob ? {
+              address: lnd.storeName,
+              latitude: -7.1415,
+              longitude: 107.7820,
+              placeName: lnd.storeName,
+            } : {
+              address: lnd.deliveryAddress || lnd.pickupAddress,
+              latitude: Number(lnd.addressSnapshot?.latitude ?? (typeof lnd.deliveryCoords === "string" && lnd.deliveryCoords.includes(",") ? lnd.deliveryCoords.split(",")[0] : -7.1432)),
+              longitude: Number(lnd.addressSnapshot?.longitude ?? (typeof lnd.deliveryCoords === "string" && lnd.deliveryCoords.includes(",") ? lnd.deliveryCoords.split(",")[1] : 107.7845)),
+              placeName: lnd.customerName || "Rumah Customer",
+            },
           };
         }) : [];
 

@@ -14,6 +14,7 @@ import {
   AppState,
   AppStateStatus,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -75,6 +76,9 @@ const PRESET_HOURS = [
 ];
 
 export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccount }) => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   const { setSelectedDeposit, setSelectedBank } = useRecycle();
   const [bank, setBank] = useState<WasteBankUI | null>(null);
   const [deposits, setDeposits] = useState<WasteDepositUI[]>([]);
@@ -593,65 +597,71 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
-      {/* Top App Bar with Back Button */}
+      {/* Top App Bar with Operations Cockpit Styling */}
       <View style={styles.headerBar}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigate("role")}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={18} color="#1E293B" />
-        </TouchableOpacity>
-
-        <View style={styles.headerTitleCol}>
-          <Text style={styles.headerMainTitle}>Panel Bank Sampah</Text>
-          <Text style={styles.headerSubUnit} numberOfLines={1}>
-            {displayUnitName}
-          </Text>
-        </View>
-
-        <View style={styles.headerActions}>
+        <View style={styles.headerInner}>
           <TouchableOpacity
-            style={styles.refreshBtn}
-            onPress={() => onRefresh()}
+            style={styles.backBtn}
+            onPress={() => navigate("role")}
             activeOpacity={0.7}
           >
-            <RefreshCw size={14} color="#15803D" />
+            <ArrowLeft size={18} color="#1E293B" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.btnSwitchCustomer}
-            onPress={() => navigate("c_home")}
-            activeOpacity={0.7}
-          >
-            <User size={13} color="#15803D" />
-            <Text style={styles.btnSwitchCustomerText}>Customer</Text>
-          </TouchableOpacity>
+          <View style={styles.headerTitleCol}>
+            <View style={styles.headerBadgeRow}>
+              <View style={styles.headerLiveDot} />
+              <Text style={styles.headerBadgeText}>OFFICER PORTAL</Text>
+            </View>
+            <Text style={styles.headerMainTitle}>Panel Bank Sampah</Text>
+            <Text style={styles.headerSubUnit} numberOfLines={1}>
+              {displayUnitName}
+            </Text>
+          </View>
 
-          <TouchableOpacity
-            style={styles.logoutBtn}
-            onPress={() => setLogoutModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <LogOut size={15} color="#DC2626" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              onPress={() => onRefresh()}
+              activeOpacity={0.7}
+            >
+              <RefreshCw size={14} color="#059669" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.btnSwitchCustomer}
+              onPress={() => navigate("c_home")}
+              activeOpacity={0.7}
+            >
+              <User size={13} color="#059669" />
+              <Text style={styles.btnSwitchCustomerText}>Customer</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={() => setLogoutModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <LogOut size={15} color="#DC2626" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isWide && styles.scrollContentWide]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#15803D"]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#059669"]} />
         }
       >
         {/* Officer & Unit Profile Card */}
         <View style={styles.unitCard}>
           <View style={styles.unitCardTop}>
             <View style={styles.unitAvatar}>
-              <Building2 size={22} color="#15803D" />
+              <Building2 size={24} color="#059669" />
             </View>
-            <View style={{ flex: 1, marginLeft: 10 }}>
+            <View style={{ flex: 1, marginLeft: 12 }}>
               <View style={styles.unitTagRow}>
                 <View style={styles.statusLivePill}>
                   <View style={styles.livePulseDot} />
@@ -663,54 +673,56 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                     <Text style={styles.pickupPillText}>Pickup Aktif</Text>
                   </View>
                 ) : (
-                  <View style={[styles.pickupPill, { backgroundColor: "#F1F5F9" }]}>
+                  <View style={[styles.pickupPill, { backgroundColor: "#F1F5F9", borderColor: "#E2E8F0" }]}>
                     <Truck size={10} color="#64748B" />
                     <Text style={[styles.pickupPillText, { color: "#64748B" }]}>Pickup Nonaktif</Text>
                   </View>
                 )}
               </View>
-              <Text style={styles.unitFullName} numberOfLines={2}>
-                {displayUnitName}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <Text style={styles.unitFullName} numberOfLines={1}>
+                  {displayUnitName}
+                </Text>
+                <ShieldCheck size={16} color="#059669" />
+              </View>
               <Text style={styles.officerName} numberOfLines={1}>
                 Petugas: {authAccount?.name || "Pengelola Bank Sampah"}
               </Text>
             </View>
           </View>
 
-          <View style={styles.unitDetailsRow}>
-            <View style={styles.unitDetailItem}>
-              <MapPin size={12} color="#64748B" />
-              <Text style={styles.unitDetailText} numberOfLines={1}>
-                {displayUnitAddress}
-              </Text>
-            </View>
-            <View style={styles.unitDetailItem}>
-              <Clock size={12} color="#15803D" />
-              <Text style={[styles.unitDetailText, { color: "#15803D", fontWeight: "700" }]} numberOfLines={1}>
-                Jam Operasional: {activeOpeningHours || bank?.openingHours || "Senin - Sabtu, 08:00 - 15:15"}
-              </Text>
-            </View>
+          <View style={styles.unitAddressRow}>
+            <MapPin size={13} color="#64748B" />
+            <Text style={styles.unitAddressText} numberOfLines={1}>
+              {displayUnitAddress}
+            </Text>
+          </View>
+
+          <View style={styles.unitHoursBanner}>
+            <Clock size={13} color="#059669" />
+            <Text style={styles.unitHoursBannerText} numberOfLines={1}>
+              Jam Operasional: {activeOpeningHours || bank?.openingHours || "Senin - Sabtu, 08:00 - 15:15"}
+            </Text>
           </View>
 
           {/* Quick Action Buttons: Atur Jam & Lihat Katalog Harga */}
           <View style={styles.unitActionGrid}>
             <TouchableOpacity
-              style={[styles.unitActionBtn, { borderColor: "#86EFAC", backgroundColor: "#F0FDF4" }]}
+              style={styles.unitActionBtnHours}
               onPress={handleOpenHoursModal}
               activeOpacity={0.8}
             >
-              <Clock size={13} color="#15803D" />
-              <Text style={[styles.unitActionBtnText, { color: "#15803D" }]}>Atur Jam Buka-Tutup</Text>
+              <Clock size={14} color="#059669" />
+              <Text style={styles.unitActionBtnHoursText}>Atur Jam Buka-Tutup</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.unitActionBtn}
+              style={styles.unitActionBtnCatalog}
               onPress={handleOpenPriceModal}
               activeOpacity={0.8}
             >
-              <Tag size={13} color="#0284C7" />
-              <Text style={[styles.unitActionBtnText, { color: "#0284C7" }]}>Katalog Harga</Text>
+              <Tag size={14} color="#0284C7" />
+              <Text style={styles.unitActionBtnCatalogText}>Katalog Harga</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -719,10 +731,10 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
         <View style={styles.searchSection}>
           <Text style={styles.searchSectionTitle}>Cari & Timbang Tiket Nasabah</Text>
           <View style={styles.searchBox}>
-            <Search size={16} color="#64748B" style={{ marginLeft: 4 }} />
+            <Search size={16} color="#059669" style={{ marginLeft: 4 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Masukkan kode setor (cth: DEP-...)"
+              placeholder="Masukkan kode setor (cth: RNG-RCY-...)"
               placeholderTextColor="#94A3B8"
               value={searchCode}
               onChangeText={(text) => {
@@ -746,45 +758,83 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
           {searchError ? <Text style={styles.searchErrorText}>{searchError}</Text> : null}
         </View>
 
-        {/* Metric Cards Grid */}
-        <View style={styles.metricsGrid}>
-          <View style={[styles.metricCard, { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }]}>
-            <View style={[styles.metricIconCircle, { backgroundColor: "#DCFCE7" }]}>
-              <Scale size={16} color="#15803D" />
+        {/* Executive Metric Cards Grid */}
+        <View style={styles.metricsContainer}>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCardGreen}>
+              <View style={styles.metricCardHeader}>
+                <View style={styles.metricIconCircleGreen}>
+                  <Scale size={16} color="#059669" />
+                </View>
+                <View style={styles.metricBadgeGreen}>
+                  <Text style={styles.metricBadgeTextGreen}>Sampah</Text>
+                </View>
+              </View>
+              <View style={styles.metricValRow}>
+                <Text style={styles.metricVal}>{totalKg.toFixed(1)}</Text>
+                <Text style={styles.metricUnit}>kg</Text>
+              </View>
+              <Text style={styles.metricLabel}>Total Sampah Masuk</Text>
             </View>
-            <Text style={styles.metricVal}>{totalKg.toFixed(1)} kg</Text>
-            <Text style={styles.metricLabel}>Total Sampah</Text>
+
+            <View style={styles.metricCardAmber}>
+              <View style={styles.metricCardHeader}>
+                <View style={styles.metricIconCircleAmber}>
+                  <Sparkles size={16} color="#D97706" />
+                </View>
+                <View style={styles.metricBadgeAmber}>
+                  <Text style={styles.metricBadgeTextAmber}>Poin</Text>
+                </View>
+              </View>
+              <View style={styles.metricValRow}>
+                <Text style={styles.metricVal}>{totalPointsIssued.toLocaleString("id-ID")}</Text>
+                <Text style={styles.metricUnit}>Pts</Text>
+              </View>
+              <Text style={styles.metricLabel}>Poin Nasabah Terbit</Text>
+            </View>
           </View>
 
-          <View style={[styles.metricCard, { backgroundColor: "#FEFCE8", borderColor: "#FEF08A" }]}>
-            <View style={[styles.metricIconCircle, { backgroundColor: "#FEF08A" }]}>
-              <Sparkles size={16} color="#CA8A04" />
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCardOrange}>
+              <View style={styles.metricCardHeader}>
+                <View style={styles.metricIconCircleOrange}>
+                  <Clock size={16} color="#EA580C" />
+                </View>
+                <View style={styles.metricBadgeOrange}>
+                  <Text style={styles.metricBadgeTextOrange}>Antrean</Text>
+                </View>
+              </View>
+              <View style={styles.metricValRow}>
+                <Text style={styles.metricVal}>{waitingWeighing.length}</Text>
+                <Text style={styles.metricUnit}>Tiket</Text>
+              </View>
+              <Text style={styles.metricLabel}>Menunggu Ditimbang</Text>
             </View>
-            <Text style={styles.metricVal}>{totalPointsIssued.toLocaleString("id-ID")}</Text>
-            <Text style={styles.metricLabel}>Poin Disalurkan</Text>
-          </View>
 
-          <View style={[styles.metricCard, { backgroundColor: "#FFF7ED", borderColor: "#FFEDD5" }]}>
-            <View style={[styles.metricIconCircle, { backgroundColor: "#FFEDD5" }]}>
-              <Clock size={16} color="#EA580C" />
+            <View style={styles.metricCardBlue}>
+              <View style={styles.metricCardHeader}>
+                <View style={styles.metricIconCircleBlue}>
+                  <CheckCircle2 size={16} color="#2563EB" />
+                </View>
+                <View style={styles.metricBadgeBlue}>
+                  <Text style={styles.metricBadgeTextBlue}>Berhasil</Text>
+                </View>
+              </View>
+              <View style={styles.metricValRow}>
+                <Text style={styles.metricVal}>{completedDeposits.length}</Text>
+                <Text style={styles.metricUnit}>Selesai</Text>
+              </View>
+              <Text style={styles.metricLabel}>Setoran Selesai</Text>
             </View>
-            <Text style={styles.metricVal}>{waitingWeighing.length}</Text>
-            <Text style={styles.metricLabel}>Perlu Ditimbang</Text>
-          </View>
-
-          <View style={[styles.metricCard, { backgroundColor: "#EFF6FF", borderColor: "#DBEAFE" }]}>
-            <View style={[styles.metricIconCircle, { backgroundColor: "#DBEAFE" }]}>
-              <CheckCircle2 size={16} color="#2563EB" />
-            </View>
-            <Text style={styles.metricVal}>{completedDeposits.length}</Text>
-            <Text style={styles.metricLabel}>Setoran Selesai</Text>
           </View>
         </View>
 
         {/* Queue Section */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Antrean & Penimbangan Sampah</Text>
-          <Text style={styles.sectionBadge}>{deposits.length} Total</Text>
+          <View style={styles.sectionBadgeBox}>
+            <Text style={styles.sectionBadge}>{deposits.length} Tiket Aktif</Text>
+          </View>
         </View>
 
         {/* Segmented Queue Tabs (Single Line, No Wrap) */}
@@ -801,8 +851,13 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
               ]}
               numberOfLines={1}
             >
-              Timbang ({waitingWeighing.length})
+              Timbang
             </Text>
+            <View style={[styles.queueTabBadge, activeQueue === "WEIGHING" && styles.queueTabBadgeActive]}>
+              <Text style={[styles.queueTabBadgeText, activeQueue === "WEIGHING" && styles.queueTabBadgeTextActive]}>
+                {waitingWeighing.length}
+              </Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -810,26 +865,31 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
             onPress={() => setActiveQueue("WAITING")}
             activeOpacity={0.8}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }}>
+            <Text
+              style={[
+                styles.queueTabText,
+                activeQueue === "WAITING" && styles.queueTabTextActive,
+              ]}
+              numberOfLines={1}
+            >
+              Menunggu
+            </Text>
+            <View
+              style={[
+                styles.queueTabBadge,
+                activeQueue === "WAITING" && styles.queueTabBadgeActive,
+                disputedCount > 0 && { backgroundColor: "#DC2626" },
+              ]}
+            >
               <Text
                 style={[
-                  styles.queueTabText,
-                  activeQueue === "WAITING" && styles.queueTabTextActive,
+                  styles.queueTabBadgeText,
+                  activeQueue === "WAITING" && styles.queueTabBadgeTextActive,
+                  disputedCount > 0 && { color: "#FFFFFF" },
                 ]}
-                numberOfLines={1}
               >
-                Menunggu ({waitingCustomerConfirm.length})
+                {waitingCustomerConfirm.length}
               </Text>
-              {disputedCount > 0 && (
-                <View
-                  style={[
-                    styles.tabDisputeDot,
-                    activeQueue === "WAITING" && styles.tabDisputeDotActive,
-                  ]}
-                >
-                  <Text style={styles.tabDisputeDotText}>{disputedCount}</Text>
-                </View>
-              )}
             </View>
           </TouchableOpacity>
 
@@ -845,8 +905,13 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
               ]}
               numberOfLines={1}
             >
-              Selesai ({completedDeposits.length})
+              Selesai
             </Text>
+            <View style={[styles.queueTabBadge, activeQueue === "COMPLETED" && styles.queueTabBadgeActive]}>
+              <Text style={[styles.queueTabBadgeText, activeQueue === "COMPLETED" && styles.queueTabBadgeTextActive]}>
+                {completedDeposits.length}
+              </Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -854,27 +919,31 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
             onPress={() => setActiveQueue("REDEMPTIONS")}
             activeOpacity={0.8}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }}>
+            <Text
+              style={[
+                styles.queueTabText,
+                activeQueue === "REDEMPTIONS" && styles.queueTabTextActive,
+              ]}
+              numberOfLines={1}
+            >
+              Pencairan
+            </Text>
+            <View
+              style={[
+                styles.queueTabBadge,
+                activeQueue === "REDEMPTIONS" && styles.queueTabBadgeActive,
+                pendingRedemptionsCount > 0 && { backgroundColor: "#F59E0B" },
+              ]}
+            >
               <Text
                 style={[
-                  styles.queueTabText,
-                  activeQueue === "REDEMPTIONS" && styles.queueTabTextActive,
+                  styles.queueTabBadgeText,
+                  activeQueue === "REDEMPTIONS" && styles.queueTabBadgeTextActive,
+                  pendingRedemptionsCount > 0 && { color: "#FFFFFF" },
                 ]}
-                numberOfLines={1}
               >
-                Pencairan ({pendingRedemptionsCount})
+                {pendingRedemptionsCount}
               </Text>
-              {pendingRedemptionsCount > 0 && (
-                <View
-                  style={[
-                    styles.tabDisputeDot,
-                    activeQueue === "REDEMPTIONS" && styles.tabDisputeDotActive,
-                    { backgroundColor: "#F59E0B" },
-                  ]}
-                >
-                  <Text style={styles.tabDisputeDotText}>{pendingRedemptionsCount}</Text>
-                </View>
-              )}
             </View>
           </TouchableOpacity>
         </View>
@@ -1251,7 +1320,7 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                         ? { backgroundColor: "#DC2626" }
                         : item.status === "WAITING_CUSTOMER_CONFIRMATION"
                         ? { backgroundColor: "#D97706" }
-                        : { backgroundColor: "#15803D" },
+                        : { backgroundColor: "#059669" },
                     ]}
                   >
                     <Scale size={13} color="#FFFFFF" />
@@ -1501,37 +1570,63 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
   },
   headerBar: {
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  headerInner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    maxWidth: 1140,
+    width: "100%",
+    alignSelf: "center",
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     justifyContent: "center",
     alignItems: "center",
   },
   headerTitleCol: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
     marginRight: 8,
   },
+  headerBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  headerLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
+  },
+  headerBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#059669",
+    letterSpacing: 0.8,
+  },
   headerMainTitle: {
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 15,
+    fontWeight: "800",
     color: "#0F172A",
+    letterSpacing: -0.3,
+    marginTop: 1,
   },
   headerSubUnit: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#15803D",
+    color: "#059669",
     marginTop: 1,
   },
   headerActions: {
@@ -1540,69 +1635,78 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   refreshBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#DCFCE7",
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
   },
   btnSwitchCustomer: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#F0FDF4",
     paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    paddingHorizontal: 9,
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: "#BBF7D0",
+    borderColor: "#DCFCE7",
   },
   btnSwitchCustomerText: {
     fontSize: 11,
-    fontWeight: "800",
-    color: "#15803D",
+    fontWeight: "700",
+    color: "#059669",
   },
   logoutBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 9,
     backgroundColor: "#FEF2F2",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "#FEE2E2",
   },
   scrollContent: {
-    padding: 14,
+    padding: 16,
     paddingBottom: 40,
+    maxWidth: 1140,
+    width: "100%",
+    alignSelf: "center",
+  },
+  scrollContentWide: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
   },
   // Unit Card
   unitCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1.5,
-    borderColor: "#86EFAC",
-    shadowColor: "#15803D",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 2,
   },
   unitCardTop: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   unitAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: "#DCFCE7",
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1610,132 +1714,169 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   statusLivePill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#DCFCE7",
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingVertical: 2.5,
+    paddingHorizontal: 8,
     borderRadius: 6,
   },
   livePulseDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#16A34A",
+    backgroundColor: "#10B981",
   },
   statusLiveText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#15803D",
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: "#059669",
   },
   pickupPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: "#E0F2FE",
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingVertical: 2.5,
+    paddingHorizontal: 8,
     borderRadius: 6,
   },
   pickupPillText: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: "700",
     color: "#0284C7",
   },
   unitFullName: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900",
     color: "#0F172A",
-    lineHeight: 18,
+    letterSpacing: -0.3,
   },
   officerName: {
     fontSize: 11,
     color: "#64748B",
-    marginTop: 1,
+    marginTop: 2,
   },
-  unitDetailsRow: {
-    flexDirection: "column",
-    gap: 4,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
-  unitDetailItem: {
+  unitAddressRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    marginBottom: 8,
   },
-  unitDetailText: {
-    fontSize: 11,
+  unitAddressText: {
+    fontSize: 11.5,
     color: "#475569",
+    flex: 1,
+  },
+  unitHoursBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  unitHoursBannerText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#065F46",
     flex: 1,
   },
   unitActionGrid: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 8,
+    gap: 10,
   },
-  unitActionBtn: {
+  unitActionBtnHours: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    backgroundColor: "#F8FAFC",
+    gap: 6,
+    backgroundColor: "#F0FDF4",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingVertical: 8,
-    borderRadius: 8,
+    borderColor: "#A7F3D0",
+    paddingVertical: 10,
+    borderRadius: 12,
   },
-  unitActionBtnText: {
-    fontSize: 11,
-    fontWeight: "800",
+  unitActionBtnHoursText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#059669",
+  },
+  unitActionBtnCatalog: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  unitActionBtnCatalogText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#0284C7",
   },
   // Search section
   searchSection: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   searchSectionTitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: "800",
-    color: "#334155",
-    marginBottom: 5,
+    color: "#1E293B",
+    marginBottom: 6,
+    letterSpacing: 0.2,
   },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#CBD5E1",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   searchInput: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 13,
     color: "#0F172A",
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 6,
   },
   btnSearchAction: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
-    backgroundColor: "#15803D",
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-    borderRadius: 6,
+    gap: 3,
+    backgroundColor: "#059669",
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 9,
   },
   btnSearchActionText: {
-    fontSize: 11,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "700",
     color: "#FFFFFF",
   },
   searchErrorText: {
@@ -1744,87 +1885,249 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   // Metrics Grid
-  metricsGrid: {
+  metricsContainer: {
+    marginBottom: 18,
+  },
+  metricsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 10,
   },
-  metricCard: {
-    width: "48.5%",
-    borderRadius: 12,
+  metricCardGreen: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    padding: 10,
-    alignItems: "flex-start",
+    borderColor: "#A7F3D0",
+    padding: 12,
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 1,
   },
-  metricIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+  metricCardAmber: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    padding: 12,
+    shadowColor: "#D97706",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  metricCardOrange: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+    padding: 12,
+    shadowColor: "#EA580C",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  metricCardBlue: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    padding: 12,
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  metricCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  metricBadgeGreen: {
+    backgroundColor: "#ECFDF5",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
+  metricBadgeTextGreen: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#059669",
+  },
+  metricBadgeAmber: {
+    backgroundColor: "#FFFBEB",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
+  metricBadgeTextAmber: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#D97706",
+  },
+  metricBadgeOrange: {
+    backgroundColor: "#FFF7ED",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
+  metricBadgeTextOrange: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#EA580C",
+  },
+  metricBadgeBlue: {
+    backgroundColor: "#EFF6FF",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+  },
+  metricBadgeTextBlue: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#2563EB",
+  },
+  metricIconCircleGreen: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: "#ECFDF5",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 4,
+  },
+  metricIconCircleAmber: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: "#FFFBEB",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  metricIconCircleOrange: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: "#FFF7ED",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  metricIconCircleBlue: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  metricValRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 3,
   },
   metricVal: {
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: "900",
     color: "#0F172A",
+    letterSpacing: -0.5,
+  },
+  metricUnit: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
   },
   metricLabel: {
-    fontSize: 10,
+    fontSize: 10.5,
+    fontWeight: "600",
     color: "#64748B",
-    marginTop: 1,
+    marginTop: 2,
   },
   // Section Headers
   sectionHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: "800",
     color: "#0F172A",
   },
-  sectionBadge: {
-    fontSize: 10.5,
-    fontWeight: "700",
-    color: "#15803D",
-    backgroundColor: "#DCFCE7",
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+  sectionBadgeBox: {
+    backgroundColor: "#ECFDF5",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  sectionBadge: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#059669",
   },
   queueTabBar: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    padding: 3,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 14,
+    gap: 4,
   },
   queueTab: {
     flex: 1,
-    paddingVertical: 7,
-    paddingHorizontal: 4,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 7,
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 10,
   },
   queueTabActive: {
-    backgroundColor: "#15803D",
+    backgroundColor: "#059669",
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   queueTabText: {
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "600",
     color: "#64748B",
-    textAlign: "center",
   },
   queueTabTextActive: {
     color: "#FFFFFF",
     fontWeight: "800",
+  },
+  queueTabBadge: {
+    minWidth: 17,
+    height: 17,
+    borderRadius: 8.5,
+    backgroundColor: "#E2E8F0",
+    paddingHorizontal: 4,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  queueTabBadgeActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+  },
+  queueTabBadgeText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#475569",
+  },
+  queueTabBadgeTextActive: {
+    color: "#FFFFFF",
   },
   tabDisputeDot: {
     backgroundColor: "#DC2626",
@@ -1881,16 +2184,16 @@ const styles = StyleSheet.create({
   // Deposit Card
   depositCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   depositCardHeader: {
     flexDirection: "row",
@@ -1903,30 +2206,35 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   depositCode: {
-    fontSize: 13.5,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "800",
     color: "#0F172A",
+    letterSpacing: -0.2,
   },
   methodBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    paddingVertical: 2,
-    paddingHorizontal: 5,
-    borderRadius: 5,
+    paddingVertical: 2.5,
+    paddingHorizontal: 7,
+    borderRadius: 6,
   },
   methodBadgePickup: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
   },
   methodBadgeDropOff: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
   },
   methodBadgeText: {
-    fontSize: 8.5,
-    fontWeight: "800",
+    fontSize: 9.5,
+    fontWeight: "700",
   },
   methodBadgeTextPickup: {
-    color: "#047857",
+    color: "#059669",
   },
   methodBadgeTextDropOff: {
     color: "#0284C7",
@@ -1934,17 +2242,17 @@ const styles = StyleSheet.create({
   customerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginTop: 3,
+    gap: 5,
+    marginTop: 4,
   },
   customerName: {
-    fontSize: 11.5,
-    fontWeight: "700",
-    color: "#334155",
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#475569",
   },
   statusPill: {
-    paddingVertical: 2,
-    paddingHorizontal: 7,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
     borderRadius: 6,
   },
   statusPillBlue: {
@@ -1960,8 +2268,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FEE2E2",
   },
   statusPillText: {
-    fontSize: 9,
-    fontWeight: "800",
+    fontSize: 9.5,
+    fontWeight: "700",
   },
   statusPillTextBlue: {
     color: "#0369A1",
@@ -1970,7 +2278,7 @@ const styles = StyleSheet.create({
     color: "#B45309",
   },
   statusPillTextGreen: {
-    color: "#15803D",
+    color: "#059669",
   },
   statusPillTextRed: {
     color: "#DC2626",
@@ -1997,16 +2305,16 @@ const styles = StyleSheet.create({
   categoryTagsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 5,
+    gap: 6,
     marginTop: 8,
   },
   categoryTag: {
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    paddingVertical: 2.5,
-    paddingHorizontal: 6,
-    borderRadius: 5,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
   },
   categoryTagText: {
     fontSize: 10,
@@ -2017,36 +2325,44 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10,
-    paddingTop: 8,
+    marginTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
   },
   footerWeightLabel: {
     fontSize: 9.5,
+    fontWeight: "600",
     color: "#64748B",
   },
   footerWeightVal: {
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: 15,
+    fontWeight: "800",
     color: "#0F172A",
+    marginTop: 1,
   },
   footerPointVal: {
-    fontSize: 10.5,
-    fontWeight: "800",
-    color: "#15803D",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#059669",
+    marginTop: 1,
   },
   btnTimbangAction: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 7,
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 9,
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   btnTimbangActionText: {
-    fontSize: 11,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "700",
     color: "#FFFFFF",
   },
   // Modal styles

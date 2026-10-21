@@ -286,6 +286,17 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
       height: 32px !important;
       line-height: 32px !important;
     }
+    .leaflet-control-layers {
+      border: none !important;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.15) !important;
+      border-radius: 12px !important;
+      padding: 6px 10px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(8px) !important;
+      color: #0f172a !important;
+    }
   </style>
 </head>
 <body>
@@ -316,6 +327,12 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
           crossOrigin: true
         });
 
+        var googleSatellite = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+          maxZoom: 20,
+          subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+          crossOrigin: true
+        });
+
         googleRoadmap.on('tileerror', function(e) {
           var img = e.tile;
           if (img && !img.__hasFallback && e.coords) {
@@ -325,6 +342,14 @@ export const NativeMapComponent: React.FC<WebMapProps> = ({
         });
 
         googleRoadmap.addTo(map);
+
+        if (${interactive ? "true" : "false"}) {
+          var baseMaps = {
+            "🗺️ Google Maps": googleRoadmap,
+            "🛰️ Satelit Realistis": googleSatellite
+          };
+          L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+        }
 
         var markersData = ${markersJson};
         var routeData = ${routePointsJson};

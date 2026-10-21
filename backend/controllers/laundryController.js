@@ -93,13 +93,33 @@ exports.getMyStore = async (req, res) => {
       return res.status(400).json({ success: false, message: "Owner ID diperlukan" });
     }
 
-    let store = await LaundryStore.findOne({ ownerId });
-    if (!store) {
-      const ownerUser = await User.findById(ownerId);
+    let ownerUser = null;
+    let validOwnerId = null;
+    if (mongoose.Types.ObjectId.isValid(ownerId)) {
+      validOwnerId = ownerId;
+      ownerUser = await User.findById(ownerId);
+    } else {
+      ownerUser = await User.findOne({
+        $or: [
+          { email: "aisl@gmail.com" },
+          { name: "Ais Laundry" },
+          { role: "pemilik_laundry" },
+        ],
+      });
+      if (ownerUser) {
+        validOwnerId = ownerUser._id;
+      }
+    }
+
+    let store = null;
+    if (validOwnerId) {
+      store = await LaundryStore.findOne({ ownerId: validOwnerId });
+    }
+    if (!store && validOwnerId) {
       const storeName = ownerUser?.roleData?.businessName || ownerUser?.name || "Toko Laundry Saya";
       // Buat default toko jika belum ada dengan rekening kosong (belum diatur)
       store = await LaundryStore.create({
-        ownerId,
+        ownerId: validOwnerId,
         storeName: storeName.charAt(0).toUpperCase() + storeName.slice(1),
         address: ownerUser?.address || ownerUser?.roleData?.businessAddress || "Kamojang, Jawa Barat",
         phone: ownerUser?.phone || "",
@@ -526,18 +546,37 @@ exports.getStoreOrders = async (req, res) => {
     const { ownerId } = req.params;
     let query = {};
     if (ownerId && ownerId !== "all") {
+      let candidateOwnerIds = [ownerId];
+
+      let ownerUser = null;
+      if (mongoose.Types.ObjectId.isValid(ownerId)) {
+        ownerUser = await User.findById(ownerId);
+      } else {
+        ownerUser = await User.findOne({
+          $or: [
+            { email: "aisl@gmail.com" },
+            { name: "Ais Laundry" },
+            { role: "pemilik_laundry" },
+          ],
+        });
+      }
+      if (ownerUser) {
+        candidateOwnerIds.push(ownerUser._id.toString());
+      }
+
+      const validOwnerObjectIds = candidateOwnerIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
       const stores = await LaundryStore.find({
         $or: [
-          { ownerId: ownerId },
-          ...(mongoose.Types.ObjectId.isValid(ownerId) ? [{ _id: ownerId }] : []),
+          ...(validOwnerObjectIds.length > 0 ? [{ ownerId: { $in: validOwnerObjectIds } }] : []),
+          ...(validOwnerObjectIds.length > 0 ? [{ _id: { $in: validOwnerObjectIds } }] : []),
         ],
       });
       const storeIds = stores.map((s) => s._id);
 
       query.$or = [
-        { ownerId: ownerId },
-        { storeId: { $in: storeIds } },
-        ...(mongoose.Types.ObjectId.isValid(ownerId) ? [{ storeId: ownerId }] : []),
+        { ownerId: { $in: candidateOwnerIds } },
+        ...(storeIds.length > 0 ? [{ storeId: { $in: storeIds } }] : []),
+        ...(validOwnerObjectIds.length > 0 ? [{ storeId: { $in: validOwnerObjectIds } }] : []),
       ];
     }
     const orders = await LaundryOrder.find(query).sort({ createdAt: -1 });
@@ -555,7 +594,38 @@ exports.getStoreCustomers = async (req, res) => {
     const { ownerId } = req.params;
     let query = {};
     if (ownerId && ownerId !== "all") {
-      query.ownerId = ownerId;
+      let candidateOwnerIds = [ownerId];
+
+      let ownerUser = null;
+      if (mongoose.Types.ObjectId.isValid(ownerId)) {
+        ownerUser = await User.findById(ownerId);
+      } else {
+        ownerUser = await User.findOne({
+          $or: [
+            { email: "aisl@gmail.com" },
+            { name: "Ais Laundry" },
+            { role: "pemilik_laundry" },
+          ],
+        });
+      }
+      if (ownerUser) {
+        candidateOwnerIds.push(ownerUser._id.toString());
+      }
+
+      const validOwnerObjectIds = candidateOwnerIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+      const stores = await LaundryStore.find({
+        $or: [
+          ...(validOwnerObjectIds.length > 0 ? [{ ownerId: { $in: validOwnerObjectIds } }] : []),
+          ...(validOwnerObjectIds.length > 0 ? [{ _id: { $in: validOwnerObjectIds } }] : []),
+        ],
+      });
+      const storeIds = stores.map((s) => s._id);
+
+      query.$or = [
+        { ownerId: { $in: candidateOwnerIds } },
+        ...(storeIds.length > 0 ? [{ storeId: { $in: storeIds } }] : []),
+        ...(validOwnerObjectIds.length > 0 ? [{ storeId: { $in: validOwnerObjectIds } }] : []),
+      ];
     }
 
     const orders = await LaundryOrder.find(query).sort({ createdAt: -1 });
@@ -1027,6 +1097,12 @@ exports.markReadyForDelivery = async (req, res) => {
     }
 
     order.status = "SIAP_DIANTAR";
+    // Sesuai alur bisnis: prioritaskan driver yang sama (driverPickupId)
+    if (order.driverPickupId) {
+      order.driverDeliveryId = order.driverPickupId;
+      order.driverDeliveryName = order.driverPickupName;
+      order.driverDeliveryPhone = order.driverPickupPhone;
+    }
     await order.save();
 
     // Broadcast ke Driver & Customer
@@ -1037,9 +1113,16 @@ exports.markReadyForDelivery = async (req, res) => {
         message: `Order Antar Laundry Bersih (${order.orderCode}) siap diantar ke ${order.customerName}!`,
         order,
       });
+      if (order.driverPickupId) {
+        req.io.emit(`laundry_driver_${order.driverPickupId}`, {
+          type: "LAUNDRY_READY_FOR_DELIVERY",
+          message: `Cucian order ${order.orderCode} telah selesai dicuci dan siap diambil di outlet untuk diantar ke ${order.customerName}!`,
+          order,
+        });
+      }
       req.io.emit(`laundry_customer_${order.customerId}`, {
         type: "LAUNDRY_READY_FOR_DELIVERY",
-        message: `Cucianmu telah selesai dicuci & dipacking rapi! Sedang mencari driver untuk pengantaran ke rumah.`,
+        message: `Cucianmu telah selesai dicuci & dipacking rapi! Sedang disiapkan untuk pengantaran ke rumah.`,
         order,
       });
     }

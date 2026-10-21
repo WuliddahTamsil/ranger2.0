@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Recycle,
   Leaf,
@@ -36,7 +37,6 @@ import {
   X,
   Check,
   Coins,
-  History,
   Info,
   Search,
   ArrowRight,
@@ -82,48 +82,100 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Address & Location state
+  // Address & Location state & Persistence Key
+  const RECYCLE_LOCATION_STORAGE_KEY = "@geoverse_recycle_selected_location";
+
   const initialAddr =
     authAccount?.address && authAccount.address !== "BGR" && authAccount.address.length > 5
       ? authAccount.address
-      : "Jl. Kamojang No. 12, Samarang, Garut";
+      : "Jl. Kamojang No. 8, Samarang, Garut";
   const [userAddress, setUserAddress] = useState(initialAddr);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number }>({ lat: -7.145, lng: 107.789 });
   const [addressModalVisible, setAddressModalVisible] = useState(false);
   const [searchLocationQuery, setSearchLocationQuery] = useState("");
 
+  // Verified active partner bank locations (all corresponding to real registered user accounts in MongoDB)
   const baseLocations = [
-    { label: "Pakuan (Bogor)", address: "Pakuan, Bogor, Jawa Barat", lat: -6.5976, lng: 106.8062, bankName: "Bank Sampah Pakuan" },
-    { label: "Kamojang (Samarang, Garut)", address: "Jl. Kamojang No. 8, Samarang, Garut", lat: -7.145, lng: 107.789, bankName: "Bank Sampah Induk Kamojang Asri" },
-    { label: "Garut Kota", address: "Jl. Cimanuk No. 42, Garut Kota", lat: -7.218, lng: 107.902, bankName: "Bank Sampah Berkah Mandiri Garut" },
-    { label: "Coblong / Dago (Bandung)", address: "Jl. Dago No. 120, Coblong, Bandung", lat: -6.885, lng: 107.614, bankName: "Bank Sampah Hijau Lestari Bandung" },
-    { label: "Sumur Bandung", address: "Jl. Merdeka No. 64, Sumur Bandung", lat: -6.912, lng: 107.610, bankName: "Bank Sampah Merdeka Bersih" },
+    {
+      id: "6ac1002378c866d3600036fa",
+      label: "Pakuan (Bogor)",
+      address: "Pakuan, Bogor, Jawa Barat",
+      lat: -6.5976,
+      lng: 106.8062,
+      bankName: "Bank Sampah Pakuan",
+      officerEmail: "agalagan@gmail.com",
+    },
+    {
+      id: "6aadbb8c5513afda4c34d9a0",
+      label: "Kamojang (Samarang, Garut)",
+      address: "Jl. Kamojang No. 8, Samarang, Garut",
+      lat: -7.1452,
+      lng: 107.7891,
+      bankName: "Bank Sampah Induk Kamojang Asri",
+      officerEmail: "banksampah@geoverse.com",
+    },
+    {
+      id: "6aadbb8c5513afda4c34d9b4",
+      label: "Garut Kota",
+      address: "Jl. Cimanuk No. 42, Garut Kota",
+      lat: -7.2185,
+      lng: 107.9022,
+      bankName: "Bank Sampah Berkah Mandiri Garut",
+      officerEmail: "banksampah.garutkota@geoverse.com",
+    },
+    {
+      id: "6aadbb8d5513afda4c34d9c1",
+      label: "Coblong / Dago (Bandung)",
+      address: "Jl. Dago No. 120, Coblong, Bandung",
+      lat: -6.885,
+      lng: 107.614,
+      bankName: "Bank Sampah Hijau Lestari Bandung",
+      officerEmail: "banksampah.bandung@geoverse.com",
+    },
+    {
+      id: "6aadbb8d5513afda4c34d9ce",
+      label: "Sumur Bandung",
+      address: "Jl. Merdeka No. 64, Sumur Bandung",
+      lat: -6.912,
+      lng: 107.6105,
+      bankName: "Bank Sampah Merdeka Bersih",
+      officerEmail: "banksampah.merdeka@geoverse.com",
+    },
   ];
 
-  // Dynamically include any other registered bank addresses (memoized to avoid rerender overhead)
+  // Dynamically include any other registered bank addresses from real API data
   const allServiceLocations = useMemo(() => {
-    const list = [...baseLocations];
-    (nearbyBanks || []).forEach((b) => {
-      if (!b || !b.address) return;
-      const bAddr = String(b.address);
-      const bName = String(b.name || "Bank Sampah");
-      if (
-        !list.some(
-          (l) =>
-            (l.address || "").toLowerCase().includes(bAddr.toLowerCase()) ||
-            bAddr.toLowerCase().includes((l.address || "").toLowerCase())
-        )
-      ) {
-        list.push({
-          label: `${bName} (${bAddr.split(",")[0] || bAddr})`,
+    if (nearbyBanks && nearbyBanks.length > 0) {
+      return nearbyBanks.map((b) => {
+        const bAddr = String(b.address || "");
+        const bName = String(b.name || "Bank Sampah");
+        let label = bName;
+        const lowerName = bName.toLowerCase();
+        const lowerAddr = bAddr.toLowerCase();
+        if (lowerName.includes("pakuan") || lowerAddr.includes("pakuan")) {
+          label = "Pakuan (Bogor)";
+        } else if (lowerName.includes("kamojang") || lowerAddr.includes("kamojang")) {
+          label = "Kamojang (Samarang, Garut)";
+        } else if (lowerName.includes("garut") || lowerAddr.includes("cimanuk")) {
+          label = "Garut Kota";
+        } else if (lowerName.includes("dago") || lowerAddr.includes("coblong")) {
+          label = "Coblong / Dago (Bandung)";
+        } else if (lowerName.includes("merdeka") || lowerAddr.includes("sumur bandung")) {
+          label = "Sumur Bandung";
+        } else {
+          label = `${bName} (${bAddr.split(",")[0] || bAddr})`;
+        }
+        return {
+          id: b._id,
+          label,
           address: bAddr,
           lat: Number(b.latitude) || -7.145,
           lng: Number(b.longitude) || 107.789,
           bankName: bName,
-        });
-      }
-    });
-    return list;
+        };
+      });
+    }
+    return baseLocations;
   }, [nearbyBanks]);
 
   const filteredPresetLocations = useMemo(() => {
@@ -158,14 +210,51 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
     }
   };
 
+  // Restore saved location from AsyncStorage on mount so it persists across refreshes
   useEffect(() => {
     let isMounted = true;
-    loadData(userCoords);
-    refreshRecycleWallet().catch(() => {});
+
+    const restoreSavedLocationAndLoad = async () => {
+      let activeCoords = userCoords;
+      try {
+        const userKey = authAccount?.id ? `${RECYCLE_LOCATION_STORAGE_KEY}_${authAccount.id}` : null;
+        let savedRaw = userKey ? await AsyncStorage.getItem(userKey) : null;
+        if (!savedRaw) {
+          savedRaw = await AsyncStorage.getItem(RECYCLE_LOCATION_STORAGE_KEY);
+        }
+
+        if (savedRaw) {
+          const parsed = JSON.parse(savedRaw);
+          if (
+            parsed &&
+            parsed.address &&
+            parsed.coords &&
+            typeof parsed.coords.lat === "number" &&
+            typeof parsed.coords.lng === "number"
+          ) {
+            if (isMounted) {
+              setUserAddress(parsed.address);
+              setUserCoords(parsed.coords);
+              activeCoords = parsed.coords;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("KanyahRecycleHomeScreen restore saved location error:", err);
+      } finally {
+        if (isMounted) {
+          loadData(activeCoords);
+          refreshRecycleWallet().catch(() => {});
+        }
+      }
+    };
+
+    restoreSavedLocationAndLoad();
+
     return () => {
       isMounted = false;
     };
-  }, [authAccount?.id, userCoords.lat, userCoords.lng]);
+  }, [authAccount?.id]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -180,6 +269,19 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
     setUserCoords(finalCoords);
     setAddressModalVisible(false);
     loadData(finalCoords);
+
+    // Persist to AsyncStorage so selected location stays even after refresh
+    const payload = JSON.stringify({
+      address: finalAddress,
+      coords: finalCoords,
+      savedAt: Date.now(),
+    });
+    AsyncStorage.setItem(RECYCLE_LOCATION_STORAGE_KEY, payload).catch((e) =>
+      console.warn("AsyncStorage save error:", e)
+    );
+    if (authAccount?.id) {
+      AsyncStorage.setItem(`${RECYCLE_LOCATION_STORAGE_KEY}_${authAccount.id}`, payload).catch(() => {});
+    }
   };
 
   const handleStartDepositToBank = (bank: WasteBankUI) => {
@@ -660,13 +762,8 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
             </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.headerActionBtn}
-            onPress={() => navigate("c_recycle_ledger")}
-            activeOpacity={0.7}
-          >
-            <History size={18} color="#059669" />
-          </TouchableOpacity>
+          {/* Right spacer to keep center title balanced */}
+          <View style={{ width: 36 }} />
         </View>
       </View>
 
@@ -779,8 +876,10 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
                   ) : (
                     filteredPresetLocations.map((p, idx) => {
                       const isSelected =
-                        userAddress.toLowerCase().includes(p.label.toLowerCase()) ||
-                        userAddress === p.address;
+                        userAddress.toLowerCase() === p.address.toLowerCase() ||
+                        userAddress.toLowerCase().includes(p.address.toLowerCase()) ||
+                        p.address.toLowerCase().includes(userAddress.toLowerCase()) ||
+                        (nearestBank && nearestBank.name === p.bankName);
                       return (
                         <TouchableOpacity
                           key={`preset-${idx}`}
@@ -793,9 +892,14 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
                         >
                           <View style={[styles.modalLocationDot, isSelected && styles.modalLocationDotActive]} />
                           <View style={{ flex: 1 }}>
-                            <Text style={[styles.modalLocationLabel, isSelected && styles.modalLocationLabelActive]}>
-                              {p.label}
-                            </Text>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              <Text style={[styles.modalLocationLabel, isSelected && styles.modalLocationLabelActive]}>
+                                {p.label}
+                              </Text>
+                              <View style={{ backgroundColor: "#ECFDF5", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 9, fontWeight: "700", color: "#059669" }}>Aktif</Text>
+                              </View>
+                            </View>
                             <Text style={styles.modalLocationAddress} numberOfLines={1}>
                               {p.address}
                             </Text>

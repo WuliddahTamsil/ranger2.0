@@ -345,48 +345,6 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
     }
   };
 
-  // Simulator helper
-  const handleNextStepDemo = async () => {
-    if (!order) return;
-    const orderId = order._id || order.id || "temp";
-    if (order.status === "MENUNGGU_KONFIRMASI_MITRA") {
-      await updateLaundryOrderStatus(orderId, "MENUNGGU_DRIVER_JEMPUT");
-    } else if (order.status === "MENUNGGU_DRIVER_JEMPUT") {
-      await updateLaundryOrderStatus(orderId, "DRIVER_MENUJU_CUSTOMER", {
-        driverPickupId: "drv_1",
-        driverPickupName: "Rian Hidayat",
-        driverPickupPhone: "0812-9988-7766",
-      });
-    } else if (order.status === "DRIVER_MENUJU_CUSTOMER") {
-      await updateLaundryOrderStatus(orderId, "DRIVER_MENUJU_LAUNDRY");
-    } else if (order.status === "DRIVER_MENUJU_LAUNDRY") {
-      await updateLaundryOrderStatus(orderId, "TIBA_DI_LAUNDRY");
-    } else if (order.status === "TIBA_DI_LAUNDRY") {
-      await weighAndBillLaundryOrder(orderId, 3.8);
-    } else if (order.status === "MENUNGGU_PEMBAYARAN") {
-      setIsPaymentModalOpen(true);
-    } else if (order.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN") {
-      await verifyLaundryPayment(orderId, "approve");
-    } else if (order.status === "SEDANG_DICUCI" || order.status === "PEMBAYARAN_LUNAS") {
-      await updateLaundryOrderStatus(orderId, "SIAP_DIANTAR");
-    } else if (order.status === "SIAP_DIANTAR") {
-      await updateLaundryOrderStatus(orderId, "DRIVER_MENGANTAR_BALIK", {
-        driverDeliveryId: "drv_2",
-        driverDeliveryName: "Budi Santoso",
-        driverDeliveryPhone: "0813-1122-3344",
-      });
-    } else if (order.status === "DRIVER_MENGANTAR_BALIK") {
-      await updateLaundryOrderStatus(orderId, "SELESAI");
-    } else {
-      await updateLaundryOrderStatus(orderId, "MENUNGGU_KONFIRMASI_MITRA");
-    }
-  };
-
-  const handleResetDemo = async () => {
-    if (!order) return;
-    const orderId = order._id || order.id || "temp";
-    await updateLaundryOrderStatus(orderId, "MENUNGGU_KONFIRMASI_MITRA");
-  };
 
   const isVerifying = order?.status === "MENUNGGU_VERIFIKASI_PEMBAYARAN" || order?.paymentStatus === "menunggu_verifikasi";
   const isPaid = order?.paymentStatus === "lunas";
@@ -726,23 +684,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
           </View>
         )}
 
-        {/* Demo Simulation Controls */}
-        <View style={styles.simCard}>
-          <Text style={styles.simTitle}>⚡ Simulator Alur Real-time</Text>
-          <Text style={styles.simSub}>
-            Uji alur: Jemput ➔ Timbang ➔ Upload Bukti Bayar ➔ Verifikasi Owner ➔ Antar:
-          </Text>
-          <View style={styles.simButtonsRow}>
-            <TouchableOpacity style={styles.btnSimNext} onPress={handleNextStepDemo} activeOpacity={0.8}>
-              <Play size={14} color="#FFFFFF" />
-              <Text style={styles.btnSimNextText}>Langkah Berikutnya</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.btnSimReset} onPress={handleResetDemo} activeOpacity={0.8}>
-              <RotateCcw size={14} color="#374151" />
-              <Text style={styles.btnSimResetText}>Reset</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+
 
         <View style={{ height: 40 }} />
       </ScrollView>

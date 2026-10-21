@@ -1,6 +1,6 @@
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -84,22 +84,35 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
   const [weightManual, setWeightManual] = useState("");
   const [priceVal, setPriceVal] = useState("");
 
-  const loadOrders = async () => {
-    setLoading(true);
-    if (!authAccount?.id) {
-      setOrders([]);
-      setLoading(false);
-      return;
+  const isFetchingRef = useRef(false);
+
+  const loadOrders = async (showLoadingSpinner: boolean = true) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    if (showLoadingSpinner) {
+      setLoading(true);
     }
-    const data = await fetchStoreOrders(authAccount.id);
-    setOrders(data || []);
-    setLoading(false);
+    try {
+      if (!authAccount?.id) {
+        setOrders([]);
+        return;
+      }
+      const data = await fetchStoreOrders(authAccount.id);
+      if (Array.isArray(data)) {
+        setOrders(data);
+      }
+    } catch (err) {
+      console.warn("⚠️ loadOrders error:", err);
+    } finally {
+      setLoading(false);
+      isFetchingRef.current = false;
+    }
   };
 
   useEffect(() => {
-    loadOrders();
+    loadOrders(true);
     const unsub = subscribeLaundry(() => {
-      loadOrders();
+      loadOrders(false);
     });
     return unsub;
   }, [authAccount?.id]);
@@ -107,7 +120,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
   const handleAcceptOrder = async (ord: LaundryOrder) => {
     const ordId = ord._id || ord.id || "";
     await acceptLaundryOrder(ordId);
-    await loadOrders();
+    await loadOrders(false);
     Alert.alert(
       "Pesanan Diterima!",
       "Pesanan telah di-ACC. Notifikasi penjemputan pakaian kotor telah disebarkan ke para driver di sekitar lokasi!"
@@ -130,8 +143,8 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
           return;
         }
         const result = await ImagePicker.launchCameraAsync({
-          allowsEditing: false,
-          quality: 0.8,
+          allowsEditing: true,
+          quality: 0.3,
           base64: true,
         });
         if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -146,8 +159,8 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
           return;
         }
         const result = await ImagePicker.launchImageLibraryAsync({
-          allowsEditing: false,
-          quality: 0.8,
+          allowsEditing: true,
+          quality: 0.3,
           base64: true,
         });
         if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -174,7 +187,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
       const ordId = selectedOrderForWeigh._id || selectedOrderForWeigh.id || "";
       await weighAndBillLaundryOrder(ordId, weightNum, undefined, weighingProofImage || undefined);
       setIsWeighModalOpen(false);
-      await loadOrders();
+      await loadOrders(false);
       Alert.alert("Tagihan Terkirim", `Tagihan sebesar ${(weightNum * (selectedOrderForWeigh.pricePerUnit || 6000) + 9000).toLocaleString("id-ID")} telah dikirim ke Customer.`);
     } catch (err) {
       console.error("Weigh error:", err);
@@ -191,21 +204,40 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
 
   const handleVerifyPaymentAction = async (action: "approve" | "reject") => {
     if (!selectedOrderForProof) return;
+    const ordId = selectedOrderForProof._id || selectedOrderForProof.id || "";
     setIsVerifyingAction(true);
+    setIsVerifyProofModalOpen(false);
+
+    // Optimistic UI Update: Langsung ubah status pesanan di memori layar agar tidak ada loading
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o._id === ordId || o.id === ordId) {
+          return {
+            ...o,
+            paymentStatus: action === "approve" ? "lunas" : "ditolak",
+            status: action === "approve" ? "SEDANG_DICUCI" : "MENUNGGU_PEMBAYARAN",
+            paymentRejectionReason: action === "reject" ? rejectionReason : "",
+            paidAt: action === "approve" ? new Date().toISOString() : o.paidAt,
+          };
+        }
+        return o;
+      })
+    );
+
     try {
-      const ordId = selectedOrderForProof._id || selectedOrderForProof.id || "";
       await verifyLaundryPayment(ordId, action, rejectionReason);
-      setIsVerifyProofModalOpen(false);
-      await loadOrders();
       if (action === "approve") {
         Alert.alert("Pembayaran Terverifikasi", "Status pembayaran LUNAS. Cucian siap diproses cuci!");
       } else {
         Alert.alert("Bukti Ditolak", "Customer telah diberitahu untuk mengunggah ulang bukti transfer.");
       }
+      // Refresh data dari server di latar belakang tanpa spinner layar penuh
+      await loadOrders(false);
     } catch (err) {
       console.error("Verify error:", err);
     } finally {
       setIsVerifyingAction(false);
+      setLoading(false);
     }
   };
 

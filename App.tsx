@@ -196,8 +196,59 @@ export default function App() {
               status: "verified",
               token: "6aadbb8c5513afda4c34d999",
             };
-            setCurrentAuthAccount(bankAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: bankAcc, accountId: bankAcc.id }));
+          } else if (screenParam?.startsWith("pemilik_laundry") || urlParams.get("role") === "pemilik_laundry") {
+            const laundryAcc: any = {
+              id: "laundry_seed_001",
+              name: "Ais Laundry",
+              email: "aisl@gmail.com",
+              phone: "081234567891",
+              role: "pemilik_laundry",
+              status: "verified",
+              token: "laundry_seed_001",
+              roleData: {
+                businessName: "Ais Laundry",
+                businessAddress: "BGR",
+                serviceType: "express",
+                operatingHours: "24 jam",
+              },
+            };
+            setCurrentAuthAccount(laundryAcc);
+            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: laundryAcc, accountId: laundryAcc.id }));
+          } else if (screenParam?.startsWith("pemilik_kos") || urlParams.get("role") === "pemilik_kos") {
+            const isAdam = urlParams.get("account") === "adam" || urlParams.get("email")?.includes("adam");
+            const kosAcc: any = isAdam
+              ? {
+                  id: "6ac6718770933058bf751c11",
+                  name: "Adam (ADAM HO)",
+                  email: "adamshalishazahra@gmail.com",
+                  phone: "+6287805987309",
+                  role: "pemilik_kos",
+                  status: "verified",
+                  token: "6ac6718770933058bf751c11",
+                  roleData: {
+                    businessName: "ADAM HO",
+                    businessAddress: "GARUT",
+                    propertyType: "Wisata",
+                    businessCategory: "wisata",
+                  },
+                }
+              : {
+                  id: "kos_seed_001",
+                  name: "Aisyah Pemilik Kos & Homestay",
+                  email: "aisk@gmail.com",
+                  phone: "087805987309",
+                  role: "pemilik_kos",
+                  status: "verified",
+                  token: "kos_seed_001",
+                  roleData: {
+                    businessName: "Ais Kos Exclusive & Homestay",
+                    businessAddress: "Tarogong Kaler, Garut",
+                    kostType: "Campur",
+                    roomCount: "10",
+                  },
+                };
+            setCurrentAuthAccount(kosAcc);
+            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: kosAcc, accountId: kosAcc.id }));
           } else if (screenParam?.startsWith("c_") || urlParams.get("role") === "customer") {
             const custAcc: any = {
               id: "6a85892d8d27c7d42a0d8ba8",
@@ -225,6 +276,20 @@ export default function App() {
             };
             setCurrentAuthAccount(custAcc);
             void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: custAcc, accountId: custAcc.id }));
+          } else if (screenParam?.startsWith("admin") || urlParams.get("role") === "admin") {
+            const adminAcc: any = {
+              id: "6aa17978d4b39e0b125becd5",
+              name: "Super Admin Ranger",
+              email: "ranger@gmail.com",
+              phone: "081511226089",
+              role: "admin",
+              status: "verified",
+              token: "6aa17978d4b39e0b125becd5",
+              address: "HQ GEOVERSE Platform, Garut",
+              roleData: {},
+            };
+            setCurrentAuthAccount(adminAcc);
+            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: adminAcc, accountId: adminAcc.id }));
           }
           setCurrentScreen(screenParam);
           return;

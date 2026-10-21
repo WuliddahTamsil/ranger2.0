@@ -1035,6 +1035,26 @@ export const Order: React.FC<OrderProps> = ({
         { key: "selesai", label: "Selesai", title: "Pesanan Diterima", desc: "Pesanan catering telah diserahkan ke pemesan dengan baik.", icon: CheckCircle },
       ];
     }
+    if (order.type === "Laundry") {
+      const isPickup = order.items?.[0]?.name?.includes("Jemput");
+      if (isPickup) {
+        return [
+          { key: "terima", label: "Diterima", title: "Job Jemput Diterima", desc: "Driver bersiap menuju rumah customer untuk mengambil baju kotor.", icon: CheckCircle2 },
+          { key: "menuju", label: "Menuju", title: "Menuju Rumah Customer", desc: "Driver dalam perjalanan ke rumah customer untuk mengambil baju kotor.", icon: Navigation },
+          { key: "sampai", label: "Sampai", title: "Tiba di Customer", desc: "Driver tiba di rumah customer. Ambil & cek pakaian kotor.", icon: MapPin },
+          { key: "antar", label: "OTW Toko", title: "Baju Kotor OTW Toko", desc: "Baju kotor sudah diambil & sedang diantar ke toko laundry.", icon: Bike },
+          { key: "selesai", label: "Tiba Toko", title: "Tiba di Toko Laundry", desc: "Baju kotor telah diserahkan ke toko laundry & siap ditimbang.", icon: CheckCircle },
+        ];
+      } else {
+        return [
+          { key: "terima", label: "Siap", title: "Cucian Selesai Dicuci", desc: "Toko laundry telah menyelesaikan cucian & siap diantar.", icon: CheckCircle2 },
+          { key: "menuju", label: "Menuju", title: "Menuju Toko Laundry", desc: "Driver dalam perjalanan ke toko laundry untuk ambil cucian bersih.", icon: Navigation },
+          { key: "sampai", label: "Sampai", title: "Tiba di Toko Laundry", desc: "Driver tiba di toko laundry & mengambil pakaian bersih.", icon: MapPin },
+          { key: "antar", label: "Antar", title: "Mengantar ke Customer", desc: "Driver sedang mengantar pakaian bersih kembali ke rumah customer.", icon: Bike },
+          { key: "selesai", label: "Selesai", title: "Cucian Diterima", desc: "Pakaian bersih telah diterima kembali oleh customer.", icon: CheckCircle },
+        ];
+      }
+    }
     return [
       { key: "terima", label: "Diterima", title: "Pesanan Siap", desc: "Pesanan belanja telah siap untuk diambil di toko mitra.", icon: CheckCircle2 },
       { key: "menuju", label: "Menuju", title: "Menuju Toko", desc: "Kurir sedang dalam perjalanan menuju toko / outlet.", icon: Navigation },
@@ -1328,6 +1348,10 @@ export const Order: React.FC<OrderProps> = ({
                               ? "MULAI JEMPUT PENUMPANG"
                               : selectedOrder.type === "Kanyaah Send"
                               ? "MULAI JALAN KE PENGIRIM"
+                              : selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "MULAI JEMPUT BAJU KOTOR"
+                                  : "MULAI AMBIL CUCIAN BERSIH")
                               : "MULAI JALAN KE TOKO"}
                           </Text>
                           <Text style={styles.startTripSubtitle}>
@@ -1337,6 +1361,10 @@ export const Order: React.FC<OrderProps> = ({
                               ? "Aktifkan rute navigasi menuju lokasi jemput penumpang"
                               : selectedOrder.type === "Kanyaah Send"
                               ? "Aktifkan tracking menuju lokasi pengirim paket"
+                              : selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "Mulai perjalanan menuju rumah customer untuk mengambil pakaian kotor"
+                                  : "Mulai perjalanan menuju outlet laundry untuk mengambil pakaian bersih")
                               : "Aktifkan tracking & kirim notifikasi ke pemilik toko"}
                           </Text>
                         </View>
@@ -1353,6 +1381,10 @@ export const Order: React.FC<OrderProps> = ({
                               ? "SEDANG MENUJU PENUMPANG"
                               : selectedOrder.type === "Kanyaah Send"
                               ? "SEDANG MENUJU PENGIRIM"
+                              : selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "SEDANG MENUJU RUMAH CUSTOMER"
+                                  : "SEDANG MENUJU TOKO LAUNDRY")
                               : "SEDANG DALAM PERJALANAN KE TOKO"}
                           </Text>
                         </View>
@@ -1378,7 +1410,7 @@ export const Order: React.FC<OrderProps> = ({
                           onPress={() => handleDriverTransition(selectedOrder, "Sampai Pickup")}
                           activeOpacity={0.85}
                         >
-                          {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride" || selectedOrder.type === "Kanyaah Send" ? (
+                          {selectedOrder.type === "Setor Sampah" || selectedOrder.type === "Kanyaah Ride" || selectedOrder.type === "Kanyaah Send" || (selectedOrder.type === "Laundry" && selectedOrder.items?.[0]?.name?.includes("Jemput")) ? (
                             <MapPin size={15} color="#FFFFFF" />
                           ) : (
                             <Store size={15} color="#FFFFFF" />
@@ -1392,24 +1424,53 @@ export const Order: React.FC<OrderProps> = ({
                               ? "Konfirmasi Tiba di Pengirim"
                               : selectedOrder.type === "Catering"
                               ? "Konfirmasi Tiba di Dapur Catering"
+                              : selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "Konfirmasi Tiba di Rumah Customer"
+                                  : "Konfirmasi Tiba di Toko Laundry")
                               : "Konfirmasi Tiba di Toko / Resto"}
                           </Text>
                         </TouchableOpacity>
                       </View>
                     ) : (
-                      <View style={styles.tripCompletedNotice}>
-                        <CheckCircle size={15} color="#0D7A53" />
-                        <Text style={styles.tripCompletedNoticeText}>
-                          {selectedOrder.type === "Setor Sampah"
-                            ? "Anda sudah tiba di rumah customer. Ambil sampah daur ulang lalu mulai antar ke Bank Sampah."
-                            : selectedOrder.type === "Kanyaah Ride"
-                            ? "Anda sudah tiba di lokasi penjemputan. Silakan tunggu penumpang naik."
-                            : selectedOrder.type === "Kanyaah Send"
-                            ? "Anda sudah di lokasi pengirim. Ambil paket & verifikasi kode pickup."
-                            : selectedOrder.type === "Catering"
-                            ? "Anda sudah tiba di dapur katering. Silakan periksa pesanan & ambil makanan."
-                            : "Anda sudah sampai di toko / resto. Silakan periksa pesanan & ambil barang."}
-                        </Text>
+                      <View style={{ gap: 8 }}>
+                        <View style={styles.tripCompletedNotice}>
+                          <CheckCircle size={15} color="#0D7A53" />
+                          <Text style={styles.tripCompletedNoticeText}>
+                            {selectedOrder.type === "Setor Sampah"
+                              ? "Anda sudah tiba di rumah customer. Ambil sampah daur ulang lalu mulai antar ke Bank Sampah."
+                              : selectedOrder.type === "Kanyaah Ride"
+                              ? "Anda sudah tiba di lokasi penjemputan. Silakan tunggu penumpang naik."
+                              : selectedOrder.type === "Kanyaah Send"
+                              ? "Anda sudah di lokasi pengirim. Ambil paket & verifikasi kode pickup."
+                              : selectedOrder.type === "Catering"
+                              ? "Anda sudah tiba di dapur katering. Silakan periksa pesanan & ambil makanan."
+                              : selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "Anda sudah tiba di rumah customer. Ambil pakaian kotor dan bawa ke toko laundry."
+                                  : "Anda sudah tiba di outlet laundry. Ambil pakaian bersih untuk diantar ke customer.")
+                              : "Anda sudah sampai di toko / resto. Silakan periksa pesanan & ambil barang."}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.tripNextActionButton, { backgroundColor: "#15803D" }]}
+                          onPress={async () => {
+                            setNavMode("customer");
+                            await handleDriverTransition(selectedOrder, "Mengantar");
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <Bike size={15} color="#FFFFFF" />
+                          <Text style={styles.tripNextActionText}>
+                            {selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "Baju Kotor Diterima & OTW ke Laundry"
+                                  : "Baju Bersih Diterima & OTW ke Customer")
+                              : selectedOrder.type === "Setor Sampah"
+                              ? "Sampah Diambil & OTW ke Bank"
+                              : "Mulai Antar ke Customer"}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                     )}
                   </View>
@@ -1439,6 +1500,10 @@ export const Order: React.FC<OrderProps> = ({
                               ? "MULAI ANTAR KE PENERIMA"
                               : selectedOrder.type === "Catering"
                               ? "MULAI ANTAR KE PEMESAN"
+                              : selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "BAJU KOTOR DIAMBIL & OTW KE LAUNDRY"
+                                  : "BAJU BERSIH DIAMBIL & OTW KE CUSTOMER")
                               : "MULAI ANTAR KE CUSTOMER"}
                           </Text>
                           <Text style={styles.startTripSubtitle}>
@@ -1450,6 +1515,10 @@ export const Order: React.FC<OrderProps> = ({
                               ? "Paket sudah dibawa, mulai antar menuju alamat penerima"
                               : selectedOrder.type === "Catering"
                               ? "Pesanan catering sudah diambil, mulai antar ke pemesan"
+                              : selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "Bawa pakaian kotor menuju outlet toko laundry"
+                                  : "Antar pakaian bersih kembali ke rumah customer")
                               : "Aktifkan tracking & kirim notifikasi ke customer"}
                           </Text>
                         </View>
@@ -1468,6 +1537,10 @@ export const Order: React.FC<OrderProps> = ({
                               ? "SEDANG MENGANTAR KE PENERIMA"
                               : selectedOrder.type === "Catering"
                               ? "SEDANG MENGANTAR KE PEMESAN"
+                              : selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "SEDANG MENGANTAR BAJU KOTOR KE LAUNDRY"
+                                  : "SEDANG MENGANTAR BAJU BERSIH KE CUSTOMER")
                               : "SEDANG MENGANTAR KE CUSTOMER"}
                           </Text>
                         </View>
@@ -1506,6 +1579,10 @@ export const Order: React.FC<OrderProps> = ({
                               ? "Paket Terkirim & Selesai"
                               : selectedOrder.type === "Catering"
                               ? "Catering Diterima & Selesai"
+                              : selectedOrder.type === "Laundry"
+                              ? (selectedOrder.items?.[0]?.name?.includes("Jemput")
+                                  ? "Tiba di Toko Laundry & Serahkan Cucian"
+                                  : "Baju Diterima Customer & Selesai")
                               : "Selesaikan Pengantaran"}
                           </Text>
                         </TouchableOpacity>
