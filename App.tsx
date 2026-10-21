@@ -94,6 +94,7 @@ import { VerifikasiDpScreen } from "./src/screens/pemilik_kos/VerifikasiDpScreen
 import { KirimPengingatScreen } from "./src/screens/pemilik_kos/KirimPengingatScreen";
 import { AdminHomeScreen } from "./src/screens/admin/AdminHomeScreen";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
+import { GeoverseGlobalDialog } from "./src/components/CustomDialog";
 import {
   createAuthSession,
   restoreStoredAccount,
@@ -562,6 +563,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <GeoverseGlobalDialog />
       <GeoversePointProvider>
         <RecycleProvider>
           <SendProvider>

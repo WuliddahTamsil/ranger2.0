@@ -41,8 +41,7 @@ export const ProfilePhotoEditor: React.FC<ProfilePhotoEditorProps> = ({
   const initial = name?.trim().charAt(0).toUpperCase() || "?";
 
   const showError = (message: string) => {
-    if (Platform.OS === "web") window.alert(message);
-    else Alert.alert("Foto profil", message);
+    Alert.alert("Foto profil", message);
   };
 
   const selectPhoto = async (source: "gallery" | "camera") => {
@@ -99,8 +98,7 @@ export const ProfilePhotoEditor: React.FC<ProfilePhotoEditorProps> = ({
       }
 
       onSaved(uploadedUri);
-      if (Platform.OS === "web") window.alert("Foto profil berhasil diperbarui.");
-      else Alert.alert("Berhasil", "Foto profil berhasil diperbarui.");
+      Alert.alert("Berhasil", "Foto profil berhasil diperbarui.");
     } catch (error: any) {
       console.error("Profile photo upload error:", error);
       let errMsg = "Foto profil gagal disimpan.";

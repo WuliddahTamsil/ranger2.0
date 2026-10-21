@@ -544,7 +544,17 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
         <View style={styles.paymentCard}>
           <View style={styles.paymentHeaderRow}>
             <View style={styles.paymentHeaderTitle}><View style={styles.paymentIcon}><Wallet size={17} color="#1B7A4E" /></View><View style={styles.paymentHeaderCopy}><Text style={styles.paymentTitle}>Pembayaran</Text><Text style={styles.paymentMethod}>{paymentMethodLabel(order.paymentMethod)}</Text></View></View>
-            <View style={[styles.paymentStatusPill, isPaymentComplete ? styles.paymentStatusPillDone : styles.paymentStatusPillPending]}><Text style={[styles.paymentStatusText, { color: isPaymentComplete ? "#166534" : "#9A3412" }]} numberOfLines={1}>{isPaymentComplete ? "LUNAS" : (order.paymentStatus || "MENUNGGU")}</Text></View>
+            <View style={[
+              styles.paymentStatusPill, 
+              isPaymentComplete ? styles.paymentStatusPillDone : (paidAmount > 0 && remaining > 0 ? { backgroundColor: "#FEF3C7" } : styles.paymentStatusPillPending)
+            ]}>
+              <Text style={[
+                styles.paymentStatusText, 
+                { color: isPaymentComplete ? "#166534" : (paidAmount > 0 && remaining > 0 ? "#B45309" : "#9A3412") }
+              ]} numberOfLines={1}>
+                {isPaymentComplete ? "LUNAS 100%" : (paidAmount > 0 && remaining > 0 ? "DP TERVERIFIKASI" : (order.paymentStatus || "MENUNGGU"))}
+              </Text>
+            </View>
           </View>
           <View style={styles.paymentProgressTrack}><View style={[styles.paymentProgressFill, { width: `${Math.min(100, totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0)}%` }]} /></View>
           <View style={styles.paymentAmountRow}><View style={styles.paymentAmountColumn}><Text style={styles.paymentAmountLabel}>Sudah dibayar</Text><Text style={styles.paymentAmountValue}>{rp(paidAmount)}</Text></View><View style={[styles.paymentAmountColumn, styles.paymentAmountColumnRight]}><Text style={styles.paymentAmountLabel}>Total pesanan</Text><Text style={styles.paymentAmountValue}>{rp(totalAmount)}</Text></View></View>

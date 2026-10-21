@@ -507,14 +507,10 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
     if (isObjectId) {
       const result = await updateCateringOrderStatus(orderId, nextStatus);
       if (!result.success) {
-        if (Platform.OS === "web") {
-          window.alert(result.message || "Pesanan belum berhasil diperbarui. Silakan coba lagi.");
-        } else {
-          Alert.alert(
-            "Status belum diperbarui",
-            result.message || "Pesanan belum berhasil diperbarui. Silakan coba lagi.",
-          );
-        }
+        Alert.alert(
+          "Status belum diperbarui",
+          result.message || "Pesanan belum berhasil diperbarui. Silakan coba lagi.",
+        );
         return;
       }
     }
@@ -539,27 +535,15 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
       });
     }
 
-    if (Platform.OS === "web") {
-      window.alert(`Sukses: ${messageText}`);
-    } else {
-      Alert.alert("Sukses", messageText);
-    }
+    Alert.alert("Sukses", messageText);
   };
 
   const confirmOrderStatus = (orderId: string, nextStatus: "Diproses" | "Dibatalkan") => {
     const isRejecting = nextStatus === "Dibatalkan";
-    const title = isRejecting ? "Tolak pesanan?" : "Terima & Mulai Masak?";
+    const title = isRejecting ? "Tolak Pesanan?" : "Terima & Mulai Masak?";
     const message = isRejecting
       ? "Pesanan akan ditolak dan customer akan menerima pemberitahuan."
       : "Pesanan akan diterima dan status dapur akan berubah ke proses memasak.";
-
-    if (Platform.OS === "web") {
-      const confirmed = typeof window !== "undefined" ? window.confirm(`${title}\n\n${message}`) : true;
-      if (confirmed) {
-        void handleUpdateStatus(orderId, nextStatus);
-      }
-      return;
-    }
 
     Alert.alert(
       title,

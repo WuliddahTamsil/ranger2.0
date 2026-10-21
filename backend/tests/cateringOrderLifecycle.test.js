@@ -18,8 +18,17 @@ test("catering payment status is derived from verified money, not selected optio
   assert.equal(getPaymentStatusLabel({ totalAmount: 1000000, status: "Menunggu" }, 0), "Menunggu Pembayaran");
   assert.equal(getPaymentStatusLabel({ totalAmount: 1000000, status: "Menunggu" }, 300000), "Menunggu Pelunasan");
   assert.equal(getPaymentStatusLabel({ totalAmount: 1000000, status: "Menunggu" }, 1000000), "Lunas");
-  assert.equal(isCateringPaymentComplete({ totalAmount: 1000000, remainingAmount: 0, paymentStatus: "Lunas" }), true);
-  assert.equal(isCateringPaymentComplete({ totalAmount: 1000000, remainingAmount: 700000, paymentStatus: "Menunggu Pelunasan" }), false);
+  assert.equal(isCateringPaymentComplete({ totalAmount: 1000000, remainingAmount: 0, paymentStatus: "Lunas", paidAmount: 1000000 }), true);
+  assert.equal(isCateringPaymentComplete({ totalAmount: 1000000, remainingAmount: 700000, paidAmount: 300000, paymentOption: "dp30", paymentStatus: "DP Terbayar" }), false);
+  assert.equal(isCateringPaymentComplete({ totalAmount: 1000000, remainingAmount: 500000, paidAmount: 500000, paymentOption: "dp50", paymentStatus: "DP Terbayar" }), false);
+});
+
+test("catering DP verification validates minimum threshold per payment plan", () => {
+  const { isCateringDpVerified } = require("../utils/cateringOrderLifecycle");
+  assert.equal(isCateringDpVerified({ totalAmount: 1000000, paidAmount: 300000, paymentOption: "dp30" }), true);
+  assert.equal(isCateringDpVerified({ totalAmount: 1000000, paidAmount: 250000, paymentOption: "dp30" }), false);
+  assert.equal(isCateringDpVerified({ totalAmount: 1000000, paidAmount: 500000, paymentOption: "dp50" }), true);
+  assert.equal(isCateringDpVerified({ totalAmount: 1000000, paidAmount: 490000, paymentOption: "dp50" }), false);
 });
 
 test("catering lifecycle separates owner preparation and driver delivery transitions", () => {

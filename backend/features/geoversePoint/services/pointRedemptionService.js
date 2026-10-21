@@ -10,6 +10,7 @@ const Notification = require("../../../models/Notification");
 const { debitPoints, reversePoints, getOrCreateWallet } = require("./pointWalletService");
 const {
   getPointRate,
+  POINT_TO_RUPIAH_RATE,
   MIN_CASH_REDEMPTION_POINTS,
   REDEMPTION_STATUSES,
   REDEMPTION_TYPES,

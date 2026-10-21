@@ -135,23 +135,14 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
   const [currentTab, setCurrentTab] = useState<number>(0);
 
   const showAlert = (title: string, message: string) => {
-    if (Platform.OS === "web") {
-      alert(`${title}: ${message}`);
-    } else {
-      Alert.alert(title, message);
-    }
+    Alert.alert(title, message);
   };
 
   const showConfirm = (title: string, message: string, onConfirm: () => void) => {
-    if (Platform.OS === "web") {
-      const confirmed = window.confirm(`${title}\n\n${message}`);
-      if (confirmed) onConfirm();
-    } else {
-      Alert.alert(title, message, [
-        { text: "Batal", style: "cancel" },
-        { text: "Ya", onPress: onConfirm },
-      ]);
-    }
+    Alert.alert(title, message, [
+      { text: "Batal", style: "cancel" },
+      { text: "Ya, Lanjutkan", onPress: onConfirm },
+    ]);
   };
 
   // 1. Global Store Info State

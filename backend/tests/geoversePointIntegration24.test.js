@@ -83,6 +83,8 @@ async function run24Tests() {
   const testUserId = new mongoose.Types.ObjectId();
   const testAdminId = new mongoose.Types.ObjectId();
   const testOfficerId = new mongoose.Types.ObjectId();
+  const initialPointRate = getPointRate();
+  setPointRate(1);
 
   try {
     // ------------------------------------------------------------------------
@@ -853,6 +855,7 @@ async function run24Tests() {
       await PointRedemption.deleteMany({ userId: testUserId });
       await Voucher.deleteMany({ title: /Test/i });
     } catch (_) {}
+    setPointRate(initialPointRate);
 
     await mongoose.disconnect();
     process.exit(failed > 0 ? 1 : 0);

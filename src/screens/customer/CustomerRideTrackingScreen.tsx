@@ -279,7 +279,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
 
     if (currentRide.status === "TRIP_STARTED") {
       if (Platform.OS === "web") {
-        window.alert(
+        Alert.alert("Kanyaah Ride", 
           "Perjalanan sudah dimulai bersama driver dan tidak dapat dibatalkan dari aplikasi penumpang."
         );
       } else {
@@ -291,23 +291,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
       return;
     }
 
-    if (Platform.OS === "web") {
-      const feeNote =
-        currentRide.status === "SEARCHING_DRIVER"
-          ? "Driver belum ditugaskan. Pembatalan ini GRATIS tanpa biaya."
-          : currentRide.status === "DRIVER_ARRIVED"
-          ? "Driver sudah tiba di titik jemput. Pembatalan dikenakan biaya Rp 5.000."
-          : "Driver sedang menuju lokasi penjemputan. Pembatalan dikenakan biaya Rp 3.000.";
-
-      const confirmed = window.confirm(
-        `Batalkan Perjalanan Kanyaah Ride?\n\n${feeNote}\n\nTekan OK untuk membatalkan pesanan sekarang.`
-      );
-      if (confirmed) {
-        await executeCancelRide("Dibatalkan oleh pelanggan via Web");
-        return;
-      }
-      return;
-    }
+    setCancelModalVisible(true);
 
     setCancelModalVisible(true);
   };
@@ -341,14 +325,14 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           ? ` Biaya pembatalan: Rp ${updated.cancellation.fee.toLocaleString("id-ID")}.`
           : "";
         if (Platform.OS === "web") {
-          window.alert(`Pesanan Anda telah dibatalkan.${feeText}`);
+          Alert.alert("Kanyaah Ride", `Pesanan Anda telah dibatalkan.${feeText}`);
         } else {
           Alert.alert("Perjalanan Dibatalkan", `Pesanan Anda telah dibatalkan.${feeText}`);
         }
       } else {
         const errorMsg = res.message || "Gagal membatalkan pesanan. Silakan coba lagi.";
         if (Platform.OS === "web") {
-          window.alert(errorMsg);
+          Alert.alert("Kanyaah Ride", errorMsg);
         } else {
           Alert.alert("Gagal Membatalkan", errorMsg);
         }
@@ -356,7 +340,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
     } catch (err: any) {
       const errorMsg = err.message || "Terjadi kesalahan saat membatalkan perjalanan.";
       if (Platform.OS === "web") {
-        window.alert(errorMsg);
+        Alert.alert("Kanyaah Ride", errorMsg);
       } else {
         Alert.alert("Gagal", errorMsg);
       }
@@ -369,7 +353,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
   const handleSubmitComplaint = async () => {
     if (!currentRide) {
       if (Platform.OS === "web") {
-        window.alert("Pesanan tidak ditemukan.");
+        Alert.alert("Kanyaah Ride", "Pesanan tidak ditemukan.");
       } else {
         Alert.alert("Gagal", "Pesanan tidak ditemukan.");
       }
@@ -391,7 +375,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
       } else {
         const errorMsg = res.message || "Silakan coba lagi.";
         if (Platform.OS === "web") {
-          window.alert(errorMsg);
+          Alert.alert("Kanyaah Ride", errorMsg);
         } else {
           Alert.alert("Gagal Mengajukan", errorMsg);
         }
@@ -399,7 +383,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
     } catch (err: any) {
       const errorMsg = err.message || "Terjadi kesalahan saat mengirim pengaduan.";
       if (Platform.OS === "web") {
-        window.alert(errorMsg);
+        Alert.alert("Kanyaah Ride", errorMsg);
       } else {
         Alert.alert("Gagal", errorMsg);
       }

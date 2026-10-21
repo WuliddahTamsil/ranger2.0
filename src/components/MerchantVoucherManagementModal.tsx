@@ -141,20 +141,14 @@ export const MerchantVoucherManagementModal: React.FC<Props> = ({
       }
     };
 
-    if (Platform.OS === "web") {
-      if (window.confirm(`Hapus voucher ${item.voucherCode}?`)) {
-        void doDelete();
-      }
-    } else {
-      Alert.alert(
-        "Hapus Voucher?",
-        `Apakah Anda yakin ingin menghapus voucher "${item.title}" (${item.voucherCode})?`,
-        [
-          { text: "Batal", style: "cancel" },
-          { text: "Hapus", style: "destructive", onPress: () => void doDelete() },
-        ]
-      );
-    }
+    Alert.alert(
+      "Hapus Voucher?",
+      `Apakah Anda yakin ingin menghapus voucher "${item.title}" (${item.voucherCode})?`,
+      [
+        { text: "Batal", style: "cancel" },
+        { text: "Hapus", style: "destructive", onPress: () => void doDelete() },
+      ]
+    );
   };
 
   const resetForm = () => {

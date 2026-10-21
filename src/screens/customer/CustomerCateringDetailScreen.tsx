@@ -421,8 +421,7 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
 
   const confirmOrder = async () => {
     const showMessage = (title: string, message: string) => {
-      if (Platform.OS === "web") alert(`${title}: ${message}`);
-      else Alert.alert(title, message);
+      Alert.alert(title, message);
     };
     if (submitting) return;
     if (!authAccount?.id || !authAccount.name) {
@@ -746,11 +745,22 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
             </View>
           </View>
 
-          <View style={styles.secureNote}>
-            <ShieldAlert size={17} color="#B45309" />
-            <Text style={styles.mutedText}>
-              DP 30% atau 50% memulai persiapan dapur. Sistem akan mengingatkan bila sisa pembayaran belum selesai. Kurir baru akan mengambil dan mengantar setelah pembayaran terverifikasi dan dapur menandai pesanan siap.
-            </Text>
+          <View style={[styles.secureNote, { backgroundColor: "#FEF3C7", borderColor: "#FCD34D", borderRadius: 14, padding: 12 }]}>
+            <ShieldAlert size={18} color="#B45309" style={{ marginTop: 2 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12.5, fontWeight: "800", color: "#92400E", marginBottom: 3 }}>
+                Kebijakan DP & Pelunasan Aman (Sistem Escrow)
+              </Text>
+              <Text style={{ fontSize: 11, color: "#78350F", lineHeight: 16 }}>
+                • <Text style={{ fontWeight: "700" }}>Uang Muka (DP):</Text> DP 30% atau 50% mengikat jadwal slot dapur dan pembelian bahan baku segar.
+              </Text>
+              <Text style={{ fontSize: 11, color: "#78350F", lineHeight: 16 }}>
+                • <Text style={{ fontWeight: "700" }}>Waktu Pelunasan:</Text> Sisa tagihan wajib dilunasi paling lambat H-1 sebelum pengiriman agar kurir dapat ditugaskan.
+              </Text>
+              <Text style={{ fontSize: 11, color: "#78350F", lineHeight: 16 }}>
+                • <Text style={{ fontWeight: "700" }}>Kebijakan Pembatalan:</Text> Batal ≥ H-2 DP kembali 100%. Batal H-1 atau hari H, DP hangus sebagai ganti rugi bahan baku dapur.
+              </Text>
+            </View>
           </View>
           <TouchableOpacity
             style={[styles.primaryButton, submitting && { opacity: 0.65 }]}

@@ -273,20 +273,14 @@ export const AdminPgeInfoHubSection: React.FC<AdminPgeInfoHubSectionProps> = ({
       })();
     };
 
-    if (Platform.OS === "web") {
-      if (window.confirm(`Yakin ingin ${actionLabel} materi "${item.title}"?`)) {
-        proceed();
-      }
-    } else {
-      Alert.alert(
-        "Konfirmasi Status",
-        `Yakin ingin ${actionLabel} materi "${item.title}"?`,
-        [
-          { text: "Batal", style: "cancel" },
-          { text: "Ya, Lanjutkan", onPress: proceed },
-        ]
-      );
-    }
+    Alert.alert(
+      "Konfirmasi Status",
+      `Yakin ingin ${actionLabel} materi "${item.title}"?`,
+      [
+        { text: "Batal", style: "cancel" },
+        { text: "Ya, Lanjutkan", onPress: proceed },
+      ]
+    );
   };
 
   // Delete Item
@@ -305,20 +299,14 @@ export const AdminPgeInfoHubSection: React.FC<AdminPgeInfoHubSectionProps> = ({
       })();
     };
 
-    if (Platform.OS === "web") {
-      if (window.confirm(`Hapus permanen materi "${item.title}"? Tindakan ini tidak dapat dibatalkan.`)) {
-        proceed();
-      }
-    } else {
-      Alert.alert(
-        "Konfirmasi Hapus",
-        `Hapus permanen materi "${item.title}"?`,
-        [
-          { text: "Batal", style: "cancel" },
-          { text: "Hapus", style: "destructive", onPress: proceed },
-        ]
-      );
-    }
+    Alert.alert(
+      "Konfirmasi Hapus",
+      `Hapus permanen materi "${item.title}"?`,
+      [
+        { text: "Batal", style: "cancel" },
+        { text: "Hapus", style: "destructive", onPress: proceed },
+      ]
+    );
   };
 
   // Handle File Upload on Web

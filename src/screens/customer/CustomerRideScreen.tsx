@@ -692,19 +692,12 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                     ]}
                     onPress={async () => {
                       if (!activeRideOrder) return;
-                      if (Platform.OS === "web") {
-                        const confirmed = window.confirm("Batalkan pesanan Kanyaah Ride aktif?");
-                        if (!confirmed) return;
-                      }
+                      
                       const orderTargetId = activeRideOrder._id || (activeRideOrder as any).orderCode;
                       await cancelRide(orderTargetId, "Dibatalkan oleh pelanggan");
                       setActiveRideOrder(null);
                       await AsyncStorage.removeItem("selected_ride_tracking_id").catch(() => {});
-                      if (Platform.OS === "web") {
-                        window.alert("Pesanan perjalanan Anda telah dibatalkan.");
-                      } else {
-                        Alert.alert("Pesanan Dibatalkan", "Pesanan sebelumnya telah dibatalkan. Anda dapat memesan kembali sekarang.");
-                      }
+                      Alert.alert("Pesanan Dibatalkan", "Pesanan sebelumnya telah dibatalkan. Anda dapat memesan kembali sekarang.");
                     }}
                     activeOpacity={0.8}
                   >

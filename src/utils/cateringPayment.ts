@@ -21,16 +21,33 @@ export const isCateringPaymentFullyPaid = (
   const paid = Number(paidAmount ?? 0);
   const total = Number(totalAmount ?? 0);
 
+  // Jika masih ada sisa pembayaran yang harus dilunasi, pesanan belum lunas penuh
+  if (remaining > 0) return false;
+  if (total > 0 && paid < total) return false;
+
   return (
     remaining <= 0 ||
-    paid >= total ||
+    (total > 0 && paid >= total) ||
     normalizedStatus === "lunas" ||
     normalizedStatus === "paid" ||
     normalizedStatus === "sudah_lunas" ||
-    normalizedStatus === "pembayaran_lunas" ||
-    normalizedStatus === "terverifikasi" ||
-    normalizedStatus === "verified"
+    normalizedStatus === "pembayaran_lunas"
   );
+};
+
+export const isCateringDpVerified = (
+  paidAmount?: number | string | null,
+  totalAmount?: number | string | null,
+  paymentOption?: string | null,
+) => {
+  const paid = Number(paidAmount ?? 0);
+  const total = Number(totalAmount ?? 0);
+  const option = String(paymentOption || "").toLowerCase();
+
+  if (paid <= 0) return false;
+  if (option === "dp30") return paid >= Math.round(total * 0.3);
+  if (option === "dp50") return paid >= Math.round(total * 0.5);
+  return paid >= total;
 };
 
 export const getCateringPaymentBreakdown = (

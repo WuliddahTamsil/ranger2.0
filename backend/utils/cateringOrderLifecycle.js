@@ -15,26 +15,55 @@ const DRIVER_TRANSITIONS = Object.freeze({
   Mengantar: "Selesai",
 });
 
+const isCateringDpVerified = (order) => {
+  const total = Number(order?.totalAmount ?? order?.total ?? 0);
+  const paid = Number(order?.paidAmount ?? 0);
+  const option = String(order?.paymentOption || "").toLowerCase();
+  const paymentStatus = String(order?.paymentStatus || "").toLowerCase();
+
+  if (paid <= 0) return false;
+  if (paymentStatus === "pembayaran ditolak") return false;
+
+  if (option === "dp30") {
+    const minDp = Math.round(total * 0.3);
+    return paid >= minDp;
+  }
+  if (option === "dp50") {
+    const minDp = Math.round(total * 0.5);
+    return paid >= minDp;
+  }
+  return paid >= total;
+};
+
 const isCateringPaymentComplete = (order) => {
   const method = String(order?.paymentMethod || "").toLowerCase();
   const paymentStatus = String(order?.paymentStatus || "").toLowerCase();
+  const remaining = Number(order?.remainingAmount ?? 0);
+  const total = Number(order?.totalAmount ?? order?.total ?? 0);
+  const paid = Number(order?.paidAmount ?? 0);
 
-  // COD / Bayar Tunai: pembayaran dilakukan ke kurir saat barang diserahkan
-  if (
+  // COD / Bayar Tunai: jika order PO katering menggunakan skema COD pelunasan,
+  // DP 30% atau 50% tetap harus terverifikasi sebelum pesanan siap diantar kurir.
+  const isCod = (
     method === "cod" ||
     method === "cash_on_delivery" ||
     method === "tunai" ||
     method === "cash" ||
     paymentStatus.includes("tunai") ||
     paymentStatus.includes("cod")
-  ) {
+  );
+
+  if (isCod) {
+    if (order?.paymentOption === "dp30" || order?.paymentOption === "dp50") {
+      return isCateringDpVerified(order);
+    }
     return true;
   }
 
+  // Pesanan non-COD wajib lunas 100% (remaining <= 0 dan paid >= total)
   return (
-    Number(order?.remainingAmount || 0) <= 0 ||
-    Number(order?.paidAmount || 0) > 0 ||
-    ["lunas", "pembayaran terverifikasi", "dp terverifikasi", "sudah_lunas"].includes(paymentStatus)
+    (remaining <= 0 && (total === 0 || paid >= total)) ||
+    (remaining <= 0 && ["lunas", "sudah_lunas", "pembayaran_lunas"].includes(paymentStatus))
   );
 };
 
@@ -82,6 +111,7 @@ module.exports = {
   DRIVER_TRANSITIONS,
   OWNER_TRANSITIONS,
   isCateringPaymentComplete,
+  isCateringDpVerified,
   getPaymentPlan,
   getCateringDueAt,
   getPaymentStatusLabel,

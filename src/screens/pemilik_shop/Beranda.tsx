@@ -74,8 +74,7 @@ interface Props extends Nav {
 }
 
 const showMessage = (title: string, message: string) => {
-  if (Platform.OS === "web") alert(`${title}: ${message}`);
-  else Alert.alert(title, message);
+  Alert.alert(title, message);
 };
 
 export const Beranda: React.FC<Props> = ({ navigate, authAccount, onUpdateAccount }) => {
@@ -230,20 +229,14 @@ export const Beranda: React.FC<Props> = ({ navigate, authAccount, onUpdateAccoun
       }
     };
 
-    if (Platform.OS === "web") {
-      if (window.confirm(`Hapus permanen ${product.name} dari katalog toko?`)) {
-        void doDelete();
-      }
-    } else {
-      Alert.alert(
-        "Hapus Produk?",
-        `Yakin ingin menghapus ${product.name} secara permanen dari katalog etalase?`,
-        [
-          { text: "Batal", style: "cancel" },
-          { text: "Hapus Permanen", style: "destructive", onPress: () => void doDelete() },
-        ]
-      );
-    }
+    Alert.alert(
+      "Hapus Produk?",
+      `Yakin ingin menghapus ${product.name} secara permanen dari katalog etalase?`,
+      [
+        { text: "Batal", style: "cancel" },
+        { text: "Hapus Permanen", style: "destructive", onPress: () => void doDelete() },
+      ]
+    );
   };
 
   // Quick Stock Adjustment Handler (creates InventoryLog)
