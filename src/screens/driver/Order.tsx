@@ -56,7 +56,7 @@ import { getChatMessages, sendChatMessage, uploadFileToBackend } from "../../ser
 import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 import { SafeCallModal } from "../../components/SafeCallModal";
-import { sortDriverOrders, isDriverOrderActive } from "./driverOrderUtils";
+import { sortDriverOrders, isDriverOrderActive, isDriverOrderPending } from "./driverOrderUtils";
 
 export type DriverOrderTab =
   | "Semua"
@@ -2648,7 +2648,7 @@ export const Order: React.FC<OrderProps> = ({
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => {
-          const isPending = item.status === "Menunggu" && item.type !== "Marketplace" || item.status === "Siap" && item.type === "Marketplace";
+          const isPending = isDriverOrderPending(item);
           const isOngoing = ["Menuju Pickup", "Sampai Pickup", "Mengantar"].includes(item.status);
           const isMapOpen = !!cardMapExpanded[item.id];
           const step = getStageStep(item.status, item);

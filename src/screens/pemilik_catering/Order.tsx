@@ -1000,7 +1000,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                     : selectedOrder.status === "Diproses"
                     ? "Dapur sedang memasak dan menyiapkan pesanan"
                     : selectedOrder.status === "Siap"
-                    ? (selectedOrder.driver ? "Pesanan siap, menunggu kurir penjemput" : "Pesanan selesai dimasak, segera tugaskan kurir")
+                    ? (selectedOrder.driver ? "Pesanan siap, menunggu kurir penjemput" : "Pesanan selesai dimasak! Menunggu kurir mengambil pesanan")
                     : selectedOrder.status === "Menuju Pickup"
                     ? "Kurir sedang dalam perjalanan menuju dapur catering"
                     : selectedOrder.status === "Sampai Pickup"
@@ -1175,62 +1175,46 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
             );
           })()}
 
-          {/* Quick Driver Assignment Card when ready & unassigned */}
+          {/* Automated Broadcast Waiting Card when ready & unassigned */}
           {selectedOrder.status === "Siap" && !selectedOrder.driver && (
             <View style={styles.sectionCard}>
               <View style={styles.sectionCardHeader}>
-                <View style={[styles.sectionIconBg, { backgroundColor: "#F3E8FF" }]}>
-                  <Truck size={18} color="#7E22CE" />
+                <View style={[styles.sectionIconBg, { backgroundColor: "#DCFCE7" }]}>
+                  <Truck size={18} color="#15803D" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.sectionCardTitle}>Tugaskan Kurir Penjemput</Text>
+                  <Text style={styles.sectionCardTitle}>Siap Diambil Kurir</Text>
                   <Text style={styles.sectionCardSubtitle}>
-                    Pilih kurir GEOVERSE yang tersedia di sekitar dapur Anda
+                    Otomatis disiarkan & muncul di aplikasi kurir GEOVERSE
                   </Text>
                 </View>
               </View>
 
-              <View style={{ gap: 8, marginTop: 10 }}>
-                {drivers.map((drv) => (
-                  <View key={drv.id} style={styles.assignDriverRow}>
-                    <View style={styles.assignDriverAvatar}>
-                      <User size={18} color="#15803D" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.assignDriverName}>{drv.name}</Text>
-                      <Text style={styles.assignDriverSub}>
-                        {drv.vehicleType || "Motor"} • {drv.plateNumber || drv.phone}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.assignDriverBtn}
-                      onPress={async () => {
-                        if (onAssignDriver) {
-                          const ok = await onAssignDriver(selectedOrder.id, drv.id);
-                          if (ok) {
-                            const newDriver: DriverProfile = {
-                              name: drv.name,
-                              vehicle: drv.vehicleType || "Motor",
-                              plateNumber: drv.plateNumber || drv.phone,
-                              rating: 4.9,
-                              stage: "Driver menuju outlet catering",
-                              distance: "1.2 km",
-                              eta: "5 mnt",
-                            };
-                            setSelectedOrder({
-                              ...selectedOrder,
-                              status: "Siap",
-                              driver: newDriver,
-                            });
-                          }
-                        }
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.assignDriverBtnText}>Tugaskan</Text>
-                    </TouchableOpacity>
+              <View style={styles.broadcastWaitingCard}>
+                <View style={styles.broadcastBadgeRow}>
+                  <View style={styles.broadcastPulseDot} />
+                  <Text style={styles.broadcastBadgeText}>MENUNGGU KURIR MENERIMA PESANAN</Text>
+                </View>
+
+                <Text style={styles.broadcastDesc}>
+                  Pesanan telah selesai disiapkan dan otomatis disiarkan ke semua kurir GEOVERSE di sekitar dapur Anda.
+                  Dapur catering tidak perlu menugaskan kurir secara manual — kurir yang mengambil order ini akan langsung terhubung dan bersiap menuju lokasi dapur.
+                </Text>
+
+                <View style={styles.broadcastInfoGrid}>
+                  <View style={styles.broadcastInfoItem}>
+                    <Text style={styles.broadcastInfoLabel}>Status Menu</Text>
+                    <Text style={[styles.broadcastInfoVal, { color: "#15803D" }]}>Siap Diantar</Text>
                   </View>
-                ))}
+                  <View style={styles.broadcastInfoItem}>
+                    <Text style={styles.broadcastInfoLabel}>Alokasi Kurir</Text>
+                    <Text style={[styles.broadcastInfoVal, { color: "#2563EB" }]}>Otomatis ke Driver</Text>
+                  </View>
+                  <View style={styles.broadcastInfoItem}>
+                    <Text style={styles.broadcastInfoLabel}>Pengambilan</Text>
+                    <Text style={styles.broadcastInfoVal}>Kurir Datang ke Dapur</Text>
+                  </View>
+                </View>
               </View>
             </View>
           )}
@@ -1251,7 +1235,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                     : selectedOrder.status === "Mengantar" || selectedOrder.status === "Diambil" || selectedOrder.status === "Dikirim"
                     ? "Kurir sedang mengantarkan pesanan ke alamat customer"
                     : selectedOrder.status === "Siap"
-                    ? (selectedOrder.driver ? "Kurir ditugaskan, bersiap menuju dapur catering" : "Pesanan siap. Menunggu penugasan kurir.")
+                    ? (selectedOrder.driver ? "Kurir ditugaskan, bersiap menuju dapur catering" : "Pesanan siap, disiarkan otomatis ke driver terdekat.")
                     : "Pantau rute penjemputan dan pengantaran customer."}
                 </Text>
               </View>
@@ -1958,10 +1942,10 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
             )}
 
             {selectedOrder.status === "Siap" && !selectedOrder.driver && (
-              <View style={styles.driverWaitingBanner}>
-                <Clock size={16} color="#7E22CE" style={{ flexShrink: 0 }} />
-                <Text style={styles.driverWaitingText} numberOfLines={2}>
-                  Pesanan telah siap. Tugaskan salah satu kurir di atas.
+              <View style={[styles.driverWaitingBanner, { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }]}>
+                <Clock size={16} color="#15803D" style={{ flexShrink: 0 }} />
+                <Text style={[styles.driverWaitingText, { color: "#166534" }]} numberOfLines={2}>
+                  Pesanan siap! Otomatis disiarkan ke kurir GEOVERSE terdekat.
                 </Text>
               </View>
             )}
@@ -3688,6 +3672,66 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
     gap: 10,
+  },
+  broadcastWaitingCard: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
+    padding: 16,
+    marginTop: 8,
+  },
+  broadcastBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  broadcastPulseDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: "#16A34A",
+    flexShrink: 0,
+  },
+  broadcastBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#15803D",
+    letterSpacing: 0.6,
+  },
+  broadcastDesc: {
+    fontSize: 12.5,
+    color: "#374151",
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+  broadcastInfoGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#DCFCE7",
+  },
+  broadcastInfoItem: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  broadcastInfoLabel: {
+    fontSize: 9.5,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  broadcastInfoVal: {
+    fontSize: 11,
+    color: "#0F172A",
+    fontWeight: "700",
+    marginTop: 2,
   },
   assignDriverAvatar: {
     width: 36,

@@ -1207,6 +1207,29 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     }
   };
 
+  const acceptCateringFromHome = async (orderId: string) => {
+    if (homeActionLock.current.has(orderId)) return;
+    homeActionLock.current.add(orderId);
+    setHomeActionOrderId(orderId);
+    try {
+      const result = await assignCateringDriver(orderId, authAccount?.id || "");
+      if (!result.success || !result.data) {
+        Alert.alert("Pesanan belum diterima", result.message || "Pesanan mungkin sudah diambil driver lain.");
+        return;
+      }
+      const now = new Date().toISOString();
+      const updated: DriverOrder = {
+        ...mapCateringDriverOrder(result.data),
+        acceptedAt: now,
+        updatedAt: now,
+      };
+      setOrders((current) => sortDriverOrders([updated, ...current.filter((order) => order.id !== updated.id)]));
+    } finally {
+      homeActionLock.current.delete(orderId);
+      setHomeActionOrderId((current) => current === orderId ? null : current);
+    }
+  };
+
   // Incoming available orders waiting for driver acceptance
   const incomingAvailableOrders = orders.filter((o) => {
     if (isTripOngoing(o) || o.status === "Selesai" || o.status === "Dibatalkan") return false;
@@ -1216,7 +1239,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     if (o.type === "Kanyaah Send") {
       return (o.rawStatus === "SEARCHING_DRIVER" || o.rawStatus === "PAYMENT_PENDING" || o.rawStatus === "CREATED" || o.status === "Menunggu") && (!o.driverId || o.driverId === "");
     }
-    if (o.type === "Marketplace") {
+    if (o.type === "Marketplace" || o.type === "Catering") {
       return (o.status === "Siap" || o.status === "Menunggu") && (!o.driverId || o.driverId === "");
     }
     return o.status === "Menunggu" && (!o.driverId || o.driverId === "");
@@ -1760,6 +1783,8 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
               e?.stopPropagation?.();
               if (order.type === "Marketplace") {
                 await acceptMarketplaceFromHome(order.id);
+              } else if (order.type === "Catering") {
+                await acceptCateringFromHome(order.id);
               } else if (order.type === "Kanyaah Send") {
                 if (homeActionLock.current.has(order.id)) return;
                 homeActionLock.current.add(order.id);

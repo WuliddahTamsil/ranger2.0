@@ -752,54 +752,38 @@ export const AnimatedOrderPreparation: React.FC<AnimatedOrderPreparationProps> =
           </View>
         </View>
       ) : normalizedStatus !== "Selesai" && normalizedStatus !== "Dibatalkan" ? (
-        // TUGASKAN DRIVER SECTION (if no driver assigned yet)
+        // AUTOMATED DRIVER BROADCAST SECTION (if no driver assigned yet)
         <View style={styles.assignDriverCard}>
           <View style={styles.assignHeader}>
-            <View style={styles.assignIconBg}>
-              <Truck size={18} color="#7E22CE" />
+            <View style={[styles.assignIconBg, { backgroundColor: "#DCFCE7" }]}>
+              <Truck size={18} color="#15803D" />
             </View>
             <View style={styles.assignHeaderTextCol}>
-              <Text style={styles.assignTitle}>Tugaskan Driver Pengantar</Text>
+              <Text style={styles.assignTitle}>Siap Diambil Kurir</Text>
               <Text style={styles.assignSub}>
-                Pilih driver mitra untuk menjemput dan mengantar orderan ini
+                Otomatis disiarkan & muncul di aplikasi kurir GEOVERSE
               </Text>
             </View>
           </View>
 
-          {availableDrivers.length > 0 ? (
-            <View style={styles.driverList}>
-              {availableDrivers.map((drv) => (
-                <TouchableOpacity
-                  key={drv.id}
-                  style={styles.driverOptionRow}
-                  onPress={() => onAssignDriver?.(drv.id)}
-                  disabled={isAssigningDriver}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.driverAvatarSmall}>
-                    <Truck size={16} color="#4B5563" />
-                  </View>
-                  <View style={styles.driverOptionDetails}>
-                    <Text style={styles.driverOptionName}>{drv.name}</Text>
-                    <Text style={styles.driverOptionPhone}>
-                      {drv.phone || "No HP belum tersedia"}
-                    </Text>
-                  </View>
-                  <View style={styles.selectDriverBtn}>
-                    <Text style={styles.selectDriverBtnText}>Tugaskan</Text>
-                    <ChevronRight size={14} color="#FFFFFF" />
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyDriversBox}>
-              <AlertCircle size={18} color="#9CA3AF" />
-              <Text style={styles.emptyDriversText}>
-                Belum ada driver mitra online saat ini. Pesanan tetap dapat ditandai siap diambil.
+          <View style={{
+            backgroundColor: "#F0FDF4",
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "#BBF7D0",
+            padding: 14,
+            gap: 8,
+          }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ width: 9, height: 9, borderRadius: 4.5, backgroundColor: "#16A34A" }} />
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#15803D", letterSpacing: 0.5 }}>
+                MENUNGGU KURIR MENERIMA PESANAN
               </Text>
             </View>
-          )}
+            <Text style={{ fontSize: 12, color: "#166534", lineHeight: 18 }}>
+              Pesanan telah selesai disiapkan toko dan otomatis disiarkan ke semua kurir GEOVERSE. Toko tidak perlu menugaskan kurir secara manual.
+            </Text>
+          </View>
         </View>
       ) : null}
     </View>
