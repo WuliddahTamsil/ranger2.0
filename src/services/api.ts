@@ -945,7 +945,7 @@ export const getChatConversations = async (
                     ? lastMsg.senderName || "Wuwu Customer"
                     : "Pelanggan",
                 driverId: convRes.data.driverId,
-                driverName: "Driver Rangers",
+                driverName: "Driver GEOVERSE",
                 ownerId: convRes.data.ownerId,
                 status: convRes.data.status || "inquiry",
                 lastMessage:
@@ -1016,4 +1016,37 @@ export const checkDigitalPaymentStatus = async (paymentId: string) => {
     return { success: false, message: error.message || "Gagal memeriksa status pembayaran" };
   }
 };
+
+export const deleteUserAccount = async (userId?: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const headers = await getAuthHeaders(userId);
+    const res = await fetch(getApiUrl("/auth/delete-account"), {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify({ userId }),
+    });
+    const data = await readApiJson(res);
+    if (data.success) {
+      await AsyncStorage.removeItem(AUTH_SESSION_KEY).catch(() => {});
+      try {
+        const accountsRaw = await AsyncStorage.getItem(AUTH_ACCOUNTS_KEY);
+        if (accountsRaw) {
+          const accounts = JSON.parse(accountsRaw);
+          if (Array.isArray(accounts)) {
+            const updated = accounts.filter((a: any) => String(a.id) !== String(userId));
+            await AsyncStorage.setItem(AUTH_ACCOUNTS_KEY, JSON.stringify(updated));
+          }
+        }
+      } catch {}
+    }
+    return data;
+  } catch (error: any) {
+    console.error("❌ deleteUserAccount error:", error);
+    return { success: false, message: error.message || "Gagal memproses penghapusan akun" };
+  }
+};
+
 

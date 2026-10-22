@@ -78,7 +78,7 @@ class PaymentGateway {
     let virtualAccount = {
       bank: "",
       vaNumber: "",
-      accountName: "GEOVERSE RANGERS",
+      accountName: "GEOVERSE",
       expiryTime,
     };
 

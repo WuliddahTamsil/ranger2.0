@@ -57,7 +57,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
   storeName,
   storeAddress,
   customerAddress,
-  driverName = "Driver Rangers",
+  driverName = "Driver GEOVERSE",
   driverVehicle = "Motor",
   orderStatus,
   height = 270,
@@ -389,7 +389,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
     list.push({
       id: "driver",
       coordinate: driverPos,
-      title: driverName || "Driver Rangers",
+      title: driverName || "Driver GEOVERSE",
       description: `${driverVehicle} • Navigasi: ${effectiveNavigating ? `${simulatedSpeed} km/j` : "Standby"}`,
       type: "driver",
       pinColor: "#0284C7",

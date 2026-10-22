@@ -21,6 +21,7 @@ import {
   HelpCircle,
   Info,
   LogOut,
+  Trash2,
   ChevronRight,
   X,
   CheckCircle2,
@@ -28,6 +29,7 @@ import {
 } from "lucide-react-native";
 import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
+import { deleteUserAccount } from "../../services/api";
 
 interface ProfileProps {
   driverInfo: {
@@ -139,6 +141,36 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, use
   const handleLogout = () => {
     setLogoutModalVisible(false);
     navigate("login");
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Hapus Akun Mitra Driver",
+      "Apakah Anda yakin ingin menghapus akun mitra pengemudi GEOVERSE beserta seluruh data profil dan riwayat aktivitas secara permanen?\n\nSesuai standar privasi Apple (Guideline 5.1.1(v)), tindakan ini tidak dapat dibatalkan.",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus Akun",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await deleteUserAccount(userId);
+              if (res.success) {
+                Alert.alert(
+                  "Akun Dihapus",
+                  "Akun mitra driver Anda telah berhasil dihapus secara permanen dari platform GEOVERSE.",
+                  [{ text: "OK", onPress: () => navigate("login") }]
+                );
+              } else {
+                Alert.alert("Gagal", res.message || "Gagal memproses penghapusan akun. Silakan coba kembali.");
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Terjadi kendala saat menghapus akun.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getDocStatusColor = (status: string) => {
@@ -300,6 +332,17 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, use
             <LogOut size={16} color="#B91C1C" />
           </View>
           <Text style={styles.logoutBtnText}>Keluar</Text>
+        </TouchableOpacity>
+
+        {/* Delete Account Button (Apple App Store Guideline 5.1.1(v) Compliant) */}
+        <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount} activeOpacity={0.7}>
+          <View style={styles.deleteAccountIconBg}>
+            <Trash2 size={15} color="#DC2626" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.deleteAccountBtnText}>Hapus Akun Driver</Text>
+            <Text style={styles.deleteAccountBtnSub}>Hapus akun & seluruh data mitra permanen</Text>
+          </View>
         </TouchableOpacity>
         <Text style={styles.footerVersion}>GEOVERSE 2.0 - Driver</Text>
       </ScrollView>
@@ -809,6 +852,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     marginLeft: 12,
+  },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    padding: 12,
+    marginTop: 10,
+  },
+  deleteAccountIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteAccountBtnText: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "800",
+    marginLeft: 12,
+  },
+  deleteAccountBtnSub: {
+    color: "#EF4444",
+    fontSize: 10,
+    fontWeight: "500",
+    marginLeft: 12,
+    marginTop: 1,
   },
   modalBgBottom: {
     flex: 1,

@@ -30,6 +30,7 @@ import {
   HelpCircle,
   Shield,
   LogOut,
+  Trash2,
   ChevronRight,
   X,
   CheckCircle2,
@@ -40,7 +41,7 @@ import { AuthAccount } from "../auth/authTypes";
 import { updateCachedAccount } from "../auth/authService";
 import { ShopStore, updateMerchantShopStore } from "../../services/shopService";
 import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
-import { updateUserProfile, uploadFileToBackend } from "../../services/api";
+import { updateUserProfile, uploadFileToBackend, deleteUserAccount } from "../../services/api";
 
 interface ShopProfilTabProps {
   store: ShopStore | null;
@@ -338,6 +339,36 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
   const handleLogout = () => {
     setLogoutModalVisible(false);
     navigate("login");
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Hapus Akun Mitra Toko Kanyaah Shop",
+      "Apakah Anda yakin ingin menghapus akun mitra toko GEOVERSE ini beserta seluruh data etalase dan riwayat pesanan secara permanen?\n\nSesuai standar privasi Apple (Guideline 5.1.1(v)), tindakan ini tidak dapat dibatalkan.",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus Akun",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await deleteUserAccount(authAccount?.id);
+              if (res.success) {
+                Alert.alert(
+                  "Akun Dihapus",
+                  "Akun mitra toko Anda telah berhasil dihapus secara permanen dari platform GEOVERSE.",
+                  [{ text: "OK", onPress: () => navigate("login") }]
+                );
+              } else {
+                Alert.alert("Gagal", res.message || "Gagal memproses penghapusan akun. Silakan coba kembali.");
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Terjadi kendala saat menghapus akun.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const displayName = authAccount?.name || "Dyaska";
@@ -716,6 +747,23 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
             <LogOut size={18} color="#DC2626" />
           </View>
           <Text style={styles.logoutText}>Keluar dari Akun</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 7. Delete Account Card (Apple App Store Guideline 5.1.1(v) Compliant) */}
+      <View style={[styles.logoutCard, { borderColor: "#FECACA", backgroundColor: "#FEF2F2", marginTop: 8 }]}>
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={handleDeleteAccount}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.iconBg, { backgroundColor: "#FEE2E2" }]}>
+            <Trash2 size={18} color="#DC2626" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.logoutText, { color: "#DC2626" }]}>Hapus Akun Kanyaah Shop</Text>
+            <Text style={{ fontSize: 10, color: "#EF4444", marginTop: 2 }}>Hapus akun & seluruh data etalase toko secara permanen</Text>
+          </View>
         </TouchableOpacity>
       </View>
 

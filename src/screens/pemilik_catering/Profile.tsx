@@ -29,6 +29,7 @@ import {
   HelpCircle,
   FileText,
   LogOut,
+  Trash2,
   ChevronRight,
   Camera,
   X,
@@ -43,7 +44,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Nav } from "../../types";
 import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
-import { updateUserProfile, uploadFileToBackend } from "../../services/api";
+import { updateUserProfile, uploadFileToBackend, deleteUserAccount } from "../../services/api";
 import { AuthAccount } from "../auth/authTypes";
 import { updateCachedAccount } from "../auth/authService";
 import { CustomerLocationPicker, CustomerLocationValue } from "../../components/CustomerLocationPicker";
@@ -345,6 +346,36 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
   const handleLogout = () => {
     setLogoutModalVisible(false);
     navigate("login");
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Hapus Akun Mitra Katering",
+      "Apakah Anda yakin ingin menghapus akun mitra katering GEOVERSE beserta seluruh profil dapur dan riwayat transaksi secara permanen?\n\nSesuai standar privasi Apple (Guideline 5.1.1(v)), tindakan ini tidak dapat dibatalkan.",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus Akun",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await deleteUserAccount(userId || authAccount?.id);
+              if (res.success) {
+                Alert.alert(
+                  "Akun Dihapus",
+                  "Akun mitra katering Anda telah berhasil dihapus secara permanen dari platform GEOVERSE.",
+                  [{ text: "OK", onPress: () => navigate("login") }]
+                );
+              } else {
+                Alert.alert("Gagal", res.message || "Gagal memproses penghapusan akun. Silakan coba kembali.");
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Terjadi kendala saat menghapus akun.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handlePickQris = async () => {
@@ -680,6 +711,17 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
             <LogOut size={16} color="#B91C1C" />
           </View>
           <Text style={styles.logoutBtnText}>Keluar</Text>
+        </TouchableOpacity>
+
+        {/* Delete Account Button (Apple App Store Guideline 5.1.1(v) Compliant) */}
+        <TouchableOpacity style={styles.deleteAccountBtn} onPress={handleDeleteAccount} activeOpacity={0.7}>
+          <View style={styles.deleteAccountIconBg}>
+            <Trash2 size={15} color="#DC2626" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.deleteAccountBtnText}>Hapus Akun Katering</Text>
+            <Text style={styles.deleteAccountBtnSub}>Hapus akun & seluruh data dapur mitra permanen</Text>
+          </View>
         </TouchableOpacity>
         <Text style={styles.footerVersion}>GEOVERSE 2.0 - PGE Kamojang</Text>
       </ScrollView>
@@ -1456,6 +1498,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     marginLeft: 12,
+  },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    padding: 12,
+    marginTop: 10,
+  },
+  deleteAccountIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteAccountBtnText: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "800",
+    marginLeft: 12,
+  },
+  deleteAccountBtnSub: {
+    color: "#EF4444",
+    fontSize: 10,
+    fontWeight: "500",
+    marginLeft: 12,
+    marginTop: 1,
   },
   modalBg: {
     flex: 1,

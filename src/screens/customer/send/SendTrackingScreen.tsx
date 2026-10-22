@@ -389,7 +389,7 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
       list.push({
         id: "driver_live",
         coordinate: driverCoord,
-        title: "Driver Rangers: " + (activeOrder?.driverId?.name || "Mitra Driver"),
+        title: "Driver GEOVERSE: " + (activeOrder?.driverId?.name || "Mitra Driver"),
         description: "Sedang dalam perjalanan",
         pinColor: "#0284C7",
         type: "driver",
@@ -403,7 +403,7 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
     ? { latitude: activeOrder.sender.latitude as number, longitude: activeOrder.sender.longitude as number }
     : { latitude: -6.5962, longitude: 106.8040 });
 
-  const driverName = activeOrder?.driverId?.name || "Kang Asep Rangers";
+  const driverName = activeOrder?.driverId?.name || "Kang Asep GEOVERSE";
   const driverPhone = activeOrder?.driverId?.phone || "081234567890";
   const driverRating = activeOrder?.driverId?.rating || 4.9;
 
@@ -711,7 +711,7 @@ export const SendTrackingScreen: React.FC<SendTrackingScreenProps> = ({
         visible={callVisible}
         onClose={() => setCallVisible(false)}
         targetName={driverName}
-        targetRole="Driver Rangers"
+        targetRole="Driver GEOVERSE"
         targetPhone={driverPhone}
         orderCode={activeOrder?.orderCode}
       />

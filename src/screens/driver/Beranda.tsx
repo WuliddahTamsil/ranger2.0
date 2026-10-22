@@ -543,7 +543,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
 
   // 1. Global Driver Info State
   const [driverInfo, setDriverInfo] = useState(() => ({
-    name: authAccount?.name || "Driver Rangers",
+    name: authAccount?.name || "Driver GEOVERSE",
     phone: authAccount?.phone || "",
     email: authAccount?.email || "",
     profilePhoto: authAccount?.profilePhoto || undefined,
@@ -564,7 +564,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
     payment: {
       bankName: authAccount?.roleData?.bankName || (authAccount as any)?.bankName || "BCA",
       accountNo: authAccount?.roleData?.accountNo || (authAccount as any)?.accountNo || "",
-      holderName: (authAccount?.name || "DRIVER RANGERS").toUpperCase(),
+      holderName: (authAccount?.name || "DRIVER GEOVERSE").toUpperCase(),
       gopayNo: authAccount?.roleData?.gopayNo || authAccount?.phone || "",
     }
   }));

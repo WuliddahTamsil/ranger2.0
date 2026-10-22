@@ -98,6 +98,102 @@ app.get("/", (req, res) => {
   res.send("🚀 GEOVERSE Backend API is running smoothly!");
 });
 
+// App Store Review Guideline 5.1.1 & 2.1 Compliant Privacy Policy Page
+app.get("/privacy", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kebijakan Privasi - GEOVERSE</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; background: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 800px; margin: 0 auto; background: #ffffff; padding: 36px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    h1 { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; }
+    h2 { color: #0d7a53; margin-top: 24px; }
+    p, li { font-size: 15px; color: #334155; }
+    .footer { margin-top: 36px; font-size: 13px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kebijakan Privasi GEOVERSE</h1>
+    <p>Terakhir Diperbarui: 22 Oktober 2026</p>
+    <p>GEOVERSE ("kami") berkomitmen untuk melindungi dan menghormati privasi pengguna aplikasi kami. Dokumen Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, dan melindungi informasi pribadi Anda.</p>
+
+    <h2>1. Informasi yang Kami Kumpulkan</h2>
+    <ul>
+      <li><strong>Informasi Akun:</strong> Nama lengkap, alamat email, nomor telepon, dan peran akun pengguna (Pelanggan, Mitra Pengemudi, Pemilik Kos/Hotel/Wisata).</li>
+      <li><strong>Data Lokasi (GPS):</strong> Digunakan untuk menentukan titik penjemputan ojek (Kanyaah Ride), pengiriman barang (Kanyaah Send), dan menampilkan mitra terdekat di sekitar kawasan Kamojang & Garut.</li>
+      <li><strong>Akses Kamera & Galeri Foto:</strong> Digunakan untuk mengunggah foto profil, dokumen verifikasi mitra (KTP/SIM/STNK), serta bukti foto serah terima pengantaran barang secara real-time.</li>
+    </ul>
+
+    <h2>2. Penggunaan Informasi</h2>
+    <p>Informasi yang dikumpulkan digunakan semata-mata untuk memproses transaksi, memastikan akurasi penjemputan armada, verifikasi keaslian mitra, dan meningkatkan kualitas pengalaman layanan pengguna.</p>
+
+    <h2>3. Penghapusan Akun & Data (Account Deletion)</h2>
+    <p>Pengguna memiliki hak penuh untuk menghapus akun dan data pribadinya secara permanen kapan saja langsung melalui menu <strong>Profil > Pengaturan > Hapus Akun</strong> di dalam aplikasi GEOVERSE, atau dengan menghubungi kami melalui email di <code>support@geoverse.id</code>.</p>
+
+    <h2>4. Kontak Dukungan</h2>
+    <p>Jika Anda memiliki pertanyaan mengenai privasi atau penggunaan data, silakan hubungi tim dukungan kami di email: <code>support@geoverse.id</code> atau WhatsApp: <code>+62 878-0598-7309</code>.</p>
+
+    <div class="footer">
+      &copy; 2026 GEOVERSE Kamojang. Seluruh hak cipta dilindungi undang-undang.
+    </div>
+  </div>
+</body>
+</html>`);
+});
+
+// App Store Review Guideline 2.1 Compliant Support URL Page
+app.get("/support", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bantuan & Dukungan Pelanggan - GEOVERSE</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; background: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 800px; margin: 0 auto; background: #ffffff; padding: 36px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    h1 { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; }
+    h2 { color: #0d7a53; margin-top: 24px; }
+    .contact-card { background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 20px; margin: 20px 0; }
+    .contact-item { font-size: 15px; margin: 8px 0; font-weight: 600; color: #166534; }
+    .footer { margin-top: 36px; font-size: 13px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Pusat Bantuan & Customer Care GEOVERSE</h1>
+    <p>Selamat datang di Pusat Bantuan Resmi GEOVERSE. Kami siap membantu Anda terkait kendala pesanan, layanan penginapan, pengiriman kurir, dan kemitraan.</p>
+
+    <div class="contact-card">
+      <h2>Hubungi Tim Dukungan Kami:</h2>
+      <div class="contact-item">📧 Email: support@geoverse.id</div>
+      <div class="contact-item">💬 WhatsApp / Call Center: +62 878-0598-7309</div>
+      <div class="contact-item">📍 Lokasi Layanan: Kawasan Geothermal Kamojang & Garut, Jawa Barat</div>
+      <div class="contact-item">⏰ Jam Operasional: Setiap Hari (06.00 - 22.00 WIB)</div>
+    </div>
+
+    <h2>Bantuan Cepat Layanan:</h2>
+    <ul>
+      <li><strong>Kanyaah Ride:</strong> Transportasi motor lokal dengan verifikasi PIN penumpang aman.</li>
+      <li><strong>Kanyaah Send:</strong> Pengiriman dokumen & paket kilat dengan konfirmasi foto serah terima.</li>
+      <li><strong>Kos & Hotel:</strong> Reservasi kamar harian/bulanan dengan kwitansi digital resmi.</li>
+      <li><strong>Wisata Kamojang:</strong> E-ticket wahana dengan fitur scan rombongan wisata.</li>
+    </ul>
+
+    <div class="footer">
+      &copy; 2026 GEOVERSE Kamojang. Customer Care & Technical Support.
+    </div>
+  </div>
+</body>
+</html>`);
+});
+
 // Socket.io Realtime Connection
 io.on("connection", (socket) => {
   console.log(`🔌 Client connected to Socket.io: ${socket.id}`);

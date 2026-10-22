@@ -167,7 +167,7 @@ export const SendDeliveryDetailScreen: React.FC<SendDeliveryDetailScreenProps> =
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Penilaian Mitra Driver</Text>
           <Text style={styles.ratingSubtitle}>
-            Berikan rating untuk driver {activeOrder?.driverId?.name || "Rangers"}:
+            Berikan rating untuk driver {activeOrder?.driverId?.name || "GEOVERSE"}:
           </Text>
 
           <View style={styles.starsRow}>

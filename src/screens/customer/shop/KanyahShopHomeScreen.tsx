@@ -595,7 +595,7 @@ export const KanyahShopHomeScreen: React.FC<KanyahShopHomeScreenProps> = ({
                 ) : displayProducts.length === 0 ? (
                   <EmptyState
                     iconType="search"
-                    title="Produk Segera Hadir"
+                    title="Belum Ada Produk"
                     description="Belum ada produk aktif untuk kategori ini di outlet terdekat."
                   />
                 ) : (

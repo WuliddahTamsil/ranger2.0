@@ -226,12 +226,12 @@ export const LOCAL_KNOWN_POIS: Array<{
     keywords: ["rs siloam", "siloam bogor", "siloam", "rumah sakit siloam"],
   },
   {
-    name: "Pusat Kegiatan Rangers Kamojang",
+    name: "Pusat Kegiatan GEOVERSE Kamojang",
     subtitle: "Samarang, Garut, Jawa Barat",
-    formattedAddress: "Pusat Kegiatan Rangers Kamojang, Samarang, Garut, Jawa Barat",
+    formattedAddress: "Pusat Kegiatan GEOVERSE Kamojang, Samarang, Garut, Jawa Barat",
     latitude: -7.1452,
     longitude: 107.7891,
-    keywords: ["kamojang", "basecamp", "basecamp rangers", "pusat kegiatan rangers kamojang", "rangers kamojang"],
+    keywords: ["kamojang", "basecamp", "basecamp rangers", "pusat kegiatan rangers kamojang", "rangers kamojang", "geoverse", "pusat kegiatan geoverse kamojang", "basecamp geoverse"],
   },
   {
     name: "Kawah Kamojang & Wisata Geothermal",

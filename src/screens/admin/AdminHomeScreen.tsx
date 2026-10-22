@@ -2081,7 +2081,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             </Text>
             <Text style={styles.adminRoleSubtitle}>Administrator Platform PGE Kamojang</Text>
             <Text style={styles.customerPhoneText}>
-              {authAccount?.email || "ranger@gmail.com"}
+              {authAccount?.email || "admin@geoverse.id"}
             </Text>
 
             {/* 3-Column Stat Row */}
@@ -2120,7 +2120,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.menuLabel}>Detail Profil</Text>
-                <Text style={styles.menuSubLabel}>{authAccount?.email || "ranger@gmail.com"}</Text>
+                <Text style={styles.menuSubLabel}>{authAccount?.email || "admin@geoverse.id"}</Text>
               </View>
               <ChevronRight size={16} color="#9CA3AF" />
             </TouchableOpacity>

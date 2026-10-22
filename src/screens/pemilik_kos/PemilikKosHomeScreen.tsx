@@ -46,6 +46,7 @@ import {
   Compass,
   CheckCircle2,
   PlusCircle,
+  Plus,
   Bed,
   Utensils,
   Share2,
@@ -101,11 +102,11 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
 
     const uniqueCats = Array.from(new Set(rawCategories.filter(Boolean))) as LodgingCategoryType[];
     if (uniqueCats.length === 0) {
-      const defaultType: LodgingCategoryType = (property?.categoryType as LodgingCategoryType) || "wisata";
+      const defaultType: LodgingCategoryType = (property?.categoryType as LodgingCategoryType) || "kost";
       return [
         {
           id: property?._id || `unit-${account?.id || "default"}`,
-          name: property?.name || account?.roleData?.businessName || (account?.name ? `${account.name} Wisata & Properti` : "Kanyaah Homestay"),
+          name: property?.name || account?.roleData?.businessName || (account?.name ? `${account.name} Properti` : "Kanyaah Homestay"),
           type: defaultType,
           tag: defaultType === "wisata" ? "Tiket & Objek Wisata" : defaultType === "hotel" ? "Hotel & Villa Harian" : "Kos Mahasiswa & Karyawan",
           address: property?.address || account?.roleData?.businessAddress || "Garut, Jawa Barat",
@@ -140,6 +141,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   const [isTicketScannerOpen, setIsTicketScannerOpen] = useState(false);
   const [inputTicketCode, setInputTicketCode] = useState("");
   const [scannedTicketResult, setScannedTicketResult] = useState<any>(null);
+  const [ticketEnteredCount, setTicketEnteredCount] = useState<number>(0);
 
   // Hotel Guest Check-in Modal
   const [isHotelGuestModalOpen, setIsHotelGuestModalOpen] = useState(false);
@@ -272,25 +274,28 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
     const clean = inputTicketCode.trim().toUpperCase();
     const foundBooking = allBookings.find((b: any) => (b.bookingCode || "").toUpperCase().includes(clean));
     if (foundBooking) {
+      const pCount = foundBooking.ticketCount || 1;
       setScannedTicketResult({
         code: foundBooking.bookingCode,
         visitorName: foundBooking.customerName || "Pengunjung",
         packageName: foundBooking.roomNumber || "Tiket Masuk Wahana",
-        personCount: foundBooking.ticketCount || 1,
+        personCount: pCount,
         visitDate: "Hari Ini",
         status: "VALID_VERIFIED",
         verifiedAt: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
       });
+      setTicketEnteredCount(pCount > 1 ? 0 : 1);
     } else {
       setScannedTicketResult({
         code: clean,
-        visitorName: "Wuwu Pelanggan (Customer)",
+        visitorName: "Rombongan Wisata (Customer)",
         packageName: "Tiket Terusan Wahana Air Lengkap (All-Access)",
-        personCount: 2,
+        personCount: 5,
         visitDate: "Hari Ini",
         status: "VALID_VERIFIED",
         verifiedAt: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
       });
+      setTicketEnteredCount(0);
     }
   };
 
@@ -1060,17 +1065,154 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                     <Text style={styles.ticketResultVal}>{scannedTicketResult.personCount} Orang</Text>
                   </View>
 
+                  {/* MULTI-SCAN COUNTER TIKET ROMBONGAN */}
+                  {scannedTicketResult.personCount > 1 ? (
+                    <View style={styles.groupCounterContainer}>
+                      <View style={styles.groupCounterHeaderRow}>
+                        <View style={styles.groupBadge}>
+                          <Users size={14} color="#0D7A53" />
+                          <Text style={styles.groupBadgeText}>Multi-Scan Counter Rombongan</Text>
+                        </View>
+                        <View style={[
+                          styles.groupStatusPill,
+                          ticketEnteredCount >= scannedTicketResult.personCount
+                            ? styles.groupStatusPillDone
+                            : ticketEnteredCount > 0
+                            ? styles.groupStatusPillPartial
+                            : styles.groupStatusPillWaiting,
+                        ]}>
+                          <Text style={[
+                            styles.groupStatusPillText,
+                            ticketEnteredCount >= scannedTicketResult.personCount
+                              ? styles.groupStatusPillTextDone
+                              : ticketEnteredCount > 0
+                              ? styles.groupStatusPillTextPartial
+                              : styles.groupStatusPillTextWaiting,
+                          ]}>
+                            {ticketEnteredCount >= scannedTicketResult.personCount
+                              ? "Lengkap ✓"
+                              : ticketEnteredCount > 0
+                              ? `Masuk: ${ticketEnteredCount}/${scannedTicketResult.personCount}`
+                              : "Siap Scan"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Visual Counter Numbers */}
+                      <View style={styles.counterDisplayRow}>
+                        <View style={styles.counterBox}>
+                          <Text style={styles.counterBoxNumGreen}>{ticketEnteredCount}</Text>
+                          <Text style={styles.counterBoxLabel}>Sudah Masuk</Text>
+                        </View>
+                        <Text style={styles.counterDividerSlash}>/</Text>
+                        <View style={styles.counterBox}>
+                          <Text style={styles.counterBoxNumDark}>{scannedTicketResult.personCount}</Text>
+                          <Text style={styles.counterBoxLabel}>Total Rombongan</Text>
+                        </View>
+                        <View style={styles.counterBoxRemaining}>
+                          <Text style={styles.counterBoxNumAmber}>
+                            {Math.max(0, scannedTicketResult.personCount - ticketEnteredCount)}
+                          </Text>
+                          <Text style={styles.counterBoxLabel}>Sisa Belum</Text>
+                        </View>
+                      </View>
+
+                      {/* Progress bar */}
+                      <View style={styles.counterProgressBarTrack}>
+                        <View
+                          style={[
+                            styles.counterProgressBarFill,
+                            {
+                              width: `${Math.min(100, (ticketEnteredCount / scannedTicketResult.personCount) * 100)}%`,
+                              backgroundColor: ticketEnteredCount >= scannedTicketResult.personCount ? "#15803D" : "#0D7A53",
+                            },
+                          ]}
+                        />
+                      </View>
+
+                      {/* Quick Gate Tap Controls */}
+                      <View style={styles.gateControlRow}>
+                        <TouchableOpacity
+                          style={[styles.btnGateCounter, styles.btnGateMinus]}
+                          onPress={() => setTicketEnteredCount((prev) => Math.max(0, prev - 1))}
+                          disabled={ticketEnteredCount <= 0}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.btnGateMinusText, ticketEnteredCount <= 0 && { color: "#CBD5E1" }]}>-1 Koreksi</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.btnGateCounter, styles.btnGatePlus]}
+                          onPress={() => setTicketEnteredCount((prev) => Math.min(scannedTicketResult.personCount, prev + 1))}
+                          disabled={ticketEnteredCount >= scannedTicketResult.personCount}
+                          activeOpacity={0.8}
+                        >
+                          <Plus size={16} color="#FFFFFF" strokeWidth={3} />
+                          <Text style={styles.btnGatePlusText}>+1 Masuk Gerbang</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.btnGateCounter, styles.btnGateAll]}
+                          onPress={() => setTicketEnteredCount(scannedTicketResult.personCount)}
+                          disabled={ticketEnteredCount >= scannedTicketResult.personCount}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.btnGateAllText}>Semua Masuk</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : null}
+
                   <TouchableOpacity
-                    style={styles.btnConfirmEntry}
+                    style={[
+                      styles.btnConfirmEntry,
+                      scannedTicketResult.personCount > 1 && ticketEnteredCount === 0 && { backgroundColor: "#0D7A53" },
+                      scannedTicketResult.personCount > 1 && ticketEnteredCount >= scannedTicketResult.personCount && { backgroundColor: "#15803D" },
+                    ]}
                     onPress={() => {
-                      Alert.alert("Berhasil Masuk", "Tiket telah diverifikasi. Pengunjung dipersilakan masuk.");
+                      if (scannedTicketResult.personCount > 1 && ticketEnteredCount < scannedTicketResult.personCount) {
+                        if (ticketEnteredCount === 0) {
+                          Alert.alert("Belum Ada yang Masuk", "Gunakan tombol +1 Masuk Gerbang atau Semua Masuk untuk menghitung rombongan.");
+                          return;
+                        }
+                        Alert.alert(
+                          "Konfirmasi Masuk Sebagian",
+                          `Tercatat ${ticketEnteredCount} dari ${scannedTicketResult.personCount} orang telah memasuki gerbang wahana. Sisa ${scannedTicketResult.personCount - ticketEnteredCount} orang dapat scan tiket ini kembali nanti.`,
+                          [
+                            {
+                              text: "Tutup & Simpan",
+                              onPress: () => {
+                                setIsTicketScannerOpen(false);
+                                setScannedTicketResult(null);
+                                setInputTicketCode("");
+                                setTicketEnteredCount(0);
+                              },
+                            },
+                          ]
+                        );
+                        return;
+                      }
+
+                      Alert.alert(
+                        "Rombongan Lengkap Berhasil Masuk",
+                        `Tiket #${scannedTicketResult.code} untuk ${scannedTicketResult.personCount} orang telah diverifikasi penuh. Selamat menikmati wahana!`
+                      );
                       setIsTicketScannerOpen(false);
                       setScannedTicketResult(null);
                       setInputTicketCode("");
+                      setTicketEnteredCount(0);
                     }}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.btnConfirmEntryText}>Izinkan Masuk Wahana ✓</Text>
+                    <Text style={styles.btnConfirmEntryText}>
+                      {scannedTicketResult.personCount > 1
+                        ? ticketEnteredCount >= scannedTicketResult.personCount
+                          ? `Selesaikan Check-In Rombongan Lengkap (${scannedTicketResult.personCount} Orang) ✓`
+                          : ticketEnteredCount > 0
+                          ? `Simpan Masuk Sebagian (${ticketEnteredCount}/${scannedTicketResult.personCount} Orang) ✓`
+                          : `Mulai Masuk Gerbang (${scannedTicketResult.personCount} Orang)`
+                        : "Izinkan Masuk Wahana ✓"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1778,16 +1920,171 @@ const styles = StyleSheet.create({
   },
   btnConfirmEntry: {
     backgroundColor: "#15803D",
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
+    marginTop: 12,
   },
   btnConfirmEntryText: {
     color: "#FFFFFF",
     fontSize: 12.5,
     fontWeight: "800",
+  },
+  // Multi-Scan Group Counter Styles
+  groupCounterContainer: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 12,
+    gap: 12,
+  },
+  groupCounterHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  groupBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  groupBadgeText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#166534",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  groupStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  groupStatusPillWaiting: {
+    backgroundColor: "#FEF3C7",
+  },
+  groupStatusPillPartial: {
+    backgroundColor: "#DBEAFE",
+  },
+  groupStatusPillDone: {
+    backgroundColor: "#DCFCE7",
+  },
+  groupStatusPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  groupStatusPillTextWaiting: {
+    color: "#D97706",
+  },
+  groupStatusPillTextPartial: {
+    color: "#1D4ED8",
+  },
+  groupStatusPillTextDone: {
+    color: "#15803D",
+  },
+  counterDisplayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  counterBox: {
+    alignItems: "center",
+  },
+  counterBoxRemaining: {
+    alignItems: "center",
+    borderLeftWidth: 1,
+    borderLeftColor: "#E2E8F0",
+    paddingLeft: 12,
+  },
+  counterBoxNumGreen: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#15803D",
+  },
+  counterBoxNumDark: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  counterBoxNumAmber: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#D97706",
+  },
+  counterBoxLabel: {
+    fontSize: 10,
+    color: "#64748B",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  counterDividerSlash: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#CBD5E1",
+  },
+  counterProgressBarTrack: {
+    height: 8,
+    backgroundColor: "#E2E8F0",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  counterProgressBarFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  gateControlRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  btnGateCounter: {
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnGateMinus: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  btnGateMinusText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  btnGatePlus: {
+    flex: 2,
+    backgroundColor: "#0D7A53",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  btnGatePlusText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  btnGateAll: {
+    flex: 1.4,
+    backgroundColor: "#E0F2FE",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+  },
+  btnGateAllText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0369A1",
   },
 
   // Guest Cards

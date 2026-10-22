@@ -102,7 +102,7 @@ const DEFAULT_FALLBACK_VOUCHERS: PointVoucherUI[] = [
     description: "Gratis ongkos kirim pengiriman hingga Rp 10.000 tanpa ribet.",
     pointsCost: 3000,
     service: "SHOP",
-    merchantName: "Mitra Kanyaah Ranger",
+    merchantName: "Mitra Kanyaah GEOVERSE",
     discountType: "FREE_SHIPPING",
     discountValue: 10000,
     minTransaction: 20000,

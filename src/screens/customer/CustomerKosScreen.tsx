@@ -415,9 +415,22 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
     });
   }, [currentItemsList, selectedArea, activeKostGender, hotelTypeFilter, wisataTypeFilter, searchQuery, mainCategory]);
 
-  const handleOpenWhatsAppOwner = (phone?: string, name?: string, roomNumber?: string) => {
+  const handleOpenWhatsAppOwner = (
+    phone?: string,
+    name?: string,
+    roomNumber?: string,
+    categoryType?: LodgingCategoryType,
+    bookingCode?: string
+  ) => {
     const cleanPhone = (phone || "087805987309").replace(/[^0-9]/g, "").replace(/^0/, "62");
-    const msg = `Halo Pengelola ${name || "Properti"}, saya ingin konfirmasi perihal reservasi ${roomNumber ? `No. ${roomNumber}` : ""} saya di Kanyaah Homestay.`;
+    let msg = "";
+    if (categoryType === "wisata") {
+      msg = `Halo Pengelola ${name || "Wisata"}, saya ingin konfirmasi perihal tiket wisata ${roomNumber ? `(${roomNumber})` : ""} dengan kode booking ${bookingCode || ""} di Kanyaah.`;
+    } else if (categoryType === "hotel") {
+      msg = `Halo Pengelola ${name || "Homestay"}, saya ingin konfirmasi perihal reservasi unit ${roomNumber || ""} dengan kode booking ${bookingCode || ""} di Kanyaah Homestay.`;
+    } else {
+      msg = `Halo Pengelola ${name || "Kos"}, saya ingin konfirmasi perihal booking sewa Kamar ${roomNumber ? `No. ${roomNumber}` : ""} dengan kode booking ${bookingCode || ""} di Kanyaah Kos.`;
+    }
     Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`).catch(() => {});
   };
 
@@ -577,8 +590,14 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                 <View style={styles.activeGreenDot} />
                 <Text style={styles.bookingStatusText}>
                   {activeBooking.status === "dp_verified" || activeBooking.status === "active" || (activeBooking.status as string) === "verified"
-                    ? "RESERVASI TERKONFIRMASI"
-                    : "MENUNGGU VERIFIKASI"}
+                    ? (activeBooking.categoryType === "wisata"
+                        ? "TIKET TERKONFIRMASI"
+                        : activeBooking.categoryType === "hotel"
+                        ? "RESERVASI TERKONFIRMASI"
+                        : "BOOKING KOS TERKONFIRMASI")
+                    : (activeBooking.categoryType === "wisata"
+                        ? "MENUNGGU PEMBAYARAN"
+                        : "MENUNGGU VERIFIKASI")}
                 </Text>
               </View>
 
@@ -600,12 +619,16 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                   {activeBooking.kostName}
                 </Text>
                 <Text style={styles.bookingSub}>
-                  Kode: {activeBooking.bookingCode} • Check-in: {activeBooking.entryDate || "Segera"}
+                  {activeBooking.categoryType === "wisata"
+                    ? `Kode: ${activeBooking.bookingCode} • Kunjungan: ${activeBooking.entryDate || "Hari Ini"} (${activeBooking.ticketCount || 1} Tiket)`
+                    : activeBooking.categoryType === "hotel"
+                    ? `Kode: ${activeBooking.bookingCode} • Check-in: ${activeBooking.entryDate || "Segera"}${activeBooking.durationNights ? ` (${activeBooking.durationNights} Malam)` : ""}`
+                    : `Kode: ${activeBooking.bookingCode} • Masuk Kos: ${activeBooking.entryDate || "Segera"}${activeBooking.roomNumber ? ` (Kamar ${activeBooking.roomNumber})` : ""}`}
                 </Text>
               </View>
 
               <Text style={styles.bookingPrice}>
-                {rp(activeBooking.dpAmount || activeBooking.totalAmount)}
+                {rp(activeBooking.categoryType === "wisata" ? (activeBooking.totalAmount || activeBooking.dpAmount) : (activeBooking.dpAmount || activeBooking.totalAmount))}
               </Text>
             </View>
 
@@ -615,7 +638,13 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                 onPress={() => setIsNotaModalOpen(true)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.bookingBtnSecondaryText}>Lihat E-Receipt</Text>
+                <Text style={styles.bookingBtnSecondaryText}>
+                  {activeBooking.categoryType === "wisata"
+                    ? "Lihat E-Ticket"
+                    : activeBooking.categoryType === "hotel"
+                    ? "Lihat Reservasi"
+                    : "Lihat E-Receipt DP"}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -980,8 +1009,20 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalHeaderTitle}>E-Receipt Reservasi</Text>
-                <Text style={styles.modalHeaderSub}>Bukti pemesanan resmi Kanyaah Homestay</Text>
+                <Text style={styles.modalHeaderTitle}>
+                  {activeBooking?.categoryType === "wisata"
+                    ? "E-Ticket Masuk Wisata Resmi"
+                    : activeBooking?.categoryType === "hotel"
+                    ? "E-Receipt Reservasi Homestay"
+                    : "E-Receipt Sewa Kamar Kos"}
+                </Text>
+                <Text style={styles.modalHeaderSub}>
+                  {activeBooking?.categoryType === "wisata"
+                    ? "Tiket resmi & bukti pembayaran lunas"
+                    : activeBooking?.categoryType === "hotel"
+                    ? "Bukti pemesanan kamar resmi Kanyaah Homestay"
+                    : "Bukti tanda jadi (DP) sewa kamar resmi Kanyaah Kos"}
+                </Text>
               </View>
               <TouchableOpacity
                 onPress={() => setIsNotaModalOpen(false)}
@@ -995,20 +1036,57 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.receiptScroll}>
               <View style={styles.receiptCard}>
                 <View style={styles.receiptHeader}>
-                  <Text style={styles.receiptBrand}>KANYAAH STAYS</Text>
+                  <Text style={styles.receiptBrand}>
+                    {activeBooking?.categoryType === "wisata"
+                      ? "KANYAAH WISATA"
+                      : activeBooking?.categoryType === "hotel"
+                      ? "KANYAAH HOMESTAY"
+                      : "KANYAAH KOST LIVING"}
+                  </Text>
                   <Text style={styles.receiptMeta}>
-                    Kode Booking: {activeBooking?.bookingCode || "GEO-ONLINE"}
+                    {activeBooking?.categoryType === "wisata" ? "Kode Tiket" : "Kode Booking"}: {activeBooking?.bookingCode || "GEO-ONLINE"}
                   </Text>
                   <View style={styles.receiptVerifiedBadge}>
                     <Check size={12} color="#059669" strokeWidth={3} />
-                    <Text style={styles.receiptVerifiedText}>DOKUMEN RESMI TERVERIFIKASI</Text>
+                    <Text style={styles.receiptVerifiedText}>
+                      {activeBooking?.categoryType === "wisata"
+                        ? "E-TICKET RESMI TERVERIFIKASI"
+                        : "DOKUMEN RESMI TERVERIFIKASI"}
+                    </Text>
                   </View>
                 </View>
+
+                {activeBooking?.categoryType === "wisata" && (
+                  <View style={styles.barcodeContainer}>
+                    <Text style={styles.barcodeSubLabel}>SCAN DI LOKET WISATA</Text>
+                    <View style={styles.barcodeLinesRow}>
+                      {[3, 1, 4, 2, 1, 3, 2, 4, 1, 2, 3, 1, 4, 2, 3, 1, 2, 4, 1, 3].map((w, idx) => (
+                        <View
+                          key={idx}
+                          style={{
+                            width: w,
+                            height: 34,
+                            backgroundColor: "#0F172A",
+                            marginHorizontal: 1.5,
+                          }}
+                        />
+                      ))}
+                    </View>
+                    <Text style={styles.barcodeCodeLabel}>{activeBooking?.bookingCode || "WST-ONLINE"}</Text>
+                    <Text style={styles.barcodeSubLabel}>Tunjukkan kode barcode ini kepada petugas loket wisata</Text>
+                  </View>
+                )}
 
                 <View style={styles.receiptContent}>
                   <Text style={styles.receiptSectionTitle}>DATA PEMESAN</Text>
                   <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Nama Tamu</Text>
+                    <Text style={styles.receiptLabel}>
+                      {activeBooking?.categoryType === "wisata"
+                        ? "Nama Pengunjung"
+                        : activeBooking?.categoryType === "hotel"
+                        ? "Nama Tamu"
+                        : "Nama Calon Penghuni"}
+                    </Text>
                     <Text style={styles.receiptValueBold}>
                       {activeBooking?.customerName || authAccount?.name || "Customer"}
                     </Text>
@@ -1020,33 +1098,92 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
                     </Text>
                   </View>
 
-                  <Text style={styles.receiptSectionTitle}>RINCIAN RESERVASI</Text>
+                  <Text style={styles.receiptSectionTitle}>
+                    {activeBooking?.categoryType === "wisata"
+                      ? "RINCIAN TIKET WISATA"
+                      : activeBooking?.categoryType === "hotel"
+                      ? "RINCIAN RESERVASI"
+                      : "RINCIAN SEWA KAMAR"}
+                  </Text>
                   <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Nama Properti</Text>
+                    <Text style={styles.receiptLabel}>
+                      {activeBooking?.categoryType === "wisata"
+                        ? "Destinasi Wisata"
+                        : activeBooking?.categoryType === "hotel"
+                        ? "Nama Homestay"
+                        : "Nama Properti"}
+                    </Text>
                     <Text style={styles.receiptValueBoldGreen}>
                       {activeBooking?.kostName || "Properti Pilihan"}
                     </Text>
                   </View>
-                  <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Tanggal Masuk</Text>
-                    <Text style={styles.receiptValue}>{activeBooking?.entryDate || "-"}</Text>
-                  </View>
-                  {Boolean(activeBooking?.durationNights) && (
-                    <View style={styles.receiptRow}>
-                      <Text style={styles.receiptLabel}>Durasi Menginap</Text>
-                      <Text style={styles.receiptValue}>{activeBooking?.durationNights} Malam</Text>
-                    </View>
+
+                  {activeBooking?.categoryType === "wisata" ? (
+                    <>
+                      <View style={styles.receiptRow}>
+                        <Text style={styles.receiptLabel}>Tanggal Kunjungan</Text>
+                        <Text style={styles.receiptValue}>{activeBooking?.entryDate || "-"}</Text>
+                      </View>
+                      <View style={styles.receiptRow}>
+                        <Text style={styles.receiptLabel}>Jumlah Tiket</Text>
+                        <Text style={styles.receiptValue}>{activeBooking?.ticketCount || 1} Tiket (Orang)</Text>
+                      </View>
+                    </>
+                  ) : activeBooking?.categoryType === "hotel" ? (
+                    <>
+                      <View style={styles.receiptRow}>
+                        <Text style={styles.receiptLabel}>Tanggal Check-in</Text>
+                        <Text style={styles.receiptValue}>{activeBooking?.entryDate || "-"}</Text>
+                      </View>
+                      {Boolean(activeBooking?.checkOutDate) && (
+                        <View style={styles.receiptRow}>
+                          <Text style={styles.receiptLabel}>Tanggal Check-out</Text>
+                          <Text style={styles.receiptValue}>{activeBooking?.checkOutDate}</Text>
+                        </View>
+                      )}
+                      <View style={styles.receiptRow}>
+                        <Text style={styles.receiptLabel}>Durasi Menginap</Text>
+                        <Text style={styles.receiptValue}>{activeBooking?.durationNights || 1} Malam</Text>
+                      </View>
+                      {Boolean(activeBooking?.guestCount) && (
+                        <View style={styles.receiptRow}>
+                          <Text style={styles.receiptLabel}>Jumlah Tamu</Text>
+                          <Text style={styles.receiptValue}>{activeBooking?.guestCount} Orang</Text>
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.receiptRow}>
+                        <Text style={styles.receiptLabel}>Tanggal Masuk Kos</Text>
+                        <Text style={styles.receiptValue}>{activeBooking?.entryDate || "-"}</Text>
+                      </View>
+                      <View style={styles.receiptRow}>
+                        <Text style={styles.receiptLabel}>No. Kamar & Tipe</Text>
+                        <Text style={styles.receiptValue}>Kamar {activeBooking?.roomNumber || "101"} ({activeBooking?.roomType || "AC"})</Text>
+                      </View>
+                      <View style={styles.receiptRow}>
+                        <Text style={styles.receiptLabel}>Durasi Sewa</Text>
+                        <Text style={styles.receiptValue}>{activeBooking?.durationMonths || 1} Bulan</Text>
+                      </View>
+                    </>
                   )}
 
                   <View style={styles.receiptTotalContainer}>
                     <View style={styles.receiptTotalRow}>
-                      <Text style={styles.receiptTotalLabel}>Uang Muka / Terbayar</Text>
+                      <Text style={styles.receiptTotalLabel}>
+                        {activeBooking?.categoryType === "wisata" ? "Total Bayar Tiket" : "Uang Muka / Terbayar"}
+                      </Text>
                       <Text style={styles.receiptTotalVal}>
-                        {rp(activeBooking?.dpAmount || activeBooking?.totalAmount || 0)} (LUNAS ✓)
+                        {rp(activeBooking?.categoryType === "wisata" ? (activeBooking?.totalAmount || activeBooking?.dpAmount || 0) : (activeBooking?.dpAmount || activeBooking?.totalAmount || 0))} (LUNAS ✓)
                       </Text>
                     </View>
                     <Text style={styles.receiptTotalNote}>
-                      Tunjukkan e-receipt ini kepada staf saat proses check-in di lokasi.
+                      {activeBooking?.categoryType === "wisata"
+                        ? "Tunjukkan barcode e-ticket ini kepada petugas loket saat kunjungan ke destinasi wisata."
+                        : activeBooking?.categoryType === "hotel"
+                        ? "Tunjukkan e-receipt ini kepada staf saat proses check-in di homestay."
+                        : "Tunjukkan e-receipt tanda jadi DP ini kepada pemilik kos saat survei atau serah terima kunci."}
                     </Text>
                   </View>
                 </View>
@@ -1845,5 +1982,33 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: "#047857",
     marginTop: 2,
+  },
+  barcodeContainer: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+    alignItems: "center",
+    marginVertical: 10,
+  },
+  barcodeLinesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 38,
+    marginVertical: 6,
+  },
+  barcodeCodeLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: 2,
+  },
+  barcodeSubLabel: {
+    fontSize: 10,
+    color: "#64748B",
+    marginTop: 2,
+    textAlign: "center",
   },
 });

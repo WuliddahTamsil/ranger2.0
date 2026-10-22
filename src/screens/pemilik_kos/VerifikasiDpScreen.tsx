@@ -134,17 +134,19 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
     }
   };
 
-  const isWisata =
-    currentBooking?.categoryType === "wisata" ||
-    String(currentBooking?.bookingCode || "").startsWith("WST") ||
-    !!currentBooking?.ticketCount ||
-    authAccount?.roleData?.businessCategories?.includes("wisata");
+  const isWisata = currentBooking
+    ? (currentBooking?.categoryType === "wisata" ||
+       String(currentBooking?.bookingCode || "").startsWith("WST") ||
+       !!currentBooking?.ticketCount)
+    : false;
 
-  const isHotel =
-    currentBooking?.categoryType === "hotel" ||
-    String(currentBooking?.bookingCode || "").startsWith("HTL") ||
-    !!currentBooking?.durationNights ||
-    authAccount?.roleData?.businessCategories?.includes("hotel");
+  const isHotel = currentBooking
+    ? (!isWisata && (
+        currentBooking?.categoryType === "hotel" ||
+        String(currentBooking?.bookingCode || "").startsWith("HTL") ||
+        !!currentBooking?.durationNights
+      ))
+    : false;
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>

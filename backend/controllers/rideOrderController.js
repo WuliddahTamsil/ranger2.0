@@ -166,7 +166,7 @@ const createRideOrder = async (req, res) => {
       return res.status(401).json({ success: false, message: "Otentikasi pengguna diperlukan untuk memesan ride." });
     }
 
-    const customerName = req.authUser?.name || req.body.customerName || "Pelanggan Rangers";
+    const customerName = req.authUser?.name || req.body.customerName || "Pelanggan GEOVERSE";
     const customerPhone = req.authUser?.phone || req.body.customerPhone || "";
 
     const {
@@ -427,7 +427,7 @@ const createRideOrder = async (req, res) => {
         await Notification.create({
           userId: customerId,
           title: "Kanyaah Ride Dipesan",
-          message: `Mencari Driver Rangers untuk perjalanan Anda (${pickup.placeName || pickup.address} → ${destination.placeName || destination.address}).`,
+          message: `Mencari Driver GEOVERSE untuk perjalanan Anda (${pickup.placeName || pickup.address} → ${destination.placeName || destination.address}).`,
           type: "order_new",
           relatedId: rideOrder._id,
         }).catch(() => {});
@@ -563,7 +563,7 @@ const acceptRideOrder = async (req, res) => {
       driver = await User.findById(fallbackDriverId).lean();
     }
     if (!driver || driver.role !== "driver") {
-      return res.status(403).json({ success: false, message: "Hanya akun Driver Rangers yang dapat menerima pesanan." });
+      return res.status(403).json({ success: false, message: "Hanya akun Driver GEOVERSE yang dapat menerima pesanan." });
     }
 
     // Operational Driver Compliance Check (UU LLAJ & Safety Verification)

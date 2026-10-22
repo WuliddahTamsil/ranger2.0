@@ -450,13 +450,23 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
     }
   };
 
-  // Dynamic Counters
-  const totalItemCount = rooms.length;
-  const activeCount = rooms.filter((r) => r.status === "kosong" || r.isAvailable).length;
-  const occupiedCount = rooms.filter((r) => r.status === "terisi").length;
+  // Filtered Rooms matching active category tab
+  const categoryRooms = rooms.filter((r) => {
+    if (r.categoryType) {
+      return r.categoryType === categoryType;
+    }
+    if (categoryType === "wisata") return !!r.ticketName || (r.name && r.name.toLowerCase().includes("tiket"));
+    if (categoryType === "hotel") return !!r.bedType || !!r.roomName || (r.type && r.type.toLowerCase().includes("tamu"));
+    return true;
+  });
 
-  // Filtered Rooms
-  const filteredRooms = rooms.filter((r) => {
+  // Dynamic Counters
+  const totalItemCount = categoryRooms.length;
+  const activeCount = categoryRooms.filter((r) => r.status === "kosong" || r.isAvailable).length;
+  const occupiedCount = categoryRooms.filter((r) => r.status === "terisi").length;
+
+  // Filtered Rooms with search
+  const filteredRooms = categoryRooms.filter((r) => {
     const q = searchQuery.toLowerCase();
     return (
       (r.name && r.name.toLowerCase().includes(q)) ||
@@ -585,6 +595,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
 
     if (categoryType === "hotel") {
       payload = {
+        categoryType: "hotel",
         roomName: namaTipeKamar || `Deluxe Room ${rooms.length + 1}`,
         bedType: tipeKasur,
         capacity: parseInt(kapasitasTamu) || 2,
@@ -598,6 +609,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
       };
     } else if (categoryType === "wisata") {
       payload = {
+        categoryType: "wisata",
         ticketName: namaTiket || `Tiket Masuk ${rooms.length + 1}`,
         ticketType: kategoriTiket,
         price: numPrice,
@@ -613,6 +625,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
     } else {
       const cleanNum = (nomorKamar || `10${rooms.length + 1}`).replace(/^(Kamar\s*)+/gi, "").trim();
       payload = {
+        categoryType: "kost",
         roomNumber: cleanNum,
         roomType: tipeKamar,
         priceMonthly: numPrice,
@@ -840,6 +853,66 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
             />
           </View>
         )}
+
+        {/* 3-Way Category Tab Switcher */}
+        <View style={styles.categorySwitcherContainer}>
+          <TouchableOpacity
+            style={[
+              styles.categorySwitcherTab,
+              categoryType === "kost" && styles.categorySwitcherTabActiveKost,
+            ]}
+            onPress={() => setCategoryType("kost")}
+            activeOpacity={0.8}
+          >
+            <Building2 size={16} color={categoryType === "kost" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryType === "kost" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Kamar Kos
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categorySwitcherTab,
+              categoryType === "hotel" && styles.categorySwitcherTabActiveHotel,
+            ]}
+            onPress={() => setCategoryType("hotel")}
+            activeOpacity={0.8}
+          >
+            <Hotel size={16} color={categoryType === "hotel" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryType === "hotel" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Hotel & Villa
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categorySwitcherTab,
+              categoryType === "wisata" && styles.categorySwitcherTabActiveWisata,
+            ]}
+            onPress={() => setCategoryType("wisata")}
+            activeOpacity={0.8}
+          >
+            <Ticket size={16} color={categoryType === "wisata" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryType === "wisata" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Tiket Wisata
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* 3 Summary Cards */}
         <View style={styles.summaryRow}>
@@ -3144,5 +3217,40 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: "#FFFFFF",
+  },
+  categorySwitcherContainer: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  categorySwitcherTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  categorySwitcherTabActiveKost: {
+    backgroundColor: "#0D7A53",
+  },
+  categorySwitcherTabActiveHotel: {
+    backgroundColor: "#0284C7",
+  },
+  categorySwitcherTabActiveWisata: {
+    backgroundColor: "#D97706",
+  },
+  categorySwitcherText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  categorySwitcherTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
   },
 });

@@ -627,7 +627,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
                   <Bike size={16} color="#0D7A53" />
                   <Text style={{ fontSize: 12, fontWeight: "800", color: "#166534" }}>
-                    Ketentuan Kurir Sepeda Motor Ranger (Kamojang):
+                    Ketentuan Kurir Sepeda Motor GEOVERSE (Kamojang):
                   </Text>
                 </View>
                 <Text style={{ fontSize: 11, color: "#15803D", lineHeight: 17 }}>

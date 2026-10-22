@@ -613,7 +613,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                 : isOwnerView
                 ? "Terhubung langsung dengan Pelanggan / Calon Penghuni"
                 : isDriver
-                ? (isRide ? "Terhubung langsung dengan Driver Rangers" : "Terhubung langsung dengan Kurir Pengantar Pesanan")
+                ? (isRide ? "Terhubung langsung dengan Driver GEOVERSE" : "Terhubung langsung dengan Kurir Pengantar Pesanan")
                 : isKost
                 ? "Terhubung langsung dengan Pemilik Properti / Homestay"
                 : "Terhubung langsung dengan Mitra Toko / Penjual"}
@@ -690,7 +690,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                     {!isMe && (
                       <Text style={styles.senderNameLabel}>
                         {chatTargetRole === "driver"
-                          ? (isRide ? "🛵 Driver Rangers" : "🛵 Kurir Pengantar")
+                          ? (isRide ? "🛵 Driver GEOVERSE" : "🛵 Kurir Pengantar")
                           : chatTargetRole === "owner"
                           ? (isKost ? "🏠 Pemilik Kos" : "📦 Toko / Penjual")
                           : "👤 Pelanggan"}

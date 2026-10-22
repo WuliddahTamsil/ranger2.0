@@ -16,7 +16,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.wuliddahtamsil.geoverse",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "GEOVERSE memerlukan akses kamera untuk mengambil foto profil, dokumen verifikasi mitra (KTP/SIM/STNK), dan bukti foto serah terima pesanan.",
+        "NSPhotoLibraryUsageDescription": "GEOVERSE memerlukan akses galeri foto untuk memilih foto profil, dokumen pendaftaran mitra, dan bukti transaksi serah terima.",
+        "NSLocationWhenInUseUsageDescription": "GEOVERSE memerlukan akses lokasi saat aplikasi digunakan untuk menentukan titik penjemputan armada, pelacakan rute pengantaran real-time, dan menemukan mitra terdekat.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "GEOVERSE memerlukan akses lokasi untuk memastikan akurasi pelacakan navigasi armada pengemudi saat perjalanan berlangsung.",
+        "NSPhotoLibraryAddUsageDescription": "GEOVERSE memerlukan izin untuk menyimpan bukti pembayaran, struk pesanan, dan dokumen transaksi ke galeri foto Anda."
       }
     },
     "android": {
@@ -38,14 +43,14 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "GEOVERSE menggunakan lokasi untuk membantu menentukan titik rumah customer."
+          "locationAlwaysAndWhenInUsePermission": "GEOVERSE memerlukan akses lokasi untuk menentukan titik penjemputan armada, pelacakan rute pengantaran real-time, dan menemukan mitra terdekat."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "GEOVERSE memerlukan akses foto untuk mengubah foto profil.",
-          "cameraPermission": "GEOVERSE memerlukan akses kamera untuk mengambil foto profil."
+          "photosPermission": "GEOVERSE memerlukan akses galeri foto untuk memilih foto profil, dokumen pendaftaran mitra, dan bukti transaksi serah terima.",
+          "cameraPermission": "GEOVERSE memerlukan akses kamera untuk mengambil foto profil, dokumen verifikasi mitra (KTP/SIM/STNK), dan bukti foto serah terima pesanan."
         }
       ],
       "expo-video"

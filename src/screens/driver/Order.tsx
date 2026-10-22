@@ -57,6 +57,7 @@ import { subscribeToChatRealtime } from "../../services/chatRealtime";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
 import { SafeCallModal } from "../../components/SafeCallModal";
 import { sortDriverOrders, isDriverOrderActive, isDriverOrderPending } from "./driverOrderUtils";
+import { getRidePassengerOtp } from "../../utils/rideOtp";
 
 export type DriverOrderTab =
   | "Semua"
@@ -190,7 +191,7 @@ export const Order: React.FC<OrderProps> = ({
   selectedOrderId,
   onClearSelectedOrder,
 }) => {
-  const effectiveDriverName = driverName || "Driver Rangers";
+  const effectiveDriverName = driverName || "Driver GEOVERSE";
   const effectiveDriverVehicle = [driverVehicle, driverPlate].filter(Boolean).join(" • ") || "Sepeda Motor";
 
   const [activeTab, setActiveTab] = useState<DriverOrderTab>("Semua");
@@ -220,6 +221,9 @@ export const Order: React.FC<OrderProps> = ({
   const [proofUploadOrderId, setProofUploadOrderId] = useState<string | null>(null);
   const [proofUploadError, setProofUploadError] = useState<{ orderId: string; message: string } | null>(null);
   const [deliveryProofOrder, setDeliveryProofOrder] = useState<DriverOrder | null>(null);
+  const [rideOtpOrderModal, setRideOtpOrderModal] = useState<DriverOrder | null>(null);
+  const [enteredRideOtp, setEnteredRideOtp] = useState("");
+  const [rideOtpError, setRideOtpError] = useState<string | null>(null);
   const [safeCallVisible, setSafeCallVisible] = useState(false);
   const [safeCallTarget, setSafeCallTarget] = useState<{ name: string; role: string; phone: string; orderCode: string } | null>(null);
   const [dismissedIncomingId, setDismissedIncomingId] = useState<string | null>(null);
@@ -503,6 +507,12 @@ export const Order: React.FC<OrderProps> = ({
       setDeliveryProofOrder(order);
       return;
     }
+    if (order.type === "Kanyaah Ride" && nextStatus === "Mengantar") {
+      setRideOtpOrderModal(order);
+      setEnteredRideOtp("");
+      setRideOtpError(null);
+      return;
+    }
     if (order.type === "Kanyaah Ride" && nextStatus === "Selesai") {
       if (Platform.OS === "web") {
         void handleUpdateStatus(order.id, "Selesai");
@@ -583,6 +593,117 @@ export const Order: React.FC<OrderProps> = ({
             >
               <Text style={styles.proofPickerCancelText}>Batal</Text>
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  const handleVerifyRideOtp = async () => {
+    if (!rideOtpOrderModal) return;
+    const expectedOtp = getRidePassengerOtp(rideOtpOrderModal);
+    if (enteredRideOtp.trim() !== expectedOtp) {
+      setRideOtpError("PIN salah! Pastikan 4 digit PIN sesuai dengan yang ada di aplikasi penumpang.");
+      return;
+    }
+    const orderToStart = rideOtpOrderModal;
+    setRideOtpOrderModal(null);
+    setEnteredRideOtp("");
+    setRideOtpError(null);
+    await handleUpdateStatus(orderToStart.id, "Mengantar");
+  };
+
+  const renderRideOtpModal = () => {
+    if (!rideOtpOrderModal) return null;
+    const order = rideOtpOrderModal;
+    const expectedOtp = getRidePassengerOtp(order);
+
+    return (
+      <Modal
+        visible
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setRideOtpOrderModal(null);
+          setEnteredRideOtp("");
+          setRideOtpError(null);
+        }}
+      >
+        <View style={styles.otpModalBackdrop}>
+          <View style={styles.otpModalCard}>
+            <View style={styles.otpModalIconWrap}>
+              <ShieldCheck size={26} color="#15803D" />
+            </View>
+            <Text style={styles.otpModalTitle}>Konfirmasi Penumpang Ride</Text>
+            <Text style={styles.otpModalSub}>
+              Minta 4 digit PIN / OTP yang tertera di aplikasi penumpang sebelum menekan perjalanan dimulai.
+            </Text>
+
+            <View style={styles.otpPassengerCard}>
+              <View style={styles.otpPassengerRow}>
+                <User size={15} color="#15803D" />
+                <Text style={styles.otpPassengerName}>{order.customer}</Text>
+              </View>
+              <View style={styles.otpPassengerRow}>
+                <MapPin size={15} color="#6B7280" />
+                <Text style={styles.otpPassengerPickup} numberOfLines={1}>
+                  {order.pickup?.placeName || order.from || "Titik Penjemputan"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.otpInputSection}>
+              <Text style={styles.otpInputLabel}>Masukkan 4 Digit PIN Penumpang:</Text>
+              <TextInput
+                style={styles.otpInputBox}
+                value={enteredRideOtp}
+                onChangeText={(text) => {
+                  setEnteredRideOtp(text.replace(/[^0-9]/g, "").slice(0, 4));
+                  if (rideOtpError) setRideOtpError(null);
+                }}
+                keyboardType="numeric"
+                maxLength={4}
+                placeholder="• • • •"
+                placeholderTextColor="#9CA3AF"
+                autoFocus
+              />
+              <Text style={styles.otpTestHint}>
+                (Petunjuk Sistem: PIN Penumpang adalah {expectedOtp})
+              </Text>
+            </View>
+
+            {rideOtpError && (
+              <View style={styles.otpErrorWrap}>
+                <AlertCircle size={15} color="#DC2626" />
+                <Text style={styles.otpErrorText}>{rideOtpError}</Text>
+              </View>
+            )}
+
+            <View style={styles.otpModalBtnRow}>
+              <TouchableOpacity
+                style={styles.otpModalCancelBtn}
+                onPress={() => {
+                  setRideOtpOrderModal(null);
+                  setEnteredRideOtp("");
+                  setRideOtpError(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.otpModalCancelText}>Batal</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.otpModalSubmitBtn,
+                  enteredRideOtp.length !== 4 && styles.otpModalSubmitBtnDisabled,
+                ]}
+                onPress={handleVerifyRideOtp}
+                disabled={enteredRideOtp.length !== 4}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.otpModalSubmitText}>Mulai Perjalanan ✓</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -2372,6 +2493,7 @@ export const Order: React.FC<OrderProps> = ({
         </ResponsiveSafeAreaView>
       </Modal>
       {renderDeliveryProofPicker()}
+      {renderRideOtpModal()}
       {safeCallTarget && (
         <SafeCallModal
           visible={safeCallVisible}
@@ -2671,6 +2793,7 @@ export const Order: React.FC<OrderProps> = ({
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       {renderDeliveryProofPicker()}
+      {renderRideOtpModal()}
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -5115,5 +5238,152 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: "#64748B",
     lineHeight: 16,
+  },
+  // OTP Verification Modal Styles
+  otpModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  otpModalCard: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 22,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  otpModalIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  otpModalTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0F172A",
+    textAlign: "center",
+  },
+  otpModalSub: {
+    fontSize: 12,
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  otpPassengerCard: {
+    width: "100%",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 6,
+  },
+  otpPassengerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  otpPassengerName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
+  otpPassengerPickup: {
+    fontSize: 12,
+    color: "#64748B",
+    flex: 1,
+  },
+  otpInputSection: {
+    width: "100%",
+    alignItems: "center",
+    marginTop: 16,
+  },
+  otpInputLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
+    marginBottom: 8,
+  },
+  otpInputBox: {
+    width: 180,
+    height: 52,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 2,
+    borderColor: "#22C55E",
+    borderRadius: 14,
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#15803D",
+    textAlign: "center",
+    letterSpacing: 8,
+  },
+  otpTestHint: {
+    fontSize: 11,
+    color: "#15803D",
+    marginTop: 6,
+    fontWeight: "500",
+  },
+  otpErrorWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  otpErrorText: {
+    fontSize: 11,
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+  otpModalBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 20,
+    width: "100%",
+  },
+  otpModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+  },
+  otpModalCancelText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  otpModalSubmitBtn: {
+    flex: 1.5,
+    backgroundColor: "#15803D",
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  otpModalSubmitBtnDisabled: {
+    backgroundColor: "#94A3B8",
+  },
+  otpModalSubmitText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });

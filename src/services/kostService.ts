@@ -242,9 +242,10 @@ export const fetchCustomerBookings = async (customerId: string) => {
 };
 
 // =================== ROOMS API ===================
-export const fetchRoomsByOwner = async (ownerId: string) => {
+export const fetchRoomsByOwner = async (ownerId: string, category?: string) => {
   try {
-    const url = getApiUrl(`/kosts/rooms/${ownerId}`);
+    const query = category ? `?category=${category}` : "";
+    const url = getApiUrl(`/kosts/rooms/${ownerId}${query}`);
     const response = await fetch(url);
     const result = await response.json();
     return result.data || [];

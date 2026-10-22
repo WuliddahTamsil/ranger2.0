@@ -113,7 +113,7 @@ const paymentSchema = new mongoose.Schema(
     virtualAccount: {
       bank: { type: String, default: "" },
       vaNumber: { type: String, default: "" },
-      accountName: { type: String, default: "GEOVERSE RANGERS" },
+      accountName: { type: String, default: "GEOVERSE" },
       expiryTime: { type: Date },
     },
     paidAt: {

@@ -651,7 +651,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
           </View>
           <View style={styles.bannerTextWrap}>
             <Text style={styles.bannerTitle}>Kanyaah Ride</Text>
-            <Text style={styles.bannerSub}>Perjalanan nyaman bersama Rangers.</Text>
+            <Text style={styles.bannerSub}>Perjalanan nyaman bersama GEOVERSE.</Text>
           </View>
         </View>
 
@@ -946,34 +946,6 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
               )}
             </View>
           </TouchableOpacity>
-
-          {/* Vehicle 2: Kanyaah Car (COMING SOON) */}
-          <TouchableOpacity
-            style={[styles.vehicleOptionCard, styles.vehicleOptionCardDisabled]}
-            activeOpacity={1}
-            disabled={true}
-            onPress={() =>
-              Alert.alert("Coming Soon", "Layanan Kanyaah Car saat ini masih dalam persiapan.")
-            }
-          >
-            <View style={[styles.vehicleIconBg, { backgroundColor: "#F1F5F9" }]}>
-              <Car size={26} color="#94A3B8" />
-            </View>
-
-            <View style={styles.vehicleInfoCol}>
-              <View style={styles.vehicleTitleRow}>
-                <Text style={[styles.vehicleTitle, { color: "#94A3B8" }]}>Kanyaah Car</Text>
-                <View style={styles.comingSoonBadge}>
-                  <Text style={styles.comingSoonBadgeText}>Coming Soon</Text>
-                </View>
-              </View>
-              <Text style={[styles.vehicleDesc, { color: "#94A3B8" }]}>Nyaman untuk bepergian bersama</Text>
-            </View>
-
-            <View style={styles.vehiclePriceCol}>
-              <Text style={[styles.vehiclePricePlaceholder, { color: "#CBD5E1" }]}>-</Text>
-            </View>
-          </TouchableOpacity>
         </View>
 
         {/* Section: Catatan Untuk Driver */}
@@ -1183,7 +1155,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         <View style={styles.safetyCard}>
           <ShieldCheck size={18} color="#15803D" />
           <Text style={styles.safetyText}>
-            Driver Rangers telah terverifikasi resmi oleh komunitas lokal GEOVERSE Kamojang.
+            Driver GEOVERSE telah terverifikasi resmi oleh komunitas lokal GEOVERSE Kamojang.
           </Text>
         </View>
 
@@ -1255,7 +1227,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         subtitle={
           pickerTarget === "destination"
             ? "Cari nama tempat / geser pin ke tujuan perjalanan"
-            : "Tentukan titik penjemputan driver Rangers"
+            : "Tentukan titik penjemputan driver GEOVERSE"
         }
         badgeText={pickerTarget === "destination" ? "Pin Tujuan" : "Pin Jemput"}
         onClose={() => setLocationPickerVisible(false)}

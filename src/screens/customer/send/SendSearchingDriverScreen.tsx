@@ -215,7 +215,7 @@ export const SendSearchingDriverScreen: React.FC<SendSearchingDriverScreenProps>
           <ArrowLeft size={20} color="#0F172A" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Mencari Driver Rangers</Text>
+          <Text style={styles.headerTitle}>Mencari Driver GEOVERSE</Text>
           <Text style={styles.headerSub}>Order #{activeOrder?.orderCode || "RNG-SEND"}</Text>
         </View>
       </View>

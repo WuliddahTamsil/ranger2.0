@@ -24,6 +24,7 @@ import {
   Shield,
   Settings,
   LogOut,
+  Trash2,
   ChevronRight,
   Camera,
   Home,
@@ -37,7 +38,7 @@ import {
 } from "lucide-react-native";
 
 import { fetchKostProperty, updateKostProperty } from "../../services/kostService";
-import { updateUserProfile } from "../../services/api";
+import { updateUserProfile, deleteUserAccount } from "../../services/api";
 
 interface PemilikKosProfilProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -148,6 +149,36 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
   const handleLogout = () => {
     setActiveModal(null);
     navigate("login");
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Hapus Akun Mitra Pemilik Kos",
+      "Apakah Anda yakin ingin menghapus akun mitra pemilik kos GEOVERSE beserta seluruh data kamar dan riwayat hunian secara permanen?\n\nSesuai standar privasi Apple (Guideline 5.1.1(v)), tindakan ini tidak dapat dibatalkan.",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus Akun",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await deleteUserAccount(authAccount?.id);
+              if (res.success) {
+                Alert.alert(
+                  "Akun Dihapus",
+                  "Akun mitra pemilik kos Anda telah berhasil dihapus secara permanen dari platform GEOVERSE.",
+                  [{ text: "OK", onPress: () => navigate("login") }]
+                );
+              } else {
+                Alert.alert("Gagal", res.message || "Gagal memproses penghapusan akun. Silakan coba kembali.");
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Terjadi kendala saat menghapus akun.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -307,6 +338,23 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
               <LogOut size={18} color="#DC2626" />
             </View>
             <Text style={[styles.menuTitle, styles.logoutText]}>Keluar</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Section 4: Delete Account Card (Apple App Store Guideline 5.1.1(v) Compliant) */}
+        <View style={[styles.logoutGroupCard, { borderColor: "#FECACA", backgroundColor: "#FEF2F2", marginTop: 8 }]}>
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 0 }]}
+            onPress={handleDeleteAccount}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBg, { backgroundColor: "#FEE2E2" }]}>
+              <Trash2 size={18} color="#DC2626" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={[styles.menuTitle, { color: "#DC2626" }]}>Hapus Akun Pemilik Kos</Text>
+              <Text style={{ fontSize: 10, color: "#EF4444", marginTop: 2 }}>Hapus akun & seluruh data homestay secara permanen</Text>
+            </View>
           </TouchableOpacity>
         </View>
 

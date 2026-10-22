@@ -563,7 +563,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
                     <View style={styles.qrCodeBox}>
                       {renderQrisMatrix(qrString)}
                       <View style={styles.qrGpnBadge}>
-                        <Text style={styles.qrGpnText}>GPN • GEOVERSE RANGERS</Text>
+                        <Text style={styles.qrGpnText}>GPN • GEOVERSE</Text>
                       </View>
                     </View>
 
@@ -583,7 +583,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
                       <Text style={styles.instructionStep}>1. Buka aplikasi m-Banking (BCA, Mandiri, BRI, BNI) atau E-Wallet (GoPay, OVO, DANA, ShopeePay).</Text>
                       <Text style={styles.instructionStep}>2. Pilih menu "Scan" atau "Bayar dengan QRIS".</Text>
                       <Text style={styles.instructionStep}>3. Pindai kode QR di atas atau gunakan tangkapan layar.</Text>
-                      <Text style={styles.instructionStep}>4. Periksa nama merchant (GEOVERSE RANGERS) dan nominal ({rp(totalAmount)}), lalu masukkan PIN Anda.</Text>
+                      <Text style={styles.instructionStep}>4. Periksa nama merchant (GEOVERSE) dan nominal ({rp(totalAmount)}), lalu masukkan PIN Anda.</Text>
                     </View>
                   </View>
                 )}

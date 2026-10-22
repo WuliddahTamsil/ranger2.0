@@ -58,6 +58,10 @@ import {
   Edit3,
   ShieldCheck,
   Image as ImageIcon,
+  Hotel,
+  Ticket,
+  Sparkles,
+  Printer,
 } from "lucide-react-native";
 
 interface Transaction {
@@ -90,6 +94,9 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
   const monthOptions = monthNames.map(m => `${m} ${currentYear}`);
   const [selectedMonth, setSelectedMonth] = useState(`${monthNames[currentMonthIdx]} ${currentYear}`);
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+
+  // 4-Way Category Filter Tab: "semua" | "kost" | "hotel" | "wisata"
+  const [categoryTab, setCategoryTab] = useState<"semua" | "kost" | "hotel" | "wisata">("semua");
 
   // State data dari Database
   const [rooms, setRooms] = useState<any[]>([]);
@@ -244,8 +251,19 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
     }
   };
 
+  // Filter data sesuai 4-Way Category Tab ("semua" | "kost" | "hotel" | "wisata")
+  const categoryFilteredBookings = bookings.filter((b) => {
+    if (categoryTab === "semua") return true;
+    return (b.categoryType || "kost") === categoryTab;
+  });
+
+  const categoryFilteredRooms = rooms.filter((r) => {
+    if (categoryTab === "semua") return true;
+    return (r.categoryType || "kost") === categoryTab;
+  });
+
   // Kalkulasi Penerimaan DP & Pelunasan dari Customer
-  const validBookings = bookings.filter(b => b.status === "dp_verified" || b.status === "dp_submitted" || b.status === "active");
+  const validBookings = categoryFilteredBookings.filter(b => b.status === "dp_verified" || b.status === "dp_submitted" || b.status === "active");
   
   const totalDpCustomer = validBookings.reduce(
     (sum, b) => sum + Number(b.dpAmount || 0),
@@ -265,49 +283,98 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
   );
 
   // Kalkulasi Piutang Sisa Perpanjangan Sewa
-  const unsettledExtensionRooms = rooms.filter(r => r.currentTenant && Number(r.currentTenant.extensionRemaining || 0) > 0);
+  const unsettledExtensionRooms = categoryFilteredRooms.filter(r => r.currentTenant && Number(r.currentTenant.extensionRemaining || 0) > 0);
   const totalPiutangPerpanjangan = unsettledExtensionRooms.reduce(
     (sum, r) => sum + Number(r.currentTenant.extensionRemaining || 0),
     0
   );
 
-  // Kamar Terisi (okupansi)
-  const occupiedRooms = rooms.filter(r => r.status === "terisi" || r.isAvailable === false);
+  // Kamar / Unit Terisi (okupansi)
+  const occupiedRooms = categoryFilteredRooms.filter(r => r.status === "terisi" || r.isAvailable === false);
+
+  // Filter Manual Transactions berdasarkan Category Tab
+  const filteredManualTx = manualTx.filter((t) => {
+    if (categoryTab === "semua") return true;
+    const cat = (t.rawCategory || "").toLowerCase();
+    const title = (t.title || "").toLowerCase();
+    if (categoryTab === "kost") {
+      return cat.includes("kos") || cat.includes("kamar") || title.includes("kos") || title.includes("kamar") || (!cat.includes("hotel") && !cat.includes("villa") && !cat.includes("wisata") && !cat.includes("tiket"));
+    }
+    if (categoryTab === "hotel") {
+      return cat.includes("hotel") || cat.includes("villa") || cat.includes("kamar") || title.includes("hotel") || title.includes("villa");
+    }
+    if (categoryTab === "wisata") {
+      return cat.includes("wisata") || cat.includes("tiket") || cat.includes("wahana") || title.includes("wisata") || title.includes("tiket");
+    }
+    return true;
+  });
 
   // Kalkulasi Manual & Pengeluaran
-  const manualIncome = manualTx.filter(t => t.type === "income").reduce((sum, t) => sum + (t.rawAmount || parseInt((t.amount || "").replace(/[^0-9]/g, "")) || 0), 0);
-  const manualExpense = manualTx.filter(t => t.type === "expense").reduce((sum, t) => sum + (t.rawAmount || parseInt((t.amount || "").replace(/[^0-9]/g, "")) || 0), 0);
+  const manualIncome = filteredManualTx.filter(t => t.type === "income").reduce((sum, t) => sum + (t.rawAmount || parseInt((t.amount || "").replace(/[^0-9]/g, "")) || 0), 0);
+  const manualExpense = filteredManualTx.filter(t => t.type === "expense").reduce((sum, t) => sum + (t.rawAmount || parseInt((t.amount || "").replace(/[^0-9]/g, "")) || 0), 0);
   
   const totalPendapatan = totalDpCustomer + totalPelunasanCustomer + manualIncome;
   const totalPengeluaran = manualExpense;
   const labaBersih = totalPendapatan - totalPengeluaran;
 
-  // Generate Real Transactions List (DP & Pelunasan)
-  const dpTxs: Transaction[] = validBookings.map((b) => ({
-    id: `dp_${b._id}`,
-    title: `Penerimaan DP Kamar ${b.roomNumber || "101"}`,
-    subtitle: `${b.customerName || "Customer"} • Transfer DP ${b.dpPercentage || 20}%`,
-    date: b.verifiedAt ? new Date(b.verifiedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini",
-    amount: `+ Rp ${Number(b.dpAmount || 0).toLocaleString("id-ID")}`,
-    type: "income" as const,
-    rawAmount: Number(b.dpAmount || 0),
-    rawCategory: "DP Booking",
-    isManual: false,
-  }));
+  // Generate Real Transactions List (DP & Pelunasan) dengan Nama & Label Sesuai Kategori
+  const dpTxs: Transaction[] = validBookings.map((b) => {
+    const isWisata = b.categoryType === "wisata";
+    const isHotel = b.categoryType === "hotel";
+    const title = isWisata
+      ? `Pemesanan Tiket Wisata (${b.ticketCount || 1} Tiket)`
+      : isHotel
+      ? `DP Reservasi Hotel ${b.roomNumber ? `Kamar ${b.roomNumber}` : (b.roomName || "Villa")}`
+      : `Penerimaan DP Kamar ${b.roomNumber || "101"}`;
+    const subtitle = isWisata
+      ? `${b.customerName || "Pengunjung"} • ${b.ticketCount || 1} Orang • Bayar Lunas 100%`
+      : isHotel
+      ? `${b.customerName || "Tamu"} • DP Reservasi ${b.dpPercentage || 50}% • ${b.durationNights || 1} Malam`
+      : `${b.customerName || "Customer"} • Transfer DP ${b.dpPercentage || 20}%`;
+    const cat = isWisata ? "Tiket Wisata" : isHotel ? "Reservasi Hotel" : "DP Kos";
 
-  const settlementTxs: Transaction[] = settledBookings.map((b) => ({
-    id: `settle_${b._id}`,
-    title: `Pelunasan Sewa Kamar ${b.roomNumber || "101"}`,
-    subtitle: `${b.customerName || "Customer"} • ${b.settlementPaymentMethod === "cash" ? "Tunai (Cash)" : "Transfer Bank"} Check-in`,
-    date: b.settledAt ? new Date(b.settledAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini",
-    amount: `+ Rp ${(Number(b.settledAmount) || (Number(b.totalAmount || 0) - Number(b.dpAmount || 0)) || 0).toLocaleString("id-ID")}`,
-    type: "income" as const,
-    rawAmount: (Number(b.settledAmount) || (Number(b.totalAmount || 0) - Number(b.dpAmount || 0)) || 0),
-    rawCategory: "Pelunasan Sewa",
-    isManual: false,
-  }));
+    return {
+      id: `dp_${b._id}`,
+      title,
+      subtitle,
+      date: b.verifiedAt ? new Date(b.verifiedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini",
+      amount: `+ Rp ${Number(b.dpAmount || 0).toLocaleString("id-ID")}`,
+      type: "income" as const,
+      rawAmount: Number(b.dpAmount || 0),
+      rawCategory: cat,
+      isManual: false,
+    };
+  });
 
-  const allTransactions = [...settlementTxs, ...dpTxs, ...manualTx];
+  const settlementTxs: Transaction[] = settledBookings.map((b) => {
+    const isWisata = b.categoryType === "wisata";
+    const isHotel = b.categoryType === "hotel";
+    const title = isWisata
+      ? `Pelunasan Tiket Wisata (${b.ticketCount || 1} Tiket)`
+      : isHotel
+      ? `Pelunasan Reservasi Hotel ${b.roomNumber ? `Kamar ${b.roomNumber}` : (b.roomName || "Villa")}`
+      : `Pelunasan Sewa Kamar ${b.roomNumber || "101"}`;
+    const subtitle = isWisata
+      ? `${b.customerName || "Pengunjung"} • ${b.settlementPaymentMethod === "cash" ? "Loket Tunai" : "Transfer Bank"} • Masuk`
+      : isHotel
+      ? `${b.customerName || "Tamu"} • ${b.settlementPaymentMethod === "cash" ? "Resepsionis Tunai" : "Transfer Bank"} • Check-in`
+      : `${b.customerName || "Customer"} • ${b.settlementPaymentMethod === "cash" ? "Tunai (Cash)" : "Transfer Bank"} Check-in`;
+    const cat = isWisata ? "Tiket Wisata" : isHotel ? "Pelunasan Hotel" : "Pelunasan Sewa";
+
+    return {
+      id: `settle_${b._id}`,
+      title,
+      subtitle,
+      date: b.settledAt ? new Date(b.settledAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Hari ini",
+      amount: `+ Rp ${(Number(b.settledAmount) || (Number(b.totalAmount || 0) - Number(b.dpAmount || 0)) || 0).toLocaleString("id-ID")}`,
+      type: "income" as const,
+      rawAmount: (Number(b.settledAmount) || (Number(b.totalAmount || 0) - Number(b.dpAmount || 0)) || 0),
+      rawCategory: cat,
+      isManual: false,
+    };
+  });
+
+  const allTransactions = [...settlementTxs, ...dpTxs, ...filteredManualTx];
 
   const handleSaveTransaction = async () => {
     const numAmount = parseInt((txAmount || "").replace(/[^0-9]/g, "")) || 0;
@@ -368,6 +435,77 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
     }
   };
 
+  const handleExportReport = () => {
+    if (typeof window !== "undefined" && window.open) {
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        const rowsHtml = allTransactions.slice(0, 50).map((t) => `
+          <tr>
+            <td>${t.date}</td>
+            <td><strong>${t.title}</strong><br><small style="color:#64748b">${t.subtitle}</small></td>
+            <td>${t.rawCategory || "-"}</td>
+            <td style="color:${t.type === 'income' ? '#0d7a53' : '#dc2626'}; font-weight:800; text-align:right;">${t.amount}</td>
+          </tr>
+        `).join("");
+
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Laporan Keuangan - ${selectedMonth} - Kanyaah</title>
+              <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #1e293b; max-width: 800px; margin: 0 auto; }
+                .header { text-align: center; border-bottom: 2px solid #0d7a53; padding-bottom: 15px; margin-bottom: 20px; }
+                .title { font-size: 22px; font-weight: 900; color: #0d7a53; }
+                .subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
+                .summary-grid { display: flex; gap: 15px; margin-bottom: 25px; }
+                .summary-card { flex: 1; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc; }
+                .summary-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+                .summary-val { font-size: 18px; font-weight: 900; margin-top: 4px; }
+                table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+                th { background: #f0fdf4; border-bottom: 2px solid #0d7a53; padding: 10px; text-align: left; }
+                td { border-bottom: 1px solid #e2e8f0; padding: 9px 10px; }
+                .footer { margin-top: 40px; display: flex; justify-content: space-between; font-size: 12px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <div class="title">KANYAAH HOMESTAY & RESIDENCE</div>
+                <div class="subtitle">Laporan Keuangan Resmi • Periode: ${selectedMonth} • Kategori: ${categoryTab.toUpperCase()}</div>
+              </div>
+              <div class="summary-grid">
+                <div class="summary-card" style="background: #f0fdf4; border-color: #bbf7d0;">
+                  <div class="summary-label" style="color: #0d7a53;">Total Pendapatan</div>
+                  <div class="summary-val" style="color: #0d7a53;">Rp ${totalPendapatan.toLocaleString('id-ID')}</div>
+                </div>
+                <div class="summary-card" style="background: #fef2f2; border-color: #fecaca;">
+                  <div class="summary-label" style="color: #dc2626;">Total Pengeluaran</div>
+                  <div class="summary-val" style="color: #dc2626;">Rp ${totalPengeluaran.toLocaleString('id-ID')}</div>
+                </div>
+                <div class="summary-card" style="background: #ecfdf5; border-color: #a7f3d0;">
+                  <div class="summary-label" style="color: #047857;">Laba Bersih</div>
+                  <div class="summary-val" style="color: #047857;">Rp ${labaBersih.toLocaleString('id-ID')}</div>
+                </div>
+              </div>
+              <h3>Rincian Transaksi Terdata</h3>
+              <table>
+                <thead><tr><th>Tanggal</th><th>Keterangan Transaksi</th><th>Kategori</th><th style="text-align:right;">Nominal</th></tr></thead>
+                <tbody>${rowsHtml}</tbody>
+              </table>
+              <div class="footer">
+                <div>Dicetak pada: ${new Date().toLocaleString('id-ID')}</div>
+                <div style="text-align:center;">Pengelola Properti<br><br><br><br><strong>( _____________________ )</strong></div>
+              </div>
+              <script>window.print();</script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    } else {
+      alert(`Laporan keuangan periode ${selectedMonth} (${categoryTab.toUpperCase()}) siap dicetak.`);
+    }
+  };
+
   const filteredTransactions = allTransactions.filter((t: Transaction) => {
     const matchesSearch =
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -407,15 +545,106 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
             <Text style={styles.headerSubtitle}>Ringkasan pemasukan & pengeluaran</Text>
           </View>
 
-          {/* Month Selector Pill */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            {/* Month Selector Pill */}
+            <TouchableOpacity
+              style={styles.monthPillBtn}
+              onPress={() => setIsMonthPickerOpen(!isMonthPickerOpen)}
+              activeOpacity={0.8}
+            >
+              <Calendar size={14} color="#0D7A53" />
+              <Text style={styles.monthPillText}>{selectedMonth}</Text>
+              <ChevronDown size={14} color="#6B7280" />
+            </TouchableOpacity>
+
+            {/* Print / Export Report Button */}
+            <TouchableOpacity
+              style={styles.btnExportReport}
+              onPress={handleExportReport}
+              activeOpacity={0.8}
+            >
+              <Printer size={14} color="#0D7A53" />
+              <Text style={styles.btnExportReportText}>Cetak</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 4-Way Category Tab Switcher */}
+        <View style={styles.categorySwitcherContainer}>
           <TouchableOpacity
-            style={styles.monthPillBtn}
-            onPress={() => setIsMonthPickerOpen(!isMonthPickerOpen)}
+            style={[
+              styles.categorySwitcherTab,
+              categoryTab === "semua" && styles.categorySwitcherTabActiveSemua,
+            ]}
+            onPress={() => setCategoryTab("semua")}
             activeOpacity={0.8}
           >
-            <Calendar size={14} color="#0D7A53" />
-            <Text style={styles.monthPillText}>{selectedMonth}</Text>
-            <ChevronDown size={14} color="#6B7280" />
+            <Sparkles size={14} color={categoryTab === "semua" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryTab === "semua" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Semua
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categorySwitcherTab,
+              categoryTab === "kost" && styles.categorySwitcherTabActiveKost,
+            ]}
+            onPress={() => setCategoryTab("kost")}
+            activeOpacity={0.8}
+          >
+            <Building2 size={14} color={categoryTab === "kost" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryTab === "kost" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Kos
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categorySwitcherTab,
+              categoryTab === "hotel" && styles.categorySwitcherTabActiveHotel,
+            ]}
+            onPress={() => setCategoryTab("hotel")}
+            activeOpacity={0.8}
+          >
+            <Hotel size={14} color={categoryTab === "hotel" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryTab === "hotel" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Hotel
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categorySwitcherTab,
+              categoryTab === "wisata" && styles.categorySwitcherTabActiveWisata,
+            ]}
+            onPress={() => setCategoryTab("wisata")}
+            activeOpacity={0.8}
+          >
+            <Ticket size={14} color={categoryTab === "wisata" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryTab === "wisata" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Wisata
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -423,7 +652,15 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
         <View style={styles.labaBersihCard}>
           <View style={styles.labaHeaderRow}>
             <View>
-              <Text style={styles.labaLabel}>Laba Bersih</Text>
+              <Text style={styles.labaLabel}>
+                {categoryTab === "wisata"
+                  ? "Laba Bersih Wisata"
+                  : categoryTab === "hotel"
+                  ? "Laba Bersih Hotel & Villa"
+                  : categoryTab === "kost"
+                  ? "Laba Bersih Kamar Kos"
+                  : "Laba Bersih Total"}
+              </Text>
               <Text style={styles.labaValue}>Rp {labaBersih.toLocaleString("id-ID")}</Text>
 
               <View style={styles.growthBadgeRow}>
@@ -435,7 +672,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
                 </View>
                 <Text style={styles.growthSubtext}>
                   {occupiedRooms.length > 0 || validBookings.length > 0
-                    ? `${occupiedRooms.length} kamar • ${validBookings.length} booking terdata`
+                    ? `${occupiedRooms.length} ${categoryTab === "wisata" ? "tiket/wahana" : "kamar"} • ${validBookings.length} ${categoryTab === "wisata" ? "pengunjung" : "booking"} terdata`
                     : "Belum ada transaksi bulan ini"}
                 </Text>
               </View>
@@ -464,7 +701,11 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
                 </Text>
               </View>
               <Text style={styles.miniPillSub}>
-                {totalPendapatan > 0 ? `${settledBookings.length} lunas & ${validBookings.length} DP` : "Belum ada pemasukan"}
+                {totalPendapatan > 0
+                  ? categoryTab === "wisata"
+                    ? `${settledBookings.length} tiket lunas & ${validBookings.length} pesanan`
+                    : `${settledBookings.length} lunas & ${validBookings.length} DP`
+                  : "Belum ada pemasukan"}
               </Text>
             </View>
           </View>
@@ -491,17 +732,39 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
 
         {/* Section: Rincian Sumber Pendapatan */}
         <View style={[styles.chartCard, { marginBottom: 14 }]}>
-          <Text style={styles.chartCardTitle}>Rincian Sumber Pendapatan</Text>
+          <Text style={styles.chartCardTitle}>
+            {categoryTab === "wisata"
+              ? "Rincian Pendapatan Wisata"
+              : categoryTab === "hotel"
+              ? "Rincian Pendapatan Hotel & Villa"
+              : categoryTab === "kost"
+              ? "Rincian Pendapatan Sewa Kos"
+              : "Rincian Sumber Pendapatan"}
+          </Text>
           <View style={{ marginTop: 12, gap: 10 }}>
             {/* Item 1: DP Booking Customer */}
             <View style={styles.breakdownItemRow}>
               <View style={styles.breakdownItemLeft}>
-                <View style={[styles.statIconBgSmall, { backgroundColor: "#FEF3C7" }]}>
-                  <Receipt size={16} color="#D97706" />
+                <View style={[styles.statIconBgSmall, { backgroundColor: categoryTab === "wisata" ? "#FEF3C7" : categoryTab === "hotel" ? "#E0F2FE" : "#FEF3C7" }]}>
+                  {categoryTab === "wisata" ? (
+                    <Ticket size={16} color="#D97706" />
+                  ) : categoryTab === "hotel" ? (
+                    <Hotel size={16} color="#0284C7" />
+                  ) : (
+                    <Receipt size={16} color="#D97706" />
+                  )}
                 </View>
                 <View style={styles.breakdownTextCol}>
-                  <Text style={styles.breakdownItemTitle} numberOfLines={1}>Penerimaan DP (20%)</Text>
-                  <Text style={styles.breakdownItemSub}>{validBookings.length} booking via transfer</Text>
+                  <Text style={styles.breakdownItemTitle} numberOfLines={1}>
+                    {categoryTab === "wisata"
+                      ? "Pemesanan Tiket Wisata"
+                      : categoryTab === "hotel"
+                      ? "Penerimaan DP Reservasi"
+                      : "Penerimaan DP Sewa"}
+                  </Text>
+                  <Text style={styles.breakdownItemSub}>
+                    {validBookings.length} {categoryTab === "wisata" ? "pemesanan tiket" : "booking terdata"}
+                  </Text>
                 </View>
               </View>
               <Text style={[styles.breakdownItemAmount, { color: totalDpCustomer > 0 ? "#D97706" : "#111827" }]} numberOfLines={1}>
@@ -516,8 +779,16 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
                   <Building2 size={16} color="#0D7A53" />
                 </View>
                 <View style={styles.breakdownTextCol}>
-                  <Text style={styles.breakdownItemTitle} numberOfLines={1}>Pelunasan Sewa (80%)</Text>
-                  <Text style={styles.breakdownItemSub}>{settledBookings.length} check-in lunas</Text>
+                  <Text style={styles.breakdownItemTitle} numberOfLines={1}>
+                    {categoryTab === "wisata"
+                      ? "Pelunasan Masuk / Loket"
+                      : categoryTab === "hotel"
+                      ? "Pelunasan Check-in Tamu"
+                      : "Pelunasan Sewa (80%)"}
+                  </Text>
+                  <Text style={styles.breakdownItemSub}>
+                    {settledBookings.length} {categoryTab === "wisata" ? "tiket lunas" : "check-in lunas"}
+                  </Text>
                 </View>
               </View>
               <Text style={[styles.breakdownItemAmount, { color: totalPelunasanCustomer > 0 ? "#0D7A53" : "#111827" }]} numberOfLines={1}>
@@ -2222,6 +2493,60 @@ const styles = StyleSheet.create({
   ubahPillText: {
     fontSize: 11.5,
     fontWeight: "700",
+    color: "#0D7A53",
+  },
+  categorySwitcherContainer: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  categorySwitcherTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 9,
+    borderRadius: 10,
+    gap: 5,
+  },
+  categorySwitcherTabActiveSemua: {
+    backgroundColor: "#1E293B",
+  },
+  categorySwitcherTabActiveKost: {
+    backgroundColor: "#0D7A53",
+  },
+  categorySwitcherTabActiveHotel: {
+    backgroundColor: "#0284C7",
+  },
+  categorySwitcherTabActiveWisata: {
+    backgroundColor: "#D97706",
+  },
+  categorySwitcherText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  categorySwitcherTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  btnExportReport: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(13, 122, 83, 0.2)",
+  },
+  btnExportReportText: {
+    fontSize: 12,
+    fontWeight: "800",
     color: "#0D7A53",
   },
 });

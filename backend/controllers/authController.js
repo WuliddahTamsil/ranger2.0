@@ -1178,6 +1178,39 @@ const adminVerifyDocument = async (req, res) => {
   }
 };
 
+// Delete Account (Apple App Store Guideline 5.1.1(v) Compliant)
+const deleteAccount = async (req, res) => {
+  try {
+    const userId = req.authUser?._id || req.user?.id || req.body?.userId;
+    if (!userId && !req.authUser?.email && !req.body?.email) {
+      return res.status(401).json({ success: false, message: "Otentikasi diperlukan untuk menghapus akun." });
+    }
+
+    let user = null;
+    if (userId && mongoose.Types.ObjectId.isValid(String(userId))) {
+      user = await User.findById(userId);
+    }
+    if (!user && req.authUser?.email) {
+      user = await User.findOne({ email: req.authUser.email.toLowerCase() });
+    }
+    if (!user && req.body?.email) {
+      user = await User.findOne({ email: String(req.body.email).toLowerCase() });
+    }
+
+    if (user) {
+      await User.findByIdAndDelete(user._id);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Akun dan data pribadi Anda telah berhasil dihapus secara permanen.",
+    });
+  } catch (error) {
+    console.error("deleteAccount error:", error);
+    return res.status(500).json({ success: false, message: "Gagal memproses penghapusan akun.", error: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -1190,5 +1223,6 @@ module.exports = {
   getAllPlatformTransactions,
   getDocumentRequirements,
   adminVerifyDocument,
+  deleteAccount,
 };
 

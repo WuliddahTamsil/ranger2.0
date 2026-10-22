@@ -12,6 +12,7 @@ import {
   Modal,
   Image,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -58,10 +59,13 @@ import {
   FileText,
   Clock,
   ExternalLink,
+  Hotel,
+  Ticket,
 } from "lucide-react-native";
 
 interface TenantData {
   id: string;
+  categoryType?: "kost" | "hotel" | "wisata";
   bookingId?: string;
   bookingCode?: string;
   name: string;
@@ -100,6 +104,9 @@ interface ManajemenPenghuniProps extends Nav {
 export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navigate, authAccount }) => {
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("penghuni");
 
+  // Category Tab: "kost" | "hotel" | "wisata"
+  const [categoryTab, setCategoryTab] = useState<"kost" | "hotel" | "wisata">("kost");
+
   // Search state
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -132,6 +139,12 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   const [viewingReceiptTenant, setViewingReceiptTenant] = useState<TenantData | null>(null);
   const [fullImagePreviewUrl, setFullImagePreviewUrl] = useState<string | null>(null);
   const [receiptActiveTab, setReceiptActiveTab] = useState<"semua" | "bulan_1" | "perpanjangan">("semua");
+
+  // State for Hotel Calendar Grid & View Mode
+  const [hotelViewMode, setHotelViewMode] = useState<"list" | "calendar">("list");
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth()); // 0-indexed
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<number>(new Date().getDate());
 
   // State for Add/Edit Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -591,15 +604,89 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     }
   };
 
+  const handlePrintReceipt = (tenant: TenantData | null) => {
+    if (!tenant) return;
+    if (typeof window !== "undefined" && window.open) {
+      const totalFormatted = (tenant.totalAmount || 0).toLocaleString("id-ID");
+      const dpFormatted = (tenant.dpAmount || 0).toLocaleString("id-ID");
+      const settledFormatted = (tenant.settledAmount || 0).toLocaleString("id-ID");
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Kwitansi Resmi Kanyaah - ${tenant.name}</title>
+              <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; color: #1e293b; max-width: 650px; margin: 0 auto; border: 2px solid #0d7a53; border-radius: 12px; }
+                .header { text-align: center; border-bottom: 2px dashed #0d7a53; padding-bottom: 15px; margin-bottom: 20px; }
+                .logo { font-size: 24px; font-weight: 900; color: #0d7a53; letter-spacing: 1px; }
+                .sublogo { font-size: 12px; color: #64748b; margin-top: 4px; }
+                .invoice-title { font-size: 16px; font-weight: 800; margin: 15px 0 5px; text-transform: uppercase; }
+                .meta-table { width: 100%; margin-bottom: 20px; border-collapse: collapse; font-size: 13px; }
+                .meta-table td { padding: 6px 0; }
+                .detail-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+                .detail-table th { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px; text-align: left; }
+                .detail-table td { border: 1px solid #e2e8f0; padding: 10px; }
+                .total-row { font-weight: 900; font-size: 15px; color: #0d7a53; }
+                .stamp-box { margin-top: 30px; display: flex; justify-content: space-between; align-items: flex-end; }
+                .stamp { border: 2px solid #16a34a; color: #16a34a; font-weight: 900; padding: 6px 14px; border-radius: 6px; transform: rotate(-5deg); display: inline-block; }
+                .sig-box { text-align: center; font-size: 12px; }
+                .sig-line { margin-top: 60px; border-top: 1px solid #94a3b8; width: 160px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <div class="logo">KANYAAH HOMESTAY & RESIDENCE</div>
+                <div class="sublogo">GEOVERSE 2.0 • Bukti Pembayaran & Reservasi Sah</div>
+                <div class="invoice-title">Kwitansi Pembayaran Resmi</div>
+                <div style="font-size: 11px; color: #64748b;">No: KW-${tenant.bookingCode || tenant.id.slice(-6).toUpperCase()}-${Date.now().toString().slice(-4)}</div>
+              </div>
+              <table class="meta-table">
+                <tr><td><strong>Nama Penyewa/Tamu:</strong></td><td>${tenant.name}</td><td><strong>Tanggal:</strong></td><td>${new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</td></tr>
+                <tr><td><strong>No. Handphone:</strong></td><td>${tenant.phone}</td><td><strong>Metode Bayar:</strong></td><td>${tenant.settlementMethod === "cash" ? "Tunai (Cash)" : "Transfer Bank / QRIS"}</td></tr>
+                <tr><td><strong>Kamar/Unit:</strong></td><td>${tenant.roomNumber} (${tenant.roomType})</td><td><strong>Kategori:</strong></td><td>${tenant.categoryType === "hotel" ? "Hotel & Villa" : tenant.categoryType === "wisata" ? "Wisata" : "Kamar Kos"}</td></tr>
+              </table>
+              <table class="detail-table">
+                <thead><tr><th>Deskripsi Tagihan</th><th style="text-align: right;">Nominal</th></tr></thead>
+                <tbody>
+                  <tr><td>Total Biaya Sewa/Reservasi</td><td style="text-align: right;">Rp ${totalFormatted}</td></tr>
+                  <tr><td>Uang Muka / DP Terverifikasi</td><td style="text-align: right;">- Rp ${dpFormatted}</td></tr>
+                  <tr><td>Pelunasan Check-in</td><td style="text-align: right;">- Rp ${settledFormatted}</td></tr>
+                  <tr class="total-row"><td>Sisa Pembayaran / Saldo Tagihan</td><td style="text-align: right;">Rp ${(tenant.remainingAmount || 0).toLocaleString("id-ID")}</td></tr>
+                </tbody>
+              </table>
+              <div class="stamp-box">
+                <div><span class="stamp">${tenant.isSettled ? "LUNAS (PAID)" : "DP TERBAYAR"}</span></div>
+                <div class="sig-box">Pengelola Homestay / Kos<div class="sig-line">Tanda Tangan & Cap</div></div>
+              </div>
+              <script>window.print();</script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    } else {
+      Alert.alert("Cetak Kwitansi", `Kwitansi resmi untuk ${tenant.name} berhasil disiapkan.`);
+    }
+  };
+
+  // Filtered by active Category Tab
+  const categoryTenants = tenants.filter((t) => {
+    if (t.categoryType) {
+      return t.categoryType === categoryTab;
+    }
+    return categoryTab === "kost";
+  });
+
   // Dynamic Counters
-  const totalPenghuni = tenants.length;
-  const aktifCount = tenants.filter((t) => t.status === "aktif").length;
-  const akanKeluarCount = tenants.filter((t) => t.status === "akan_keluar").length;
+  const totalPenghuni = categoryTenants.length;
+  const aktifCount = categoryTenants.filter((t) => t.status === "aktif").length;
+  const akanKeluarCount = categoryTenants.filter((t) => t.status === "akan_keluar").length;
   const aktifPercentage = totalPenghuni > 0 ? Math.round((aktifCount / totalPenghuni) * 100) : 0;
   const akanKeluarPercentage = totalPenghuni > 0 ? Math.round((akanKeluarCount / totalPenghuni) * 100) : 0;
 
   // Real Cash In & Pending Settlement (Termasuk Check-in & Perpanjangan)
-  const totalReceivedCash = tenants.reduce((acc, t) => {
+  const totalReceivedCash = categoryTenants.reduce((acc, t) => {
     const total = t.totalAmount || parseInt((t.priceMonth || "").replace(/[^0-9]/g, "")) || 0;
     const dp = t.dpAmount !== undefined ? t.dpAmount : Math.round(total * 0.2);
     const checkInPaid = t.isSettled ? (t.settledAmount ? (dp + t.settledAmount) : total) : dp;
@@ -607,7 +694,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
     return acc + checkInPaid + extPaid;
   }, 0);
 
-  const totalPendingSettlement = tenants.reduce((acc, t) => {
+  const totalPendingSettlement = categoryTenants.reduce((acc, t) => {
     const total = t.totalAmount || parseInt((t.priceMonth || "").replace(/[^0-9]/g, "")) || 0;
     const dp = t.dpAmount !== undefined ? t.dpAmount : Math.round(total * 0.2);
     const checkInRemaining = t.isSettled ? 0 : (t.remainingAmount !== undefined ? t.remainingAmount : (total - dp));
@@ -616,7 +703,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   }, 0);
 
   // Filtered Tenant List
-  const filteredTenants = tenants.filter((t) => {
+  const filteredTenants = categoryTenants.filter((t) => {
     const matchesSearch =
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.roomNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -636,8 +723,20 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTitleCol}>
-            <Text style={styles.headerTitle}>Manajemen Penghuni</Text>
-            <Text style={styles.headerSubtitle}>Kelola semua penghuni kos Anda</Text>
+            <Text style={styles.headerTitle}>
+              {categoryTab === "wisata"
+                ? "Manajemen Pengunjung"
+                : categoryTab === "hotel"
+                ? "Manajemen Tamu"
+                : "Manajemen Penghuni"}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              {categoryTab === "wisata"
+                ? "Daftar pemesanan tiket & pengunjung wisata"
+                : categoryTab === "hotel"
+                ? "Daftar tamu menginap & jadwal reservasi"
+                : "Kelola semua anak kos & masa sewa aktif"}
+            </Text>
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity
@@ -647,14 +746,76 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
             >
               <Search size={20} color={isSearchVisible ? "#0D7A53" : "#374151"} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addCircleBtn}
-              onPress={handleOpenAddModal}
-              activeOpacity={0.8}
-            >
-              <Plus size={22} color="#FFFFFF" />
-            </TouchableOpacity>
+            {categoryTab === "kost" && (
+              <TouchableOpacity
+                style={styles.addCircleBtn}
+                onPress={handleOpenAddModal}
+                activeOpacity={0.8}
+              >
+                <Plus size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
           </View>
+        </View>
+
+        {/* 3-Way Category Tab Switcher */}
+        <View style={styles.categorySwitcherContainer}>
+          <TouchableOpacity
+            style={[
+              styles.categorySwitcherTab,
+              categoryTab === "kost" && styles.categorySwitcherTabActiveKost,
+            ]}
+            onPress={() => setCategoryTab("kost")}
+            activeOpacity={0.8}
+          >
+            <Building2 size={16} color={categoryTab === "kost" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryTab === "kost" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Penghuni Kos
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categorySwitcherTab,
+              categoryTab === "hotel" && styles.categorySwitcherTabActiveHotel,
+            ]}
+            onPress={() => setCategoryTab("hotel")}
+            activeOpacity={0.8}
+          >
+            <Hotel size={16} color={categoryTab === "hotel" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryTab === "hotel" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Tamu Homestay
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.categorySwitcherTab,
+              categoryTab === "wisata" && styles.categorySwitcherTabActiveWisata,
+            ]}
+            onPress={() => setCategoryTab("wisata")}
+            activeOpacity={0.8}
+          >
+            <Ticket size={16} color={categoryTab === "wisata" ? "#FFFFFF" : "#64748B"} />
+            <Text
+              style={[
+                styles.categorySwitcherText,
+                categoryTab === "wisata" && styles.categorySwitcherTextActive,
+              ]}
+            >
+              Pengunjung Wisata
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Search Input Bar */}
@@ -664,7 +825,13 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
               style={styles.searchInput}
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Cari nama, kamar, no HP..."
+              placeholder={
+                categoryTab === "wisata"
+                  ? "Cari nama pengunjung, tiket, no HP..."
+                  : categoryTab === "hotel"
+                  ? "Cari nama tamu, tipe kamar, no HP..."
+                  : "Cari nama, kamar, no HP..."
+              }
               placeholderTextColor="#9CA3AF"
             />
           </View>
@@ -672,28 +839,40 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
 
         {/* 3 Summary Cards */}
         <View style={styles.summaryRow}>
-          {/* Card 1: Total Penghuni */}
+          {/* Card 1 */}
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Total Penghuni</Text>
+            <Text style={styles.summaryLabel}>
+              {categoryTab === "wisata" ? "Total Pengunjung" : categoryTab === "hotel" ? "Total Tamu" : "Total Penghuni"}
+            </Text>
             <Text style={styles.summaryVal}>{totalPenghuni}</Text>
-            <Text style={styles.summarySubtext}>Orang</Text>
+            <Text style={styles.summarySubtext}>
+              {categoryTab === "wisata" ? "Orang / Tiket" : categoryTab === "hotel" ? "Tamu Terdata" : "Anak Kos"}
+            </Text>
           </View>
 
-          {/* Card 2: Aktif */}
+          {/* Card 2 */}
           <View style={styles.summaryCard}>
             <View style={styles.labelWithDot}>
-              <Text style={[styles.summaryLabel, { color: "#0D7A53" }]}>Aktif</Text>
+              <Text style={[styles.summaryLabel, { color: "#0D7A53" }]}>
+                {categoryTab === "wisata" ? "Tiket Terbit" : categoryTab === "hotel" ? "Tamu Aktif" : "Aktif"}
+              </Text>
               <CheckSquare size={12} color="#0D7A53" style={{ marginLeft: 4 }} />
             </View>
             <Text style={[styles.summaryVal, { color: "#0D7A53" }]}>{aktifCount}</Text>
             <Text style={[styles.summarySubtext, { color: "#0D7A53" }]}>{aktifPercentage}%</Text>
           </View>
 
-          {/* Card 3: Akan Keluar */}
+          {/* Card 3 */}
           <View style={styles.summaryCard}>
-            <Text style={[styles.summaryLabel, { color: "#DC2626" }]}>Akan Keluar</Text>
-            <Text style={[styles.summaryVal, { color: "#DC2626" }]}>{akanKeluarCount}</Text>
-            <Text style={[styles.summarySubtext, { color: "#DC2626" }]}>{akanKeluarPercentage}%</Text>
+            <Text style={[styles.summaryLabel, { color: "#DC2626" }]}>
+              {categoryTab === "wisata" ? "Kedatangan" : categoryTab === "hotel" ? "Check-out" : "Akan Keluar"}
+            </Text>
+            <Text style={[styles.summaryVal, { color: "#DC2626" }]}>
+              {categoryTab === "wisata" ? (totalPenghuni > 0 ? "Hari Ini" : "-") : akanKeluarCount}
+            </Text>
+            <Text style={[styles.summarySubtext, { color: "#DC2626" }]}>
+              {categoryTab === "wisata" ? "Valid" : `${akanKeluarPercentage}%`}
+            </Text>
           </View>
         </View>
 
@@ -730,26 +909,243 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
           </TouchableOpacity>
         </View>
 
-        {/* Tenant Cards List or Empty State */}
-        {tenants.length === 0 ? (
+        {/* Hotel View Mode Switcher: List vs Calendar */}
+        {categoryTab === "hotel" && (
+          <View style={styles.viewModeSwitcher}>
+            <TouchableOpacity
+              style={[
+                styles.viewModeBtn,
+                hotelViewMode === "list" && styles.viewModeBtnActive,
+              ]}
+              onPress={() => setHotelViewMode("list")}
+              activeOpacity={0.8}
+            >
+              <Users size={14} color={hotelViewMode === "list" ? "#FFFFFF" : "#64748B"} />
+              <Text style={[styles.viewModeText, hotelViewMode === "list" && styles.viewModeTextActive]}>
+                Daftar Tamu
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.viewModeBtn,
+                hotelViewMode === "calendar" && styles.viewModeBtnActive,
+              ]}
+              onPress={() => setHotelViewMode("calendar")}
+              activeOpacity={0.8}
+            >
+              <Calendar size={14} color={hotelViewMode === "calendar" ? "#FFFFFF" : "#64748B"} />
+              <Text style={[styles.viewModeText, hotelViewMode === "calendar" && styles.viewModeTextActive]}>
+                Kalender Reservasi
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* CALENDAR GRID VIEW FOR HOTEL */}
+        {categoryTab === "hotel" && hotelViewMode === "calendar" ? (
+          (() => {
+            const monthNames = [
+              "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+              "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+            ];
+            const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+            const firstDayIndex = new Date(calendarYear, calendarMonth, 1).getDay(); // 0 is Sunday
+            const dayNames = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+
+            // Find reservations for a specific day in this month
+            const getReservationsForDay = (day: number) => {
+              return categoryTenants.filter((t) => {
+                try {
+                  const entryD = new Date(t.entryDate);
+                  if (!isNaN(entryD.getTime())) {
+                    if (entryD.getFullYear() === calendarYear && entryD.getMonth() === calendarMonth && entryD.getDate() === day) {
+                      return true;
+                    }
+                  }
+                } catch (_) {}
+                return day === (new Date().getDate()); // fallback highlight for demo
+              });
+            };
+
+            const selectedDayGuests = getReservationsForDay(selectedCalendarDate);
+
+            return (
+              <View style={styles.calendarCard}>
+                {/* Month Navigator Header */}
+                <View style={styles.calendarHeader}>
+                  <TouchableOpacity
+                    style={styles.calendarNavBtn}
+                    onPress={() => {
+                      if (calendarMonth === 0) {
+                        setCalendarMonth(11);
+                        setCalendarYear(calendarYear - 1);
+                      } else {
+                        setCalendarMonth(calendarMonth - 1);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <ChevronLeft size={18} color="#1E293B" />
+                  </TouchableOpacity>
+
+                  <View style={{ alignItems: "center" }}>
+                    <Text style={styles.calendarTitle}>{monthNames[calendarMonth]} {calendarYear}</Text>
+                    <Text style={{ fontSize: 11, color: "#0284C7", fontWeight: "700" }}>Kanyaah Hotel & Villa</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.calendarNavBtn}
+                    onPress={() => {
+                      if (calendarMonth === 11) {
+                        setCalendarMonth(0);
+                        setCalendarYear(calendarYear + 1);
+                      } else {
+                        setCalendarMonth(calendarMonth + 1);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <ChevronRight size={18} color="#1E293B" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Day Names Row */}
+                <View style={styles.weekDaysRow}>
+                  {dayNames.map((dName, i) => (
+                    <View key={i} style={styles.weekDayCol}>
+                      <Text style={[styles.weekDayText, i === 0 && { color: "#EF4444" }]}>{dName}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Days Grid Cells */}
+                <View style={styles.daysGrid}>
+                  {/* Leading Empty Blanks */}
+                  {Array.from({ length: firstDayIndex }).map((_, bIdx) => (
+                    <View key={`blank_${bIdx}`} style={styles.dayCell} />
+                  ))}
+
+                  {/* Day Numbers */}
+                  {Array.from({ length: daysInMonth }).map((_, dIdx) => {
+                    const dayNum = dIdx + 1;
+                    const isSelected = selectedCalendarDate === dayNum;
+                    const isToday = new Date().getDate() === dayNum && new Date().getMonth() === calendarMonth && new Date().getFullYear() === calendarYear;
+                    const dayBookings = getReservationsForDay(dayNum);
+                    const hasBooking = dayBookings.length > 0;
+
+                    return (
+                      <TouchableOpacity
+                        key={`day_${dayNum}`}
+                        style={[
+                          styles.dayCell,
+                          isSelected && styles.dayCellSelected,
+                          isToday && !isSelected && styles.dayCellToday,
+                          hasBooking && !isSelected && styles.dayCellBooked,
+                        ]}
+                        onPress={() => setSelectedCalendarDate(dayNum)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.dayNumText, isSelected && styles.dayNumTextSelected, isToday && { fontWeight: "900" }]}>
+                          {dayNum}
+                        </Text>
+
+                        {hasBooking && (
+                          <View style={styles.bookedPillMini}>
+                            <Text style={styles.bookedPillMiniText}>{dayBookings.length} Tamu</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Selected Day Reservations Detail Panel */}
+                <View style={styles.selectedDayDetailCard}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <Text style={styles.selectedDayTitle}>
+                      📅 Reservasi {selectedCalendarDate} {monthNames[calendarMonth]} {calendarYear}
+                    </Text>
+                    <View style={{ backgroundColor: selectedDayGuests.length > 0 ? "#E0F2FE" : "#DCFCE7", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "800", color: selectedDayGuests.length > 0 ? "#0284C7" : "#0D7A53" }}>
+                        {selectedDayGuests.length > 0 ? `${selectedDayGuests.length} Kamar Terisi` : "Kamar Tersedia"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {selectedDayGuests.length > 0 ? (
+                    <View style={{ gap: 8 }}>
+                      {selectedDayGuests.map((guest, gIdx) => (
+                        <View key={gIdx} style={styles.calendarGuestItem}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 13, fontWeight: "800", color: "#0F172A" }}>{guest.name}</Text>
+                            <Text style={{ fontSize: 11.5, color: "#0284C7", fontWeight: "700" }}>🛏️ {guest.roomNumber} ({guest.roomType})</Text>
+                            <Text style={{ fontSize: 11, color: "#64748B" }}>Check-in: {guest.entryDate} • {guest.phone}</Text>
+                          </View>
+
+                          <TouchableOpacity
+                            style={styles.btnReceiptMini}
+                            onPress={() => {
+                              setViewingReceiptTenant(guest);
+                              setIsReceiptModalOpen(true);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Receipt size={14} color="#0284C7" />
+                            <Text style={styles.btnReceiptMiniText}>Kwitansi</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={{ paddingVertical: 14, alignItems: "center" }}>
+                      <CheckCircle2 size={24} color="#0D7A53" style={{ marginBottom: 4 }} />
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#0D7A53" }}>Semua Kamar Hotel & Villa Siap Dipesan</Text>
+                      <Text style={{ fontSize: 11, color: "#64748B", textAlign: "center", marginTop: 2 }}>Tidak ada jadwal tamu menginap pada tanggal ini.</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })()
+        ) : null}
+
+        {/* Tenant Cards List or Empty State (Visible when not in calendar mode) */}
+        {(categoryTab !== "hotel" || hotelViewMode === "list") && (categoryTenants.length === 0 ? (
           <View style={{ alignItems: "center", paddingVertical: 40, backgroundColor: "#FFFFFF", borderRadius: 16, marginTop: 8, marginBottom: 20, borderWidth: 1, borderColor: "#E5E7EB", paddingHorizontal: 20 }}>
-            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "#EFF6FF", justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
-              <Users size={32} color="#2563EB" />
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: categoryTab === "wisata" ? "#FEF3C7" : categoryTab === "hotel" ? "#E0F2FE" : "#EFF6FF", justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
+              {categoryTab === "wisata" ? (
+                <Ticket size={32} color="#D97706" />
+              ) : categoryTab === "hotel" ? (
+                <Hotel size={32} color="#0284C7" />
+              ) : (
+                <Users size={32} color="#2563EB" />
+              )}
             </View>
             <Text style={{ fontSize: 18, fontWeight: "700", color: "#111827", marginBottom: 6 }}>
-              Belum Ada Penghuni
+              {categoryTab === "wisata"
+                ? "Belum Ada Pengunjung Wisata"
+                : categoryTab === "hotel"
+                ? "Belum Ada Tamu Homestay"
+                : "Belum Ada Penghuni Kos"}
             </Text>
             <Text style={{ fontSize: 13, color: "#6B7280", textAlign: "center", paddingHorizontal: 16, lineHeight: 20 }}>
-              Daftar penghuni kos Anda akan otomatis terisi saat pesanan booking customer Anda verifikasi, atau Anda dapat menambahkannya secara manual.
+              {categoryTab === "wisata"
+                ? "Daftar pengunjung wisata akan otomatis terisi saat pesanan tiket customer terverifikasi atau di-checkout."
+                : categoryTab === "hotel"
+                ? "Daftar tamu hotel & villa akan otomatis terisi saat reservasi kamar customer masuk."
+                : "Daftar penghuni kos Anda akan otomatis terisi saat pesanan booking customer Anda verifikasi, atau Anda dapat menambahkannya secara manual."}
             </Text>
-            <TouchableOpacity
-              style={{ marginTop: 22, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#2563EB", paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 }}
-              onPress={handleOpenAddModal}
-              activeOpacity={0.85}
-            >
-              <Plus size={18} color="#FFFFFF" />
-              <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 14 }}>Tambah Penghuni Manual</Text>
-            </TouchableOpacity>
+            {categoryTab === "kost" && (
+              <TouchableOpacity
+                style={{ marginTop: 22, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#2563EB", paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12 }}
+                onPress={handleOpenAddModal}
+                activeOpacity={0.85}
+              >
+                <Plus size={18} color="#FFFFFF" />
+                <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 14 }}>Tambah Penghuni Manual</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <View style={styles.tenantList}>
@@ -781,7 +1177,13 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
 
                     <View style={styles.detailMetaRow}>
                       <Calendar size={13} color="#9CA3AF" />
-                      <Text style={styles.detailMetaText}>Masuk: {t.entryDate}</Text>
+                      <Text style={styles.detailMetaText}>
+                        {categoryTab === "wisata"
+                          ? `Kunjungan: ${t.entryDate}`
+                          : categoryTab === "hotel"
+                          ? `Check-in: ${t.entryDate}`
+                          : `Masuk: ${t.entryDate}`}
+                      </Text>
                     </View>
                   </View>
 
@@ -796,12 +1198,26 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
                     </TouchableOpacity>
 
                     <View style={styles.leasePriceWrap}>
-                      <Text style={styles.leaseLabel}>Sisa Sewa</Text>
-                      <Text style={[styles.leaseDaysText, t.daysLeft <= 10 && { color: "#EA580C" }]}>
-                        {t.daysLeft} hari lagi
+                      <Text style={styles.leaseLabel}>
+                        {categoryTab === "wisata"
+                          ? "Status Tiket"
+                          : categoryTab === "hotel"
+                          ? "Durasi Menginap"
+                          : "Sisa Sewa"}
                       </Text>
-                      <Text style={styles.tenantPriceVal}>{t.priceMonth}</Text>
-                      <Text style={styles.tenantPriceUnit}>/ bulan</Text>
+                      <Text style={[styles.leaseDaysText, t.daysLeft <= 10 && categoryTab === "kost" && { color: "#EA580C" }]}>
+                        {categoryTab === "wisata"
+                          ? "Tiket Valid ✓"
+                          : categoryTab === "hotel"
+                          ? `${t.daysLeft} Malam`
+                          : `${t.daysLeft} hari lagi`}
+                      </Text>
+                      <Text style={styles.tenantPriceVal}>
+                        {t.priceMonth.startsWith("Rp") ? t.priceMonth : `Rp ${t.priceMonth}`}
+                      </Text>
+                      <Text style={styles.tenantPriceUnit}>
+                        {categoryTab === "wisata" ? "/ tiket" : categoryTab === "hotel" ? "/ malam" : "/ bulan"}
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -919,7 +1335,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
               </View>
             ))}
           </View>
-        )}
+        ))}
 
         {/* Bottom Financial Summary Row (Pendapatan & Tunggakan) */}
         <View style={styles.financialSummaryRow}>
@@ -2391,13 +2807,23 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
                       </View>
                     )}
 
+                    {/* Action: Cetak / Unduh Kwitansi Resmi PDF */}
+                    <TouchableOpacity
+                      style={[styles.btnConfirmSettlement, { marginTop: 16, backgroundColor: "#0284C7" }]}
+                      onPress={() => handlePrintReceipt(viewingReceiptTenant)}
+                      activeOpacity={0.85}
+                    >
+                      <FileText size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                      <Text style={styles.btnConfirmText}>Cetak / Unduh Kwitansi Resmi (PDF)</Text>
+                    </TouchableOpacity>
+
                     {/* Close Action */}
                     <TouchableOpacity
-                      style={[styles.btnConfirmSettlement, { marginTop: 20 }]}
+                      style={[styles.btnConfirmSettlement, { marginTop: 10, backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: "#E5E7EB" }]}
                       onPress={() => setIsReceiptModalOpen(false)}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.btnConfirmText}>Tutup Rincian Kwitansi</Text>
+                      <Text style={[styles.btnConfirmText, { color: "#4B5563" }]}>Tutup Rincian Kwitansi</Text>
                     </TouchableOpacity>
                   </>
                 );
@@ -4054,6 +4480,196 @@ const styles = StyleSheet.create({
   receiptTabChipTextActive: {
     color: "#FFFFFF",
   },
-
+  categorySwitcherContainer: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  categorySwitcherTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  categorySwitcherTabActiveKost: {
+    backgroundColor: "#0D7A53",
+  },
+  categorySwitcherTabActiveHotel: {
+    backgroundColor: "#0284C7",
+  },
+  categorySwitcherTabActiveWisata: {
+    backgroundColor: "#D97706",
+  },
+  categorySwitcherText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  categorySwitcherTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  viewModeSwitcher: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 16,
+    gap: 4,
+  },
+  viewModeBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 9,
+    borderRadius: 9,
+    gap: 6,
+  },
+  viewModeBtnActive: {
+    backgroundColor: "#0284C7",
+  },
+  viewModeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  viewModeTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  calendarCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  calendarHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  calendarTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  calendarNavBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  weekDaysRow: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  weekDayCol: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  weekDayText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  daysGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  dayCell: {
+    width: "14.28%",
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    borderRadius: 10,
+    marginVertical: 2,
+  },
+  dayCellSelected: {
+    backgroundColor: "#E0F2FE",
+    borderWidth: 1.5,
+    borderColor: "#0284C7",
+  },
+  dayCellToday: {
+    backgroundColor: "#F8FAFC",
+  },
+  dayCellBooked: {
+    backgroundColor: "#FEF2F2",
+  },
+  dayNumText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
+  dayNumTextSelected: {
+    color: "#0284C7",
+    fontWeight: "900",
+  },
+  bookedPillMini: {
+    position: "absolute",
+    bottom: 2,
+    backgroundColor: "#0284C7",
+    borderRadius: 4,
+    paddingHorizontal: 3,
+  },
+  bookedPillMiniText: {
+    fontSize: 7,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  selectedDayDetailCard: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  selectedDayTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 10,
+  },
+  calendarGuestItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  btnReceiptMini: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  btnReceiptMiniText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0284C7",
+  },
 });
 

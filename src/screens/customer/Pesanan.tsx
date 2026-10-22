@@ -46,9 +46,12 @@ import {
   ArrowUpDown,
   Check,
   Package,
+  Ticket,
+  Hotel,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
+import { getRidePassengerOtp } from "../../utils/rideOtp";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
 import { LiveOrderTrackingMap } from "../../components/LiveOrderTrackingMap";
@@ -365,6 +368,10 @@ export const Pesanan: React.FC<PesananProps> = ({
       return { icon: Coffee, fg: "#EA580C", bg: "#FFF7ED", border: "#FED7AA" };
     } else if (normalized.includes("laund")) {
       return { icon: Wind, fg: "#0284C7", bg: "#F0F9FF", border: "#BAE6FD" };
+    } else if (normalized.includes("wisata") || normalized.includes("ticket") || normalized.includes("tiket")) {
+      return { icon: Ticket, fg: "#D97706", bg: "#FFFBEB", border: "#FDE68A" };
+    } else if (normalized.includes("hotel") || normalized.includes("homestay") || normalized.includes("villa") || normalized.includes("stay")) {
+      return { icon: Hotel, fg: "#0284C7", bg: "#F0F9FF", border: "#BAE6FD" };
     } else if (normalized.includes("kos")) {
       return { icon: Building, fg: "#9333EA", bg: "#FAF5FF", border: "#E9D5FF" };
     } else if (normalized.includes("ride")) {
@@ -835,6 +842,14 @@ export const Pesanan: React.FC<PesananProps> = ({
                     </View>
                   </View>
                 ) : null}
+
+                {item.type === "Kanyaah Ride" && !["Selesai", "Batal"].includes(item.status) && (
+                  <View style={styles.cardRidePinRow}>
+                    <ShieldCheck size={13} color="#15803D" />
+                    <Text style={styles.cardRidePinLabel}>PIN Armada Penumpang: </Text>
+                    <Text style={styles.cardRidePinValue}>{getRidePassengerOtp(item)}</Text>
+                  </View>
+                )}
               </View>
 
               {/* Complaint Banner for Marketplace */}
@@ -1458,6 +1473,22 @@ export const Pesanan: React.FC<PesananProps> = ({
                     <Bike size={14} color="#FFFFFF" />
                     <Text style={styles.driverQuickChatBtnText}>Chat</Text>
                   </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Kanyaah Ride Security PIN / OTP */}
+              {selectedOrder.type === "Kanyaah Ride" && !["Selesai", "Batal"].includes(selectedOrder.status) && (
+                <View style={styles.ridePinCard}>
+                  <View style={styles.ridePinHeader}>
+                    <ShieldCheck size={18} color="#15803D" />
+                    <Text style={styles.ridePinTitle}>PIN Konfirmasi Penumpang: </Text>
+                    <View style={styles.ridePinBadge}>
+                      <Text style={styles.ridePinText}>{getRidePassengerOtp(selectedOrder)}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.ridePinHint}>
+                    Berikan 4 angka PIN ini ke Driver saat penjemputan untuk memulai perjalanan dengan aman.
+                  </Text>
                 </View>
               )}
 
@@ -3351,5 +3382,63 @@ const styles = StyleSheet.create({
   sortOptionTextActive: {
     fontWeight: "700",
     color: "#0D7A53",
+  },
+  cardRidePinRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: "flex-start",
+    gap: 4,
+  },
+  cardRidePinLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#166534",
+  },
+  cardRidePinValue: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#15803D",
+    letterSpacing: 1,
+  },
+  ridePinCard: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  ridePinHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  ridePinTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#166534",
+  },
+  ridePinBadge: {
+    backgroundColor: "#15803D",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  ridePinText: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 1.5,
+  },
+  ridePinHint: {
+    fontSize: 11,
+    color: "#166534",
+    marginTop: 6,
+    lineHeight: 16,
   },
 });

@@ -8,6 +8,8 @@ import {
   StyleSheet,
   Modal,
   Alert,
+  ActivityIndicator,
+  Linking,
 } from "react-native";
 import {
   User,
@@ -20,10 +22,13 @@ import {
   LogOut,
   ChevronRight,
   X,
+  Trash2,
+  ExternalLink,
 } from "lucide-react-native";
 import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
 import { AuthAccount } from "../auth/authTypes";
+import { deleteUserAccount, API_BASE_URL } from "../../services/api";
 
 interface ProfileProps {
   customerName: string;
@@ -65,6 +70,8 @@ export const Profile: React.FC<ProfileProps> = ({
   const [infoTitle, setInfoTitle] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const triggerInfoSheet = (title: string, msg: string) => {
     setInfoTitle(title);
@@ -75,6 +82,47 @@ export const Profile: React.FC<ProfileProps> = ({
   const handleLogout = () => {
     setLogoutModalVisible(false);
     navigate("login");
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Hapus Akun Pengguna",
+      "Apakah Anda yakin ingin menghapus akun GEOVERSE beserta seluruh data profil dan riwayat pesanan Anda secara permanen?\n\nSesuai standar privasi Apple, tindakan ini tidak dapat dibatalkan.",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus Akun",
+          style: "destructive",
+          onPress: async () => {
+            setIsDeletingAccount(true);
+            try {
+              const res = await deleteUserAccount(authAccount?.id);
+              setIsDeletingAccount(false);
+              if (res.success) {
+                setSettingsModalVisible(false);
+                Alert.alert(
+                  "Akun Dihapus",
+                  "Akun Anda telah berhasil dihapus secara permanen dari basis data GEOVERSE.",
+                  [
+                    {
+                      text: "OK",
+                      onPress: () => {
+                        navigate("login");
+                      },
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert("Gagal", res.message || "Gagal memproses penghapusan akun. Silakan coba kembali.");
+              }
+            } catch (err: any) {
+              setIsDeletingAccount(false);
+              Alert.alert("Error", err.message || "Terjadi kendala saat menghapus akun.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -171,7 +219,7 @@ export const Profile: React.FC<ProfileProps> = ({
 
           <TouchableOpacity 
             style={styles.menuRow}
-            onPress={() => triggerInfoSheet("Bantuan & FAQ", "Pusat bantuan akan menampilkan FAQ dan kanal Customer Care setelah service terhubung.")}
+            onPress={() => triggerInfoSheet("Bantuan & FAQ", "Pusat Bantuan & Layanan Pelanggan GEOVERSE:\n\n• Email Dukungan: support@geoverse.id\n• Hotline/WhatsApp: +62 878-0598-7309\n• Jam Operasional: 24 Jam Setiap Hari\n• Area Layanan: Kawasan PGE Kamojang, Ibun, Paseh, Majalaya & Sekitarnya.\n\nTim kami siap membantu kendala perjalanan ojek, pesanan kuliner, maupun reservasi penginapan Anda.")}
           >
             <View style={[styles.menuIconBg, { backgroundColor: "#FFF5D8" }]}>
               <HelpCircle size={16} color="#FF9F00" />
@@ -184,7 +232,7 @@ export const Profile: React.FC<ProfileProps> = ({
 
           <TouchableOpacity 
             style={styles.menuRow}
-            onPress={() => triggerInfoSheet("Privasi & Keamanan", "Data profil dan riwayat transaksi customer disimpan aman pada storage akun aplikasi GEOVERSE 2.0.")}
+            onPress={() => triggerInfoSheet("Privasi & Keamanan", "Kebijakan Privasi & Perlindungan Data GEOVERSE:\n\n• Seluruh data akun & transaksi dienkripsi dengan standar keamanan tinggi.\n• Izin lokasi & kamera hanya digunakan saat Anda melakukan pemesanan aktif atau mengunggah bukti dokumen/foto.\n• Pengguna memiliki hak penuh untuk meminta penghapusan akun beserta data pribadi secara permanen melalui menu Pengaturan.")}
           >
             <View style={[styles.menuIconBg, { backgroundColor: "#E9EEF0" }]}>
               <Shield size={16} color="#607D8B" />
@@ -197,7 +245,7 @@ export const Profile: React.FC<ProfileProps> = ({
 
           <TouchableOpacity 
             style={styles.menuRow}
-            onPress={() => triggerInfoSheet("Pengaturan", "Pengaturan preferensi akun Anda akan tersedia pada update build berikutnya.")}
+            onPress={() => setSettingsModalVisible(true)}
           >
             <View style={[styles.menuIconBg, { backgroundColor: "#F0F2F3" }]}>
               <Settings size={16} color="#78909C" />
@@ -242,6 +290,111 @@ export const Profile: React.FC<ProfileProps> = ({
             <TouchableOpacity 
               style={styles.sheetBtnClose}
               onPress={() => setInfoModalVisible(false)}
+            >
+              <Text style={styles.sheetBtnCloseText}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Settings & Account Deletion (Apple Guideline 5.1.1(v) Compliant) */}
+      <Modal visible={settingsModalVisible} transparent animationType="slide">
+        <View style={styles.modalBgBottom}>
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Pengaturan Akun</Text>
+              <TouchableOpacity onPress={() => setSettingsModalVisible(false)}>
+                <X size={20} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {/* Account summary box */}
+              <View style={styles.settingsSectionBox}>
+                <Text style={styles.settingsSectionTitle}>Informasi Akun</Text>
+                <View style={styles.settingsItemRow}>
+                  <Text style={styles.settingsItemLabel}>Nama Pengguna</Text>
+                  <Text style={styles.settingsItemValue}>{customerName || "-"}</Text>
+                </View>
+                <View style={styles.settingsItemRow}>
+                  <Text style={styles.settingsItemLabel}>Email Akun</Text>
+                  <Text style={styles.settingsItemValue}>{authAccount?.email || "customer@geoverse.id"}</Text>
+                </View>
+                <View style={styles.settingsItemRow}>
+                  <Text style={styles.settingsItemLabel}>Nomor Telepon</Text>
+                  <Text style={styles.settingsItemValue}>{customerPhone || "Belum diatur"}</Text>
+                </View>
+                <View style={styles.settingsItemRow}>
+                  <Text style={styles.settingsItemLabel}>Tipe Akun</Text>
+                  <Text style={[styles.settingsItemValue, { color: "#1B7A4E", fontWeight: "700" }]}>Pengguna (Customer)</Text>
+                </View>
+              </View>
+
+              {/* Legal & Policy Links */}
+              <View style={styles.settingsSectionBox}>
+                <Text style={styles.settingsSectionTitle}>Legalitas & Kebijakan</Text>
+                <TouchableOpacity
+                  style={styles.settingsLinkRow}
+                  onPress={() => {
+                    const url = `${API_BASE_URL}/privacy`;
+                    Linking.openURL(url).catch(() => {
+                      Alert.alert("Kebijakan Privasi", `Kunjungi kebijakan privasi kami di ${url}`);
+                    });
+                  }}
+                >
+                  <Text style={styles.settingsLinkText}>Kebijakan Privasi GEOVERSE</Text>
+                  <ExternalLink size={16} color="#1B7A4E" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.settingsLinkRow, { borderBottomWidth: 0 }]}
+                  onPress={() => {
+                    const url = `${API_BASE_URL}/support`;
+                    Linking.openURL(url).catch(() => {
+                      Alert.alert("Bantuan & Dukungan", `Kunjungi laman dukungan kami di ${url}`);
+                    });
+                  }}
+                >
+                  <Text style={styles.settingsLinkText}>Dukungan & Layanan Pengguna</Text>
+                  <ExternalLink size={16} color="#1B7A4E" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Apple Guideline 5.1.1(v) Compliant Account Deletion Box */}
+              <View style={styles.dangerZoneBox}>
+                <View style={styles.dangerZoneHeader}>
+                  <View style={styles.dangerIconBg}>
+                    <Trash2 size={16} color="#DC2626" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.dangerZoneTitle}>Hapus Akun Pengguna</Text>
+                    <Text style={styles.dangerZoneDesc}>
+                      Sesuai pedoman privasi App Store, Anda berhak menghapus akun beserta seluruh data pribadi secara permanen.
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.deleteAccountBtn}
+                  onPress={handleDeleteAccount}
+                  disabled={isDeletingAccount}
+                  activeOpacity={0.7}
+                >
+                  {isDeletingAccount ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Trash2 size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+                      <Text style={styles.deleteAccountBtnText}>Hapus Akun Secara Permanen</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={styles.sheetBtnClose}
+              onPress={() => setSettingsModalVisible(false)}
             >
               <Text style={styles.sheetBtnCloseText}>Tutup</Text>
             </TouchableOpacity>
@@ -504,5 +657,95 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "800",
+  },
+  settingsSectionBox: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  settingsSectionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 10,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  settingsItemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 5,
+  },
+  settingsItemLabel: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  settingsItemValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  settingsLinkRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  settingsLinkText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1B7A4E",
+  },
+  dangerZoneBox: {
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    marginBottom: 10,
+  },
+  dangerZoneHeader: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  dangerIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dangerZoneTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#991B1B",
+  },
+  dangerZoneDesc: {
+    fontSize: 12,
+    color: "#B91C1C",
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  deleteAccountBtn: {
+    backgroundColor: "#DC2626",
+    height: 44,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteAccountBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

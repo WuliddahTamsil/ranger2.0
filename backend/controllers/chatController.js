@@ -283,7 +283,7 @@ const getConversations = async (req, res) => {
           .lean();
 
         let customerName = "Pelanggan";
-        let driverName = "Driver Rangers";
+        let driverName = "Driver GEOVERSE";
 
         let effectiveCustId = conv.customerId;
         if (!effectiveCustId && lastMsg?.customerId) {

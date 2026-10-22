@@ -55,6 +55,7 @@ import { fetchDrivingRoute } from "../../services/routeService";
 import { rp } from "../../utils/formatters";
 import { findKnownPoiByText } from "../../utils/geocoding";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
+import { getRidePassengerOtp } from "../../utils/rideOtp";
 
 interface CustomerRideTrackingScreenProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -251,7 +252,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           latitude: Number(currentRide.driverLocation.latitude),
           longitude: Number(currentRide.driverLocation.longitude),
         },
-        title: currentRide.driverName || "Driver Rangers",
+        title: currentRide.driverName || "Driver GEOVERSE",
         description: currentRide.driverPlate ? `Motor · ${currentRide.driverPlate}` : "Sedang dalam perjalanan",
         pinColor: "#2563EB",
         type: "driver",
@@ -754,6 +755,31 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           </View>
         )}
 
+        {/* OTP / PIN KONFIRMASI PENJEMPUTAN PENUMPANG (Visible during active driver arrival & pickup) */}
+        {hasDriver && (status === "DRIVER_ASSIGNED" || status === "DRIVER_ON_THE_WAY" || status === "DRIVER_ARRIVED") && (
+          <View style={styles.otpCard}>
+            <View style={styles.otpHeaderRow}>
+              <View style={styles.otpIconBadge}>
+                <ShieldCheck size={18} color="#15803D" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.otpHeaderTitle}>PIN KONFIRMASI PENUMPANG (OTP)</Text>
+                <Text style={styles.otpHeaderSub}>Tunjukkan 4 angka ini kepada driver saat naik armada</Text>
+              </View>
+            </View>
+            <View style={styles.otpCodeBox}>
+              {getRidePassengerOtp(currentRide).split("").map((digit, i) => (
+                <View key={i} style={styles.otpDigitBox}>
+                  <Text style={styles.otpDigitText}>{digit}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.otpNoticeText}>
+              🛡️ Demi keamanan bersama, driver wajib memasukkan 4 angka PIN ini untuk memulai perjalanan ke tujuan Anda.
+            </Text>
+          </View>
+        )}
+
         {/* Interactive Route & Driver Map */}
         {trackingMarkers.length > 0 && (
           <View style={styles.mapContainer}>
@@ -943,7 +969,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
                       <Bike size={20} color="#15803D" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.ratingDriverName}>{currentRide.driverName || "Driver Rangers"}</Text>
+                      <Text style={styles.ratingDriverName}>{currentRide.driverName || "Driver GEOVERSE"}</Text>
                       <Text style={styles.ratingDriverSub}>
                         {currentRide.driverVehicle || "Kanyaah Motor"} • {currentRide.driverPlate || "Plat Terverifikasi"}
                       </Text>
@@ -1205,7 +1231,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           onClose={() => setChatModalVisible(false)}
           orderId={currentRide._id}
           participantType="driver"
-          participantName={currentRide.driverName || "Driver Rangers"}
+          participantName={currentRide.driverName || "Driver GEOVERSE"}
           customerId={authAccount?.id}
           orderType="RIDE"
           serviceType="KANYAAH_RIDE"
@@ -1217,8 +1243,8 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
         <SafeCallModal
           visible={safeCallVisible}
           onClose={() => setSafeCallVisible(false)}
-          targetName={currentRide.driverName || "Driver Rangers"}
-          targetRole="Driver Rangers"
+          targetName={currentRide.driverName || "Driver GEOVERSE"}
+          targetRole="Driver GEOVERSE"
           targetPhone={currentRide.driverPhone || "+6281200000000"}
           orderCode={currentRide.orderCode}
         />
@@ -1265,7 +1291,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
                   <Text style={styles.complaintSuccessTitle}>Komplain Berhasil Dikirim</Text>
                   <Text style={styles.complaintSuccessCode}>Nomor Tiket: #{complaintTicketId}</Text>
                   <Text style={styles.complaintSuccessSub}>
-                    Tim operasional Rangers akan memeriksa rekaman perjalanan dan segera menghubungi Anda.
+                    Tim operasional GEOVERSE akan memeriksa rekaman perjalanan dan segera menghubungi Anda.
                   </Text>
                   <TouchableOpacity
                     style={styles.complaintCloseBtn}
@@ -2311,5 +2337,74 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "700",
     fontSize: 13,
+  },
+  // OTP Passenger Card Styles
+  otpCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
+    shadowColor: "#15803D",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  otpHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
+  otpIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  otpHeaderTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#166534",
+    letterSpacing: 0.5,
+  },
+  otpHeaderSub: {
+    fontSize: 11,
+    color: "#4B5563",
+    marginTop: 2,
+  },
+  otpCodeBox: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+    marginVertical: 10,
+  },
+  otpDigitBox: {
+    width: 48,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#22C55E",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  otpDigitText: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#15803D",
+    letterSpacing: 1,
+  },
+  otpNoticeText: {
+    fontSize: 11,
+    color: "#166534",
+    textAlign: "center",
+    lineHeight: 16,
+    marginTop: 4,
   },
 });

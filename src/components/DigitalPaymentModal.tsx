@@ -151,7 +151,7 @@ const PAYMENT_METHODS: MethodOption[] = [
   {
     id: "CASH",
     name: "Tunai (Bayar di Tempat)",
-    desc: "Bayar tunai langsung kepada Driver Rangers saat perjalanan",
+    desc: "Bayar tunai langsung kepada Driver GEOVERSE saat perjalanan",
     category: "CASH",
     badgeColor: "#10B981",
     icon: "cash",

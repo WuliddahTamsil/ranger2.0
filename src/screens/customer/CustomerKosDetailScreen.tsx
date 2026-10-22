@@ -79,6 +79,7 @@ import {
   getSelectedKost,
   SelectedKost,
   setActiveCustomerBooking,
+  getActiveCustomerBooking,
   setSelectedKost,
   HotelRoomOption,
   WisataTicketOption,
@@ -192,15 +193,19 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
       const stored = getSelectedKost();
       if (stored) {
         setKostData(stored);
-        if (stored.rooms && stored.rooms.length > 0) {
-          const avail = stored.rooms.find((r) => r.isAvailable) || stored.rooms[0];
-          setSelectedRoom(avail);
-        }
-        if (stored.hotelRooms && stored.hotelRooms.length > 0) {
-          setSelectedHotelRoom(stored.hotelRooms[0]);
-        }
-        if (stored.wisataTickets && stored.wisataTickets.length > 0) {
-          setSelectedWisataTicket(stored.wisataTickets[0]);
+        if (stored.categoryType === "hotel") {
+          if (stored.hotelRooms && stored.hotelRooms.length > 0) {
+            setSelectedHotelRoom(stored.hotelRooms[0]);
+          }
+        } else if (stored.categoryType === "wisata") {
+          if (stored.wisataTickets && stored.wisataTickets.length > 0) {
+            setSelectedWisataTicket(stored.wisataTickets[0]);
+          }
+        } else {
+          if (stored.rooms && stored.rooms.length > 0) {
+            const avail = stored.rooms.find((r) => r.isAvailable) || stored.rooms[0];
+            setSelectedRoom(avail);
+          }
         }
       }
 
@@ -213,29 +218,43 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         }
 
         if (freshKost) {
-          setKostData((prev) => ({ ...prev, ...freshKost }));
-          setSelectedKost({ ...(stored || {}), ...freshKost });
-          if (Array.isArray(freshKost.rooms) && freshKost.rooms.length > 0) {
-            const availRoom = freshKost.rooms.find((r: any) => r.isAvailable) || freshKost.rooms[0];
-            setSelectedRoom(availRoom);
-          }
-          if (Array.isArray(freshKost.wisataTickets) && freshKost.wisataTickets.length > 0) {
-            setSelectedWisataTicket((prev) => {
-              if (prev) {
-                const matched = freshKost.wisataTickets.find((t: any) => t.ticketName === prev.ticketName || t._id === prev._id);
-                return matched || freshKost.wisataTickets[0];
-              }
-              return freshKost.wisataTickets[0];
-            });
-          }
-          if (Array.isArray(freshKost.hotelRooms) && freshKost.hotelRooms.length > 0) {
-            setSelectedHotelRoom((prev) => {
-              if (prev) {
-                const matched = freshKost.hotelRooms.find((r: any) => r.roomName === prev.roomName || r._id === prev._id);
-                return matched || freshKost.hotelRooms[0];
-              }
-              return freshKost.hotelRooms[0];
-            });
+          // STRICT RULE: Preserve the user's category context so tabs never collide
+          const preservedCategoryType: LodgingCategoryType =
+            stored?.categoryType || (freshKost.categoryType as LodgingCategoryType) || "kost";
+
+          const merged = {
+            ...freshKost,
+            categoryType: preservedCategoryType,
+          };
+
+          setKostData(merged);
+          setSelectedKost({ ...(stored || {}), ...merged });
+
+          if (preservedCategoryType === "hotel") {
+            if (Array.isArray(freshKost.hotelRooms) && freshKost.hotelRooms.length > 0) {
+              setSelectedHotelRoom((prev) => {
+                if (prev) {
+                  const matched = freshKost.hotelRooms.find((r: any) => r.roomName === prev.roomName || r._id === prev._id);
+                  return matched || freshKost.hotelRooms[0];
+                }
+                return freshKost.hotelRooms[0];
+              });
+            }
+          } else if (preservedCategoryType === "wisata") {
+            if (Array.isArray(freshKost.wisataTickets) && freshKost.wisataTickets.length > 0) {
+              setSelectedWisataTicket((prev) => {
+                if (prev) {
+                  const matched = freshKost.wisataTickets.find((t: any) => t.ticketName === prev.ticketName || t._id === prev._id);
+                  return matched || freshKost.wisataTickets[0];
+                }
+                return freshKost.wisataTickets[0];
+              });
+            }
+          } else {
+            if (Array.isArray(freshKost.rooms) && freshKost.rooms.length > 0) {
+              const availRoom = freshKost.rooms.find((r: any) => r.isAvailable) || freshKost.rooms[0];
+              setSelectedRoom(availRoom);
+            }
           }
         }
       } catch (err) {
@@ -1350,10 +1369,12 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         <View>
           <Text style={styles.bottomPriceLabel}>
             {categoryType === "hotel"
-              ? selectedHotelRoom?.roomName || "Kamar Hotel"
+              ? selectedHotelRoom?.roomName || "Unit Homestay"
               : categoryType === "wisata"
-              ? selectedWisataTicket?.ticketName || "Tiket Masuk"
-              : `Kamar ${String(selectedRoom?.roomNumber || "Pilihan").replace(/^(Kamar\s*)+/gi, "")}`}
+              ? selectedWisataTicket?.ticketName || "Tiket Masuk Wisata"
+              : selectedRoom
+              ? `Kamar ${String(selectedRoom.roomNumber).replace(/^(Kamar\s*)+/gi, "")} (${selectedRoom.roomType || "Standard"})`
+              : "Pilih Kamar Kos"}
           </Text>
           <Text style={styles.bottomPriceVal}>
             {rp(currentUnitCost)}{" "}
@@ -1383,10 +1404,10 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
           >
             <Text style={styles.btnBookingDpText}>
               {categoryType === "hotel"
-                ? "Pesan Kamar Hotel"
+                ? "Pesan Homestay"
                 : categoryType === "wisata"
-                ? "Beli Tiket Masuk"
-                : "Booking & DP"}
+                ? "Beli Tiket Wisata"
+                : "Sewa Kamar Kos"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1400,12 +1421,18 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
               <View style={{ flex: 1 }}>
                 <Text style={styles.sheetTitle}>
                   {categoryType === "hotel"
-                    ? "Form Reservasi Hotel"
+                    ? "Form Reservasi Homestay & Hotel"
                     : categoryType === "wisata"
                     ? "Form Pembelian Tiket Wisata"
-                    : "Form Booking Kamar Kos"}
+                    : "Form Sewa Kamar Kos"}
                 </Text>
-                <Text style={styles.sheetSub}>Konfirmasi instan & aman lewat aplikasi GEOVERSE</Text>
+                <Text style={styles.sheetSub}>
+                  {categoryType === "wisata"
+                    ? "E-Ticket resmi tanpa antre via GEOVERSE"
+                    : categoryType === "hotel"
+                    ? "Reservasi instan & terverifikasi via GEOVERSE"
+                    : "Booking kamar kos aman & terverifikasi via GEOVERSE"}
+                </Text>
               </View>
               <TouchableOpacity
                 onPress={() => setIsBookingModalOpen(false)}
@@ -1432,10 +1459,12 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                   <Text style={styles.merchantSummaryTitle}>{kostData?.name || "Properti Pilihan"}</Text>
                   <Text style={styles.merchantSummaryRoomText}>
                     {categoryType === "hotel"
-                      ? selectedHotelRoom?.roomName || "Superior Room"
+                      ? selectedHotelRoom?.roomName || "Unit Homestay"
                       : categoryType === "wisata"
-                      ? selectedWisataTicket?.ticketName || "Tiket Masuk"
-                      : `Kamar ${selectedRoom?.roomNumber || "101"} (${selectedRoom?.roomType || "Standar"})`}
+                      ? selectedWisataTicket?.ticketName || "Tiket Masuk Wisata"
+                      : selectedRoom
+                      ? `Kamar ${String(selectedRoom.roomNumber).replace(/^(Kamar\s*)+/gi, "")} (${selectedRoom.roomType || "Standard"})`
+                      : "Kamar Kos Standar"}
                   </Text>
                   <Text style={styles.merchantSummaryPrice}>
                     {rp(currentUnitCost)}{" "}
@@ -1446,13 +1475,19 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
 
               {/* Field: Nama Pemesan */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Nama Lengkap Pemesan</Text>
+                <Text style={styles.fieldLabel}>
+                  {categoryType === "wisata"
+                    ? "Nama Lengkap Pengunjung / Wisatawan"
+                    : categoryType === "hotel"
+                    ? "Nama Lengkap Tamu"
+                    : "Nama Calon Penghuni Kos"}
+                </Text>
                 <View style={styles.inputContainer}>
                   <TextInput
                     style={styles.textInput}
                     value={tenantName}
                     onChangeText={setTenantName}
-                    placeholder="Nama lengkap"
+                    placeholder="Nama lengkap sesuai KTP"
                     placeholderTextColor="#9CA3AF"
                   />
                 </View>
@@ -1480,7 +1515,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                     {categoryType === "hotel"
                       ? "Tgl Check-in"
                       : categoryType === "wisata"
-                      ? "Tgl Kunjungan"
+                      ? "Tgl Kunjungan Wisata"
                       : "Tgl Masuk Kos"}
                   </Text>
                   <TouchableOpacity
@@ -1489,7 +1524,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                     activeOpacity={0.8}
                   >
                     <Text style={styles.datePickerInputText}>{startDate || "Pilih Tanggal"}</Text>
-                    <Calendar size={15} color="#0D7A53" />
+                    <Calendar size={15} color={categoryType === "hotel" ? "#0284C7" : categoryType === "wisata" ? "#D97706" : "#0D7A53"} />
                   </TouchableOpacity>
                 </View>
 
@@ -1565,7 +1600,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                       <Text style={styles.guestCounterBtnText}>−</Text>
                     </TouchableOpacity>
                     <View style={styles.guestCounterValueBox}>
-                      <Users size={16} color="#0D7A53" style={{ marginRight: 6 }} />
+                      <Users size={16} color="#0284C7" style={{ marginRight: 6 }} />
                       <TextInput
                         style={styles.guestCounterInput}
                         value={guestCount}
@@ -1592,38 +1627,75 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
               <View style={styles.priceCalcBlock}>
                 <View style={styles.priceCalcRow}>
                   <Text style={styles.calcLabel}>
-                    {categoryType === "wisata" ? "Total Tiket" : "Biaya Sewa Unit"}
+                    {categoryType === "wisata"
+                      ? `Total Tiket (${ticketsNum} Tiket)`
+                      : categoryType === "hotel"
+                      ? `Biaya Menginap (${nightsNum} Malam)`
+                      : `Biaya Sewa Kamar (${durationNum} Bulan)`}
                   </Text>
                   <Text style={[styles.calcVal, { fontWeight: "700" }]}>{rp(basePrice)}</Text>
                 </View>
 
-                {platformFee > 0 && (
+                {platformFee > 0 ? (
                   <View style={styles.priceCalcRow}>
                     <Text style={styles.calcLabel}>Biaya Layanan Aplikasi</Text>
                     <Text style={[styles.calcVal, { fontWeight: "700" }]}>{rp(platformFee)}</Text>
                   </View>
-                )}
+                ) : categoryType === "wisata" ? (
+                  <View style={styles.priceCalcRow}>
+                    <Text style={styles.calcLabel}>Biaya Layanan Aplikasi</Text>
+                    <Text style={[styles.calcVal, { fontWeight: "700", color: "#059669" }]}>Gratis (Rp 0)</Text>
+                  </View>
+                ) : null}
 
                 <View style={[styles.priceCalcRow, { borderTopWidth: 1, borderTopColor: "#E2E8F0", paddingTop: 6 }]}>
-                  <Text style={[styles.calcLabel, { fontWeight: "800", color: "#0F172A" }]}>Total Pesanan</Text>
+                  <Text style={[styles.calcLabel, { fontWeight: "800", color: "#0F172A" }]}>
+                    {categoryType === "wisata"
+                      ? "Total Pembayaran Tiket"
+                      : categoryType === "hotel"
+                      ? "Total Reservasi Homestay"
+                      : "Total Sewa Kamar Kos"}
+                  </Text>
                   <Text style={[styles.calcVal, { fontWeight: "900", color: "#0F172A", fontSize: 14 }]}>{rp(totalPrice)}</Text>
                 </View>
 
-                <View style={styles.dpBoxGreen}>
+                <View style={[
+                  styles.dpBoxGreen,
+                  categoryType === "hotel" && { backgroundColor: "#E0F2FE" },
+                  categoryType === "wisata" && { backgroundColor: "#FEF3C7" },
+                ]}>
                   <View style={styles.dpBoxLeft}>
-                    <Wallet size={18} color="#0D7A53" />
-                    <Text style={styles.dpBoxLabel}>
-                      {categoryType === "wisata" ? "Total Bayar (Lunas)" : `DP Tanda Jadi (${ownerDpPercent}%)`}
+                    {categoryType === "wisata" ? (
+                      <Ticket size={18} color="#D97706" />
+                    ) : categoryType === "hotel" ? (
+                      <Hotel size={18} color="#0284C7" />
+                    ) : (
+                      <Wallet size={18} color="#0D7A53" />
+                    )}
+                    <Text style={[
+                      styles.dpBoxLabel,
+                      categoryType === "hotel" && { color: "#0369A1" },
+                      categoryType === "wisata" && { color: "#B45309" },
+                    ]}>
+                      {categoryType === "wisata"
+                        ? "Total Bayar Tiket (Lunas 100%)"
+                        : categoryType === "hotel"
+                        ? `DP Reservasi Homestay (${ownerDpPercent}%)`
+                        : `DP Tanda Jadi Kos (${ownerDpPercent}%)`}
                     </Text>
                   </View>
-                  <Text style={styles.dpBoxVal}>{rp(dpAmount)}</Text>
+                  <Text style={[
+                    styles.dpBoxVal,
+                    categoryType === "hotel" && { color: "#0369A1" },
+                    categoryType === "wisata" && { color: "#B45309" },
+                  ]}>{rp(dpAmount)}</Text>
                 </View>
               </View>
 
-              {/* Cancellation Policy Banner (H-3 50% Refund) */}
+              {/* Policy Banner */}
               <View style={{
-                backgroundColor: "#FEF3C7",
-                borderColor: "#FCD34D",
+                backgroundColor: categoryType === "wisata" ? "#FEF3C7" : "#F0FDF4",
+                borderColor: categoryType === "wisata" ? "#FCD34D" : "#86EFAC",
                 borderWidth: 1,
                 borderRadius: 10,
                 padding: 10,
@@ -1631,20 +1703,32 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                 gap: 8,
                 alignItems: "flex-start",
               }}>
-                <ShieldAlert size={16} color="#D97706" style={{ marginTop: 1 }} />
+                <ShieldAlert size={16} color={categoryType === "wisata" ? "#D97706" : "#0D7A53"} style={{ marginTop: 1 }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 11.5, fontWeight: "800", color: "#92400E" }}>
-                    Kebijakan Pembatalan & Pengembalian DP (H-3)
+                  <Text style={{ fontSize: 11.5, fontWeight: "800", color: categoryType === "wisata" ? "#92400E" : "#166534" }}>
+                    {categoryType === "wisata"
+                      ? "Ketentuan Tiket Masuk Wisata"
+                      : categoryType === "hotel"
+                      ? "Kebijakan Pembatalan DP Reservasi (H-3)"
+                      : "Kebijakan Pembatalan DP Sewa Kos (H-3)"}
                   </Text>
-                  <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 15, marginTop: 2 }}>
-                    Pembatalan minimal 3 hari sebelum jadwal masuk (≥ H-3) berhak menerima pengembalian DP 50%. Pembatalan kurang dari H-3 tidak memperoleh pengembalian (DP hangus).
+                  <Text style={{ fontSize: 11, color: categoryType === "wisata" ? "#92400E" : "#166534", lineHeight: 15, marginTop: 2 }}>
+                    {categoryType === "wisata"
+                      ? "Tiket masuk resmi berlaku khusus pada tanggal kunjungan yang dipilih. Pastikan menunjukkan E-Ticket di loket masuk wahana."
+                      : categoryType === "hotel"
+                      ? "Pembatalan minimal 3 hari sebelum jadwal check-in (≥ H-3) berhak menerima pengembalian DP 50%. Pembatalan kurang dari H-3 tidak memperoleh pengembalian (DP hangus)."
+                      : "Pembatalan minimal 3 hari sebelum jadwal masuk (≥ H-3) berhak menerima pengembalian DP 50%. Pembatalan kurang dari H-3 tidak memperoleh pengembalian (DP hangus)."}
                   </Text>
                 </View>
               </View>
 
               {/* Submit Button */}
               <TouchableOpacity
-                style={styles.btnPayDp}
+                style={[
+                  styles.btnPayDp,
+                  categoryType === "hotel" && { backgroundColor: "#0284C7" },
+                  categoryType === "wisata" && { backgroundColor: "#D97706" },
+                ]}
                 onPress={() => {
                   setIsBookingModalOpen(false);
                   setIsPaymentModalOpen(true);
@@ -1652,7 +1736,11 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                 activeOpacity={0.85}
               >
                 <Text style={styles.btnPayDpText}>
-                  Lanjut Bayar: {rp(dpAmount)}
+                  {categoryType === "wisata"
+                    ? `Lanjut Bayar Tiket: ${rp(dpAmount)}`
+                    : categoryType === "hotel"
+                    ? `Lanjut Bayar DP Reservasi: ${rp(dpAmount)}`
+                    : `Lanjut Bayar DP Kos: ${rp(dpAmount)}`}
                 </Text>
                 <ArrowLeft size={16} color="#FFFFFF" style={{ transform: [{ rotate: "180deg" }] }} />
               </TouchableOpacity>
@@ -1676,7 +1764,13 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
               >
                 <ArrowLeft size={20} color="#111827" />
               </TouchableOpacity>
-              <Text style={styles.sheetTitle}>Pembayaran Resmi</Text>
+              <Text style={styles.sheetTitle}>
+                {categoryType === "wisata"
+                  ? "Pembayaran Tiket Wisata Resmi"
+                  : categoryType === "hotel"
+                  ? "Pembayaran DP Reservasi Homestay"
+                  : "Pembayaran DP Sewa Kamar Kos"}
+              </Text>
             </View>
 
             {/* Payment Mode Selector Tabs */}
@@ -1688,7 +1782,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                   paddingVertical: 10,
                   borderRadius: 10,
                   alignItems: "center",
-                  backgroundColor: paymentTab === "midtrans" ? "#0D7A53" : "#F1F5F9",
+                  backgroundColor: paymentTab === "midtrans" ? (categoryType === "hotel" ? "#0284C7" : categoryType === "wisata" ? "#D97706" : "#0D7A53") : "#F1F5F9",
                 }}
                 activeOpacity={0.8}
               >
@@ -1703,7 +1797,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                   paddingVertical: 10,
                   borderRadius: 10,
                   alignItems: "center",
-                  backgroundColor: paymentTab === "manual" ? "#0D7A53" : "#F1F5F9",
+                  backgroundColor: paymentTab === "manual" ? (categoryType === "hotel" ? "#0284C7" : categoryType === "wisata" ? "#D97706" : "#0D7A53") : "#F1F5F9",
                 }}
                 activeOpacity={0.8}
               >
@@ -1728,7 +1822,9 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                     </Text>
 
                     <View style={[styles.bankDetailRow, { borderBottomWidth: 0, marginTop: 8 }]}>
-                      <Text style={styles.bankLabel}>Nominal Pembayaran</Text>
+                      <Text style={styles.bankLabel}>
+                        {categoryType === "wisata" ? "Total Bayar Tiket" : "Nominal DP"}
+                      </Text>
                       <Text style={[styles.bankValue, { color: "#0D7A53", fontWeight: "900", fontSize: 17 }]}>
                         {rp(dpAmount)}
                       </Text>
@@ -1736,7 +1832,12 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                   </View>
 
                   <TouchableOpacity
-                    style={[styles.btnPayDp, isMidtransLoading && { opacity: 0.7 }]}
+                    style={[
+                      styles.btnPayDp,
+                      categoryType === "hotel" && { backgroundColor: "#0284C7" },
+                      categoryType === "wisata" && { backgroundColor: "#D97706" },
+                      isMidtransLoading && { opacity: 0.7 },
+                    ]}
                     onPress={handlePayWithMidtrans}
                     disabled={isMidtransLoading}
                     activeOpacity={0.85}
@@ -1744,7 +1845,11 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                     {isMidtransLoading ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.btnPayDpText}>Bayar via Midtrans Snap</Text>
+                      <Text style={styles.btnPayDpText}>
+                        {categoryType === "wisata"
+                          ? "Bayar Tiket Sekarang (Midtrans Snap)"
+                          : "Bayar DP via Midtrans Snap"}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -1767,7 +1872,9 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                       <Text style={styles.bankValue}>{kostData?.bankAccount?.accountHolder || "GEOVERSE INDONESIA"}</Text>
                     </View>
                     <View style={[styles.bankDetailRow, { borderBottomWidth: 0, marginTop: 4 }]}>
-                      <Text style={styles.bankLabel}>Nominal Pembayaran</Text>
+                      <Text style={styles.bankLabel}>
+                        {categoryType === "wisata" ? "Total Bayar Tiket" : "Nominal DP"}
+                      </Text>
                       <Text style={[styles.bankValue, { color: "#0D7A53", fontWeight: "900", fontSize: 16 }]}>
                         {rp(dpAmount)}
                       </Text>
@@ -1776,7 +1883,13 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
 
                   {/* Upload Struk Proof */}
                   <View style={styles.uploadProofSection}>
-                    <Text style={styles.uploadProofTitle}>Unggah Bukti Transfer / Resi</Text>
+                    <Text style={styles.uploadProofTitle}>
+                      {categoryType === "wisata"
+                        ? "Unggah Bukti Pembayaran Tiket"
+                        : categoryType === "hotel"
+                        ? "Unggah Bukti Transfer DP Reservasi"
+                        : "Unggah Bukti Transfer DP Sewa Kos"}
+                    </Text>
                     <TouchableOpacity
                       style={styles.uploadImageBox}
                       onPress={handlePickProofImage}
@@ -1798,7 +1911,12 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                   </View>
 
                   <TouchableOpacity
-                    style={[styles.btnPayDp, isSubmitting && { opacity: 0.7 }]}
+                    style={[
+                      styles.btnPayDp,
+                      categoryType === "hotel" && { backgroundColor: "#0284C7" },
+                      categoryType === "wisata" && { backgroundColor: "#D97706" },
+                      isSubmitting && { opacity: 0.7 },
+                    ]}
                     onPress={saveBookingOrder}
                     disabled={isSubmitting}
                     activeOpacity={0.85}
@@ -1806,7 +1924,13 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                     {isSubmitting ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.btnPayDpText}>Konfirmasi Pembayaran</Text>
+                      <Text style={styles.btnPayDpText}>
+                        {categoryType === "wisata"
+                          ? "Konfirmasi Pembelian Tiket"
+                          : categoryType === "hotel"
+                          ? "Konfirmasi Pembayaran DP Reservasi"
+                          : "Konfirmasi Pembayaran DP Kos"}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </>
@@ -1823,12 +1947,10 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>
                 {categoryType === "wisata"
-                  ? "E-Ticket Masuk Wisata"
-                  : (kostData?.name || "").toLowerCase().includes("homestay")
-                  ? "E-Receipt Reservasi Homestay"
+                  ? "E-Ticket Masuk Wisata Resmi"
                   : categoryType === "hotel"
-                  ? "E-Receipt Reservasi Hotel"
-                  : "Bukti Pemesanan Resmi"}
+                  ? "E-Receipt Reservasi Homestay"
+                  : "E-Receipt Sewa Kamar Kos"}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -1842,17 +1964,33 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}>
-              <View style={styles.receiptBox}>
-                <View style={styles.receiptTopHeader}>
-                  <Text style={styles.receiptBrand}>GEOVERSE</Text>
-                  <Text style={styles.receiptTypeBadge}>
+              <View style={[
+                styles.receiptBox,
+                categoryType === "hotel" && { backgroundColor: "#F0F9FF", borderColor: "#BAE6FD" },
+                categoryType === "wisata" && { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" },
+              ]}>
+                <View style={[
+                  styles.receiptTopHeader,
+                  categoryType === "hotel" && { borderBottomColor: "#E0F2FE" },
+                  categoryType === "wisata" && { borderBottomColor: "#FEF3C7" },
+                ]}>
+                  <Text style={[
+                    styles.receiptBrand,
+                    categoryType === "hotel" && { color: "#0284C7" },
+                    categoryType === "wisata" && { color: "#D97706" },
+                  ]}>
+                    {categoryType === "wisata" ? "KANYAAH WISATA" : categoryType === "hotel" ? "KANYAAH HOMESTAY" : "KANYAAH KOST LIVING"}
+                  </Text>
+                  <Text style={[
+                    styles.receiptTypeBadge,
+                    categoryType === "hotel" && { color: "#0369A1" },
+                    categoryType === "wisata" && { color: "#B45309" },
+                  ]}>
                     ✓ {categoryType === "wisata"
-                      ? "E-TICKET RESMI"
-                      : (kostData?.name || "").toLowerCase().includes("homestay")
-                      ? "HOMESTAY TERVERIFIKASI"
+                      ? "E-TICKET RESMI TERVERIFIKASI"
                       : categoryType === "hotel"
-                      ? "RESERVASI HOTEL TERVERIFIKASI"
-                      : "PEMESANAN TERVERIFIKASI"}
+                      ? "RESERVASI HOMESTAY TERVERIFIKASI"
+                      : "SEWA KOS TERVERIFIKASI"}
                   </Text>
                 </View>
 
@@ -1862,39 +2000,107 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                     {categoryType === "hotel"
                       ? `${selectedHotelRoom?.roomName || "Unit Homestay"} • ${nightsNum} Malam`
                       : categoryType === "wisata"
-                      ? `${selectedWisataTicket?.ticketName} • ${ticketsNum} Tiket`
-                      : `Kamar ${selectedRoom?.roomNumber} • ${durationNum} Bulan`}
+                      ? `${selectedWisataTicket?.ticketName || "Tiket Masuk"} • ${ticketsNum} Tiket Masuk`
+                      : `Kamar ${String(selectedRoom?.roomNumber || "101").replace(/^(Kamar\s*)+/gi, "")} (${selectedRoom?.roomType || "Standard"}) • ${durationNum} Bulan`}
                   </Text>
                   <Text style={styles.receiptDateInfo}>
                     {categoryType === "hotel"
                       ? `Check-in: ${startDate} • Check-out: ${calculatedCheckOut}`
                       : categoryType === "wisata"
                       ? `Tgl Kunjungan: ${startDate}`
-                      : `Tgl Masuk: ${startDate}`}
+                      : `Tgl Masuk Kos: ${startDate}`}
                   </Text>
                   {categoryType === "hotel" && (
                     <Text style={[styles.receiptDateInfo, { marginTop: 2 }]}>
                       Jumlah Tamu: {guestCount} Orang
                     </Text>
                   )}
-                  <Text style={styles.receiptCustomerInfo}>Pemesan: {tenantName}</Text>
+                  <Text style={styles.receiptCustomerInfo}>
+                    {categoryType === "wisata"
+                      ? `Nama Pengunjung: ${tenantName}`
+                      : categoryType === "hotel"
+                      ? `Nama Tamu: ${tenantName}`
+                      : `Nama Calon Penghuni: ${tenantName}`}
+                  </Text>
 
-                  <View style={styles.receiptPriceHighlight}>
-                    <Text style={{ fontSize: 12, color: "#166534", fontWeight: "700" }}>Total Terbayar:</Text>
-                    <Text style={{ fontSize: 16, color: "#166534", fontWeight: "900" }}>{rp(dpAmount)}</Text>
+                  {/* Official Barcode Visual for E-Ticket Wisata */}
+                  {categoryType === "wisata" && (
+                    <View style={styles.receiptBarcodeCard}>
+                      <View style={styles.barcodeVisualRow}>
+                        {[3, 1, 4, 2, 1, 3, 2, 4, 1, 2, 3, 1, 4, 2, 3, 1, 2, 4, 1, 3].map((w, i) => (
+                          <View
+                            key={i}
+                            style={{
+                              width: w,
+                              height: 34,
+                              backgroundColor: "#0F172A",
+                              marginHorizontal: 1.5,
+                            }}
+                          />
+                        ))}
+                      </View>
+                      <Text style={styles.barcodeCodeText}>
+                        {bookingResponse?.bookingCode || getActiveCustomerBooking()?.bookingCode || `WST-${Date.now().toString().slice(-6)}`}
+                      </Text>
+                      <Text style={styles.barcodeHelperText}>
+                        Tunjukkan barcode ini kepada petugas loket untuk scan masuk wahana
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={[
+                    styles.receiptPriceHighlight,
+                    categoryType === "hotel" && { backgroundColor: "#E0F2FE" },
+                    categoryType === "wisata" && { backgroundColor: "#FEF3C7" },
+                  ]}>
+                    <Text style={{
+                      fontSize: 12,
+                      color: categoryType === "hotel" ? "#0369A1" : categoryType === "wisata" ? "#92400E" : "#166534",
+                      fontWeight: "700"
+                    }}>
+                      {categoryType === "wisata" ? "Total Tiket Terbayar (Lunas):" : "Total DP Terbayar:"}
+                    </Text>
+                    <Text style={{
+                      fontSize: 16,
+                      color: categoryType === "hotel" ? "#0369A1" : categoryType === "wisata" ? "#92400E" : "#166534",
+                      fontWeight: "900"
+                    }}>
+                      {rp(dpAmount)}
+                    </Text>
                   </View>
+
+                  <Text style={{
+                    fontSize: 11,
+                    color: "#64748B",
+                    textAlign: "center",
+                    marginTop: 6,
+                    lineHeight: 15
+                  }}>
+                    {categoryType === "wisata"
+                      ? "Tunjukkan E-Ticket ini langsung kepada petugas loket/wahana di pintu masuk."
+                      : categoryType === "hotel"
+                      ? "Tunjukkan e-receipt ini saat check-in kepada staf resepsionis homestay."
+                      : "Tunjukkan bukti DP ini kepada pengelola kos saat serah terima kunci kamar."}
+                  </Text>
                 </View>
               </View>
 
               <TouchableOpacity
-                style={styles.btnPayDp}
+                style={[
+                  styles.btnPayDp,
+                  categoryType === "hotel" && { backgroundColor: "#0284C7" },
+                  categoryType === "wisata" && { backgroundColor: "#D97706" },
+                  { marginTop: 14 }
+                ]}
                 onPress={() => {
                   setIsReceiptModalOpen(false);
                   navigate("c_kos");
                 }}
                 activeOpacity={0.85}
               >
-                <Text style={styles.btnPayDpText}>Selesai & Kembali ke Beranda</Text>
+                <Text style={styles.btnPayDpText}>
+                  {categoryType === "wisata" ? "Selesai & Simpan E-Ticket" : "Selesai & Kembali ke Beranda"}
+                </Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -2898,6 +3104,35 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     marginTop: 8,
+  },
+  receiptBarcodeCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  barcodeVisualRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  barcodeCodeText: {
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 2,
+    color: "#0F172A",
+    marginBottom: 4,
+  },
+  barcodeHelperText: {
+    fontSize: 10.5,
+    color: "#64748B",
+    textAlign: "center",
   },
 
   // Lightbox

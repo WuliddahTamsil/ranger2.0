@@ -149,21 +149,25 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
               </Pressable>
             </View>
 
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>atau lanjutkan dengan</Text>
-              <View style={styles.dividerLine} />
-            </View>
+            {/* Divider & Google Login (Hidden on iOS to comply with Apple Guideline 4.8 without Apple Sign In) */}
+            {Platform.OS !== "ios" && (
+              <>
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>atau lanjutkan dengan</Text>
+                  <View style={styles.dividerLine} />
+                </View>
 
-            {/* Official Google Button Only */}
-            <GoogleLoginButton
-              disabled={loading}
-              loading={googleLoading}
-              onBusyChange={setGoogleLoading}
-              onLogin={onGoogleLogin}
-              onError={setError}
-            />
+                {/* Official Google Button Only */}
+                <GoogleLoginButton
+                  disabled={loading}
+                  loading={googleLoading}
+                  onBusyChange={setGoogleLoading}
+                  onLogin={onGoogleLogin}
+                  onError={setError}
+                />
+              </>
+            )}
 
             {/* Registration Callout */}
             <View style={styles.registerSection}>

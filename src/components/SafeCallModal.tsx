@@ -14,7 +14,7 @@ interface SafeCallModalProps {
   visible: boolean;
   onClose: () => void;
   targetName: string;
-  targetRole?: string; // e.g. "Driver Rangers" or "Customer"
+  targetRole?: string; // e.g. "Driver GEOVERSE" or "Customer"
   targetPhone?: string;
   orderCode?: string;
 }
@@ -23,7 +23,7 @@ export const SafeCallModal: React.FC<SafeCallModalProps> = ({
   visible,
   onClose,
   targetName,
-  targetRole = "Driver Rangers",
+  targetRole = "Driver GEOVERSE",
   targetPhone,
   orderCode,
 }) => {
@@ -37,8 +37,8 @@ export const SafeCallModal: React.FC<SafeCallModalProps> = ({
   const handleWhatsApp = async () => {
     onClose();
     const msg = orderCode
-      ? `Halo ${targetName}, saya menghubungi terkait pesanan #${orderCode} di GEOVERSE Rangers.`
-      : `Halo ${targetName}, saya menghubungi dari aplikasi GEOVERSE Rangers.`;
+      ? `Halo ${targetName}, saya menghubungi terkait pesanan #${orderCode} di GEOVERSE.`
+      : `Halo ${targetName}, saya menghubungi dari aplikasi GEOVERSE.`;
     await openWhatsApp(targetPhone, msg);
   };
 

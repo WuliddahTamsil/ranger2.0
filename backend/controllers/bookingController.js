@@ -146,9 +146,45 @@ const createBooking = async (req, res) => {
   }
 };
 
+// Auto-cancel bookings that were created over 2 hours ago and are still unverified
+const autoCancelExpiredBookings = async () => {
+  try {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const expiredBookings = await Booking.find({
+      status: { $in: ["pending", "dp_submitted"] },
+      createdAt: { $lt: twoHoursAgo },
+      verifiedAt: { $exists: false },
+    });
+
+    for (const b of expiredBookings) {
+      b.status = "rejected";
+      b.rejectionReason = "Otomatis dibatalkan sistem: Batas waktu verifikasi pembayaran (2 jam) telah berakhir.";
+      b.updatedAt = new Date();
+      await b.save();
+
+      // Release locked room or hotel room
+      if (b.kostId && b.roomId) {
+        await Kost.updateOne(
+          { _id: b.kostId, "rooms._id": b.roomId },
+          { $set: { "rooms.$.isAvailable": true }, $unset: { "rooms.$.currentTenant": "" } }
+        );
+        await Kost.updateOne(
+          { _id: b.kostId, "hotelRooms._id": b.roomId },
+          { $set: { "hotelRooms.$.isAvailable": true } }
+        );
+      }
+    }
+  } catch (err) {
+    console.warn("Auto-cancel expired bookings error (handled):", err.message);
+  }
+};
+
 // Get all bookings for Pemilik Kos (Verifikasi DP page)
 const getBookingsByOwner = async (req, res) => {
   try {
+    // Run automated cancellation on expired bookings before retrieving list
+    await autoCancelExpiredBookings();
+
     const { ownerId } = req.params;
     const { status } = req.query;
 
@@ -300,6 +336,7 @@ const verifyDpBooking = async (req, res) => {
 // Get Bookings by Customer ID or Email
 const getBookingsByCustomer = async (req, res) => {
   try {
+    await autoCancelExpiredBookings();
     const { customerId } = req.params;
     let query = {};
     if (customerId && customerId.match(/^[0-9a-fA-F]{24}$/)) {
