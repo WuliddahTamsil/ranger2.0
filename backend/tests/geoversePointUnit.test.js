@@ -24,7 +24,7 @@ const { enforceWalletOwner, enforceStaffOrAdmin } = require("../features/geovers
 const MONGO_URI =
   process.env.MONGODB_URI ||
   process.env.MONGO_URI ||
-  "mongodb+srv://dhimas:4568521379@cluster0.p71hk.mongodb.net/rangers?retryWrites=true&w=majority&appName=Cluster0";
+  "mongodb://127.0.0.1:27017/rangers_test";
 
 async function runTests() {
   console.log("==================================================");

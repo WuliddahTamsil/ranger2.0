@@ -7,7 +7,10 @@ const jwt = require('../backend/node_modules/jsonwebtoken');
 require('../backend/node_modules/dotenv').config({ path: 'd:/ranger2.0/backend/.env' });
 
 const API_BASE = 'http://localhost:5000/api';
-const JWT_SECRET = process.env.JWT_SECRET || 'rangers_app_super_secure_secret_key_2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET wajib diisi (backend/.env) sebelum menjalankan script ini.');
+}
 
 function makeToken(user) {
   return `seed_token_${String(user._id)}`;
