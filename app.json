@@ -15,12 +15,13 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wuliddahtamsil.geoverse",
+      "buildNumber": "2",
+      "appleTeamId": "A23N5QDWR3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "GEOVERSE memerlukan akses kamera untuk mengambil foto profil, dokumen verifikasi mitra (KTP/SIM/STNK), dan bukti foto serah terima pesanan.",
         "NSPhotoLibraryUsageDescription": "GEOVERSE memerlukan akses galeri foto untuk memilih foto profil, dokumen pendaftaran mitra, dan bukti transaksi serah terima.",
         "NSLocationWhenInUseUsageDescription": "GEOVERSE memerlukan akses lokasi saat aplikasi digunakan untuk menentukan titik penjemputan armada, pelacakan rute pengantaran real-time, dan menemukan mitra terdekat.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "GEOVERSE memerlukan akses lokasi untuk memastikan akurasi pelacakan navigasi armada pengemudi saat perjalanan berlangsung.",
         "NSPhotoLibraryAddUsageDescription": "GEOVERSE memerlukan izin untuk menyimpan bukti pembayaran, struk pesanan, dan dokumen transaksi ke galeri foto Anda."
       }
     },
@@ -38,12 +39,21 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
       "expo-web-browser",
       "expo-sharing",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "GEOVERSE memerlukan akses lokasi untuk menentukan titik penjemputan armada, pelacakan rute pengantaran real-time, dan menemukan mitra terdekat."
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false
         }
       ],
       [
