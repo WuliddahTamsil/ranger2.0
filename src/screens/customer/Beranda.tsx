@@ -1279,13 +1279,6 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <Text style={styles.walletBarSub} numberOfLines={1} ellipsizeMode="tail">
                   ≈ {rp(rupiahEquivalent)}
                 </Text>
-                <Text style={styles.walletDot}>•</Text>
-                <View style={styles.walletOpenBadge}>
-                  <Text style={styles.walletOpenText} numberOfLines={1}>
-                    Buka Dompet
-                  </Text>
-                  <ChevronRight size={10} color="#0D7A53" />
-                </View>
               </View>
             </View>
           </TouchableOpacity>
