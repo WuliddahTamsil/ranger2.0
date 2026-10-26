@@ -86,8 +86,8 @@ const resolveApiBaseUrl = (): string => {
     return `http://${devHost}:5000/api`;
   }
 
-  const defaultUrl = Platform.OS === "android" ? "http://10.0.2.2:5000" : "http://localhost:5000";
-  return `${defaultUrl}/api`;
+  // Standalone mobile APK/IPA default fallback to production Railway backend
+  return "https://ranger20-production.up.railway.app/api";
 };
 
 export const API_BASE_URL = resolveApiBaseUrl();

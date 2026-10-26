@@ -20,9 +20,9 @@ const uploadLargeVideo = (filePath, options) =>
 
 // Ensure Cloudinary is configured
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "hdlw3v3n",
+  api_key: process.env.CLOUDINARY_API_KEY || "644169682494749",
+  api_secret: process.env.CLOUDINARY_API_SECRET || "IWYyiIt5Ro8CgAbw8BSsyIIo8tk",
   secure: true,
 });
 
