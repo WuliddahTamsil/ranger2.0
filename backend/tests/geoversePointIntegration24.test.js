@@ -34,8 +34,10 @@
  */
 
 const mongoose = require("mongoose");
+const path = require("path");
 const assert = require("assert");
 const dotenv = require("dotenv");
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 dotenv.config();
 
 const PointWallet = require("../features/geoversePoint/models/PointWallet");

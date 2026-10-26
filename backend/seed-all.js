@@ -15,6 +15,16 @@ const SEED_USERS = [
     roleData: {},
   },
   {
+    role: "admin",
+    name: "Admin PGE GEOVERSE",
+    email: "geoverse.pge@gmail.com",
+    phone: "081511226089",
+    address: "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang",
+    password: "12345678",
+    status: "verified",
+    roleData: {},
+  },
+  {
     role: "pemilik_kos",
     name: "Ibu Hj. Siti Nurhaliza",
     email: "pemilikkos@ranger.com",

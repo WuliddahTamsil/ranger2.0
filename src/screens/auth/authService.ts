@@ -300,11 +300,40 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
 };
 
 export const resetPassword = async (email: string, password: string) => {
+  const normalizedEmail = normalizeEmail(email);
+  let backendUpdated = false;
+
+  // 1. Update in Backend MongoDB Atlas
+  try {
+    const res = await fetch(getApiUrl("/auth/reset-password"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail, password }),
+    });
+    const result = await res.json();
+    if (result.success) {
+      backendUpdated = true;
+    } else if (res.status === 400 || res.status === 404) {
+      return { ok: false, error: result.message || "Gagal memperbarui kata sandi." };
+    }
+  } catch (apiErr) {
+    console.warn("Backend reset password failed or offline, fallback to local:", apiErr);
+  }
+
+  // 2. Synchronize in Local Storage (AsyncStorage)
   const accounts = await loadAccounts();
-  const index = accounts.findIndex((item) => item.email === normalizeEmail(email));
-  if (index < 0) return { ok: false, error: "Email belum terdaftar di GEOVERSE 2.0." };
-  const updated = { ...accounts[index], passwordHash: await hashSecret(password), updatedAt: new Date().toISOString() };
-  await saveAccounts(accounts.map((item, itemIndex) => itemIndex === index ? updated : item));
+  const index = accounts.findIndex((item) => item.email === normalizedEmail);
+  if (index >= 0) {
+    const updated = {
+      ...accounts[index],
+      passwordHash: await hashSecret(password),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveAccounts(accounts.map((item, itemIndex) => (itemIndex === index ? updated : item)));
+  } else if (!backendUpdated) {
+    return { ok: false, error: "Email belum terdaftar di GEOVERSE 2.0." };
+  }
+
   return { ok: true, error: undefined };
 };
 

@@ -127,13 +127,14 @@ export default function App() {
         const screenParam = urlParams.get("screen") as Screen | null;
         if (screenParam) {
           if (screenParam === "admin_home") {
+            const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge");
             const adminAcc: any = {
-              id: "6aa17978d4b39e0b125becd5",
-              name: "Super Admin Ranger",
-              email: "ranger@gmail.com",
+              id: isPge ? "admin_pge_001" : "6aa17978d4b39e0b125becd5",
+              name: isPge ? "Admin PGE GEOVERSE" : "Super Admin Ranger",
+              email: isPge ? "geoverse.pge@gmail.com" : "ranger@gmail.com",
               role: "admin",
               status: "verified",
-              token: "6aa17978d4b39e0b125becd5",
+              token: isPge ? "admin_pge_001" : "6aa17978d4b39e0b125becd5",
             };
             setCurrentAuthAccount(adminAcc);
             void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: adminAcc, accountId: adminAcc.id }));
@@ -277,15 +278,16 @@ export default function App() {
             setCurrentAuthAccount(custAcc);
             void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: custAcc, accountId: custAcc.id }));
           } else if (screenParam?.startsWith("admin") || urlParams.get("role") === "admin") {
+            const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge");
             const adminAcc: any = {
-              id: "6aa17978d4b39e0b125becd5",
-              name: "Super Admin Ranger",
-              email: "ranger@gmail.com",
+              id: isPge ? "admin_pge_001" : "6aa17978d4b39e0b125becd5",
+              name: isPge ? "Admin PGE GEOVERSE" : "Super Admin Ranger",
+              email: isPge ? "geoverse.pge@gmail.com" : "ranger@gmail.com",
               phone: "081511226089",
               role: "admin",
               status: "verified",
-              token: "6aa17978d4b39e0b125becd5",
-              address: "HQ GEOVERSE Platform, Garut",
+              token: isPge ? "admin_pge_001" : "6aa17978d4b39e0b125becd5",
+              address: isPge ? "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang" : "HQ GEOVERSE Platform, Garut",
               roleData: {},
             };
             setCurrentAuthAccount(adminAcc);

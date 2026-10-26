@@ -2,6 +2,7 @@ const express = require("express");
 const {
   registerUser,
   loginUser,
+  resetPassword,
   getMitraAccounts,
   getAllUsers,
   updateMitraStatus,
@@ -19,6 +20,7 @@ const router = express.Router();
 
 router.post("/register", registerUser);
 router.post("/login", loginUser);
+router.post("/reset-password", resetPassword);
 router.delete("/delete-account", requireAuth, deleteAccount);
 router.get("/mitra", getMitraAccounts);
 router.get("/users", getAllUsers);

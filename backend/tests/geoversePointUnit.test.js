@@ -3,9 +3,11 @@
  * Comprehensive unit test suite for GEOVERSE Point (12 required scenarios)
  */
 
-const mongoose = require("mongoose");
+const path = require("path");
 const dotenv = require("dotenv");
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 dotenv.config();
+const mongoose = require("mongoose");
 
 const PointWallet = require("../features/geoversePoint/models/PointWallet");
 const PointLedger = require("../features/geoversePoint/models/PointLedger");

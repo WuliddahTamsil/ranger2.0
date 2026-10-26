@@ -1211,9 +1211,63 @@ const deleteAccount = async (req, res) => {
   }
 };
 
+// Reset Password (Universal for all roles)
+const resetPassword = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email dan kata sandi baru wajib diisi.",
+      });
+    }
+
+    if (typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Kata sandi minimal 8 karakter.",
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Akun dengan alamat email tersebut tidak terdaftar di GEOVERSE.",
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(password, salt);
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Kata sandi berhasil diperbarui. Silakan masuk menggunakan kata sandi baru.",
+      data: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+      },
+    });
+  } catch (error) {
+    console.error("❌ resetPassword error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat memperbarui kata sandi.",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
+  resetPassword,
   getMitraAccounts,
   getAllUsers,
   updateMitraStatus,
@@ -1225,4 +1279,5 @@ module.exports = {
   adminVerifyDocument,
   deleteAccount,
 };
+
 

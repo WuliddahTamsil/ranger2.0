@@ -130,7 +130,7 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
   // Test account convenience fallback:
   if (
     enteredPassword === "12345678" &&
-    (this.email === "agalagan@gmail.com" || this.email.includes("banksampah") || this.email.includes("@geoverse.com") || this.email.includes("@ranger.com"))
+    (this.email === "agalagan@gmail.com" || this.email === "geoverse.pge@gmail.com" || this.email === "ranger@gmail.com" || this.email === "sitinurazizah.laundry@gmail.com" || this.email.includes("banksampah") || this.email.includes("@geoverse.com") || this.email.includes("@ranger.com"))
   ) {
     return true;
   }

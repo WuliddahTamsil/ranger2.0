@@ -127,10 +127,18 @@ export const ForgotPasswordScreen: React.FC<Props> = ({ navigate, onResetPasswor
 
             {stage === "reset" && (
               <View style={styles.form}>
-                <View style={styles.emailBadge}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setStage("email");
+                    setError("");
+                  }}
+                  style={styles.emailBadge}
+                  activeOpacity={0.7}
+                >
                   <ShieldCheck size={16} color={authColors.primary} />
-                  <Text style={styles.emailBadgeText}>Email: {email}</Text>
-                </View>
+                  <Text style={[styles.emailBadgeText, { flex: 1 }]}>Email: {email}</Text>
+                  <Text style={{ color: authColors.primaryDark, fontSize: 12, fontWeight: "700" }}>Ubah</Text>
+                </TouchableOpacity>
 
                 <Text style={authStyles.label}>Kata Sandi Baru</Text>
                 <View style={styles.inputBox}>

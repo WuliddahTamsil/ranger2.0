@@ -14,33 +14,48 @@ const seedAdmin = async () => {
     await mongoose.connect(mongoUri);
     console.log("Connected to MongoDB!");
 
-    const adminEmail = "ranger@gmail.com";
-    const adminPassword = "password"; // wait, the user said "ranger@gmail.com / 12345678"
-    const targetPassword = "12345678";
+    const adminAccounts = [
+      {
+        email: "ranger@gmail.com",
+        name: "Super Admin Ranger",
+        phone: "081511226089",
+        address: "HQ Ranger Platform, Garut",
+      },
+      {
+        email: "geoverse.pge@gmail.com",
+        name: "Admin PGE GEOVERSE",
+        phone: "081511226089",
+        address: "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang",
+      },
+    ];
 
-    let admin = await User.findOne({ email: adminEmail });
+    const targetPassword = "12345678";
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(targetPassword, salt);
 
-    if (admin) {
-      admin.role = "admin";
-      admin.status = "verified";
-      admin.passwordHash = passwordHash;
-      admin.name = "Super Admin Ranger";
-      admin.phone = "081511226089";
-      await admin.save();
-      console.log(`✅ Admin account (${adminEmail}) updated successfully with password: ${targetPassword}`);
-    } else {
-      admin = await User.create({
-        role: "admin",
-        name: "Super Admin Ranger",
-        email: adminEmail,
-        phone: "081511226089",
-        address: "HQ Ranger Platform, Garut",
-        passwordHash,
-        status: "verified",
-      });
-      console.log(`✅ Admin account (${adminEmail}) created successfully with password: ${targetPassword}`);
+    for (const item of adminAccounts) {
+      let admin = await User.findOne({ email: item.email });
+      if (admin) {
+        admin.role = "admin";
+        admin.status = "verified";
+        admin.passwordHash = passwordHash;
+        admin.name = item.name;
+        admin.phone = item.phone;
+        admin.address = item.address;
+        await admin.save();
+        console.log(`✅ Admin account (${item.email}) updated successfully with password: ${targetPassword}`);
+      } else {
+        admin = await User.create({
+          role: "admin",
+          name: item.name,
+          email: item.email,
+          phone: item.phone,
+          address: item.address,
+          passwordHash,
+          status: "verified",
+        });
+        console.log(`✅ Admin account (${item.email}) created successfully with password: ${targetPassword}`);
+      }
     }
 
     process.exit(0);

@@ -45,3 +45,8 @@ backend/node_modules/
 /ios
 /android
 
+# documents & sheets
+*.pdf
+*.xlsx
+
+
