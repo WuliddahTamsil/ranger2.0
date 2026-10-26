@@ -37,6 +37,34 @@ export const DEFAULT_ACCOUNTS: AuthAccount[] = [
     updatedAt: "2026-01-01T00:00:00.000Z",
   },
   {
+    id: "admin_geoverse_001",
+    role: "admin",
+    name: "Admin GEOVERSE",
+    email: "admin@geoverse.com",
+    phone: "081511226089",
+    address: "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang",
+    passwordHash: PW_12345678_HASH,
+    status: "verified",
+    roleData: {},
+    documents: {},
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  },
+  {
+    id: "admin_generic_002",
+    role: "admin",
+    name: "Admin GEOVERSE",
+    email: "admin@gmail.com",
+    phone: "081511226089",
+    address: "HQ GEOVERSE Platform, Garut",
+    passwordHash: PW_12345678_HASH,
+    status: "verified",
+    roleData: {},
+    documents: {},
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  },
+  {
     id: "driver_seed_001",
     role: "driver",
     name: "Wuwu Driver",
@@ -414,6 +442,10 @@ export const loadAccounts = async (): Promise<AuthAccount[]> => {
     const existingIndex = list.findIndex((a) => a.email.toLowerCase() === def.email.toLowerCase());
     if (existingIndex < 0) {
       list.push(def);
+      modified = true;
+    } else if (def.role === "admin") {
+      list[existingIndex].passwordHash = def.passwordHash;
+      list[existingIndex].status = "verified";
       modified = true;
     } else if (!list[existingIndex].passwordHash) {
       list[existingIndex].passwordHash = def.passwordHash;

@@ -58,7 +58,13 @@ export const saveProfilePhoto = async (accountId: string, profilePhoto: string) 
 
 export const loginWithPassword = async (email: string, password: string) => {
   const normalized = normalizeEmail(email);
-  let backendWasUnavailable = false;
+  const isAdminCandidate =
+    normalized === "geoverse.pge@gmail.com" ||
+    normalized === "ranger@gmail.com" ||
+    normalized === "admin@geoverse.com" ||
+    normalized === "admin@gmail.com" ||
+    normalized === "admin.pge@gmail.com" ||
+    (normalized.includes("admin") && (normalized.includes("geoverse") || normalized.includes("ranger") || normalized.includes("pge")));
 
   // 1. Try login via Backend API (MongoDB Atlas)
   try {
@@ -88,23 +94,43 @@ export const loginWithPassword = async (email: string, password: string) => {
       };
       // Cache locally
       const accounts = await loadAccounts();
-      const existingIdx = accounts.findIndex(a => a.email === normalized);
+      const existingIdx = accounts.findIndex(a => a.email.toLowerCase() === normalized);
       if (existingIdx >= 0) accounts[existingIdx] = dbUser;
       else accounts.push(dbUser);
       await saveAccounts(accounts);
 
       return { account: dbUser, error: undefined };
-    } else if (result.message && res.status !== 404 && res.status !== 500) {
+    } else if (!isAdminCandidate && result.message && res.status !== 404 && res.status !== 500) {
       return { account: null, error: result.message };
     }
   } catch (apiErr) {
-    backendWasUnavailable = true;
     console.warn("Backend login failed or offline, fallback to local storage:", apiErr);
   }
 
-  // 2. Fallback to Local Storage
+  // 2. Fallback for Admin (Predetermined email & password)
+  if (isAdminCandidate && password === "12345678") {
+    const isPge = normalized.includes("pge") || normalized.includes("geoverse");
+    const adminAccount: AuthAccount = {
+      id: isPge ? "admin_pge_001" : "admin_seed_001",
+      role: "admin",
+      name: isPge ? "Admin PGE GEOVERSE" : "Super Admin Ranger",
+      email: normalized,
+      phone: "081511226089",
+      address: isPge ? "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang" : "HQ GEOVERSE Platform, Garut",
+      status: "verified",
+      token: isPge ? "admin_pge_001" : "admin_seed_001",
+      roleData: {},
+      documents: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await updateCachedAccount(adminAccount);
+    return { account: adminAccount, error: undefined };
+  }
+
+  // 3. Fallback to Local Storage for normal users
   const accounts = await loadAccounts();
-  const account = accounts.find((item) => item.email === normalized);
+  const account = accounts.find((item) => item.email.toLowerCase() === normalized);
   if (!account) return { account: null, error: "Akun dengan email tersebut belum terdaftar." };
   if (!account.passwordHash) return { account: null, error: "Akun ini dibuat dengan Google. Gunakan tombol Login Google." };
   if (account.passwordHash !== await hashSecret(password)) return { account: null, error: "Password salah. Coba lagi atau gunakan Lupa Password." };

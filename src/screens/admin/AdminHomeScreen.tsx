@@ -134,12 +134,12 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   // Navigation Tabs (6 tabs):
   // 0: verifikasi, 1: monitoring, 2: transaksi, 3: mitra, 4: konten beranda, 5: akun
   const [currentTab, setCurrentTab] = useState<number>(() => {
+    if (Platform.OS !== "web") return 0;
     try {
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        const loc = (window as any)?.location;
-        if (loc && typeof loc.search === "string" && loc.search) {
-          const search = loc.search;
-          if (search.includes("tab=content") || search.includes("tab=hero") || search.includes("tab=4")) return 4;
+      if (typeof window !== "undefined" && typeof (window as any)?.location?.search === "string") {
+        const search = (window as any).location.search;
+        if (search && (search.includes("tab=content") || search.includes("tab=hero") || search.includes("tab=4"))) {
+          return 4;
         }
       }
     } catch {
@@ -421,12 +421,12 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
       const matchesStatus = statusFilter === "semua" ? true : m.status === statusFilter;
       if (!matchesStatus) return false;
 
-      const q = searchQuery.toLowerCase().trim();
+      const q = (searchQuery || "").toLowerCase().trim();
       if (!q) return true;
 
       const matchesSearch =
-        m.name.toLowerCase().includes(q) ||
-        m.email.toLowerCase().includes(q) ||
+        (m.name || "").toLowerCase().includes(q) ||
+        (m.email || "").toLowerCase().includes(q) ||
         (m.roleData?.businessName || "").toLowerCase().includes(q) ||
         (m.phone || "").includes(q) ||
         (m.address || "").toLowerCase().includes(q);
@@ -435,20 +435,24 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     });
 
   // Filtered Directory for Tab 3 (Mitra & Pengguna) - INCLUDES CUSTOMERS!
-  const filteredDirectory = mitraAccounts.filter((m) => {
+  const filteredDirectory = (mitraAccounts || []).filter((m) => {
+    if (!m) return false;
     const matchesRole = directoryRoleFilter === "semua" ? true : m.role === directoryRoleFilter;
+    const q = (directorySearch || "").toLowerCase().trim();
+    if (!q) return matchesRole;
     const matchesSearch =
-      m.name.toLowerCase().includes(directorySearch.toLowerCase()) ||
-      m.email.toLowerCase().includes(directorySearch.toLowerCase()) ||
-      (m.roleData?.businessName || "").toLowerCase().includes(directorySearch.toLowerCase()) ||
-      (m.phone || "").includes(directorySearch) ||
-      (m.address || "").toLowerCase().includes(directorySearch.toLowerCase());
+      (m.name || "").toLowerCase().includes(q) ||
+      (m.email || "").toLowerCase().includes(q) ||
+      (m.roleData?.businessName || "").toLowerCase().includes(q) ||
+      (m.phone || "").includes(q) ||
+      (m.address || "").toLowerCase().includes(q);
     return matchesRole && matchesSearch;
   });
 
   // Filtered Transactions for Tab 2
-  const filteredTransactions = transactions.filter((tx) => {
-    const q = txSearch.toLowerCase().trim();
+  const filteredTransactions = (transactions || []).filter((tx) => {
+    if (!tx) return false;
+    const q = (txSearch || "").toLowerCase().trim();
     const matchesSearch =
       !q ||
       (tx.code || "").toLowerCase().includes(q) ||

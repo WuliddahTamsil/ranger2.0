@@ -49,7 +49,7 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
     }
     setLoading(true);
     try {
-      const result = await onLogin(email, password);
+      const result = await onLogin(email.trim(), password);
       if (!result.ok) {
         setError(result.error || "Email atau kata sandi yang Anda masukkan belum tepat.");
       }
