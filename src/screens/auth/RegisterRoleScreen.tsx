@@ -19,6 +19,7 @@ import {
   Coffee,
   Scale,
   ShieldCheck,
+  ShoppingBag,
   Sparkles,
   Store,
   UserRound,
@@ -56,6 +57,14 @@ const partnerOptions: PartnerOption[] = [
     description: "Layanan ojek antar-jemput penumpang, kurir barang kilat, dan armada jemput sampah.",
     requirement: "Syarat: KTP, SIM aktif, STNK, foto kendaraan (SKCK opsional)",
     icon: Bike,
+  },
+  {
+    role: "pemilik_marketplace",
+    title: "Pemilik Marketplace (Kanyaah Mart)",
+    badge: "Kanyaah Mart & UMKM",
+    description: "Jual produk UMKM lokal, kerajinan, olahan makanan, fashion, & komoditas warga.",
+    requirement: "Syarat simpel: KTP pemilik & foto produk/toko (NIB opsional)",
+    icon: ShoppingBag,
   },
   {
     role: "pemilik_shop",

@@ -88,7 +88,7 @@ const ROLE_METAS: Record<
   pemilik_laundry: { title: "Kanyaah Laundry", badge: "Cuci & Setrika", icon: WashingMachine },
   pemilik_kos: { title: "Homestay, Kos & Wisata", badge: "Hunian & Rekreasi", icon: Building2 },
   bank_sampah: { title: "Kanyaah Recycle", badge: "Bank Sampah", icon: Scale },
-  pemilik_marketplace: { title: "UMKM Marketplace", badge: "Produk Lokal", icon: Store },
+  pemilik_marketplace: { title: "Pemilik Marketplace (Kanyaah Mart)", badge: "Kanyaah Mart / UMKM", icon: ShoppingBag },
 };
 
 const inputConfig: Record<
@@ -102,9 +102,10 @@ const inputConfig: Record<
     { key: "vehicleBrand", label: "Merek & tipe kendaraan", placeholder: "Contoh: Honda Beat 2022", required: false },
   ],
   pemilik_marketplace: [
-    { key: "businessName", label: "Nama toko / usaha", placeholder: "Contoh: UMKM Kamojang Berkah" },
-    { key: "businessAddress", label: "Alamat toko / operasional", placeholder: "Alamat lengkap tempat usaha", multiline: true },
-    { key: "businessCategory", label: "Kategori usaha", placeholder: "Makanan, kerajinan, fashion...", required: false },
+    { key: "businessName", label: "Nama toko / usaha UMKM", placeholder: "Contoh: UMKM Berkah Kamojang / Toko Bu Ani" },
+    { key: "businessAddress", label: "Alamat toko / operasional UMKM", placeholder: "Alamat lengkap tempat usaha Anda", multiline: true },
+    { key: "businessCategory", label: "Kategori produk UMKM", placeholder: "Contoh: Makanan Olahan, Kerajinan, Minuman, Fashion", required: false },
+    { key: "businessPhone", label: "No. WhatsApp usaha (opsional)", placeholder: "Contoh: 081234567890", required: false },
   ],
   pemilik_shop: [
     { key: "businessName", label: "Nama toko / apotek", placeholder: "Contoh: Kanyaah Mart / Apotek Sehat" },
@@ -743,7 +744,9 @@ const RoleStep: React.FC<{
       <SectionHeading
         icon={<ShieldCheck size={18} color={authColors.primary} />}
         title={
-          role === "pemilik_catering"
+          role === "pemilik_marketplace"
+            ? "Data Toko / Usaha UMKM"
+            : role === "pemilik_catering"
             ? "Data Usaha Katering"
             : role === "pemilik_laundry"
             ? "Data Usaha Laundry"
@@ -751,7 +754,11 @@ const RoleStep: React.FC<{
             ? "Data Unit Bank Sampah"
             : "Data Usaha"
         }
-        text="Isi informasi operasional dasar yang akan tampil pada profil mitra."
+        text={
+          role === "pemilik_marketplace"
+            ? "Isi informasi sederhana toko/UMKM Anda untuk produk Kanyaah Mart."
+            : "Isi informasi operasional dasar yang akan tampil pada profil mitra."
+        }
       />
       {inputConfig[role].map((field) => (
         <ModernTextField
@@ -1224,12 +1231,12 @@ const DocumentsStep: React.FC<{
         </View>
       );
     }
-    if (role === "pemilik_catering" || role === "pemilik_laundry") {
+    if (role === "pemilik_catering" || role === "pemilik_laundry" || role === "pemilik_marketplace") {
       return (
         <View style={styles.clientGuidanceBox}>
           <Info size={16} color={authColors.primary} />
           <Text style={styles.clientGuidanceText}>
-            <Text style={{ fontWeight: "700" }}>Kebijakan Mitra Perintis UMKM:</Text> Calon mitra perintis binaan (Laundry & Catering) cukup mengunggah <Text style={{ fontWeight: "700" }}>KTP Pemilik dan Foto Tempat Usaha / Dapur</Text>. NIB dan Sertifikat Halal bersifat <Text style={{ fontWeight: "700" }}>Opsional</Text> agar pendaftaran langsung diverifikasi.
+            <Text style={{ fontWeight: "700" }}>Kebijakan Mitra UMKM / Marketplace:</Text> Calon mitra cukup mengunggah <Text style={{ fontWeight: "700" }}>KTP Pemilik dan Foto Produk / Toko</Text>. Pendaftaran sangat simpel dan praktis agar UMKM binaan lokal dapat langsung berjualan di Kanyaah Mart.
           </Text>
         </View>
       );
