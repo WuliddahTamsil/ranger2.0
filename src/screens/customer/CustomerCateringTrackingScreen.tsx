@@ -142,13 +142,18 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
         setAllCateringOrders(sortedOrders);
 
         let targetId = targetOrderId.current || getActiveCateringTrackingOrderId();
-        if (!targetId && Platform.OS === "web" && typeof window !== "undefined" && window.location?.search) {
-          const urlParamId = new URLSearchParams(window.location.search).get("orderId");
-          if (urlParamId) {
-            targetId = urlParamId;
-            targetOrderId.current = urlParamId;
+        try {
+          if (!targetId && Platform.OS === "web" && typeof window !== "undefined") {
+            const loc = (window as any)?.location;
+            if (loc && typeof loc.search === "string" && loc.search) {
+              const urlParamId = new URLSearchParams(loc.search).get("orderId");
+              if (urlParamId) {
+                targetId = urlParamId;
+                targetOrderId.current = urlParamId;
+              }
+            }
           }
-        }
+        } catch {}
 
         let live = targetId
           ? sortedOrders.find((candidate: any) => String(candidate._id || candidate.id) === targetId)

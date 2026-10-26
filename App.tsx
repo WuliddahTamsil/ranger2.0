@@ -122,10 +122,13 @@ export default function App() {
     let active = true;
     void restoreStoredAccount().then(({ account }) => {
       if (!active) return;
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        const urlParams = new URLSearchParams(window.location.search);
-        const screenParam = urlParams.get("screen") as Screen | null;
-        if (screenParam) {
+      try {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          const loc = (window as any)?.location;
+          if (loc && typeof loc.search === "string" && loc.search) {
+            const urlParams = new URLSearchParams(loc.search);
+            const screenParam = urlParams.get("screen") as Screen | null;
+            if (screenParam) {
           if (screenParam === "admin_home") {
             const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge");
             const adminAcc: any = {
@@ -297,7 +300,11 @@ export default function App() {
           return;
         }
       }
-      if (!account) return;
+    }
+  } catch {
+    // Safe fallback for mobile environments
+  }
+  if (!account) return;
       setCurrentAuthAccount(account);
       setCurrentScreen(roleToScreen(account.role, account.status));
     });

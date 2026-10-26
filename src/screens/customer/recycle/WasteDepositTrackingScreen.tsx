@@ -91,10 +91,15 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
   useEffect(() => {
     if (!deposit) {
       let targetId: string | null = null;
-      if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.search) {
-        const params = new URLSearchParams(window.location.search);
-        targetId = params.get("depositId");
-      }
+      try {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          const loc = (window as any)?.location;
+          if (loc && typeof loc.search === "string" && loc.search) {
+            const params = new URLSearchParams(loc.search);
+            targetId = params.get("depositId");
+          }
+        }
+      } catch {}
       if (targetId) {
         setLoading(true);
         getWasteDepositById(targetId)
@@ -111,7 +116,16 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
   }, [deposit]);
 
   const fetchLatest = async () => {
-    const currentId = deposit?._id || (Platform.OS === "web" && typeof window !== "undefined" && window.location?.search ? new URLSearchParams(window.location.search).get("depositId") : null);
+    let urlDepositId: string | null = null;
+    try {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        const loc = (window as any)?.location;
+        if (loc && typeof loc.search === "string" && loc.search) {
+          urlDepositId = new URLSearchParams(loc.search).get("depositId");
+        }
+      }
+    } catch {}
+    const currentId = deposit?._id || urlDepositId;
     if (!currentId) return;
     try {
       const res = await getWasteDepositById(currentId);

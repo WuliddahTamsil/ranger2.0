@@ -178,9 +178,14 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
     let active = true;
     const fetchOrder = async () => {
       let targetId: string | null = null;
-      if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.search) {
-        targetId = new URLSearchParams(window.location.search).get("orderId");
-      }
+      try {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          const loc = (window as any)?.location;
+          if (loc && typeof loc.search === "string" && loc.search) {
+            targetId = new URLSearchParams(loc.search).get("orderId");
+          }
+        }
+      } catch {}
       if (!targetId && authAccount?.id) {
         const res = await getCateringOrdersForCustomer(authAccount.id);
         if (res.success && Array.isArray(res.data) && res.data.length > 0) {

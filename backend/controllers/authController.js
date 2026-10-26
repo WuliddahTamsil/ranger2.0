@@ -657,12 +657,12 @@ const getMitraAccounts = async (req, res) => {
     } else if (includeCustomers === "true") {
       filter.role = { $ne: "admin" };
     } else {
-      filter.role = { $ne: "customer" };
+      filter.role = { $nin: ["customer", "admin"] };
     }
 
     if (status && status !== "semua") filter.status = status;
 
-    const mitras = await User.find(filter).sort({ createdAt: -1 });
+    const mitras = await User.find(filter).sort({ createdAt: -1 }).lean();
     return res.status(200).json({ success: true, count: mitras.length, data: mitras });
   } catch (error) {
     console.error("❌ Get mitra error:", error);
@@ -676,7 +676,7 @@ const getAllUsers = async (req, res) => {
     const { role } = req.query;
     const filter = { role: { $ne: "admin" } };
     if (role && role !== "semua") filter.role = role;
-    const users = await User.find(filter).sort({ createdAt: -1 });
+    const users = await User.find(filter).sort({ createdAt: -1 }).lean();
     return res.status(200).json({ success: true, count: users.length, data: users });
   } catch (error) {
     console.error("❌ Get all users error:", error);

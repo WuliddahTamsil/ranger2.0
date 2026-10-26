@@ -88,6 +88,7 @@ import {
   fetchAdminStats,
   fetchAdminTransactions,
 } from "../auth/authService";
+import { loadAccounts } from "../auth/authStorage";
 import { rp } from "../../utils/formatters";
 import { useTimeGreeting } from "../../utils/timeGreeting";
 import { getApiUrl } from "../../services/api";
@@ -133,9 +134,16 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   // Navigation Tabs (6 tabs):
   // 0: verifikasi, 1: monitoring, 2: transaksi, 3: mitra, 4: konten beranda, 5: akun
   const [currentTab, setCurrentTab] = useState<number>(() => {
-    if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.search) {
-      const search = window.location.search;
-      if (search.includes("tab=content") || search.includes("tab=hero") || search.includes("tab=4")) return 4;
+    try {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        const loc = (window as any)?.location;
+        if (loc && typeof loc.search === "string" && loc.search) {
+          const search = loc.search;
+          if (search.includes("tab=content") || search.includes("tab=hero") || search.includes("tab=4")) return 4;
+        }
+      }
+    } catch {
+      // Safe fallback for mobile or restricted environments
     }
     return 0;
   });
@@ -287,6 +295,14 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   };
 
   useEffect(() => {
+    // 1. Immediately seed from local storage to prevent 0 flicker
+    void loadAccounts().then((cached: AuthAccount[]) => {
+      if (cached && cached.length > 0) {
+        setMitraAccounts((prev) => (prev.length === 0 ? cached : prev));
+      }
+    });
+
+    // 2. Fetch live data from backend MongoDB Atlas
     void refreshData();
 
     // Auto-refresh periodically every 15s so new registrations from any device sync automatically
@@ -382,9 +398,13 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   };
 
   // Counts (Pending count includes any partner or customer awaiting verification)
-  const pendingCount = mitraAccounts.filter((m) => m.role !== "admin" && m.status === "pending").length;
-  const approvedCount = mitraAccounts.filter((m) => m.role !== "admin" && m.status === "verified").length;
-  const rejectedCount = mitraAccounts.filter((m) => m.role !== "admin" && m.status === "rejected").length;
+  const pendingFromList = mitraAccounts.filter((m) => m.role !== "admin" && m.status === "pending").length;
+  const approvedFromList = mitraAccounts.filter((m) => m.role !== "admin" && m.status === "verified").length;
+  const rejectedFromList = mitraAccounts.filter((m) => m.role !== "admin" && m.status === "rejected").length;
+
+  const pendingCount = stats?.pendingMitra !== undefined ? Math.max(pendingFromList, stats.pendingMitra) : pendingFromList;
+  const approvedCount = stats?.approvedMitra !== undefined ? Math.max(approvedFromList, stats.approvedMitra) : approvedFromList;
+  const rejectedCount = stats?.rejectedMitra !== undefined ? Math.max(rejectedFromList, stats.rejectedMitra) : rejectedFromList;
   const customerAccounts = mitraAccounts.filter((m) => m.role === "customer");
   const totalRevenue = stats?.totalTransactionsAmount || 0;
 

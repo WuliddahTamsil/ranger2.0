@@ -324,6 +324,58 @@ export const DEFAULT_ACCOUNTS: AuthAccount[] = [
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   },
+  {
+    id: "6adf99de7c5f48d3c93c787d",
+    role: "pemilik_catering",
+    name: "Wuwu",
+    email: "wuwuuu123@gmail.com",
+    phone: "+6285294939357",
+    address: "BOGOR",
+    passwordHash: PW_12345678_HASH,
+    status: "pending",
+    roleData: {
+      businessName: "Tamsil Catering",
+      businessAddress: "Bogor",
+      businessType: "All",
+      isDapurOpen: "true",
+    },
+    documents: {
+      ktp: {
+        key: "ktp",
+        label: "KTP Pemilik",
+        uri: "file:///data/user/0/com.wuliddah_tamsil.the_ranger_react_native/cache/ImagePicker/79e134c0-23a3-43a3-9991-42423adaee3d.jpeg",
+        name: "Screenshot_20261025_134747.jpg",
+        status: "pending",
+        progress: 100,
+      },
+      kitchen_photo: {
+        key: "kitchen_photo",
+        label: "Foto Tempat Usaha / Dapur",
+        uri: "file:///data/user/0/com.wuliddah_tamsil.the_ranger_react_native/cache/ImagePicker/4f3012e1-2c94-4c9f-b98a-fae53916e24c.jpeg",
+        name: "IMG_20261014_002158.jpg",
+        status: "pending",
+        progress: 100,
+      },
+      business_license: {
+        key: "business_license",
+        label: "NIB / Izin Usaha (Opsional)",
+        uri: "file:///data/user/0/com.wuliddah_tamsil.the_ranger_react_native/cache/ImagePicker/868d2cb4-7848-44b8-8de0-e8aaac0e40f2.jpeg",
+        name: "IMG_20261014_002158.jpg",
+        status: "pending",
+        progress: 100,
+      },
+      halal_cert: {
+        key: "halal_cert",
+        label: "Sertifikat Halal (Opsional)",
+        uri: "file:///data/user/0/com.wuliddah_tamsil.the_ranger_react_native/cache/DocumentPicker/8c1c8942-5a64-4af9-bc0e-9cfffe47ace5.jpg",
+        name: "Screenshot_20261025_134502.jpg",
+        status: "pending",
+        progress: 100,
+      },
+    },
+    createdAt: "2026-10-26T18:20:14.748Z",
+    updatedAt: "2026-10-26T18:20:14.748Z",
+  },
 ];
 
 export const loadAccounts = async (): Promise<AuthAccount[]> => {
@@ -344,9 +396,8 @@ export const loadAccounts = async (): Promise<AuthAccount[]> => {
     if (existingIndex < 0) {
       list.push(def);
       modified = true;
-    } else if (!list[existingIndex].passwordHash || list[existingIndex].status !== "verified") {
+    } else if (!list[existingIndex].passwordHash) {
       list[existingIndex].passwordHash = def.passwordHash;
-      list[existingIndex].status = "verified";
       modified = true;
     }
   }
