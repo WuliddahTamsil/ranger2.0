@@ -124,7 +124,7 @@ const createRedemption = async (req, res) => {
       type: type === "VOUCHER" ? "REDEEM_VOUCHER" : "REDEEM_CASH",
       sourceType: type === "VOUCHER" ? "VOUCHER" : "CASH_REDEMPTION",
       sourceId: redemptionCode,
-      notes: type === "VOUCHER" ? `Tukar voucher ${voucherDoc?.title}` : `Tukar kas Rp ${safePoints.toLocaleString("id-ID")}`,
+      notes: type === "VOUCHER" ? `Tukar voucher ${voucherDoc?.title}` : `Tukar kas Rp ${Math.round(safePoints * 0.01).toLocaleString("id-ID")}`,
       actorId: userId,
     });
 
@@ -137,7 +137,7 @@ const createRedemption = async (req, res) => {
       bankSampahId: bankSampahId || undefined,
       type,
       points: safePoints,
-      rupiahValue: safePoints, // 1 Point = Rp 1
+      rupiahValue: Math.round(safePoints * 0.01), // 100 Point = Rp 1
       fee: 0,
       payoutDestination: {
         channel: payoutDestination.channel || (isInstantVoucher ? "VOUCHER_WALLET" : "CASH_AT_BANK"),

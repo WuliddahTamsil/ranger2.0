@@ -379,7 +379,7 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
               <Text style={styles.heroBalanceUnit}>Pts</Text>
             </View>
             <Text style={styles.heroRupiahConversion}>
-              ≈ {rp(balance)} <Text style={styles.heroConversionSub}>• 1 Pts = Rp 1</Text>
+              ≈ {rp(Math.floor(balance / 100))} <Text style={styles.heroConversionSub}>• 100 Pts = Rp 1</Text>
             </Text>
           </View>
 

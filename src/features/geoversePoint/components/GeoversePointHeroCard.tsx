@@ -88,7 +88,7 @@ export const GeoversePointHeroCard: React.FC<GeoversePointHeroCardProps> = ({
             <Text style={styles.rupiahLabel}>Estimasi Nilai Tukar:</Text>
             <Text style={styles.rupiahValue} numberOfLines={1}>
               {showBalance ? formatRupiah(rupiahValue) : "Rp ••••••"}
-              <Text style={styles.rateNote}> • 1 Pts = Rp 1</Text>
+              <Text style={styles.rateNote}> • 100 Pts = Rp 1</Text>
             </Text>
           </View>
 

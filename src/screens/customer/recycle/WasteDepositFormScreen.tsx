@@ -286,7 +286,7 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.stepHead}>Poin GEOVERSE Masuk Otomatis</Text>
-                <Text style={styles.stepDesc}>Nilai hasil timbangan (1 Pts = Rp 1) langsung cair ke dompet poin Anda.</Text>
+                <Text style={styles.stepDesc}>Nilai hasil timbangan (100 Pts = Rp 1) langsung cair ke dompet poin Anda.</Text>
               </View>
             </View>
           </View>

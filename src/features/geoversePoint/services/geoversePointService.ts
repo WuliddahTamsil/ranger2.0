@@ -198,7 +198,7 @@ export const fetchPointConfig = async (): Promise<{
     return {
       success: true,
       data: {
-        pointToRupiahRate: 1,
+        pointToRupiahRate: 0.01,
         minCashRedemptionPoints: 10000,
         features: {
           allowCashRedemption: true,

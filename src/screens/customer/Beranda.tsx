@@ -1215,7 +1215,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   // Main Beranda layout panel (Clean Gojek-Grade Super-App Design)
   const renderBerandaContent = () => {
     const pointBalance = wallet?.balancePoint ?? 0;
-    const rupiahEquivalent = pointBalance;
+    const rupiahEquivalent = Math.floor(pointBalance / 100);
 
     return (
       <ScrollView
@@ -2709,7 +2709,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.faqCard}>
                   <Text style={styles.faqQuestion}>Untuk apa saldo GEOVERSE Point digunakan?</Text>
                   <Text style={styles.faqAnswer}>
-                    1 Pts = Rp1. Poin dapat digunakan langsung untuk potongan pembayaran belanja di Kanyaah Shop, katering, atau ditukar dengan voucher belanja dan saldo tunai.
+                    100 Pts = Rp 1. Poin dapat digunakan langsung untuk potongan pembayaran belanja di Kanyaah Shop, katering, atau ditukar dengan voucher belanja dan saldo tunai.
                   </Text>
                 </View>
 

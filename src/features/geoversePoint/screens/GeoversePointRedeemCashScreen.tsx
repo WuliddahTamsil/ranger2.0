@@ -192,7 +192,7 @@ export const GeoversePointRedeemCashScreen: React.FC<Nav> = ({ navigate }) => {
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Nominal Pencairan</Text>
             <Text style={styles.sectionSubtitle}>
-              Minimal penarikan {formatPoint(minPoints)} (1 Pts = Rp 1)
+              Minimal penarikan {formatPoint(minPoints)} (100 Pts = Rp 1)
             </Text>
 
             <View style={styles.inputWrapper}>

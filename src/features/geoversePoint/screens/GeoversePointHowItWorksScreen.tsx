@@ -136,7 +136,7 @@ export const GeoversePointHowItWorksScreen: React.FC<Nav> = ({ navigate }) => {
         {/* Value Conversion Highlight */}
         <View style={styles.conversionCard}>
           <Text style={styles.convLabel}>KONVERSI RESMI</Text>
-          <Text style={styles.convFormula}>1 GEOVERSE Point = Rp 1</Text>
+          <Text style={styles.convFormula}>100 GEOVERSE Point = Rp 1</Text>
           <Text style={styles.convDesc}>
             Nilai nominal dihitung langsung dan transparan oleh sistem backend resmi GEOVERSE tanpa potongan tersembunyi.
           </Text>
