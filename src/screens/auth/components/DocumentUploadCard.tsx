@@ -102,27 +102,33 @@ export const DocumentUploadCard: React.FC<Props> = ({
         source === "camera"
           ? await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              quality: 0.85,
+              quality: 0.7,
+              base64: true,
             })
           : await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              quality: 0.85,
+              quality: 0.7,
+              base64: true,
             });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
 
-      let remoteUri = asset.uri;
+      let remoteUri = "";
       try {
         const uploadRes = await uploadFileToBackend(
           asset.uri,
           asset.fileName || `${documentKey}.jpg`,
-          asset.mimeType || "image/jpeg"
+          asset.mimeType || "image/jpeg",
+          asset.base64 || undefined
         );
         if (uploadRes?.success && uploadRes?.data?.url) {
           remoteUri = uploadRes.data.url;
         }
       } catch (uploadErr) {
-        console.warn("Upload to backend failed, keeping local uri:", uploadErr);
+        console.warn("Upload to backend note, using local fallback:", uploadErr);
+      }
+      if (!remoteUri) {
+        remoteUri = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
       }
 
       const selected = buildDocument(

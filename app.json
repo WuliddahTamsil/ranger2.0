@@ -67,7 +67,8 @@
     "extra": {
       "eas": {
         "projectId": "775fa982-0579-4002-b518-4c22a6f1d545"
-      }
+      },
+      "EXPO_PUBLIC_USE_RN_FETCH": "1"
     }
   }
 }

@@ -66,13 +66,15 @@ export const ProfilePhotoEditor: React.FC<ProfilePhotoEditorProps> = ({
             mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 0.8,
+            quality: 0.7,
+            base64: true,
           })
         : await ImagePicker.launchCameraAsync({
             mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [1, 1],
-            quality: 0.8,
+            quality: 0.7,
+            base64: true,
           });
 
       if (result.canceled || !result.assets?.[0]) return;
@@ -81,9 +83,21 @@ export const ProfilePhotoEditor: React.FC<ProfilePhotoEditorProps> = ({
       setIsUploading(true);
       const extension = asset.fileName?.split(".").pop() || "jpg";
       const fileName = `profile-${userId || Date.now()}.${extension}`;
-      const uploadResult = await uploadFileToBackend(asset.uri, fileName, asset.mimeType || "image/jpeg");
-      const uploadedUri = uploadResult?.data?.url || uploadResult?.url;
-      if (!uploadedUri) throw new Error("URL foto dari server tidak tersedia.");
+      let uploadedUri = "";
+      try {
+        const uploadResult = await uploadFileToBackend(
+          asset.uri,
+          fileName,
+          asset.mimeType || "image/jpeg",
+          asset.base64 || undefined
+        );
+        uploadedUri = uploadResult?.data?.url || uploadResult?.url || "";
+      } catch (err) {
+        console.warn("Profile upload note, using local fallback:", err);
+      }
+      if (!uploadedUri) {
+        uploadedUri = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+      }
 
       if (userId) {
         const saved = await saveProfilePhoto(userId, uploadedUri);

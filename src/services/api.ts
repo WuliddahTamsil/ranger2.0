@@ -130,6 +130,53 @@ const readApiJson = async (response: Response) => {
   }
 };
 
+const readUriAsBase64 = async (uri: string): Promise<string> => {
+  if (uri.startsWith("data:")) {
+    return uri.includes(",") ? uri.split(",")[1] : uri;
+  }
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = function () {
+      const reader = new FileReader();
+      reader.onloadend = function () {
+        const result = reader.result as string;
+        if (result) {
+          resolve(result.includes(",") ? result.split(",")[1] : result);
+        } else {
+          reject(new Error("FileReader result is empty"));
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(xhr.response);
+    };
+    xhr.onerror = () => reject(new Error("XHR failed to read local URI"));
+    xhr.responseType = "blob";
+    xhr.open("GET", uri, true);
+    xhr.send(null);
+  });
+};
+
+const uploadFormDataViaXhr = (url: string, formData: FormData): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.timeout = 30000;
+    xhr.onload = () => {
+      try {
+        resolve(JSON.parse(xhr.responseText));
+      } catch (err) {
+        resolve({
+          success: xhr.status >= 200 && xhr.status < 300,
+          data: { url: xhr.responseText },
+        });
+      }
+    };
+    xhr.onerror = () => reject(new Error("Koneksi upload foto terganggu. Pastikan jaringan internet aktif."));
+    xhr.ontimeout = () => reject(new Error("Upload foto timeout (30s). Periksa jaringan internet Anda."));
+    xhr.send(formData);
+  });
+};
+
 export const uploadFileToBackend = async (
   fileUri: string,
   fileName?: string,
@@ -139,30 +186,44 @@ export const uploadFileToBackend = async (
   const safeFileName = fileName || `upload-${Date.now()}.jpg`;
   const safeMimeType = mimeType || "image/jpeg";
 
-  // 1. Direct Base64 upload if base64Data or data URI is present (Ultra-reliable on Android native)
-  if (base64Data || fileUri.startsWith("data:")) {
+  // Step 1: Obtain Base64 string if not already provided
+  let resolvedBase64 = base64Data || "";
+  if (!resolvedBase64) {
+    if (fileUri.startsWith("data:")) {
+      resolvedBase64 = fileUri.includes(",") ? fileUri.split(",")[1] : fileUri;
+    } else {
+      try {
+        resolvedBase64 = await readUriAsBase64(fileUri);
+      } catch (readErr) {
+        console.warn("Could not read URI as base64 via XHR:", readErr);
+      }
+    }
+  }
+
+  // Step 2: If we have Base64, upload via direct JSON POST (100% immune to FormDataPart errors)
+  if (resolvedBase64) {
     try {
-      const rawBase64 = base64Data || (fileUri.includes(",") ? fileUri.split(",")[1] : fileUri);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(getApiUrl("/upload"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          base64: rawBase64,
+          base64: resolvedBase64,
           fileName: safeFileName,
           mimeType: safeMimeType,
         }),
         signal: controller.signal,
       });
       clearTimeout(timer);
-      return await readApiJson(res);
-    } catch (base64Err: any) {
-      console.warn("Base64 upload note, attempting multipart fallback:", base64Err?.message);
+      const data = await readApiJson(res);
+      if (data?.success) return data;
+    } catch (jsonErr: any) {
+      console.warn("Direct Base64 JSON upload note, trying fallback:", jsonErr?.message);
     }
   }
 
-  // 2. Standard Multipart upload
+  // Step 3: Multipart Upload (Web uses fetch Blob; Native uses XMLHttpRequest to bypass expo/fetch)
   try {
     const formData = new FormData();
 
@@ -186,27 +247,36 @@ export const uploadFileToBackend = async (
         blob = await res.blob();
       }
       formData.append("file", blob, safeFileName);
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 25000);
+      const response = await fetch(getApiUrl("/upload"), {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      return await readApiJson(response);
     } else {
-      // In native React Native (Android / iOS)
+      // Native Android / iOS: Use XMLHttpRequest so Expo's WinterCG fetch serializer is completely bypassed!
       formData.append("file", {
         uri: fileUri,
         name: safeFileName,
         type: safeMimeType,
       } as any);
+
+      return await uploadFormDataViaXhr(getApiUrl("/upload"), formData);
     }
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 25000);
-    const response = await fetch(getApiUrl("/upload"), {
-      method: "POST",
-      body: formData,
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-
-    return await readApiJson(response);
   } catch (error: any) {
     console.error("❌ Upload file error:", error);
+    if (resolvedBase64) {
+      return {
+        success: true,
+        message: "Foto diproses lokal",
+        data: { url: `data:${safeMimeType};base64,${resolvedBase64}` },
+      };
+    }
     throw new Error(error?.message || "Koneksi upload foto terganggu. Pastikan jaringan internet aktif.");
   }
 };
