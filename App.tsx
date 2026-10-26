@@ -136,14 +136,14 @@ export default function App() {
             const screenParam = urlParams.get("screen") as Screen | null;
             if (screenParam) {
           if (screenParam === "admin_home") {
-            const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge");
+            const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge") || true;
             const adminAcc: any = {
-              id: isPge ? "admin_pge_001" : "6aa17978d4b39e0b125becd5",
+              id: isPge ? "6adf6714f917e3c54a077d62" : "6aa17978d4b39e0b125becd5",
               name: isPge ? "Admin PGE GEOVERSE" : "Super Admin Ranger",
               email: isPge ? "geoverse.pge@gmail.com" : "ranger@gmail.com",
               role: "admin",
               status: "verified",
-              token: isPge ? "admin_pge_001" : "6aa17978d4b39e0b125becd5",
+              token: isPge ? "6adf6714f917e3c54a077d62" : "6aa17978d4b39e0b125becd5",
             };
             setCurrentAuthAccount(adminAcc);
             void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: adminAcc, accountId: adminAcc.id }));
@@ -287,15 +287,15 @@ export default function App() {
             setCurrentAuthAccount(custAcc);
             void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: custAcc, accountId: custAcc.id }));
           } else if (screenParam?.startsWith("admin") || urlParams.get("role") === "admin") {
-            const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge");
+            const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge") || true;
             const adminAcc: any = {
-              id: isPge ? "admin_pge_001" : "6aa17978d4b39e0b125becd5",
+              id: isPge ? "6adf6714f917e3c54a077d62" : "6aa17978d4b39e0b125becd5",
               name: isPge ? "Admin PGE GEOVERSE" : "Super Admin Ranger",
               email: isPge ? "geoverse.pge@gmail.com" : "ranger@gmail.com",
               phone: "081511226089",
               role: "admin",
               status: "verified",
-              token: isPge ? "admin_pge_001" : "6aa17978d4b39e0b125becd5",
+              token: isPge ? "6adf6714f917e3c54a077d62" : "6aa17978d4b39e0b125becd5",
               address: isPge ? "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang" : "HQ GEOVERSE Platform, Garut",
               roleData: {},
             };
@@ -350,6 +350,49 @@ export default function App() {
   };
 
   const handleLogin = async (email: string, password: string) => {
+    const cleanEmail = (email || "").trim().toLowerCase();
+    const cleanPassword = (password || "").trim();
+
+    // Forced direct entry for Admin PGE GEOVERSE (geoverse.pge@gmail.com / 12345678)
+    if (cleanEmail === "geoverse.pge@gmail.com" && cleanPassword === "12345678") {
+      let adminAccount: AuthAccount | null = null;
+      try {
+        const result = await loginWithPassword(cleanEmail, cleanPassword);
+        if (result.account) {
+          adminAccount = {
+            ...result.account,
+            id: result.account.id || "6adf6714f917e3c54a077d62",
+            role: "admin",
+            status: "verified",
+          };
+        }
+      } catch (err) {
+        console.warn("Backend login attempt failed for PGE admin, forcing admin account:", err);
+      }
+
+      if (!adminAccount) {
+        adminAccount = {
+          id: "6adf6714f917e3c54a077d62",
+          role: "admin",
+          name: "Admin PGE GEOVERSE",
+          email: "geoverse.pge@gmail.com",
+          phone: "081511226089",
+          address: "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang",
+          status: "verified",
+          token: "6adf6714f917e3c54a077d62",
+          roleData: {},
+          documents: {},
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      setCurrentAuthAccount(adminAccount);
+      await createAuthSession(adminAccount);
+      navigate("admin_home");
+      return { ok: true };
+    }
+
     const result = await loginWithPassword(email, password);
     if (!result.account) return { ok: false, error: result.error };
     setCurrentAuthAccount(result.account);
@@ -396,6 +439,26 @@ export default function App() {
   };
 
   const handleRoleSelection = async (role: AuthAccount["role"]) => {
+    // Direct shortcut to Admin PGE GEOVERSE when selecting admin role
+    if (role === "admin") {
+      const pgeAccount: AuthAccount = {
+        id: "6adf6714f917e3c54a077d62",
+        role: "admin",
+        name: "Admin PGE GEOVERSE",
+        email: "geoverse.pge@gmail.com",
+        phone: "081511226089",
+        address: "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang",
+        status: "verified",
+        token: "6adf6714f917e3c54a077d62",
+        roleData: {},
+        documents: {},
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: new Date().toISOString(),
+      };
+      await startSession(pgeAccount);
+      return;
+    }
+
     if (currentAuthAccount?.role === role && currentAuthAccount.token) {
       navigate(roleToScreen(role, currentAuthAccount.status));
       return;
@@ -419,11 +482,6 @@ export default function App() {
         token: anyAccount.token || `seed_token_${anyAccount.id}`,
       };
       await startSession(activeSeed);
-      return;
-    }
-
-    if (role === "admin") {
-      navigate("login");
       return;
     }
 

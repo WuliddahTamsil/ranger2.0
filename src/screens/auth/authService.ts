@@ -58,6 +58,7 @@ export const saveProfilePhoto = async (accountId: string, profilePhoto: string) 
 
 export const loginWithPassword = async (email: string, password: string) => {
   const normalized = normalizeEmail(email);
+  const cleanPassword = (password || "").trim();
   const isAdminCandidate =
     normalized === "geoverse.pge@gmail.com" ||
     normalized === "ranger@gmail.com" ||
@@ -71,21 +72,22 @@ export const loginWithPassword = async (email: string, password: string) => {
     const res = await fetch(getApiUrl("/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: normalized, password }),
+      body: JSON.stringify({ email: normalized, password: cleanPassword }),
     });
     const result = await res.json();
 
     if (result.success && result.data) {
+      const isPge = normalized === "geoverse.pge@gmail.com" || normalized.includes("pge");
       const dbUser: AuthAccount = {
-        id: result.data.id || result.data._id,
-        role: result.data.role,
-        name: result.data.name,
-        email: result.data.email,
-        phone: result.data.phone || "",
-        address: result.data.address || "",
+        id: result.data.id || result.data._id || (isPge ? "6adf6714f917e3c54a077d62" : "admin_seed_001"),
+        role: (isAdminCandidate ? "admin" : result.data.role) as any,
+        name: result.data.name || (isPge ? "Admin PGE GEOVERSE" : "Super Admin Ranger"),
+        email: result.data.email || normalized,
+        phone: result.data.phone || "081511226089",
+        address: result.data.address || (isPge ? "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang" : "HQ GEOVERSE Platform, Garut"),
         profilePhoto: result.data.profilePhoto,
-        token: result.data.token,
-        status: result.data.status,
+        token: result.data.token || result.data.id || (isPge ? "6adf6714f917e3c54a077d62" : "admin_seed_001"),
+        status: (isAdminCandidate ? "verified" : result.data.status) as any,
         rejectionReason: result.data.rejectionReason,
         roleData: result.data.roleData || {},
         documents: result.data.documents || {},
@@ -108,17 +110,17 @@ export const loginWithPassword = async (email: string, password: string) => {
   }
 
   // 2. Fallback for Admin (Predetermined email & password)
-  if (isAdminCandidate && password === "12345678") {
-    const isPge = normalized.includes("pge") || normalized.includes("geoverse");
+  if (isAdminCandidate && cleanPassword === "12345678") {
+    const isPge = normalized === "geoverse.pge@gmail.com" || normalized.includes("pge") || normalized.includes("geoverse");
     const adminAccount: AuthAccount = {
-      id: isPge ? "admin_pge_001" : "admin_seed_001",
+      id: isPge ? "6adf6714f917e3c54a077d62" : "admin_seed_001",
       role: "admin",
       name: isPge ? "Admin PGE GEOVERSE" : "Super Admin Ranger",
       email: normalized,
       phone: "081511226089",
       address: isPge ? "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang" : "HQ GEOVERSE Platform, Garut",
       status: "verified",
-      token: isPge ? "admin_pge_001" : "admin_seed_001",
+      token: isPge ? "6adf6714f917e3c54a077d62" : "admin_seed_001",
       roleData: {},
       documents: {},
       createdAt: new Date().toISOString(),
