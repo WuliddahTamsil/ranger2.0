@@ -15,6 +15,7 @@ import {
   Platform,
   RefreshControl,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -130,6 +131,8 @@ interface CustomerHomeProps extends Nav {
 }
 
 export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, onUpdateAccount }) => {
+  const { width: windowWidth } = useWindowDimensions();
+  const isCompact = windowWidth < 380;
   const [currentTab, setCurrentTab] = useState<number>(0);
   const { wallet: recycleWallet } = useRecycle();
   const {
@@ -1253,40 +1256,54 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             style={styles.walletBarLeft}
             onPress={() => navigate("c_point_home")}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Buka Dompet Point"
           >
             <View style={[styles.walletBarIconBox, { backgroundColor: "#FEF9C3", overflow: "hidden" }]}>
               <Image
                 source={require("../../../assets/kanyaah-point.png")}
-                style={{ width: 36, height: 36, borderRadius: 12 }}
+                style={styles.walletBarCoinImg}
                 resizeMode="cover"
               />
             </View>
             <View style={styles.walletBarTextCol}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                <Text style={styles.walletBarBalance}>
+              <View style={styles.walletBalanceRow}>
+                <Text style={styles.walletBarBalance} numberOfLines={1}>
                   {formatNumberSafe(pointBalance)} Pts
                 </Text>
                 <View style={styles.walletPlusCircle}>
-                  <Plus size={10} color="#0D7A53" />
+                  <Plus size={9} color="#0D7A53" />
                 </View>
               </View>
-              <Text style={styles.walletBarSub}>
-                ≈ {rp(rupiahEquivalent)} · Buka Dompet
-              </Text>
+              <View style={styles.walletSubRow}>
+                <Text style={styles.walletBarSub} numberOfLines={1} ellipsizeMode="tail">
+                  ≈ {rp(rupiahEquivalent)}
+                </Text>
+                <Text style={styles.walletDot}>•</Text>
+                <View style={styles.walletOpenBadge}>
+                  <Text style={styles.walletOpenText} numberOfLines={1}>
+                    Buka Dompet
+                  </Text>
+                  <ChevronRight size={10} color="#0D7A53" />
+                </View>
+              </View>
             </View>
           </TouchableOpacity>
 
+          {/* Vertical Divider so text and actions never collide */}
+          <View style={styles.walletVerticalDivider} />
+
           {/* Right: 3 Clean Action Buttons */}
-          <View style={styles.walletBarActionsRow}>
+          <View style={[styles.walletBarActionsRow, { gap: isCompact ? 8 : 12 }]}>
             <TouchableOpacity
               style={styles.walletActionBtn}
               onPress={() => navigate("c_recycle_home")}
               activeOpacity={0.75}
             >
               <View style={styles.walletActionCircle}>
-                <ArrowUp size={15} color="#0D7A53" />
+                <ArrowUp size={14} color="#0D7A53" />
               </View>
-              <Text style={styles.walletActionLabel}>Setor</Text>
+              <Text style={styles.walletActionLabel} numberOfLines={1}>Setor</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1295,9 +1312,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               activeOpacity={0.75}
             >
               <View style={styles.walletActionCircle}>
-                <Ticket size={15} color="#0D7A53" />
+                <Ticket size={14} color="#0D7A53" />
               </View>
-              <Text style={styles.walletActionLabel}>Voucher</Text>
+              <Text style={styles.walletActionLabel} numberOfLines={1}>Voucher</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1306,9 +1323,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               activeOpacity={0.75}
             >
               <View style={styles.walletActionCircle}>
-                <FileText size={15} color="#0D7A53" />
+                <FileText size={14} color="#0D7A53" />
               </View>
-              <Text style={styles.walletActionLabel}>Riwayat</Text>
+              <Text style={styles.walletActionLabel} numberOfLines={1}>Riwayat</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3023,73 +3040,123 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     shadowColor: "#0F172A",
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   walletBarLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     flex: 1,
+    minWidth: 0,
+    paddingRight: 4,
   },
   walletBarIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: "#EAF8F0",
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#FEF9C3",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
+    overflow: "hidden",
+  },
+  walletBarCoinImg: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
   },
   walletBarTextCol: {
-    gap: 1,
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+  walletBalanceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   walletBarBalance: {
     fontSize: 14,
     fontWeight: "900",
-    color: "#142238",
+    color: "#0F172A",
+    letterSpacing: -0.2,
   },
   walletPlusCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
     backgroundColor: "#DDF4E7",
     alignItems: "center",
     justifyContent: "center",
   },
+  walletSubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+    flexWrap: "nowrap",
+  },
   walletBarSub: {
     fontSize: 10,
-    color: "#6B7280",
-    fontWeight: "500",
+    color: "#64748B",
+    fontWeight: "600",
+    flexShrink: 1,
+  },
+  walletDot: {
+    fontSize: 9,
+    color: "#94A3B8",
+    marginHorizontal: 3,
+    fontWeight: "700",
+  },
+  walletOpenBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+  walletOpenText: {
+    fontSize: 10,
+    color: "#0D7A53",
+    fontWeight: "700",
+  },
+  walletVerticalDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: "#E2E8F0",
+    marginHorizontal: 6,
+    flexShrink: 0,
   },
   walletBarActionsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    flexShrink: 0,
   },
   walletActionBtn: {
     alignItems: "center",
-    gap: 4,
+    justifyContent: "center",
+    minWidth: 36,
   },
   walletActionCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 3,
   },
   walletActionLabel: {
     fontSize: 9.5,
     fontWeight: "700",
-    color: "#1E293B",
+    color: "#334155",
+    textAlign: "center",
   },
 
   // 4. MAIN 8 SERVICES LAUNCHER
@@ -3180,6 +3247,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#FFFFFF",
+    flex: 1,
   },
 
   // 6. DELIVERED PROOF ALERT & ACTIVE ORDER CARD
