@@ -170,28 +170,9 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
     setIsFormModalOpen(true);
   };
 
-  const handlePickMedia = async () => {
-    setUploadError("");
+  const processPickedMediaAsset = async (asset: any) => {
+    setUploading(true);
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert("Izin Akses", "Aplikasi memerlukan izin galeri untuk memilih media banner.");
-        return;
-      }
-
-      const pickerResult = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: formMediaType === "VIDEO" ? ["videos"] : ["images"],
-        allowsEditing: false,
-        quality: 0.9,
-      });
-
-      if (pickerResult.canceled || !pickerResult.assets || !pickerResult.assets.length) {
-        return;
-      }
-
-      const asset = pickerResult.assets[0];
-      setUploading(true);
-
       const uploaded = await uploadHomeHeroMedia({
         uri: asset.uri,
         name: asset.fileName || (formMediaType === "VIDEO" ? "hero_video.mp4" : "hero_img.jpg"),
@@ -211,6 +192,80 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
     } finally {
       setUploading(false);
     }
+  };
+
+  const handlePickMedia = async () => {
+    setUploadError("");
+    if (formMediaType === "VIDEO") {
+      try {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Izin Akses", "Aplikasi memerlukan izin galeri untuk memilih video banner.");
+          return;
+        }
+        const pickerResult = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["videos"],
+          allowsEditing: false,
+          quality: 0.9,
+        });
+        if (!pickerResult.canceled && pickerResult.assets?.[0]) {
+          await processPickedMediaAsset(pickerResult.assets[0]);
+        }
+      } catch (err: any) {
+        Alert.alert("Gagal Unggah", err.message || "Terjadi kesalahan saat memilih video.");
+      }
+      return;
+    }
+
+    const openCamera = async () => {
+      try {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Izin Akses", "Aplikasi memerlukan izin kamera untuk mengambil foto banner.");
+          return;
+        }
+        const pickerResult = await ImagePicker.launchCameraAsync({
+          mediaTypes: ["images"],
+          allowsEditing: false,
+          quality: 0.9,
+        });
+        if (!pickerResult.canceled && pickerResult.assets?.[0]) {
+          await processPickedMediaAsset(pickerResult.assets[0]);
+        }
+      } catch (err: any) {
+        Alert.alert("Gagal Buka Kamera", err.message || "Terjadi kesalahan saat membuka kamera.");
+      }
+    };
+
+    const openGallery = async () => {
+      try {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Izin Akses", "Aplikasi memerlukan izin galeri untuk memilih foto banner.");
+          return;
+        }
+        const pickerResult = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: false,
+          quality: 0.9,
+        });
+        if (!pickerResult.canceled && pickerResult.assets?.[0]) {
+          await processPickedMediaAsset(pickerResult.assets[0]);
+        }
+      } catch (err: any) {
+        Alert.alert("Gagal Buka Galeri", err.message || "Terjadi kesalahan saat membuka galeri.");
+      }
+    };
+
+    Alert.alert(
+      "Pilih Sumber Media Banner",
+      "Pilih metode pengambilan gambar untuk banner beranda:",
+      [
+        { text: "Buka Kamera", onPress: openCamera },
+        { text: "Pilih dari Galeri", onPress: openGallery },
+        { text: "Batal", style: "cancel" }
+      ]
+    );
   };
 
   const handleSaveBanner = async () => {

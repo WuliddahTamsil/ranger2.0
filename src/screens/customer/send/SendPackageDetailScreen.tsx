@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import {
   ArrowLeft,
@@ -101,43 +102,82 @@ export const SendPackageDetailScreen: React.FC<SendPackageDetailScreenProps> = (
     return Object.keys(errs).length === 0;
   };
 
-  const handlePickPhoto = async () => {
-    if (photos.length >= 3) return;
+  const processPackageAsset = async (asset: any) => {
+    setUploadingPhoto(true);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 0.7,
-        base64: true,
-      });
+      const uploadRes = await uploadFileToBackend(
+        asset.uri,
+        `pkg-${Date.now()}.jpg`,
+        "image/jpeg",
+        asset.base64 || undefined
+      );
+      const finalUrl =
+        uploadRes?.data?.url ||
+        uploadRes?.data?.viewUrl ||
+        uploadRes?.url ||
+        (asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri);
 
-      if (!result.canceled && result.assets[0]?.uri) {
-        const asset = result.assets[0];
-        setUploadingPhoto(true);
-        try {
-          const uploadRes = await uploadFileToBackend(
-            asset.uri,
-            `pkg-${Date.now()}.jpg`,
-            "image/jpeg",
-            asset.base64 || undefined
-          );
-          const finalUrl =
-            uploadRes?.data?.url ||
-            uploadRes?.data?.viewUrl ||
-            uploadRes?.url ||
-            (asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri);
-
-          setPhotos((prev) => [...prev, finalUrl]);
-        } catch (uploadErr) {
-          console.warn("Upload to backend error, using localUri fallback:", uploadErr);
-          const fallback = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-          setPhotos((prev) => [...prev, fallback]);
-        }
-      }
-    } catch (e) {
-      console.warn("Photo pick error:", e);
+      setPhotos((prev) => [...prev, finalUrl]);
+    } catch (uploadErr) {
+      console.warn("Upload to backend error, using localUri fallback:", uploadErr);
+      const fallback = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setPhotos((prev) => [...prev, fallback]);
     } finally {
       setUploadingPhoto(false);
     }
+  };
+
+  const handlePickPhoto = async () => {
+    if (photos.length >= 3) return;
+
+    const pickFromCamera = async () => {
+      try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Kamera", "Aplikasi memerlukan izin kamera untuk memotret paket.");
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets?.[0]?.uri) {
+          await processPackageAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.warn("Camera pick package error:", err);
+      }
+    };
+
+    const pickFromGallery = async () => {
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Galeri", "Aplikasi memerlukan izin galeri untuk memilih foto paket.");
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets?.[0]?.uri) {
+          await processPackageAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.warn("Gallery pick package error:", err);
+      }
+    };
+
+    Alert.alert(
+      "Foto Paket",
+      "Pilih sumber foto paket yang akan dikirim:",
+      [
+        { text: "Buka Kamera", onPress: pickFromCamera },
+        { text: "Pilih dari Galeri", onPress: pickFromGallery },
+        { text: "Batal", style: "cancel" }
+      ]
+    );
   };
 
   const handleRemovePhoto = (index: number) => {

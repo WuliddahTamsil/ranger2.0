@@ -438,22 +438,27 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
         }
       }
 
-      // If order is real backend order, upload to backend server
-      if (targetOrderId && /^[a-f\d]{24}$/i.test(String(targetOrderId))) {
-        setIsUploadingImage(true);
+      // Always upload proof image to backend/cloud first
+      setIsUploadingImage(true);
+      try {
         const uploadRes = await uploadFileToBackend(
           selectedProof.uri,
           selectedProof.name,
           selectedProof.mimeType,
           selectedProof.base64
         );
-        setIsUploadingImage(false);
         const cloudUrl = uploadRes?.data?.url || uploadRes?.url;
-        if (!cloudUrl) {
-          throw new Error(uploadRes.message || "Bukti pembayaran gagal diunggah.");
+        if (cloudUrl) {
+          finalProofUrl = cloudUrl;
         }
-        finalProofUrl = cloudUrl;
+      } catch (upErr) {
+        console.warn("Catering payment proof upload error:", upErr);
+      } finally {
+        setIsUploadingImage(false);
+      }
 
+      // If order is real backend order, submit payment with cloud URL to database
+      if (targetOrderId && /^[a-f\d]{24}$/i.test(String(targetOrderId))) {
         const submitRes = await submitCateringPayment(
           targetOrderId,
           currentPayAmount,

@@ -12,6 +12,7 @@ import {
   Modal,
   ActivityIndicator,
   Image,
+  Alert,
 } from "react-native";
 import Svg, { Path, Circle, Rect, Text as SvgText, Defs, LinearGradient, Stop } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
@@ -183,39 +184,83 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
     loadFinancialData();
   }, [authAccount]);
 
-  const handlePickQrisImage = async () => {
+  const processQrisAsset = async (asset: any) => {
+    setQrisImage(asset.uri);
+    setIsUploadingQris(true);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.7,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setQrisImage(asset.uri);
-        setIsUploadingQris(true);
-        try {
-          const uploadRes = await uploadFileToBackend(
-            asset.uri,
-            `qris_owner_${Date.now()}.jpg`,
-            asset.mimeType || "image/jpeg",
-            asset.base64 || undefined
-          );
-          const finalUrl = uploadRes?.data?.url || uploadRes?.url;
-          if (finalUrl) {
-            setQrisImage(finalUrl);
-          }
-        } catch (uploadErr) {
-          console.warn("Upload QRIS error:", uploadErr);
-        } finally {
-          setIsUploadingQris(false);
-        }
+      const uploadRes = await uploadFileToBackend(
+        asset.uri,
+        `qris_owner_${Date.now()}.jpg`,
+        asset.mimeType || "image/jpeg",
+        asset.base64 || undefined
+      );
+      const finalUrl = uploadRes?.data?.url || uploadRes?.url;
+      if (finalUrl) {
+        setQrisImage(finalUrl);
+      } else {
+        const fallback = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+        setQrisImage(fallback);
       }
-    } catch (err) {
-      console.log("Pick QRIS error:", err);
+    } catch (uploadErr) {
+      console.warn("Upload QRIS error:", uploadErr);
+      const fallback = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+      setQrisImage(fallback);
+    } finally {
+      setIsUploadingQris(false);
     }
+  };
+
+  const handlePickQrisImage = async () => {
+    const pickFromCamera = async () => {
+      try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Kamera", "Mohon izinkan akses kamera untuk memotret barcode QRIS.");
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          await processQrisAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.error("Camera pick QRIS error:", err);
+      }
+    };
+
+    const pickFromGallery = async () => {
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Galeri", "Mohon izinkan akses galeri untuk memilih foto QRIS.");
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          await processQrisAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.error("Gallery pick QRIS error:", err);
+      }
+    };
+
+    Alert.alert(
+      "Unggah Barcode QRIS Kost",
+      "Pilih sumber foto barcode QRIS:",
+      [
+        { text: "Buka Kamera", onPress: pickFromCamera },
+        { text: "Pilih dari Galeri", onPress: pickFromGallery },
+        { text: "Batal", style: "cancel" },
+      ]
+    );
   };
 
   const handleSaveBankAccount = async () => {

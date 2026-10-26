@@ -28,9 +28,12 @@ export const updateCachedAccount = async (account: AuthAccount) => {
 };
 
 export const saveProfilePhoto = async (accountId: string, profilePhoto: string) => {
-  const targetId = accountId?.trim() || "6acccf5a8931baef62204624";
-  const backendResult = await updateUserProfile(targetId, { profilePhoto });
   const accounts = await loadAccounts();
+  const matched = accounts.find((account) => account.id === accountId || account.id === accountId?.trim());
+  const email = matched?.email;
+  const targetId = accountId?.trim() || "6acccf5a8931baef62204624";
+
+  const backendResult = await updateUserProfile(targetId, { profilePhoto, email });
   const localIndex = accounts.findIndex((account) => account.id === targetId || account.id === accountId);
 
   if (localIndex >= 0) {

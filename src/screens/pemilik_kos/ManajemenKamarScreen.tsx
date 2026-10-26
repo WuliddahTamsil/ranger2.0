@@ -528,29 +528,15 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
         return;
       }
 
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Izin Ditolak", "Izin akses galeri diperlukan untuk memilih foto.");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
-        selectionLimit: 5 - roomPhotos.length,
-        quality: 0.7,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets) {
+      const processAssets = async (assets: Array<any>) => {
         const remainingSlots = 5 - roomPhotos.length;
-        const selectedAssets = result.assets.slice(0, remainingSlots);
+        const selectedAssets = assets.slice(0, remainingSlots);
 
         for (const asset of selectedAssets) {
           try {
             const uploadRes = await uploadFileToBackend(
               asset.uri,
-              asset.fileName || `item_${Date.now()}.jpg`,
+              asset.fileName || asset.name || `room_${Date.now()}.jpg`,
               asset.mimeType || "image/jpeg",
               asset.base64 || undefined
             );
@@ -569,7 +555,64 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
             }
           }
         }
-      }
+      };
+
+      const pickFromCamera = async () => {
+        try {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Izin Ditolak", "Izin akses kamera diperlukan untuk mengambil foto.");
+            return;
+          }
+          setIsUploadingPhoto(true);
+          const result = await ImagePicker.launchCameraAsync({
+            quality: 0.7,
+            base64: true,
+          });
+          if (!result.canceled && result.assets && result.assets.length > 0) {
+            await processAssets(result.assets);
+          }
+        } catch (camErr) {
+          console.error("Camera error:", camErr);
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      };
+
+      const pickFromGallery = async () => {
+        try {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Izin Ditolak", "Izin akses galeri diperlukan untuk memilih foto.");
+            return;
+          }
+          setIsUploadingPhoto(true);
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsMultipleSelection: true,
+            selectionLimit: 5 - roomPhotos.length,
+            quality: 0.7,
+            base64: true,
+          });
+          if (!result.canceled && result.assets) {
+            await processAssets(result.assets);
+          }
+        } catch (galErr) {
+          console.error("Gallery error:", galErr);
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      };
+
+      Alert.alert(
+        "Upload Foto Kamar",
+        "Pilih sumber foto kamar untuk diunggah:",
+        [
+          { text: "Buka Kamera", onPress: pickFromCamera },
+          { text: "Pilih dari Galeri", onPress: pickFromGallery },
+          { text: "Batal", style: "cancel" }
+        ]
+      );
     } catch (err) {
       console.error("Pick photos error:", err);
     } finally {

@@ -233,34 +233,70 @@ export const Pesanan: React.FC<PesananProps> = ({
     setComplaintModalVisible(true);
   };
 
-  const handlePickComplaintPhoto = async () => {
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert("Izin Akses", "Aplikasi membutuhkan izin galeri untuk memilih foto bukti.");
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.7,
-        base64: true,
-      });
-      if (!result.canceled && result.assets[0]?.uri) {
-        const asset = result.assets[0];
-        const fileName = `complaint-${Date.now()}.jpg`;
-        const mimeType = "image/jpeg";
-        const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType, asset.base64 || undefined);
-        const finalUrl = uploadRes?.data?.url || uploadRes?.url;
-        if (finalUrl) {
-          setComplaintPhotos((prev) => [...prev, finalUrl]);
-        } else {
-          Alert.alert("Gagal Upload", uploadRes.message || "Gagal mengunggah foto bukti.");
-        }
-      }
-    } catch (e: any) {
-      Alert.alert("Gagal Memilih Foto", e?.message || "Terjadi kendala.");
+  const processComplaintAsset = async (asset: any) => {
+    const fileName = `complaint-${Date.now()}.jpg`;
+    const mimeType = "image/jpeg";
+    const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType, asset.base64 || undefined);
+    const finalUrl = uploadRes?.data?.url || uploadRes?.url;
+    if (finalUrl) {
+      setComplaintPhotos((prev) => [...prev, finalUrl]);
+    } else {
+      const fallback = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setComplaintPhotos((prev) => [...prev, fallback]);
     }
+  };
+
+  const handlePickComplaintPhoto = async () => {
+    const pickFromCamera = async () => {
+      try {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Izin Kamera", "Aplikasi membutuhkan izin kamera untuk memotret bukti komplain.");
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets?.[0]?.uri) {
+          await processComplaintAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.error("Camera complaint photo error:", err);
+      }
+    };
+
+    const pickFromGallery = async () => {
+      try {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Izin Akses", "Aplikasi membutuhkan izin galeri untuk memilih foto bukti komplain.");
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets?.[0]?.uri) {
+          await processComplaintAsset(result.assets[0]);
+        }
+      } catch (e: any) {
+        Alert.alert("Gagal Memilih Foto", e?.message || "Terjadi kendala.");
+      }
+    };
+
+    Alert.alert(
+      "Unggah Bukti Komplain",
+      "Pilih sumber foto bukti kendala pesanan:",
+      [
+        { text: "Buka Kamera", onPress: pickFromCamera },
+        { text: "Pilih dari Galeri", onPress: pickFromGallery },
+        { text: "Batal", style: "cancel" }
+      ]
+    );
   };
 
   const handleSubmitComplaint = async () => {
@@ -420,28 +456,72 @@ export const Pesanan: React.FC<PesananProps> = ({
   };
 
   const pickReviewMedia = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Izin diperlukan", "Izinkan akses galeri untuk menambahkan foto atau video ke ulasan.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsMultipleSelection: true,
-      selectionLimit: 5,
-      quality: 0.7,
-      base64: true,
-      videoMaxDuration: 30,
-    });
-    if (result.canceled) return;
-    const selected = result.assets.map((asset, index) => ({
-      uri: asset.uri,
-      type: asset.type === "video" ? "video" as const : "image" as const,
-      name: asset.fileName || `review-${Date.now()}-${index}.${asset.type === "video" ? "mp4" : "jpg"}`,
-      mimeType: asset.mimeType || (asset.type === "video" ? "video/mp4" : "image/jpeg"),
-      base64: asset.base64 || undefined,
-    }));
-    setReviewMedia((current) => [...current, ...selected].slice(0, 5));
+    const pickFromCamera = async () => {
+      try {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Izin Kamera", "Izinkan akses kamera untuk mengambil foto ulasan.");
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          const asset = result.assets[0];
+          const selected = {
+            uri: asset.uri,
+            type: "image" as const,
+            name: asset.fileName || `review-${Date.now()}.jpg`,
+            mimeType: asset.mimeType || "image/jpeg",
+            base64: asset.base64 || undefined,
+          };
+          setReviewMedia((current) => [...current, selected].slice(0, 5));
+        }
+      } catch (err) {
+        console.error("Camera review error:", err);
+      }
+    };
+
+    const pickFromGallery = async () => {
+      try {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Izin diperlukan", "Izinkan akses galeri untuk menambahkan foto atau video ke ulasan.");
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.All,
+          allowsMultipleSelection: true,
+          selectionLimit: 5,
+          quality: 0.7,
+          base64: true,
+          videoMaxDuration: 30,
+        });
+        if (result.canceled || !result.assets) return;
+        const selected = result.assets.map((asset, index) => ({
+          uri: asset.uri,
+          type: asset.type === "video" ? "video" as const : "image" as const,
+          name: asset.fileName || `review-${Date.now()}-${index}.${asset.type === "video" ? "mp4" : "jpg"}`,
+          mimeType: asset.mimeType || (asset.type === "video" ? "video/mp4" : "image/jpeg"),
+          base64: asset.base64 || undefined,
+        }));
+        setReviewMedia((current) => [...current, ...selected].slice(0, 5));
+      } catch (err) {
+        console.error("Gallery review error:", err);
+      }
+    };
+
+    Alert.alert(
+      "Tambahkan Media Ulasan",
+      "Pilih sumber foto atau video untuk ulasan:",
+      [
+        { text: "Buka Kamera", onPress: pickFromCamera },
+        { text: "Pilih dari Galeri", onPress: pickFromGallery },
+        { text: "Batal", style: "cancel" }
+      ]
+    );
   };
 
   const removeReviewMedia = (index: number) => {

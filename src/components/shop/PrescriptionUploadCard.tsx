@@ -31,42 +31,79 @@ export const PrescriptionUploadCard: React.FC<PrescriptionUploadCardProps> = ({
   const [notes, setNotes] = useState(prescription?.customerNotes || "");
   const [uploading, setUploading] = useState(false);
 
-  const handlePickImage = async () => {
+  const processPrescriptionAsset = async (asset: any) => {
+    setUploading(true);
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert("Izin Akses", "Izin akses galeri foto diperlukan untuk mengunggah resep.");
-        return;
-      }
+      const uploadRes = await uploadFileToBackend(
+        asset.uri,
+        asset.fileName || `prescription-${Date.now()}.jpg`,
+        asset.mimeType || "image/jpeg",
+        asset.base64 || undefined
+      );
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.7,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        setUploading(true);
-        const uploadRes = await uploadFileToBackend(
-          asset.uri,
-          asset.fileName || "prescription.jpg",
-          asset.mimeType || "image/jpeg",
-          asset.base64 || undefined
-        );
-
-        const finalUrl = uploadRes?.data?.url || uploadRes?.url || (asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri);
-        const newImages = [...images, finalUrl];
-        setImages(newImages);
-        onUploaded({ imageUrls: newImages, doctorName, customerNotes: notes });
-      }
+      const finalUrl = uploadRes?.data?.url || uploadRes?.url || (asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri);
+      const newImages = [...images, finalUrl];
+      setImages(newImages);
+      onUploaded({ imageUrls: newImages, doctorName, customerNotes: notes });
     } catch (e: any) {
       console.warn("Upload prescription error:", e);
       Alert.alert("Gagal", "Gagal memproses gambar resep.");
     } finally {
       setUploading(false);
     }
+  };
+
+  const handlePickImage = async () => {
+    const pickFromCamera = async () => {
+      try {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Izin Akses", "Izin kamera diperlukan untuk memotret resep dokter.");
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          await processPrescriptionAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.warn("Camera pick prescription error:", err);
+      }
+    };
+
+    const pickFromGallery = async () => {
+      try {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Izin Akses", "Izin akses galeri foto diperlukan untuk mengunggah resep.");
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          await processPrescriptionAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.warn("Gallery pick prescription error:", err);
+      }
+    };
+
+    Alert.alert(
+      "Unggah Resep Dokter",
+      "Pilih sumber foto lembar resep:",
+      [
+        { text: "Buka Kamera", onPress: pickFromCamera },
+        { text: "Pilih dari Galeri", onPress: pickFromGallery },
+        { text: "Batal", style: "cancel" }
+      ]
+    );
   };
 
   const status = prescription?.status || (images.length > 0 ? "WAITING_PRESCRIPTION_REVIEW" : "NONE");

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  Platform,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -151,9 +152,40 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
     }));
   };
 
-  // Image Upload Handler (Gallery only)
+  const processWeighingAsset = async (asset: any) => {
+    const localUri = asset.base64
+      ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`
+      : asset.uri;
+    setProofPhotoUrl(localUri);
+    setUploadingPhoto(true);
+    try {
+      const uploaded = await uploadFileToBackend(
+        asset.uri,
+        asset.fileName || `weighing-proof-${Date.now()}.jpg`,
+        asset.mimeType || "image/jpeg",
+        asset.base64 || undefined
+      );
+      const finalUrl = uploaded?.data?.url || uploaded?.url;
+      if (finalUrl) {
+        setProofPhotoUrl(finalUrl);
+      }
+    } catch (uploadErr) {
+      console.warn("Upload file to backend error, fallback to local uri:", uploadErr);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Image Upload Handler (Gallery)
   const handlePickFromGallery = async () => {
     try {
+      if (Platform.OS !== "web") {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Akses", "Izin galeri foto diperlukan untuk memilih foto.");
+          return;
+        }
+      }
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
@@ -163,28 +195,36 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
       });
 
       if (!res.canceled && res.assets?.[0]) {
-        const asset = res.assets[0];
-        setProofPhotoUrl(asset.uri);
-        setUploadingPhoto(true);
-        try {
-          const uploaded = await uploadFileToBackend(
-            asset.uri,
-            asset.fileName || `weighing-proof-${Date.now()}.jpg`,
-            asset.mimeType || "image/jpeg",
-            asset.base64 || undefined
-          );
-          const finalUrl = uploaded?.data?.url || uploaded?.url;
-          if (finalUrl) {
-            setProofPhotoUrl(finalUrl);
-          }
-        } catch (uploadErr) {
-          console.warn("Upload file to backend error, fallback to local uri:", uploadErr);
-        } finally {
-          setUploadingPhoto(false);
-        }
+        await processWeighingAsset(res.assets[0]);
       }
     } catch (err: any) {
       Alert.alert("Galeri", err?.message || "Gagal membuka galeri foto.");
+    }
+  };
+
+  // Image Upload Handler (Camera)
+  const handleTakePhoto = async () => {
+    try {
+      if (Platform.OS !== "web") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Akses", "Izin kamera diperlukan untuk mengambil foto.");
+          return;
+        }
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!res.canceled && res.assets?.[0]) {
+        await processWeighingAsset(res.assets[0]);
+      }
+    } catch (err: any) {
+      Alert.alert("Kamera", err?.message || "Gagal membuka kamera.");
     }
   };
 
@@ -473,14 +513,25 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
               <Text style={styles.dropzoneTitle}>Unggah Foto Bukti Timbangan</Text>
               <Text style={styles.dropzoneSub}>Pilih foto bukti timbangan resmi dari galeri perangkat</Text>
 
-              <TouchableOpacity
-                style={styles.btnPickGalleryFull}
-                onPress={handlePickFromGallery}
-                activeOpacity={0.85}
-              >
-                <ImageIcon size={16} color="#FFFFFF" />
-                <Text style={styles.btnPickGalleryFullText}>Pilih Foto dari Galeri</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: "row", gap: 10, width: "100%", marginTop: 8 }}>
+                <TouchableOpacity
+                  style={[styles.btnPickGalleryFull, { flex: 1, backgroundColor: "#047857" }]}
+                  onPress={handleTakePhoto}
+                  activeOpacity={0.85}
+                >
+                  <Camera size={16} color="#FFFFFF" />
+                  <Text style={styles.btnPickGalleryFullText}>Kamera</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.btnPickGalleryFull, { flex: 1 }]}
+                  onPress={handlePickFromGallery}
+                  activeOpacity={0.85}
+                >
+                  <ImageIcon size={16} color="#FFFFFF" />
+                  <Text style={styles.btnPickGalleryFullText}>Galeri</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : null}
         </View>

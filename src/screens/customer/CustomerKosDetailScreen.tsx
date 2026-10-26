@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Platform,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Nav, OrderItem } from "../../types";
@@ -468,18 +469,45 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
     return d.toISOString();
   }, [startDate, nightCount]);
 
-  const handlePickProofImage = async () => {
+  const pickProofWithSource = async (source: "camera" | "gallery") => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.7,
-        base64: true,
-      });
+      if (Platform.OS !== "web") {
+        const permission =
+          source === "camera"
+            ? await ImagePicker.requestCameraPermissionsAsync()
+            : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (permission.status !== "granted") {
+          Alert.alert(
+            "Izin Diperlukan",
+            source === "camera"
+              ? "Izinkan akses kamera untuk memfoto bukti pembayaran."
+              : "Izinkan akses galeri untuk memilih bukti pembayaran."
+          );
+          return;
+        }
+      }
+
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              quality: 0.7,
+              base64: true,
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              quality: 0.7,
+              base64: true,
+            });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        setProofImage(asset.uri);
+        const localPreview = asset.base64
+          ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`
+          : asset.uri;
+        setProofImage(localPreview);
         setIsUploadingProof(true);
         try {
           const uploadRes = await uploadFileToBackend(
@@ -493,7 +521,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
             setProofImage(finalUrl);
           }
         } catch (uploadErr) {
-          console.warn("Upload proof error:", uploadErr);
+          console.warn("Upload proof error, using local base64 fallback:", uploadErr);
         } finally {
           setIsUploadingProof(false);
         }
@@ -501,6 +529,22 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
     } catch (err) {
       console.log("Pick image error:", err);
     }
+  };
+
+  const handlePickProofImage = () => {
+    if (Platform.OS === "web") {
+      void pickProofWithSource("gallery");
+      return;
+    }
+    Alert.alert(
+      "Unggah Bukti Pembayaran",
+      "Pilih sumber foto bukti transfer / pembayaran Anda:",
+      [
+        { text: "Buka Kamera", onPress: () => void pickProofWithSource("camera") },
+        { text: "Pilih dari Galeri", onPress: () => void pickProofWithSource("gallery") },
+        { text: "Batal", style: "cancel" },
+      ]
+    );
   };
 
   const saveBookingOrder = async () => {

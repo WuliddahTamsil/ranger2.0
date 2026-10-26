@@ -12,6 +12,19 @@ const upload = multer({
   },
 });
 
-router.post("/", upload.single("file"), uploadFile);
+const uploadAny = (req, res, next) => {
+  upload.any()(req, res, (err) => {
+    if (err) {
+      console.warn("Multer error during upload:", err.message);
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    if (req.files && req.files.length > 0 && !req.file) {
+      req.file = req.files[0];
+    }
+    next();
+  });
+};
+
+router.post("/", uploadAny, uploadFile);
 
 module.exports = router;

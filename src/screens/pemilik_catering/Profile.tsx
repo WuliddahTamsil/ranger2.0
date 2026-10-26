@@ -378,17 +378,9 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
     );
   };
 
-  const handlePickQris = async () => {
+  const processQrisAsset = async (asset: any) => {
+    setUploadingQris(true);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        quality: 0.7,
-        base64: true,
-      });
-      if (result.canceled || !result.assets?.[0]) return;
-      const asset = result.assets[0];
-      setUploadingQris(true);
       const uploaded = await uploadFileToBackend(
         asset.uri,
         asset.fileName || `catering-qris-${Date.now()}.jpg`,
@@ -396,13 +388,73 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
         asset.base64 || undefined
       );
       const finalUrl = uploaded?.data?.url || uploaded?.url;
-      if (!finalUrl) throw new Error("QRIS gagal diunggah.");
-      setQrisImageUrl(finalUrl);
+      if (finalUrl) {
+        setQrisImageUrl(finalUrl);
+      } else {
+        const fallback = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+        setQrisImageUrl(fallback);
+      }
     } catch (error) {
-      Alert.alert("Gagal mengunggah QRIS", error instanceof Error ? error.message : "Coba lagi.");
+      console.warn("Catering QRIS upload error:", error);
+      const fallback = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+      setQrisImageUrl(fallback);
     } finally {
       setUploadingQris(false);
     }
+  };
+
+  const handlePickQris = async () => {
+    const pickFromCamera = async () => {
+      try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Kamera", "Mohon berikan izin kamera untuk memotret barcode QRIS.");
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          await processQrisAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.error("Camera error:", err);
+      }
+    };
+
+    const pickFromGallery = async () => {
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Galeri", "Mohon berikan izin galeri untuk memilih foto QRIS.");
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          quality: 0.7,
+          base64: true,
+        });
+        if (!result.canceled && result.assets?.[0]) {
+          await processQrisAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.error("Gallery error:", err);
+      }
+    };
+
+    Alert.alert(
+      "Unggah QRIS Catering",
+      "Pilih sumber foto barcode QRIS:",
+      [
+        { text: "Buka Kamera", onPress: pickFromCamera },
+        { text: "Pilih dari Galeri", onPress: pickFromGallery },
+        { text: "Batal", style: "cancel" },
+      ]
+    );
   };
 
   const handleSavePayment = async () => {

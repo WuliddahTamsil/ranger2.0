@@ -211,56 +211,87 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
     }
   };
 
-  const handlePickQrisImage = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Izin Galeri Diperlukan",
-          "Aplikasi memerlukan izin untuk memilih foto QRIS dari galeri Anda."
-        );
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        quality: 0.85,
-        base64: true,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setIsUploadingQris(true);
-        let immediateDataUri = asset.uri;
+  const processQrisAsset = async (asset: any) => {
+    setIsUploadingQris(true);
+    let immediateDataUri = asset.uri;
 
-        if (asset.base64) {
-          immediateDataUri = `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`;
-        } else if (asset.uri.startsWith("blob:")) {
-          immediateDataUri = await convertBlobToBase64(asset.uri);
-        }
-
-        // 1. Tampilkan langsung di preview secara instan agar tidak pernah blank / putih
-        setQrisImageUrl(immediateDataUri);
-
-        // 2. Upload permanen ke server / Cloudinary
-        try {
-          const fileName = asset.fileName || `qris-${Date.now()}.jpg`;
-          const mimeType = asset.mimeType || "image/jpeg";
-          const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType, asset.base64 || undefined);
-          const finalUrl = uploadRes?.data?.url || uploadRes?.url;
-          if (finalUrl) {
-            setQrisImageUrl(finalUrl);
-          }
-        } catch (uploadErr) {
-          console.log("QRIS upload fallback to base64 data uri:", uploadErr);
-        } finally {
-          setIsUploadingQris(false);
-        }
-      }
-    } catch (err) {
-      setIsUploadingQris(false);
-      console.error("Error picking QRIS image:", err);
-      Alert.alert("Gagal Memuat Foto", "Terjadi kesalahan saat memilih gambar.");
+    if (asset.base64) {
+      immediateDataUri = `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`;
+    } else if (asset.uri.startsWith("blob:")) {
+      immediateDataUri = await convertBlobToBase64(asset.uri);
     }
+
+    // 1. Tampilkan langsung di preview secara instan agar tidak pernah blank / putih
+    setQrisImageUrl(immediateDataUri);
+
+    // 2. Upload permanen ke server / Cloudinary
+    try {
+      const fileName = asset.fileName || `qris-${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || "image/jpeg";
+      const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType, asset.base64 || undefined);
+      const finalUrl = uploadRes?.data?.url || uploadRes?.url;
+      if (finalUrl) {
+        setQrisImageUrl(finalUrl);
+      }
+    } catch (uploadErr) {
+      console.log("QRIS upload fallback to base64 data uri:", uploadErr);
+    } finally {
+      setIsUploadingQris(false);
+    }
+  };
+
+  const handlePickQrisImage = async () => {
+    const pickFromCamera = async () => {
+      try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Kamera Diperlukan", "Aplikasi memerlukan izin untuk mengambil foto QRIS.");
+          return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          quality: 0.85,
+          base64: true,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          await processQrisAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.error("Camera pick QRIS error:", err);
+      }
+    };
+
+    const pickFromGallery = async () => {
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Izin Galeri Diperlukan", "Aplikasi memerlukan izin untuk memilih foto QRIS dari galeri Anda.");
+          return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          quality: 0.85,
+          base64: true,
+        });
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          await processQrisAsset(result.assets[0]);
+        }
+      } catch (err) {
+        console.error("Gallery pick QRIS error:", err);
+      }
+    };
+
+    Alert.alert(
+      "Unggah Barcode QRIS",
+      "Pilih sumber foto QRIS usaha Anda:",
+      [
+        { text: "Buka Kamera", onPress: pickFromCamera },
+        { text: "Pilih dari Galeri", onPress: pickFromGallery },
+        { text: "Batal", style: "cancel" },
+      ]
+    );
   };
 
   const handleSavePaymentSettings = async () => {

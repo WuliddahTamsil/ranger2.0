@@ -14,6 +14,7 @@ import {
   Alert,
   Switch,
   Linking,
+  Platform,
 } from "react-native";
 import { Nav } from "../../types";
 import {
@@ -204,20 +205,38 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
     },
   ];
 
-  const handlePickProofImage = async () => {
+  const pickProofWithSource = async (source: "camera" | "gallery") => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Izin Akses Galeri", "Mohon berikan izin akses galeri foto untuk mengunggah bukti pembayaran.");
-        return;
+      if (Platform.OS !== "web") {
+        const permission =
+          source === "camera"
+            ? await ImagePicker.requestCameraPermissionsAsync()
+            : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (permission.status !== "granted") {
+          Alert.alert(
+            "Izin Diperlukan",
+            source === "camera"
+              ? "Mohon berikan izin akses kamera untuk memfoto bukti pembayaran."
+              : "Mohon berikan izin akses galeri foto untuk memilih bukti pembayaran."
+          );
+          return;
+        }
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: false,
-        quality: 0.85,
-        base64: true,
-      });
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync({
+              mediaTypes: ["images"],
+              allowsEditing: false,
+              quality: 0.85,
+              base64: true,
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ["images"],
+              allowsEditing: false,
+              quality: 0.85,
+              base64: true,
+            });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
@@ -241,9 +260,24 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
       }
     } catch (err) {
       console.warn("Picker error:", err);
-      // Fallback demo proof image if on web / simulator
       setProofImageUri("https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=500&q=80");
     }
+  };
+
+  const handlePickProofImage = () => {
+    if (Platform.OS === "web") {
+      void pickProofWithSource("gallery");
+      return;
+    }
+    Alert.alert(
+      "Unggah Bukti Pembayaran",
+      "Pilih sumber foto bukti pembayaran cucian Anda:",
+      [
+        { text: "Buka Kamera", onPress: () => void pickProofWithSource("camera") },
+        { text: "Pilih dari Galeri", onPress: () => void pickProofWithSource("gallery") },
+        { text: "Batal", style: "cancel" },
+      ]
+    );
   };
 
   const handlePayWithMidtrans = async () => {
