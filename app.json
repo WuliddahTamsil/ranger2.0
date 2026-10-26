@@ -15,7 +15,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wuliddahtamsil.geoverse",
-      "buildNumber": "2",
       "appleTeamId": "A23N5QDWR3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,

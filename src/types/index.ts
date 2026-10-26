@@ -195,6 +195,8 @@ export interface OrderItem {
   estimatedDistance?: number;
   estimatedDuration?: number;
   estimatedFare?: number;
+  driverId?: string;
+  rawOrder?: any;
 }
 
 export interface NotifItem {

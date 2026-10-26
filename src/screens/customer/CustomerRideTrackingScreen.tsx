@@ -34,9 +34,10 @@ import {
   Check,
   Compass,
 } from "lucide-react-native";
-import { Nav } from "../../types";
+import { Nav, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { addCustomerOrder, updateCustomerOrder } from "./customerOrderStore";
 import {
   fetchActiveCustomerRide,
   fetchCustomerRides,
@@ -56,6 +57,50 @@ import { rp } from "../../utils/formatters";
 import { findKnownPoiByText } from "../../utils/geocoding";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 import { getRidePassengerOtp } from "../../utils/rideOtp";
+
+const syncRideToStore = (ride: RideOrderData) => {
+  if (!ride?._id) return;
+  const statusLabel =
+    ride.status === "SEARCHING_DRIVER" ? "Mencari Driver"
+    : ride.status === "DRIVER_ASSIGNED" || ride.status === "DRIVER_ON_THE_WAY" ? "Menuju Penjemputan"
+    : ride.status === "DRIVER_ARRIVED" ? "Driver Sampai"
+    : ride.status === "TRIP_STARTED" ? "Dalam Perjalanan"
+    : ride.status === "COMPLETED" ? "Selesai" : "Dibatalkan";
+  const item: OrderItem = {
+    id: String(ride._id),
+    orderCode: ride.orderCode || `#RNG-RIDE-${String(ride._id).slice(-8).toUpperCase()}`,
+    type: "Kanyaah Ride",
+    iconName: "Bike",
+    color: "#16A34A",
+    item: "Kanyaah Ride",
+    detail: `${ride.pickup?.address || "Penjemputan"} → ${ride.destination?.address || "Tujuan"}`,
+    status: statusLabel,
+    statusColor: ride.status === "COMPLETED" ? "green" : ride.status === "CANCELLED" ? "red" : "orange",
+    date: "Hari Ini",
+    createdAt: ride.createdAt || new Date().toISOString(),
+    total: ride.totalAmount || ride.estimatedFare || 0,
+    paymentMethod: ride.paymentMethod || "Bayar Tunai",
+    paymentStatus: ride.paymentStatus || "Lunas",
+    driverId: ride.driverId || undefined,
+    driverName: ride.driverName || undefined,
+    driverPhone: ride.driverPhone || undefined,
+    driverVehicle: ride.driverVehicle || undefined,
+    pickup: ride.pickup ? {
+      address: ride.pickup.address,
+      latitude: ride.pickup.latitude ?? undefined,
+      longitude: ride.pickup.longitude ?? undefined,
+      placeName: ride.pickup.placeName,
+    } : undefined,
+    destination: ride.destination ? {
+      address: ride.destination.address,
+      latitude: ride.destination.latitude ?? undefined,
+      longitude: ride.destination.longitude ?? undefined,
+      placeName: ride.destination.placeName,
+    } : undefined,
+    rawOrder: ride,
+  };
+  updateCustomerOrder(item);
+};
 
 interface CustomerRideTrackingScreenProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -102,6 +147,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           if (!active) return;
           if (detailRes.success && detailRes.data) {
             setCurrentRide(detailRes.data);
+            syncRideToStore(detailRes.data);
             setLoading(false);
             return;
           }
@@ -111,6 +157,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
         if (!active) return;
         if (activeRes.success && activeRes.data) {
           setCurrentRide(activeRes.data);
+          syncRideToStore(activeRes.data);
           setLoading(false);
           return;
         }
@@ -120,6 +167,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
         if (!active) return;
         if (historyRes.success && historyRes.data && historyRes.data.length > 0) {
           setCurrentRide(historyRes.data[0]);
+          syncRideToStore(historyRes.data[0]);
         }
       } catch (err) {
         console.error("Load tracking ride error:", err);
@@ -320,6 +368,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           cancelReason: reasonToSubmit,
         };
         setCurrentRide(updated);
+        syncRideToStore(updated);
         setCancelModalVisible(false);
         await AsyncStorage.removeItem("selected_ride_tracking_id").catch(() => {});
         const feeText = updated.cancellation?.fee

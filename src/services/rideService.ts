@@ -256,11 +256,15 @@ export const fetchCustomerRides = async (
   customerId: string
 ): Promise<{ success: boolean; data?: RideOrderData[]; message?: string }> => {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
     const headers = await getAuthHeaders(customerId);
     const res = await fetch(getApiUrl(`/rides/customer/${customerId}?t=${Date.now()}`), {
       headers,
       cache: "no-store",
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
     return await readJson(res);
   } catch (err: any) {
     console.error("fetchCustomerRides error:", err);
@@ -273,11 +277,15 @@ export const fetchActiveCustomerRide = async (
   customerId: string
 ): Promise<{ success: boolean; data?: RideOrderData | null; message?: string }> => {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
     const headers = await getAuthHeaders(customerId);
     const res = await fetch(getApiUrl(`/rides/active/customer/${customerId}?t=${Date.now()}`), {
       headers,
       cache: "no-store",
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
     return await readJson(res);
   } catch (err: any) {
     console.error("fetchActiveCustomerRide error:", err);
@@ -290,6 +298,8 @@ export const fetchDriverRides = async (
   driverId: string
 ): Promise<{ success: boolean; data?: RideOrderData[]; message?: string }> => {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
     const headers = await getAuthHeaders(driverId);
     const res = await fetch(getApiUrl(`/rides/driver/${driverId}?t=${Date.now()}`), {
       headers: {
@@ -297,7 +307,9 @@ export const fetchDriverRides = async (
         ...headers,
       },
       cache: "no-store",
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
     return await readJson(res);
   } catch (err: any) {
     console.error("fetchDriverRides error:", err);

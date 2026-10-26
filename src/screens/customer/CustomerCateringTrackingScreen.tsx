@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
   Linking,
+  Platform,
 } from "react-native";
 import {
   CalendarDays,
@@ -141,7 +142,7 @@ export const CustomerCateringTrackingScreen: React.FC<CustomerCateringTrackingPr
         setAllCateringOrders(sortedOrders);
 
         let targetId = targetOrderId.current || getActiveCateringTrackingOrderId();
-        if (!targetId && typeof window !== "undefined" && window.location?.search) {
+        if (!targetId && Platform.OS === "web" && typeof window !== "undefined" && window.location?.search) {
           const urlParamId = new URLSearchParams(window.location.search).get("orderId");
           if (urlParamId) {
             targetId = urlParamId;

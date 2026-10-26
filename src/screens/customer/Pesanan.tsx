@@ -12,6 +12,7 @@ import {
   TextInput,
   Alert,
   Image,
+  RefreshControl,
 } from "react-native";
 import {
   ShoppingBag,
@@ -48,6 +49,7 @@ import {
   Package,
   Ticket,
   Hotel,
+  Recycle,
 } from "lucide-react-native";
 import { OrderItem } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -105,7 +107,7 @@ export const Pesanan: React.FC<PesananProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<number>(0);
   const [selectedCategory, setSelectedCategory] = useState<
-    "ALL" | "SHOP" | "MART" | "RIDE" | "SEND" | "LAUNDRY" | "CATERING"
+    "ALL" | "SHOP" | "MART" | "RIDE" | "SEND" | "LAUNDRY" | "CATERING" | "KOS" | "RECYCLE"
   >("ALL");
   const [sortBy, setSortBy] = useState<"NEWEST" | "OLDEST" | "HIGHEST_PRICE" | "LOWEST_PRICE">("NEWEST");
   const [sortModalVisible, setSortModalVisible] = useState(false);
@@ -118,6 +120,8 @@ export const Pesanan: React.FC<PesananProps> = ({
     { key: "SEND", label: "Send", icon: Truck, color: "#0284C7" },
     { key: "LAUNDRY", label: "Laundry", icon: Wind, color: "#0284C7" },
     { key: "CATERING", label: "Catering", icon: Coffee, color: "#EA580C" },
+    { key: "KOS", label: "Kos/Stay", icon: Building, color: "#9333EA" },
+    { key: "RECYCLE", label: "Recycle", icon: Recycle, color: "#0D7A53" },
   ] as const;
 
   const [trackModalVisible, setTrackModalVisible] = useState(false);
@@ -300,44 +304,50 @@ export const Pesanan: React.FC<PesananProps> = ({
     }
   };
 
+  const isOrderCompleted = (status?: string) => {
+    const s = String(status || "").trim().toLowerCase();
+    return s === "selesai" || s === "completed" || s === "delivered" || s === "settled" || s === "verified" || s === "pembayaran terverifikasi" || s === "point masuk";
+  };
+
+  const isOrderCancelled = (status?: string) => {
+    const s = String(status || "").trim().toLowerCase();
+    return s.includes("batal") || s.includes("cancel") || s === "rejected";
+  };
+
   const currentStatusOrders = orders.filter((o) => {
-    if (activeTab === 0) return o.status !== "Selesai" && !o.status.toLowerCase().includes("batal");
-    if (activeTab === 1) return o.status === "Selesai";
-    return o.status.toLowerCase().includes("batal");
+    const completed = isOrderCompleted(o?.status);
+    const cancelled = isOrderCancelled(o?.status);
+    if (activeTab === 0) return !completed && !cancelled;
+    if (activeTab === 1) return completed;
+    return cancelled;
   });
+
+  const matchesCategory = (o: OrderItem, key: string) => {
+    if (key === "ALL") return true;
+    const t = String(o.type || "").toLowerCase();
+    switch (key) {
+      case "SHOP": return t.includes("shop");
+      case "MART": return t.includes("market") || t.includes("mart");
+      case "RIDE": return t.includes("ride");
+      case "SEND": return t.includes("send");
+      case "LAUNDRY": return t.includes("laund");
+      case "CATERING": return t.includes("cater");
+      case "KOS": return t.includes("kos") || t.includes("hotel") || t.includes("homestay") || t.includes("wisata") || t.includes("stay");
+      case "RECYCLE": return t.includes("recycle") || t.includes("sampah");
+      default: return true;
+    }
+  };
 
   const getCategoryCount = (key: string) => {
     if (key === "ALL") return currentStatusOrders.length;
-    return currentStatusOrders.filter((o) => {
-      const t = (o.type || "").toLowerCase();
-      switch (key) {
-        case "SHOP": return t.includes("shop");
-        case "MART": return t.includes("market") || t.includes("mart");
-        case "RIDE": return t.includes("ride");
-        case "SEND": return t.includes("send");
-        case "LAUNDRY": return t.includes("laund");
-        case "CATERING": return t.includes("cater");
-        default: return true;
-      }
-    }).length;
+    return currentStatusOrders.filter((o) => matchesCategory(o, key)).length;
   };
 
   const getFilteredOrders = () => {
     let list = currentStatusOrders;
 
     if (selectedCategory !== "ALL") {
-      list = list.filter((o) => {
-        const t = (o.type || "").toLowerCase();
-        switch (selectedCategory) {
-          case "SHOP": return t.includes("shop");
-          case "MART": return t.includes("market") || t.includes("mart");
-          case "RIDE": return t.includes("ride");
-          case "SEND": return t.includes("send");
-          case "LAUNDRY": return t.includes("laund");
-          case "CATERING": return t.includes("cater");
-          default: return true;
-        }
-      });
+      list = list.filter((o) => matchesCategory(o, selectedCategory));
     }
 
     return [...list].sort((a, b) => {
@@ -378,6 +388,8 @@ export const Pesanan: React.FC<PesananProps> = ({
       return { icon: Bike, fg: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0" };
     } else if (normalized.includes("send")) {
       return { icon: Truck, fg: "#0284C7", bg: "#F0F9FF", border: "#BAE6FD" };
+    } else if (normalized.includes("recycle") || normalized.includes("sampah")) {
+      return { icon: Recycle, fg: "#0D7A53", bg: "#ECFDF5", border: "#A7F3D0" };
     } else {
       return { icon: Package, fg: "#D97706", bg: "#FFFBEB", border: "#FDE68A" };
     }
@@ -726,11 +738,21 @@ export const Pesanan: React.FC<PesananProps> = ({
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={Boolean(ordersLoading)}
+            onRefresh={() => {
+              if (onRetryOrders) onRetryOrders();
+            }}
+            colors={["#0D7A53"]}
+            tintColor="#0D7A53"
+          />
+        }
         renderItem={({ item }) => {
           const config = getServiceIcon(item.type);
           const IconComp = config.icon;
           const statusStyle = getStatusColors(item.status);
-          const isCompleted = item.status === "Selesai";
+          const isCompleted = isOrderCompleted(item.status);
           const hasReviewed = reviews.some((r) => r.orderId === item.id);
           const hasDriver = Boolean(
             (item as any).driverName ||

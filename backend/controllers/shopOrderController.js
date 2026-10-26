@@ -500,10 +500,24 @@ const createShopOrder = async (req, res) => {
 const getCustomerOrders = async (req, res) => {
   try {
     const { customerId } = req.params;
-    const orders = await ShopOrder.find({ customerId })
-      .populate("storeId", "name logo coverImage address storeType")
-      .sort({ createdAt: -1 })
-      .lean();
+    const candidateIds = [customerId, String(req.authUser?._id || "")].filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const orConditions = [];
+    if (candidateIds.length > 0) {
+      orConditions.push({ customerId: { $in: candidateIds } });
+    }
+    if (req.authUser?.email) {
+      orConditions.push({ customerEmail: req.authUser.email });
+    }
+    if (req.authUser?.phone) {
+      orConditions.push({ customerPhone: req.authUser.phone });
+    }
+
+    const orders = orConditions.length > 0
+      ? await ShopOrder.find({ $or: orConditions })
+          .populate("storeId", "name logo coverImage address storeType")
+          .sort({ createdAt: -1 })
+          .lean()
+      : [];
 
     return res.json({ success: true, data: orders });
   } catch (error) {

@@ -628,8 +628,11 @@ export const updateLaundryDriverLocation = async (
 
 export const fetchDriverLaundryJobs = async (driverId?: string): Promise<LaundryOrder[]> => {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
     const url = getApiUrl(`/laundry/driver/jobs${driverId ? `?driverId=${encodeURIComponent(driverId)}` : ""}`);
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
     const json = await res.json();
     if (json.success && Array.isArray(json.data)) {
       return json.data;

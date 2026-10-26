@@ -81,6 +81,9 @@ import { getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrd
 import { fetchCustomerShopOrders } from "../../services/shopService";
 import { fetchCustomerSendOrders } from "../../services/sendService";
 import { fetchCustomerLaundryOrders } from "../../services/laundryService";
+import { fetchCustomerBookings } from "../../services/kostService";
+import { getCustomerDeposits } from "../../services/recycleService";
+import { getCustomerOrders, hydrateCustomerOrders, subscribeCustomerOrders } from "./customerOrderStore";
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 import { setPendingMarketplaceCart } from "./marketplaceCartStore";
 import { setActiveCateringTrackingOrderId } from "./customerCateringStore";
@@ -222,6 +225,20 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   useEffect(() => {
     ordersRef.current = orders;
   }, [orders]);
+
+  useEffect(() => {
+    void hydrateCustomerOrders();
+    const unsub = subscribeCustomerOrders(() => {
+      setOrdersReloadKey((k) => k + 1);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (currentTab === 2) {
+      setOrdersReloadKey((k) => k + 1);
+    }
+  }, [currentTab]);
 
   useEffect(() => {
     if (!authAccount) return;
@@ -414,13 +431,15 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       if (loading) return;
       loading = true;
       try {
-        const [marketplaceResult, cateringResult, rideResult, shopResult, sendResult, laundryResult] = await Promise.allSettled([
+        const [marketplaceResult, cateringResult, rideResult, shopResult, sendResult, laundryResult, kostResult, recycleResult] = await Promise.allSettled([
           getMarketplaceOrdersForCustomer(authAccount.id),
           getCateringOrdersForCustomer(authAccount.id),
           fetchCustomerRides(authAccount.id),
           fetchCustomerShopOrders(authAccount.id),
           fetchCustomerSendOrders(authAccount.id),
           fetchCustomerLaundryOrders(authAccount.id, authAccount.phone),
+          fetchCustomerBookings(authAccount.email || authAccount.id),
+          getCustomerDeposits(authAccount.id),
         ]);
         if (!activeOrderLoader) return;
 
@@ -430,6 +449,8 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         const shopData = shopResult.status === "fulfilled" ? shopResult.value : null;
         const sendData = sendResult.status === "fulfilled" ? sendResult.value : null;
         const laundryData = laundryResult.status === "fulfilled" ? laundryResult.value : null;
+        const kostData = kostResult.status === "fulfilled" ? kostResult.value : null;
+        const recycleData = recycleResult.status === "fulfilled" ? recycleResult.value : null;
 
         const marketplaceLoadFailed = !marketplaceData?.success || !Array.isArray(marketplaceData.data);
         const cateringLoadFailed = !cateringData?.success || !Array.isArray(cateringData.data);
@@ -704,7 +725,77 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           };
         }) : null;
 
+        // 7. Kos & Homestay Bookings
+        const kostOrders: OrderItem[] | null = kostData && Array.isArray(kostData) ? kostData.map((booking: any) => {
+          const isCompleted = booking.status === "settled" || booking.status === "dp_verified" || booking.status === "verified";
+          const isCancelled = booking.status === "rejected" || booking.status === "cancelled";
+          const cat = booking.categoryType || (booking.kostId?.type?.toLowerCase().includes("hotel") ? "hotel" : "kost");
+          const typeLabel = cat === "hotel" ? "Homestay & Villa" : cat === "wisata" ? "Tiket Wisata" : "Kos Kamojang";
+          const statusLabel =
+            isCompleted ? "Selesai" :
+            isCancelled ? "Dibatalkan" :
+            booking.status === "dp_submitted" ? "Menunggu Konfirmasi DP" :
+            booking.status === "dp_verified" ? "DP Diterima" :
+            booking.status === "settled" ? "Selesai (Lunas)" :
+            "Menunggu Pembayaran";
+
+          return {
+            id: booking._id,
+            orderCode: booking.bookingCode || `#RNG-KOS-${String(booking._id).slice(-8).toUpperCase()}`,
+            type: typeLabel,
+            iconName: cat === "hotel" ? "Hotel" : cat === "wisata" ? "Ticket" : "Building",
+            color: "#9333EA",
+            item: booking.kostName || booking.kostId?.name || "Properti Kamojang",
+            detail: `${booking.durationMonths || 1} ${cat === "hotel" ? "malam" : "bulan"} • Kamar ${booking.roomNumber || "Standar"}`,
+            status: statusLabel,
+            statusColor: isCompleted ? "green" : isCancelled ? "red" : "orange",
+            date: formatDateSafe(booking.createdAt),
+            createdAt: booking.createdAt || new Date().toISOString(),
+            total: booking.totalPrice || booking.dpAmount || 0,
+            paidAmount: booking.dpAmount || 0,
+            remainingAmount: Math.max(0, (booking.totalPrice || 0) - (booking.dpAmount || 0)),
+            paymentMethod: booking.paymentMethod || "Transfer",
+            paymentStatus: booking.paymentStatus || (isCompleted ? "Lunas" : "DP"),
+            address: booking.kostAddress || booking.kostId?.address || "Kamojang, Garut",
+            rawOrder: booking,
+          };
+        }) : null;
+
+        // 8. Waste Deposits (Kanyaah Recycle)
+        const recycleOrders: OrderItem[] | null = recycleData?.success && Array.isArray(recycleData.data) ? recycleData.data.map((deposit: any) => {
+          const isCompleted = deposit.status === "CONFIRMED";
+          const isCancelled = deposit.status === "REJECTED" || deposit.status === "CANCELLED";
+          const statusLabel =
+            isCompleted ? "Selesai" :
+            isCancelled ? "Dibatalkan" :
+            deposit.status === "SCHEDULED" ? "Jadwal Setor" :
+            deposit.status === "PICKUP_ACCEPTED" ? "Kurir Ditugaskan" :
+            deposit.status === "PICKED_UP" ? "Sampah Dijemput" :
+            deposit.status === "ARRIVED_AT_BANK" ? "Tiba di Bank Sampah" :
+            deposit.status || "Menunggu";
+
+          return {
+            id: deposit._id,
+            orderCode: deposit.depositCode || `#RNG-REC-${String(deposit._id).slice(-8).toUpperCase()}`,
+            type: "Kanyaah Recycle",
+            iconName: "Recycle",
+            color: "#0D7A53",
+            item: "Setor Sampah Anorganik",
+            detail: `${deposit.bankName || "Bank Sampah"} • ${deposit.totalWeightKg ? `${deposit.totalWeightKg} kg` : "Dalam Timbangan"}`,
+            status: statusLabel,
+            statusColor: isCompleted ? "green" : isCancelled ? "red" : "orange",
+            date: formatDateSafe(deposit.createdAt),
+            createdAt: deposit.createdAt || new Date().toISOString(),
+            total: deposit.estimatedRewardPoints || deposit.finalRewardPoints || 0,
+            paymentMethod: "Point GEOVERSE",
+            paymentStatus: isCompleted ? "Point Masuk" : "Proses",
+            address: deposit.customerAddressSnapshot?.fullAddress || deposit.pickupAddress,
+            rawOrder: deposit,
+          };
+        }) : null;
+
         const currentOrders = ordersRef.current;
+        const localOrders = getCustomerOrders();
         const rawOrders = [
           ...(shopOrders ?? currentOrders.filter((order) => order.type.toLowerCase().includes("shop"))),
           ...(marketplaceOrders ?? currentOrders.filter((order) => order.type === "Marketplace")),
@@ -712,6 +803,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           ...(rideOrders ?? currentOrders.filter((order) => order.type === "Kanyaah Ride")),
           ...(sendOrders ?? currentOrders.filter((order) => order.type.toLowerCase().includes("send"))),
           ...(laundryOrders ?? currentOrders.filter((order) => order.type.toLowerCase().includes("laund"))),
+          ...(kostOrders ?? currentOrders.filter((order) => order.type.toLowerCase().includes("kos") || order.type.toLowerCase().includes("homestay") || order.type.toLowerCase().includes("wisata"))),
+          ...(recycleOrders ?? currentOrders.filter((order) => order.type.toLowerCase().includes("recycle"))),
+          ...localOrders,
         ];
 
         const seenOrderIds = new Set<string>();

@@ -132,7 +132,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   // Navigation Tabs (6 tabs):
   // 0: verifikasi, 1: monitoring, 2: transaksi, 3: mitra, 4: konten beranda, 5: akun
   const [currentTab, setCurrentTab] = useState<number>(() => {
-    if (typeof window !== "undefined") {
+    if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.search) {
       const search = window.location.search;
       if (search.includes("tab=content") || search.includes("tab=hero") || search.includes("tab=4")) return 4;
     }

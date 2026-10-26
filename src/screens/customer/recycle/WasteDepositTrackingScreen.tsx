@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -90,7 +91,7 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
   useEffect(() => {
     if (!deposit) {
       let targetId: string | null = null;
-      if (typeof window !== "undefined" && window.location?.search) {
+      if (Platform.OS === "web" && typeof window !== "undefined" && window.location?.search) {
         const params = new URLSearchParams(window.location.search);
         targetId = params.get("depositId");
       }
@@ -110,7 +111,7 @@ export const WasteDepositTrackingScreen: React.FC<Nav> = ({ navigate }) => {
   }, [deposit]);
 
   const fetchLatest = async () => {
-    const currentId = deposit?._id || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("depositId") : null);
+    const currentId = deposit?._id || (Platform.OS === "web" && typeof window !== "undefined" && window.location?.search ? new URLSearchParams(window.location.search).get("depositId") : null);
     if (!currentId) return;
     try {
       const res = await getWasteDepositById(currentId);

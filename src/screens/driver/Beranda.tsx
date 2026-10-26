@@ -620,7 +620,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       if (loading) return;
       loading = true;
       try {
-        const [mktRes, catRes, laundryJobs, rideRes, sendRes, driverSendRes, wasteRes, shopRes] = await Promise.all([
+        const results = await Promise.allSettled([
           getMarketplaceOrdersForDriver(authAccount.id),
           getCateringOrdersForDriver(authAccount.id),
           fetchDriverLaundryJobs(authAccount.id),
@@ -631,6 +631,15 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           fetchDriverShopOrders(authAccount.id),
         ]);
         if (!active) return;
+
+        const mktRes = results[0].status === "fulfilled" ? results[0].value : { success: false, data: [] };
+        const catRes = results[1].status === "fulfilled" ? results[1].value : { success: false, data: [] };
+        const laundryJobs = results[2].status === "fulfilled" ? results[2].value : [];
+        const rideRes = results[3].status === "fulfilled" ? results[3].value : { success: false, data: [] };
+        const sendRes = results[4].status === "fulfilled" ? results[4].value : { success: false, data: [] };
+        const driverSendRes = results[5].status === "fulfilled" ? results[5].value : { success: false, data: [] };
+        const wasteRes = results[6].status === "fulfilled" ? results[6].value : { success: false, data: [] };
+        const shopRes = results[7].status === "fulfilled" ? results[7].value : { success: false, data: [] };
 
         const normalizeStatus = (rawStatus: string): DriverOrder["status"] => {
           if (rawStatus === "Menuju Pickup") return "Menuju Pickup";
@@ -813,7 +822,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       clearInterval(interval);
       unsubscribeRealtime();
     };
-  }, [authAccount?.id]);
+  }, [authAccount?.id, isOnline, currentTab]);
 
   // 4. Global Transactions & Balance State
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);

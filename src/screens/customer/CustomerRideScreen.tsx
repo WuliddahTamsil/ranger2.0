@@ -36,9 +36,10 @@ import {
 } from "lucide-react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Nav } from "../../types";
+import { Nav, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { useRecycle } from "../../context/RecycleContext";
+import { addCustomerOrder } from "./customerOrderStore";
 import {
   createRideBooking,
   estimateRideFareBreakdown,
@@ -603,6 +604,39 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       if (res.data._id) {
         await AsyncStorage.setItem("selected_ride_tracking_id", String(res.data._id));
       }
+
+      // Save to customer order store immediately so it appears in "Pesanan" (tab 3)
+      const rideOrderItem: OrderItem = {
+        id: String(res.data._id),
+        orderCode: res.data.orderCode || `#RNG-RIDE-${String(res.data._id).slice(-8).toUpperCase()}`,
+        type: "Kanyaah Ride",
+        iconName: "Bike",
+        color: "#16A34A",
+        item: "Kanyaah Ride",
+        detail: `${res.data.pickup?.address || pickup.address} → ${res.data.destination?.address || destination.address}`,
+        status: "Mencari Driver",
+        statusColor: "orange",
+        date: "Baru Saja",
+        createdAt: res.data.createdAt || new Date().toISOString(),
+        total: res.data.totalAmount || res.data.estimatedFare || finalPayableFare,
+        paymentMethod: res.data.paymentMethod || selectedPaymentMethod,
+        paymentStatus: res.data.paymentStatus || (finalPayableFare === 0 ? "Lunas" : "Menunggu Pembayaran"),
+        pickup: (res.data.pickup || pickup) ? {
+          address: (res.data.pickup || pickup).address,
+          latitude: (res.data.pickup || pickup).latitude ?? undefined,
+          longitude: (res.data.pickup || pickup).longitude ?? undefined,
+          placeName: (res.data.pickup || pickup).placeName,
+        } : undefined,
+        destination: (res.data.destination || destination) ? {
+          address: (res.data.destination || destination).address,
+          latitude: (res.data.destination || destination).latitude ?? undefined,
+          longitude: (res.data.destination || destination).longitude ?? undefined,
+          placeName: (res.data.destination || destination).placeName,
+        } : undefined,
+        rawOrder: res.data,
+      };
+      addCustomerOrder(rideOrderItem);
+
       if (selectedPaymentMethod === "CASH" || finalPayableFare === 0) {
         navigate("c_ride_tracking");
       } else {

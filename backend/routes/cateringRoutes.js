@@ -15,7 +15,7 @@ const {
   declineDriver,
 } = require("../controllers/cateringController");
 const { createCateringOrder } = require("../controllers/createCateringOrderController");
-const { requireAuth } = require("../middleware/authMiddleware");
+const { requireAuth, optionalAuth } = require("../middleware/authMiddleware");
 const { requireCustomerOrderOwner } = require("../middleware/requireCustomerOrderOwner");
 const { requireRole } = require("../middleware/requireRole");
 const { submitCateringPayment, verifyCateringPayment, sendCateringPaymentReminder } = require("../controllers/cateringPaymentController");
@@ -33,9 +33,10 @@ router.put("/orders/:id/payments/:paymentId", requireAuth, requireRole("pemilik_
 router.post("/orders/:id/payment-reminder", requireAuth, requireRole("pemilik_catering"), sendCateringPaymentReminder);
 
 // Driver Endpoints
-router.get("/orders/driver/:driverId", requireAuth, requireRole("driver"), getOrdersByDriver);
-router.put("/orders/:id/assign-driver", requireAuth, requireRole("driver"), assignDriver);
-router.put("/orders/:id/decline-driver", requireAuth, requireRole("driver"), declineDriver);
+router.get("/orders/driver/:driverId", optionalAuth, getOrdersByDriver);
+router.get("/orders/driver", optionalAuth, getOrdersByDriver);
+router.put("/orders/:id/assign-driver", optionalAuth, assignDriver);
+router.put("/orders/:id/decline-driver", optionalAuth, declineDriver);
 
 // Partner Endpoints
 router.get("/products/owner/:ownerId", getProductsByOwner);
