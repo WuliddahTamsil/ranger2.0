@@ -9,7 +9,7 @@ import {
   Image,
   ActivityIndicator,
 } from "react-native";
-import { ShieldCheck, Camera, X, AlertCircle } from "lucide-react-native";
+import { ShieldCheck, Camera, Image as ImageIcon, X, AlertCircle } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { uploadFileToBackend } from "../../services/api";
 
@@ -32,7 +32,54 @@ export const DeliveryVerificationModal: React.FC<DeliveryVerificationModalProps>
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handlePickPhoto = async () => {
+  const processAssetUpload = async (asset: ImagePicker.ImagePickerAsset) => {
+    setUploadingPhoto(true);
+    try {
+      const fileName = asset.fileName || `delivery-proof-${Date.now()}.jpg`;
+      const mimeType = asset.mimeType || "image/jpeg";
+      const uploadRes = await uploadFileToBackend(
+        asset.uri,
+        fileName,
+        mimeType,
+        asset.base64 || undefined
+      );
+      const finalUrl =
+        uploadRes?.data?.url ||
+        uploadRes?.data?.viewUrl ||
+        uploadRes?.url ||
+        (asset.base64 ? `data:${mimeType};base64,${asset.base64}` : asset.uri);
+      setPhotoUri(finalUrl);
+    } catch (uploadErr) {
+      console.warn("Upload error, using local/base64 URI:", uploadErr);
+      const fallbackUrl = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+      setPhotoUri(fallbackUrl);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        alert("Izin galeri diperlukan untuk memilih foto bukti serah terima.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.7,
+        allowsEditing: false,
+        base64: true,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        await processAssetUpload(result.assets[0]);
+      }
+    } catch (e) {
+      console.warn("Gallery pick error:", e);
+    }
+  };
+
+  const handlePickFromCamera = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
@@ -40,32 +87,16 @@ export const DeliveryVerificationModal: React.FC<DeliveryVerificationModalProps>
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
         quality: 0.7,
         allowsEditing: false,
+        base64: true,
       });
-      if (!result.canceled && result.assets[0]?.uri) {
-        setUploadingPhoto(true);
-        try {
-          const uploadRes = await uploadFileToBackend(
-            result.assets[0].uri,
-            `delivery-proof-${Date.now()}.jpg`,
-            "image/jpeg"
-          );
-          const finalUrl =
-            uploadRes?.data?.url ||
-            uploadRes?.data?.viewUrl ||
-            uploadRes?.url ||
-            (typeof uploadRes === "string" ? uploadRes : result.assets[0].uri);
-          setPhotoUri(finalUrl);
-        } catch (uploadErr) {
-          console.warn("Upload error, using local URI:", uploadErr);
-          setPhotoUri(result.assets[0].uri);
-        }
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        await processAssetUpload(result.assets[0]);
       }
     } catch (e) {
       console.warn("Camera pick error:", e);
-    } finally {
-      setUploadingPhoto(false);
     }
   };
 
@@ -124,29 +155,54 @@ export const DeliveryVerificationModal: React.FC<DeliveryVerificationModalProps>
             {photoUri ? (
               <View style={styles.photoPreviewWrapper}>
                 <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-                <TouchableOpacity
-                  style={styles.retakeBtn}
-                  onPress={handlePickPhoto}
-                  disabled={uploadingPhoto}
-                >
-                  <Text style={styles.retakeText}>Ambil Ulang</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.retakeBtn}
+                    onPress={handlePickFromCamera}
+                    disabled={uploadingPhoto}
+                  >
+                    <Text style={styles.retakeText}>Kamera</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.retakeBtn}
+                    onPress={handlePickFromGallery}
+                    disabled={uploadingPhoto}
+                  >
+                    <Text style={styles.retakeText}>Galeri</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
-              <TouchableOpacity
-                style={styles.cameraBox}
-                onPress={handlePickPhoto}
-                disabled={uploadingPhoto}
-              >
-                {uploadingPhoto ? (
-                  <ActivityIndicator color="#15803D" />
-                ) : (
-                  <>
-                    <Camera size={24} color="#15803D" />
-                    <Text style={styles.cameraText}>Ambil Foto Serah Terima</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity
+                  style={[styles.cameraBox, { flex: 1 }]}
+                  onPress={handlePickFromCamera}
+                  disabled={uploadingPhoto}
+                >
+                  {uploadingPhoto ? (
+                    <ActivityIndicator color="#15803D" />
+                  ) : (
+                    <>
+                      <Camera size={22} color="#15803D" />
+                      <Text style={styles.cameraText}>Buka Kamera</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.cameraBox, { flex: 1 }]}
+                  onPress={handlePickFromGallery}
+                  disabled={uploadingPhoto}
+                >
+                  {uploadingPhoto ? (
+                    <ActivityIndicator color="#15803D" />
+                  ) : (
+                    <>
+                      <ImageIcon size={22} color="#15803D" />
+                      <Text style={styles.cameraText}>Pilih Galeri</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             )}
 
             {errorMsg ? (

@@ -107,27 +107,30 @@ export const SendPackageDetailScreen: React.FC<SendPackageDetailScreenProps> = (
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         quality: 0.7,
+        base64: true,
       });
 
       if (!result.canceled && result.assets[0]?.uri) {
-        const localUri = result.assets[0].uri;
+        const asset = result.assets[0];
         setUploadingPhoto(true);
         try {
           const uploadRes = await uploadFileToBackend(
-            localUri,
+            asset.uri,
             `pkg-${Date.now()}.jpg`,
-            "image/jpeg"
+            "image/jpeg",
+            asset.base64 || undefined
           );
           const finalUrl =
             uploadRes?.data?.url ||
             uploadRes?.data?.viewUrl ||
             uploadRes?.url ||
-            (typeof uploadRes === "string" ? uploadRes : localUri);
+            (asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri);
 
           setPhotos((prev) => [...prev, finalUrl]);
         } catch (uploadErr) {
           console.warn("Upload to backend error, using localUri fallback:", uploadErr);
-          setPhotos((prev) => [...prev, localUri]);
+          const fallback = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+          setPhotos((prev) => [...prev, fallback]);
         }
       }
     } catch (e) {

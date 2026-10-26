@@ -245,9 +245,10 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
         try {
           const fileName = asset.fileName || `qris-${Date.now()}.jpg`;
           const mimeType = asset.mimeType || "image/jpeg";
-          const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType);
-          if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
-            setQrisImageUrl(uploadRes.data.url);
+          const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType, asset.base64 || undefined);
+          const finalUrl = uploadRes?.data?.url || uploadRes?.url;
+          if (finalUrl) {
+            setQrisImageUrl(finalUrl);
           }
         } catch (uploadErr) {
           console.log("QRIS upload fallback to base64 data uri:", uploadErr);

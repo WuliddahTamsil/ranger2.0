@@ -343,13 +343,15 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
         mediaTypes: ["images"],
         quality: 0.7,
         allowsEditing: false,
+        base64: true,
       });
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         const fileSize = asset.fileSize ? `${(asset.fileSize / (1024 * 1024)).toFixed(1)} MB` : "Foto Galeri";
+        const finalUri = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
         setSelectedAttachment({
           type: "image",
-          uri: asset.uri,
+          uri: finalUri,
           name: asset.fileName || `foto_${Date.now()}.jpg`,
           size: fileSize,
         });
@@ -371,12 +373,14 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
         quality: 0.7,
+        base64: true,
       });
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
+        const finalUri = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
         setSelectedAttachment({
           type: "image",
-          uri: asset.uri,
+          uri: finalUri,
           name: `camera_${Date.now()}.jpg`,
           size: "Foto Kamera",
         });

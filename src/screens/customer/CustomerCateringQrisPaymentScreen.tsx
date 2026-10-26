@@ -222,6 +222,7 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
     uri: string;
     name: string;
     mimeType: string;
+    base64?: string;
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
@@ -366,8 +367,9 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
-        quality: 0.85,
+        quality: 0.7,
         allowsEditing: false,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -376,6 +378,7 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
           uri: asset.uri,
           name: asset.fileName || `bukti-qris-${Date.now()}.jpg`,
           mimeType: asset.mimeType || "image/jpeg",
+          base64: asset.base64 || undefined,
         });
       }
     } catch (error) {
@@ -393,8 +396,9 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
-        quality: 0.85,
+        quality: 0.7,
         allowsEditing: false,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -403,6 +407,7 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
           uri: asset.uri,
           name: asset.fileName || `bukti-qris-${Date.now()}.jpg`,
           mimeType: asset.mimeType || "image/jpeg",
+          base64: asset.base64 || undefined,
         });
       }
     } catch (error) {
@@ -439,13 +444,15 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
         const uploadRes = await uploadFileToBackend(
           selectedProof.uri,
           selectedProof.name,
-          selectedProof.mimeType
+          selectedProof.mimeType,
+          selectedProof.base64
         );
         setIsUploadingImage(false);
-        if (!uploadRes.success || !uploadRes.data?.url) {
+        const cloudUrl = uploadRes?.data?.url || uploadRes?.url;
+        if (!cloudUrl) {
           throw new Error(uploadRes.message || "Bukti pembayaran gagal diunggah.");
         }
-        finalProofUrl = uploadRes.data.url;
+        finalProofUrl = cloudUrl;
 
         const submitRes = await submitCateringPayment(
           targetOrderId,

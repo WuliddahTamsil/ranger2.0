@@ -196,8 +196,9 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
                 asset.name || `foto_${Date.now()}.jpg`,
                 asset.mimeType || "image/jpeg"
               );
-              if (res?.success && res?.data?.url) {
-                setImages((prev) => (prev.length < 6 ? [...prev, res.data.url] : prev));
+              const cloudUrl = res?.data?.url || res?.url;
+              if (cloudUrl) {
+                setImages((prev) => (prev.length < 6 ? [...prev, cloudUrl] : prev));
               } else {
                 showAlert("Gagal Mengunggah", res?.message || "Foto tidak dapat diunggah ke server.");
               }
@@ -239,8 +240,9 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
               asset.mimeType || "image/jpeg",
               asset.base64 || undefined
             );
-            if (res?.success && res?.data?.url) {
-              setImages((prev) => (prev.length < 6 ? [...prev, res.data.url] : prev));
+            const cloudUrl = res?.data?.url || res?.url;
+            if (cloudUrl) {
+              setImages((prev) => (prev.length < 6 ? [...prev, cloudUrl] : prev));
             } else {
               // Graceful fallback: use local photo uri so user can still add their menu
               const fallbackUri = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
@@ -296,8 +298,9 @@ export const FullPageProductForm: React.FC<FullPageProductFormProps> = ({
             asset.mimeType || "image/jpeg",
             asset.base64 || undefined
           );
-          if (res?.success && res?.data?.url) {
-            setImages((prev) => (prev.length < 6 ? [...prev, res.data.url] : prev));
+          const cloudUrl = res?.data?.url || res?.url;
+          if (cloudUrl) {
+            setImages((prev) => (prev.length < 6 ? [...prev, cloudUrl] : prev));
           } else {
             const fallbackUri = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
             setImages((prev) => (prev.length < 6 ? [...prev, fallbackUri] : prev));

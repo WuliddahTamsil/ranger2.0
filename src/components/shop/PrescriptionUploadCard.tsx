@@ -42,16 +42,21 @@ export const PrescriptionUploadCard: React.FC<PrescriptionUploadCardProps> = ({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        quality: 0.8,
+        quality: 0.7,
+        base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
-        const uri = result.assets[0].uri;
+        const asset = result.assets[0];
         setUploading(true);
-        // Upload to backend or use local preview
-        const uploadRes = await uploadFileToBackend(uri, "prescription.jpg", "image/jpeg");
+        const uploadRes = await uploadFileToBackend(
+          asset.uri,
+          asset.fileName || "prescription.jpg",
+          asset.mimeType || "image/jpeg",
+          asset.base64 || undefined
+        );
 
-        const finalUrl = uploadRes?.url || uri;
+        const finalUrl = uploadRes?.data?.url || uploadRes?.url || (asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri);
         const newImages = [...images, finalUrl];
         setImages(newImages);
         onUploaded({ imageUrls: newImages, doctorName, customerNotes: notes });

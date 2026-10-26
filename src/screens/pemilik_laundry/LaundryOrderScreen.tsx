@@ -53,6 +53,7 @@ import {
   LaundryOrder,
   getActiveLaundryOrder,
 } from "../../services/laundryService";
+import { uploadFileToBackend } from "../../services/api";
 
 interface LaundryOrderScreenProps extends Nav {
   authAccount?: AuthAccount | null;
@@ -144,13 +145,19 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
         }
         const result = await ImagePicker.launchCameraAsync({
           allowsEditing: true,
-          quality: 0.3,
+          quality: 0.7,
           base64: true,
         });
         if (!result.canceled && result.assets && result.assets.length > 0) {
           const asset = result.assets[0];
           const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
           setWeighingProofImage(uri);
+          void uploadFileToBackend(asset.uri, `weigh-${Date.now()}.jpg`, "image/jpeg", asset.base64 || undefined)
+            .then((res) => {
+              const url = res?.data?.url || res?.url;
+              if (url) setWeighingProofImage(url);
+            })
+            .catch(() => {});
         }
       } else {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -160,13 +167,19 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
         }
         const result = await ImagePicker.launchImageLibraryAsync({
           allowsEditing: true,
-          quality: 0.3,
+          quality: 0.7,
           base64: true,
         });
         if (!result.canceled && result.assets && result.assets.length > 0) {
           const asset = result.assets[0];
           const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
           setWeighingProofImage(uri);
+          void uploadFileToBackend(asset.uri, `weigh-${Date.now()}.jpg`, "image/jpeg", asset.base64 || undefined)
+            .then((res) => {
+              const url = res?.data?.url || res?.url;
+              if (url) setWeighingProofImage(url);
+            })
+            .catch(() => {});
         }
       }
     } catch (err: any) {

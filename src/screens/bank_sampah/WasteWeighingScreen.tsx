@@ -158,7 +158,8 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.8,
+        quality: 0.7,
+        base64: true,
       });
 
       if (!res.canceled && res.assets?.[0]) {
@@ -169,10 +170,12 @@ export const WasteWeighingScreen: React.FC<Nav> = ({ navigate }) => {
           const uploaded = await uploadFileToBackend(
             asset.uri,
             asset.fileName || `weighing-proof-${Date.now()}.jpg`,
-            asset.mimeType || "image/jpeg"
+            asset.mimeType || "image/jpeg",
+            asset.base64 || undefined
           );
-          if (uploaded?.success && uploaded?.data?.url) {
-            setProofPhotoUrl(uploaded.data.url);
+          const finalUrl = uploaded?.data?.url || uploaded?.url;
+          if (finalUrl) {
+            setProofPhotoUrl(finalUrl);
           }
         } catch (uploadErr) {
           console.warn("Upload file to backend error, fallback to local uri:", uploadErr);

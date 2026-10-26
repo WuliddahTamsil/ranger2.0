@@ -23,7 +23,10 @@ const getMarketplaceTransition = (role, currentStatus, nextStatus) => {
   return false;
 };
 
-const isValidDeliveryProofUrl = (value) => /^https?:\/\/\S+$/i.test(String(value || "").trim());
+const isValidDeliveryProofUrl = (value) => {
+  const str = String(value || "").trim();
+  return /^https?:\/\/\S+$/i.test(str) || /^data:image\/[a-zA-Z0-9+.-]+;base64,\S+$/i.test(str) || /^\/?uploads\/\S+$/i.test(str);
+};
 
 const getMarketplaceStatusNotification = (status, orderCode, driverName = "Driver") => {
   const code = orderCode || "pesanan Marketplace";

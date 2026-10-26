@@ -57,9 +57,10 @@ test("driver can only move through the marketplace delivery lifecycle", () => {
   assert.equal(getMarketplaceTransition("driver", "Mengantar", "Menuju Pickup"), false);
 });
 
-test("marketplace delivery proof must be a non-empty HTTP URL", () => {
+test("marketplace delivery proof must be a non-empty HTTP URL or valid data URI", () => {
   assert.equal(isValidDeliveryProofUrl("https://res.cloudinary.com/example/proof.jpg"), true);
   assert.equal(isValidDeliveryProofUrl("http://localhost:5000/uploads/proof.jpg"), true);
+  assert.equal(isValidDeliveryProofUrl("data:image/jpeg;base64,/9j/4AAQSkZJRg=="), true);
   assert.equal(isValidDeliveryProofUrl(""), false);
   assert.equal(isValidDeliveryProofUrl("file:///proof.jpg"), false);
 });

@@ -188,7 +188,8 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        quality: 0.8,
+        quality: 0.7,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -199,10 +200,12 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
           const uploadRes = await uploadFileToBackend(
             asset.uri,
             `qris_owner_${Date.now()}.jpg`,
-            asset.mimeType || "image/jpeg"
+            asset.mimeType || "image/jpeg",
+            asset.base64 || undefined
           );
-          if (uploadRes?.data?.url) {
-            setQrisImage(uploadRes.data.url);
+          const finalUrl = uploadRes?.data?.url || uploadRes?.url;
+          if (finalUrl) {
+            setQrisImage(finalUrl);
           }
         } catch (uploadErr) {
           console.warn("Upload QRIS error:", uploadErr);

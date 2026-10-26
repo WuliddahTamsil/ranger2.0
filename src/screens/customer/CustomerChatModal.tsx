@@ -444,8 +444,9 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           attachmentToSend.name,
           attachmentToSend.type === "image" ? "image/jpeg" : attachmentToSend.type === "video" ? "video/mp4" : "application/octet-stream"
         );
-        if (uploaded?.success && uploaded.data?.url) {
-          attachmentToSend = { ...attachmentToSend, uri: uploaded.data.url };
+        const cloudUrl = uploaded?.data?.url || uploaded?.url;
+        if (cloudUrl) {
+          attachmentToSend = { ...attachmentToSend, uri: cloudUrl };
         }
       } catch (err) {
         console.warn("Upload attachment fallback:", err);

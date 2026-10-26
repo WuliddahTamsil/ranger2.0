@@ -272,7 +272,8 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
-        quality: 0.8,
+        quality: 0.7,
+        base64: true,
       });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
@@ -280,10 +281,12 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
       const uploaded = await uploadFileToBackend(
         asset.uri,
         asset.fileName || `shop-qris-${Date.now()}.jpg`,
-        asset.mimeType || "image/jpeg"
+        asset.mimeType || "image/jpeg",
+        asset.base64 || undefined
       );
-      if (!uploaded?.success || !uploaded.data?.url) throw new Error("QRIS gagal diunggah.");
-      setQrisImageUrl(uploaded.data.url);
+      const finalUrl = uploaded?.data?.url || uploaded?.url;
+      if (!finalUrl) throw new Error("QRIS gagal diunggah.");
+      setQrisImageUrl(finalUrl);
       Alert.alert("QRIS Terunggah", "Foto barcode QRIS toko siap disimpan.");
     } catch (error: any) {
       Alert.alert("Gagal mengunggah QRIS", error?.message || "Coba lagi.");

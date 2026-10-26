@@ -383,7 +383,8 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
-        quality: 0.8,
+        quality: 0.7,
+        base64: true,
       });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
@@ -392,9 +393,11 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
         asset.uri,
         asset.fileName || `catering-qris-${Date.now()}.jpg`,
         asset.mimeType || "image/jpeg",
+        asset.base64 || undefined
       );
-      if (!uploaded?.success || !uploaded.data?.url) throw new Error("QRIS gagal diunggah.");
-      setQrisImageUrl(uploaded.data.url);
+      const finalUrl = uploaded?.data?.url || uploaded?.url;
+      if (!finalUrl) throw new Error("QRIS gagal diunggah.");
+      setQrisImageUrl(finalUrl);
     } catch (error) {
       Alert.alert("Gagal mengunggah QRIS", error instanceof Error ? error.message : "Coba lagi.");
     } finally {

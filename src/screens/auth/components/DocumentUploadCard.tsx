@@ -121,8 +121,9 @@ export const DocumentUploadCard: React.FC<Props> = ({
           asset.mimeType || "image/jpeg",
           asset.base64 || undefined
         );
-        if (uploadRes?.success && uploadRes?.data?.url) {
-          remoteUri = uploadRes.data.url;
+        const finalUrl = uploadRes?.data?.url || uploadRes?.url;
+        if (finalUrl) {
+          remoteUri = finalUrl;
         }
       } catch (uploadErr) {
         console.warn("Upload to backend note, using local fallback:", uploadErr);

@@ -163,12 +163,22 @@ const uploadFormDataViaXhr = (url: string, formData: FormData): Promise<any> => 
     xhr.timeout = 30000;
     xhr.onload = () => {
       try {
-        resolve(JSON.parse(xhr.responseText));
+        const parsed = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300 && parsed?.success !== false) {
+          resolve(parsed);
+        } else {
+          reject(new Error(parsed?.message || `Upload gagal (HTTP ${xhr.status})`));
+        }
       } catch (err) {
-        resolve({
-          success: xhr.status >= 200 && xhr.status < 300,
-          data: { url: xhr.responseText },
-        });
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve({
+            success: true,
+            data: { url: xhr.responseText },
+            url: xhr.responseText,
+          });
+        } else {
+          reject(new Error(`Upload gagal (HTTP ${xhr.status})`));
+        }
       }
     };
     xhr.onerror = () => reject(new Error("Koneksi upload foto terganggu. Pastikan jaringan internet aktif."));
@@ -217,7 +227,13 @@ export const uploadFileToBackend = async (
       });
       clearTimeout(timer);
       const data = await readApiJson(res);
-      if (data?.success) return data;
+      if (data?.success) {
+        const finalUrl = data?.data?.url || data?.url;
+        return {
+          ...data,
+          url: finalUrl,
+        };
+      }
     } catch (jsonErr: any) {
       console.warn("Direct Base64 JSON upload note, trying fallback:", jsonErr?.message);
     }
@@ -257,24 +273,38 @@ export const uploadFileToBackend = async (
       });
       clearTimeout(timer);
 
-      return await readApiJson(response);
+      const parsed = await readApiJson(response);
+      return {
+        ...parsed,
+        url: parsed?.data?.url || parsed?.url,
+      };
     } else {
       // Native Android / iOS: Use XMLHttpRequest so Expo's WinterCG fetch serializer is completely bypassed!
-      formData.append("file", {
-        uri: fileUri,
-        name: safeFileName,
-        type: safeMimeType,
-      } as any);
+      if (!fileUri.startsWith("data:")) {
+        formData.append("file", {
+          uri: fileUri,
+          name: safeFileName,
+          type: safeMimeType,
+        } as any);
 
-      return await uploadFormDataViaXhr(getApiUrl("/upload"), formData);
+        const res = await uploadFormDataViaXhr(getApiUrl("/upload"), formData);
+        if (res) {
+          return {
+            ...res,
+            url: res?.data?.url || res?.url,
+          };
+        }
+      }
     }
   } catch (error: any) {
     console.error("❌ Upload file error:", error);
     if (resolvedBase64) {
+      const dataUri = `data:${safeMimeType};base64,${resolvedBase64}`;
       return {
         success: true,
         message: "Foto diproses lokal",
-        data: { url: `data:${safeMimeType};base64,${resolvedBase64}` },
+        data: { url: dataUri },
+        url: dataUri,
       };
     }
     throw new Error(error?.message || "Koneksi upload foto terganggu. Pastikan jaringan internet aktif.");

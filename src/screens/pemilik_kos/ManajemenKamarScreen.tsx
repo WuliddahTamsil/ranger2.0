@@ -538,7 +538,8 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
         selectionLimit: 5 - roomPhotos.length,
-        quality: 0.85,
+        quality: 0.7,
+        base64: true,
       });
 
       if (!result.canceled && result.assets) {
@@ -550,11 +551,13 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
             const uploadRes = await uploadFileToBackend(
               asset.uri,
               asset.fileName || `item_${Date.now()}.jpg`,
-              asset.mimeType || "image/jpeg"
+              asset.mimeType || "image/jpeg",
+              asset.base64 || undefined
             );
-            if (uploadRes?.success && uploadRes?.data?.url) {
+            const finalUrl = uploadRes?.data?.url || uploadRes?.url;
+            if (finalUrl) {
               setRoomPhotos((prev) => {
-                if (prev.length < 5) return [...prev, uploadRes.data.url];
+                if (prev.length < 5) return [...prev, finalUrl];
                 return prev;
               });
             } else if (asset.uri) {

@@ -243,15 +243,17 @@ export const Pesanan: React.FC<PesananProps> = ({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        quality: 0.8,
+        quality: 0.7,
+        base64: true,
       });
       if (!result.canceled && result.assets[0]?.uri) {
-        const uri = result.assets[0].uri;
+        const asset = result.assets[0];
         const fileName = `complaint-${Date.now()}.jpg`;
         const mimeType = "image/jpeg";
-        const uploadRes = await uploadFileToBackend(uri, fileName, mimeType);
-        if (uploadRes.success && uploadRes.data?.url) {
-          setComplaintPhotos((prev) => [...prev, uploadRes.data.url]);
+        const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType, asset.base64 || undefined);
+        const finalUrl = uploadRes?.data?.url || uploadRes?.url;
+        if (finalUrl) {
+          setComplaintPhotos((prev) => [...prev, finalUrl]);
         } else {
           Alert.alert("Gagal Upload", uploadRes.message || "Gagal mengunggah foto bukti.");
         }
@@ -427,7 +429,8 @@ export const Pesanan: React.FC<PesananProps> = ({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsMultipleSelection: true,
       selectionLimit: 5,
-      quality: 0.8,
+      quality: 0.7,
+      base64: true,
       videoMaxDuration: 30,
     });
     if (result.canceled) return;
@@ -436,6 +439,7 @@ export const Pesanan: React.FC<PesananProps> = ({
       type: asset.type === "video" ? "video" as const : "image" as const,
       name: asset.fileName || `review-${Date.now()}-${index}.${asset.type === "video" ? "mp4" : "jpg"}`,
       mimeType: asset.mimeType || (asset.type === "video" ? "video/mp4" : "image/jpeg"),
+      base64: asset.base64 || undefined,
     }));
     setReviewMedia((current) => [...current, ...selected].slice(0, 5));
   };
@@ -450,11 +454,17 @@ export const Pesanan: React.FC<PesananProps> = ({
     try {
       const uploadedMedia: Array<{ url: string; type: "image" | "video"; name: string }> = [];
       for (const [index, media] of reviewMedia.entries()) {
-        const uploadResult = await uploadFileToBackend(media.uri, media.name || `review-${Date.now()}-${index}`, media.mimeType || "image/jpeg");
-        if (!uploadResult.success || !uploadResult.data?.url) {
-          throw new Error(uploadResult.message || "Media ulasan gagal diunggah");
+        const uploadResult = await uploadFileToBackend(
+          media.uri,
+          media.name || `review-${Date.now()}-${index}`,
+          media.mimeType || "image/jpeg",
+          (media as any).base64 || undefined
+        );
+        const finalUrl = uploadResult?.data?.url || uploadResult?.url;
+        if (!finalUrl) {
+          throw new Error(uploadResult?.message || "Media ulasan gagal diunggah");
         }
-        uploadedMedia.push({ url: uploadResult.data.url, type: media.type, name: media.name });
+        uploadedMedia.push({ url: finalUrl, type: media.type, name: media.name });
       }
 
       const result = await createCustomerReview({

@@ -230,9 +230,10 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
         try {
           const fileName = asset.fileName || `proof-${Date.now()}.jpg`;
           const mimeType = asset.mimeType || "image/jpeg";
-          const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType);
-          if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
-            setProofImageUri(uploadRes.data.url);
+          const uploadRes = await uploadFileToBackend(asset.uri, fileName, mimeType, asset.base64 || undefined);
+          const finalUrl = uploadRes?.data?.url || uploadRes?.url;
+          if (finalUrl) {
+            setProofImageUri(finalUrl);
           }
         } catch (uploadErr) {
           console.log("Upload to server fallback to base64 data uri:", uploadErr);

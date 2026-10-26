@@ -4,6 +4,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import { getApiUrl, getStoredAuthToken } from "./api";
 
 export interface HomeHeroBannerItem {
@@ -388,7 +389,7 @@ export async function uploadHomeHeroMedia(
   const fileName = file.name || (fileUri.includes(".mp4") ? "hero_video.mp4" : "hero_image.jpg");
   const mimeType = file.type || (fileName.endsWith(".mp4") ? "video/mp4" : "image/jpeg");
 
-  if (typeof window !== "undefined") {
+  if (Platform.OS === "web") {
     if (fileUri.startsWith("blob:") || fileUri.startsWith("data:")) {
       const blob = await fetch(fileUri).then((r) => r.blob());
       formData.append("file", blob, fileName);
@@ -401,27 +402,50 @@ export async function uploadHomeHeroMedia(
         type: mimeType,
       } as any);
     }
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token || ""}`,
+      },
+      body: formData,
+    });
+
+    const json = await parseResponseJson(res);
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || "Gagal mengunggah media hero.");
+    }
+
+    return json.data;
   } else {
+    // Native Android / iOS: Use XMLHttpRequest so Expo's WinterCG fetch is bypassed!
     formData.append("file", {
       uri: fileUri,
       name: fileName,
       type: mimeType,
     } as any);
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.timeout = 60000;
+      xhr.onload = () => {
+        try {
+          const json = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300 && json.success) {
+            resolve(json.data);
+          } else {
+            reject(new Error(json?.message || `Gagal mengunggah media hero (HTTP ${xhr.status})`));
+          }
+        } catch {
+          reject(new Error(`Gagal mengunggah media hero (HTTP ${xhr.status})`));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Koneksi upload hero media terganggu"));
+      xhr.ontimeout = () => reject(new Error("Upload timeout. Periksa koneksi internet Anda."));
+      xhr.send(formData);
+    });
   }
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token || ""}`,
-    },
-    body: formData,
-  });
-
-  const json = await parseResponseJson(res);
-  if (!res.ok || !json.success) {
-    throw new Error(json.message || "Gagal mengunggah media hero.");
-  }
-
-  return json.data;
 }
