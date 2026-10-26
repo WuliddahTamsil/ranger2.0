@@ -14,7 +14,7 @@ export const BackHeader: React.FC<BackHeaderProps> = ({ title, onBack, right }) 
 
   return (
     <View style={[styles.container, { paddingHorizontal: gutter }]}>
-      <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Kembali">
         <ArrowLeft size={20} color="#111827" />
       </TouchableOpacity>
       <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">
@@ -34,6 +34,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
+    gap: 8,
   },
   backButton: {
     width: 36,
@@ -42,6 +43,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
+    flexShrink: 0,
   },
   title: {
     flex: 1,
@@ -49,10 +51,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#111827",
+    paddingHorizontal: 8,
   },
   rightContainer: {
-    width: 36,
+    minWidth: 36,
     alignItems: "flex-end",
     justifyContent: "center",
+    flexShrink: 0,
   },
 });

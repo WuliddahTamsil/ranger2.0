@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
   profileSaveButton: { alignSelf: "stretch", minHeight: 40, paddingHorizontal: 13, borderRadius: 11, backgroundColor: "#EAF7EF", alignItems: "center", justifyContent: "center", marginTop: 4 },
   profileSaveText: { color: "#1B7A4E", fontSize: 11, fontWeight: "900" },
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  sectionHint: { color: "#94A3B8", fontSize: 10, marginTop: -5 },
+  sectionHint: { color: "#94A3B8", fontSize: 10, marginTop: 2 },
   compactAddButton: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: "#B7DEC8", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: "#F8FCF9" },
   compactAddText: { color: "#1B7A4E", fontSize: 11, fontWeight: "900" },
   emptyCard: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 22, borderWidth: 1, borderColor: "#E2E8F0", paddingHorizontal: 22, paddingVertical: 34 },

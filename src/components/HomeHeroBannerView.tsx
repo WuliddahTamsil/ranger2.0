@@ -202,9 +202,9 @@ export const HomeHeroBannerView: React.FC<HomeHeroHeaderProps> = ({
                 resizeMode="contain"
               />
             </View>
-            <View>
-              <Text style={styles.headerBrandTitle}>GEOVERSE</Text>
-              <Text style={styles.headerBrandSubtitle}>PGE Area Kamojang</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.headerBrandTitle} numberOfLines={1}>GEOVERSE</Text>
+              <Text style={styles.headerBrandSubtitle} numberOfLines={1}>PGE Area Kamojang</Text>
             </View>
           </View>
 
@@ -446,11 +446,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 14,
+    gap: 8,
   },
   headerBrandLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   headerBrandLogoContainer: {
     width: 32,
@@ -465,6 +468,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 3,
     elevation: 2,
+    flexShrink: 0,
   },
   headerBrandLogo: {
     width: 28,
@@ -493,6 +497,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.4)",
     shadowColor: "#000",
     shadowOpacity: 0.1,
+    flexShrink: 0,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 2,

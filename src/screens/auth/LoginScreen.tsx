@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   rowForgot: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: -4,
+    marginTop: 4,
     marginBottom: 18,
   },
   forgotText: {

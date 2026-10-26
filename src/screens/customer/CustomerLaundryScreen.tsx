@@ -293,7 +293,7 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
 
         <View style={styles.headerTitleCol}>
           <Text style={styles.headerTitle}>Layanan Laundry</Text>
-          <Text style={styles.headerSubTitle}>Pilihan mitra laundry terpercaya di sekitarmu</Text>
+          <Text style={styles.headerSubTitle} numberOfLines={1} ellipsizeMode="tail">Pilihan mitra laundry terpercaya di sekitarmu</Text>
         </View>
 
         <View style={styles.headerRightActions}>

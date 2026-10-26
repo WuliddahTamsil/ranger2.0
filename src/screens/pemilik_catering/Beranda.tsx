@@ -685,11 +685,11 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
         {/* Kitchen Status Card */}
         <View style={styles.outletCard}>
           <View style={styles.outletHeader}>
-            <View>
+            <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
               <Text style={styles.outletStatusLabel}>
                 {storeInfo.isOpen ? "DAPUR AKTIF" : "DAPUR NONAKTIF"}
               </Text>
-              <Text style={styles.storeNameText}>{storeInfo.storeName}</Text>
+              <Text style={styles.storeNameText} numberOfLines={1} ellipsizeMode="tail">{storeInfo.storeName}</Text>
             </View>
             <TouchableOpacity 
               style={styles.outletToggleBtn} 
@@ -739,7 +739,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             activeOpacity={0.8}
           >
             <ShoppingBag size={18} color="#1B7A4E" />
-            <Text style={styles.summaryValue}>{orders.length}</Text>
+            <Text style={styles.summaryValue} numberOfLines={1}>{orders.length}</Text>
             <Text style={styles.summaryLabel}>Order - Hari ini</Text>
           </TouchableOpacity>
 
@@ -749,7 +749,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             activeOpacity={0.8}
           >
             <Wallet size={18} color="#1B7A4E" />
-            <Text style={styles.summaryValue}>{rp(totalRevenueVal)}</Text>
+            <Text style={styles.summaryValue} numberOfLines={1}>{rp(totalRevenueVal)}</Text>
             <Text style={styles.summaryLabel}>Pendapatan - Tercatat</Text>
           </TouchableOpacity>
 
@@ -759,7 +759,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             activeOpacity={0.8}
           >
             <TrendingUp size={18} color="#1B7A4E" />
-            <Text style={styles.summaryValue}>{activeOrdersCount}</Text>
+            <Text style={styles.summaryValue} numberOfLines={1}>{activeOrdersCount}</Text>
             <Text style={styles.summaryLabel}>Diproses - Perlu aksi</Text>
           </TouchableOpacity>
 
@@ -769,7 +769,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             activeOpacity={0.8}
           >
             <MessageSquare size={18} color="#1B7A4E" />
-            <Text style={styles.summaryValue}>—</Text>
+            <Text style={styles.summaryValue} numberOfLines={1}>—</Text>
             <Text style={styles.summaryLabel}>Rating - Belum ada</Text>
           </TouchableOpacity>
         </View>
@@ -1994,6 +1994,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
+    gap: 12,
   },
   outletStatusLabel: {
     color: "#E8F5EE",
@@ -2075,7 +2076,7 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     padding: 14,
     width: "48%",
-    aspectRatio: 1.62,
+    minHeight: 88,
     justifyContent: "center",
     gap: 4,
   },

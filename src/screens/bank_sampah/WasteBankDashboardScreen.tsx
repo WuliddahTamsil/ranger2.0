@@ -613,7 +613,7 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
               <View style={styles.headerLiveDot} />
               <Text style={styles.headerBadgeText}>OFFICER PORTAL</Text>
             </View>
-            <Text style={styles.headerMainTitle}>Panel Bank Sampah</Text>
+            <Text style={styles.headerMainTitle} numberOfLines={1}>Panel Bank Sampah</Text>
             <Text style={styles.headerSubUnit} numberOfLines={1}>
               {displayUnitName}
             </Text>
@@ -1578,6 +1578,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     maxWidth: 1140,

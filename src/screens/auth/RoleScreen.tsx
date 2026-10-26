@@ -97,7 +97,7 @@ export const RoleScreen: React.FC<RoleScreenProps> = ({ navigate, onSelectRole }
     <ResponsiveSafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Pilih Peran Anda</Text>
-        <Text style={styles.subtitle}>Pilih salah satu dari 8 modul akses pengguna:</Text>
+        <Text style={styles.subtitle}>Pilih modul akses peran Anda:</Text>
 
         <View style={styles.cardContainer}>
           {roles.map((r) => {

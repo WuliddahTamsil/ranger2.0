@@ -2926,7 +2926,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#64748B",
     lineHeight: 16,
-    marginTop: -5,
+    marginTop: 4,
     marginBottom: 12,
   },
   reviewMediaGrid: {

@@ -13,6 +13,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -82,6 +83,8 @@ interface MarketplaceScreenProps extends Nav {
 }
 
 export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, authAccount }) => {
+  const { width: windowWidth } = useWindowDimensions();
+  const slideWidth = Math.max(260, windowWidth - 40);
   const [view, setView] = useState<MarketplaceView>("catalog");
   const [category, setCategory] = useState("Semua");
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -825,10 +828,10 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
                     horizontal
                     pagingEnabled
                     showsHorizontalScrollIndicator={false}
-                    onMomentumScrollEnd={(event) => setSelectedImage(Math.round(event.nativeEvent.contentOffset.x / 320))}
+                    onMomentumScrollEnd={(event) => setSelectedImage(Math.round(event.nativeEvent.contentOffset.x / slideWidth))}
                   >
                     {productImages.map((image: string, index: number) => (
-                      <View key={`${image}-${index}`} style={styles.detailImageSlide}>
+                      <View key={`${image}-${index}`} style={[styles.detailImageSlide, { width: slideWidth }]}>
                         <Image source={{ uri: image }} style={styles.detailProductImage} />
                         <Text style={styles.imageCounter}>{index + 1}/{productImages.length}</Text>
                       </View>
@@ -994,7 +997,7 @@ const styles = StyleSheet.create({
   addedText: { color: "#1B7A4E", fontSize: 10, fontWeight: "700", marginTop: 5 },
   productDetailSheet: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 20, maxHeight: "94%" },
   productDetailContent: { paddingBottom: 14 },
-  detailImageSlide: { width: 320, height: 220, position: "relative" },
+  detailImageSlide: { height: 220, position: "relative" },
   detailProductImage: { width: "100%", height: "100%", borderRadius: 18, backgroundColor: "#F3F4F6" },
   imageCounter: { position: "absolute", right: 12, bottom: 12, color: "#FFFFFF", backgroundColor: "rgba(15,23,42,.65)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, fontSize: 11, fontWeight: "700" },
   detailDots: { flexDirection: "row", justifyContent: "center", gap: 5, marginVertical: 10 },

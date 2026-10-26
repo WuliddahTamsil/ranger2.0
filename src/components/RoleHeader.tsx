@@ -37,7 +37,7 @@ export const RoleHeader: React.FC<RoleHeaderProps> = ({
   const topPadding = includeTopInset && topInset > 0 ? topInset + 10 * scale : 18 * scale;
 
   return (
-    <View style={fullBleed ? [styles.fullBleed, { marginHorizontal: -gutter }] : undefined}>
+    <View style={fullBleed ? [styles.fullBleed, { marginHorizontal: -gutter }] : styles.cardHeaderWrap}>
       <StatusBar barStyle="light-content" backgroundColor="#0E6641" />
       <View
         style={[
@@ -45,13 +45,13 @@ export const RoleHeader: React.FC<RoleHeaderProps> = ({
           {
             paddingHorizontal: gutter,
             paddingTop: topPadding,
-            paddingBottom: 18 * scale,
+            paddingBottom: 16 * scale,
           },
         ]}
       >
         <View style={styles.titleContainer}>
-          <Text style={styles.greetingText}>Halo, {greeting} 🌿</Text>
-          <Text style={styles.nameText} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={styles.greetingText} numberOfLines={1}>Halo, {greeting} 🌿</Text>
+          <Text style={[styles.nameText, { fontSize: Math.min(22, Math.max(17, 19 * scale)) }]} numberOfLines={1} ellipsizeMode="tail">
             {name || "Nama Pengguna"}
           </Text>
         </View>
@@ -77,7 +77,7 @@ export const RoleHeader: React.FC<RoleHeaderProps> = ({
           accessibilityLabel={`Beralih peran ${role}`}
         >
           <RoleIcon size={15} color="#FFFFFF" strokeWidth={2.5} />
-          <Text style={styles.roleText}>{role}</Text>
+          <Text style={styles.roleText} numberOfLines={1}>{role}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -88,6 +88,14 @@ const styles = StyleSheet.create({
   fullBleed: {
     marginHorizontal: -20,
   },
+  cardHeaderWrap: {
+    borderRadius: 20,
+    overflow: "hidden",
+    marginBottom: 14,
+    backgroundColor: "#0E6641",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -95,11 +103,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#0E6641",
     paddingHorizontal: 16,
     paddingTop: 20,
-    paddingBottom: 20,
+    paddingBottom: 16,
+    gap: 12,
   },
   titleContainer: {
     flex: 1,
-    paddingRight: 12,
+    minWidth: 0,
+    paddingRight: 8,
   },
   greetingText: {
     fontSize: 13,
@@ -107,7 +117,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   nameText: {
-    fontSize: 23,
+    fontSize: 20,
     fontWeight: "900",
     color: "#FFFFFF",
   },
@@ -119,6 +129,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.18)",
     position: "relative",
+    flexShrink: 0,
   },
   notificationBadge: {
     position: "absolute",
@@ -132,7 +143,7 @@ const styles = StyleSheet.create({
   roleRow: {
     backgroundColor: "#F9FAFB",
     paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingVertical: 11,
   },
   roleButton: {
     flexDirection: "row",
@@ -140,18 +151,20 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     gap: 7,
     backgroundColor: "#2563EB",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
     elevation: 3,
     shadowColor: "#2563EB",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
+    maxWidth: "100%",
   },
   roleText: {
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "800",
+    flexShrink: 1,
   },
 });

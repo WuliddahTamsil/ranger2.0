@@ -486,7 +486,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
             <View style={styles.goldDot} />
             <Text style={styles.headerSuperTag}>KANYAAH STAYS</Text>
           </View>
-          <Text style={styles.headerTitle}>
+          <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
             {mainCategory === "hotel"
               ? "Homestay & Villa"
               : mainCategory === "kost"

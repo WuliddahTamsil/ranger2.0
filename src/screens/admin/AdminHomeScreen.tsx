@@ -4353,7 +4353,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
     flexDirection: "row",
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === "ios" ? 22 : 12,
     paddingHorizontal: 4,
     justifyContent: "space-around",
   },
@@ -4389,10 +4390,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   mobileNavLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: "#94A3B8",
     fontWeight: "600",
     marginTop: 2,
+    textAlign: "center",
   },
   mobileNavLabelActive: {
     color: "#0D7A53",
@@ -4934,6 +4936,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
+    flexWrap: "wrap",
   },
   btnInspect: {
     flex: 1,

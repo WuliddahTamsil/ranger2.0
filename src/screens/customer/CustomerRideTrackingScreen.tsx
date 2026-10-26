@@ -2154,7 +2154,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#D97706",
     textAlign: "center",
-    marginTop: -4,
+    marginTop: 2,
   },
   quickTagsWrap: {
     flexDirection: "row",

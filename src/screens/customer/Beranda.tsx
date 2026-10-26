@@ -1566,10 +1566,10 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     <Camera size={16} color="#15803D" />
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.deliveredProofAlertTitle}>
+                    <Text style={styles.deliveredProofAlertTitle} numberOfLines={1}>
                       {recentlyDeliveredOrder.type === "Catering" ? "Catering Selesai Diantar" : "Pesanan Selesai Diantar"}
                     </Text>
-                    <Text style={styles.deliveredProofAlertCode}>
+                    <Text style={styles.deliveredProofAlertCode} numberOfLines={1}>
                       {recentlyDeliveredOrder.orderCode || `#${String(recentlyDeliveredOrder.id).slice(-8).toUpperCase()}`}
                     </Text>
                   </View>
@@ -3272,6 +3272,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 8,
   },
   deliveredProofAlertBadgeRow: {
     flexDirection: "row",

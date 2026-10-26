@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   statCol: {
-    width: 80,
+    flex: 1,
     alignItems: "center",
   },
   statVal: {

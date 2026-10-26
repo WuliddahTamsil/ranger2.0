@@ -318,17 +318,16 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
           <Text style={styles.sectionTitle}>Performa Pendapatan</Text>
           
           {/* Custom Dropdown Selector */}
-          <TouchableOpacity
-            style={styles.dropdownBtn}
-            onPress={() => setPeriodDropdownVisible(!periodDropdownVisible)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.dropdownBtnText}>{period}</Text>
-            <ChevronDown size={14} color="#374151" />
-          </TouchableOpacity>
-        </View>
-
-        {periodDropdownVisible && (
+          <View style={{ position: "relative", zIndex: 30 }}>
+            <TouchableOpacity
+              style={styles.dropdownBtn}
+              onPress={() => setPeriodDropdownVisible(!periodDropdownVisible)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.dropdownBtnText}>{period}</Text>
+              <ChevronDown size={14} color="#374151" />
+            </TouchableOpacity>
+            {periodDropdownVisible && (
           <View style={styles.dropdownMenu}>
             {(["7 hari", "30 hari", "Bulan ini"] as const).map((opt) => (
               <TouchableOpacity
@@ -342,8 +341,10 @@ export const Pendapatan: React.FC<PendapatanProps> = ({
                 <Text style={styles.dropdownOptionText}>{opt}</Text>
               </TouchableOpacity>
             ))}
+            </View>
+          )}
           </View>
-        )}
+        </View>
 
         {/* Bar Chart Container */}
         <View style={styles.chartContainer}>
@@ -731,8 +732,8 @@ const styles = StyleSheet.create({
   },
   dropdownMenu: {
     position: "absolute",
-    top: 245,
-    right: 20,
+    top: 38,
+    right: 0,
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
