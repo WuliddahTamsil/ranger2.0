@@ -232,6 +232,48 @@ const registerUser = async (req, res) => {
           );
         }
 
+        const reRegPayload = {
+          id: user._id,
+          _id: user._id,
+          role: user.role,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          status: user.status,
+          roleData: user.roleData,
+          documents: user.documents,
+          createdAt: user.createdAt,
+        };
+
+        if (req.io) {
+          req.io.emit("new_registration", reRegPayload);
+          req.io.emit("user_registered", reRegPayload);
+        }
+
+        try {
+          const Notification = require("../models/Notification");
+          const adminUsers = await User.find({ role: "admin" }).select("_id");
+          if (adminUsers.length > 0) {
+            const isCust = user.role === "customer";
+            const title = isCust ? "Pendaftaran Ulang Pelanggan" : "Pendaftaran Ulang Mitra (Perlu ACC)";
+            const message = `${user.name} mengajukan pendaftaran ulang (${user.role}). Berkas menunggu verifikasi.`;
+            await Promise.all(
+              adminUsers.map(admin =>
+                Notification.create({
+                  userId: admin._id,
+                  title,
+                  message,
+                  type: "general",
+                  relatedId: user._id,
+                  isRead: false,
+                }).catch(() => null)
+              )
+            );
+          }
+        } catch (notifErr) {
+          console.warn("Auto admin re-reg notification error:", notifErr.message);
+        }
+
         return res.status(200).json({
           success: true,
           message: "Pendaftaran ulang berhasil dikirimkan dan menunggu verifikasi admin.",
@@ -426,6 +468,50 @@ const registerUser = async (req, res) => {
       }).catch(err => console.warn("Auto Kost creation note:", err.message));
     }
 
+    const newRegPayload = {
+      id: user._id,
+      _id: user._id,
+      role: user.role,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      status: user.status,
+      roleData: user.roleData,
+      documents: user.documents,
+      createdAt: user.createdAt,
+    };
+
+    if (req.io) {
+      req.io.emit("new_registration", newRegPayload);
+      req.io.emit("user_registered", newRegPayload);
+    }
+
+    try {
+      const Notification = require("../models/Notification");
+      const adminUsers = await User.find({ role: "admin" }).select("_id");
+      if (adminUsers.length > 0) {
+        const isCust = user.role === "customer";
+        const title = isCust ? "Pendaftaran Pelanggan Baru" : "Pendaftaran Mitra Baru (Perlu ACC)";
+        const message = isCust
+          ? `${user.name} baru saja mendaftar sebagai Pelanggan (${user.email}).`
+          : `${user.name} mendaftar sebagai ${user.role}. Berkas verifikasi menunggu peninjauan admin.`;
+        await Promise.all(
+          adminUsers.map(admin =>
+            Notification.create({
+              userId: admin._id,
+              title,
+              message,
+              type: "general",
+              relatedId: user._id,
+              isRead: false,
+            }).catch(() => null)
+          )
+        );
+      }
+    } catch (notifErr) {
+      console.warn("Auto admin new reg notification error:", notifErr.message);
+    }
+
     return res.status(201).json({
       success: true,
       message: "Pendaftaran berhasil",
@@ -566,12 +652,10 @@ const getMitraAccounts = async (req, res) => {
     const { role, status, includeCustomers } = req.query;
     let filter = {};
 
-    if (role === "customer") {
-      filter.role = "customer";
+    if (role && role !== "semua") {
+      filter.role = role;
     } else if (includeCustomers === "true") {
       filter.role = { $ne: "admin" };
-    } else if (role && role !== "semua") {
-      filter.role = role;
     } else {
       filter.role = { $ne: "customer" };
     }
@@ -697,6 +781,19 @@ const updateMitraStatus = async (req, res) => {
         role: user.role,
         reason: user.rejectionReason,
       }).catch(err => console.warn("Email rejection background error:", err));
+    }
+
+    if (req.io) {
+      req.io.emit("mitra_status_updated", {
+        id: user._id,
+        role: user.role,
+        status: user.status,
+        rejectionReason: user.rejectionReason,
+      });
+      req.io.emit("notification:new", {
+        userId: user._id,
+        title: status === "verified" ? "Pendaftaran Disetujui" : "Pendaftaran Ditolak",
+      });
     }
 
     return res.status(200).json({
@@ -829,9 +926,9 @@ const getSystemStats = async (req, res) => {
       User.countDocuments({ role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos", "bank_sampah"] } }),
       User.countDocuments({ role: "driver" }),
       User.countDocuments({ role: "customer" }),
-      User.countDocuments({ status: "pending", role: { $ne: "customer", $ne: "admin" } }),
+      User.countDocuments({ status: "pending", role: { $nin: ["customer", "admin"] } }),
       User.countDocuments({ status: "verified", role: { $in: ["pemilik_catering", "pemilik_marketplace", "pemilik_shop", "pemilik_laundry", "pemilik_kos", "driver", "bank_sampah"] } }),
-      User.countDocuments({ status: "rejected", role: { $ne: "customer", $ne: "admin" } }),
+      User.countDocuments({ status: "rejected", role: { $nin: ["customer", "admin"] } }),
       Kost.find().select("rooms"),
       LaundryStore.find().select("services"),
       MarketplaceProduct.countDocuments(),

@@ -342,27 +342,47 @@ export const loadMitraAccounts = async (includeCustomers: boolean = true) => {
     const url = includeCustomers
       ? getApiUrl("/auth/mitra?includeCustomers=true")
       : getApiUrl("/auth/mitra");
-    const res = await fetch(url);
-    const result = await res.json();
-    if (result.success && Array.isArray(result.data)) {
-      return result.data.map((item: any) => ({
-        id: item._id || item.id,
-        role: item.role,
-        name: item.name,
-        email: item.email,
-        phone: item.phone,
-        address: item.address,
-        profilePhoto: item.profilePhoto,
-        status: item.status,
-        rejectionReason: item.rejectionReason,
-        roleData: item.roleData || {},
-        documents: item.documents || {},
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-      }));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success && Array.isArray(result.data)) {
+        const liveAccounts = result.data.map((item: any) => ({
+          id: item._id || item.id,
+          role: item.role,
+          name: item.name,
+          email: item.email,
+          phone: item.phone,
+          address: item.address,
+          profilePhoto: item.profilePhoto,
+          status: item.status,
+          rejectionReason: item.rejectionReason,
+          roleData: item.roleData || {},
+          documents: item.documents || {},
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        }));
+        // Cache to AsyncStorage so offline states and other screens have fresh DB data
+        void loadAccounts().then((existing) => {
+          const merged = [...existing];
+          liveAccounts.forEach((liveAcc: AuthAccount) => {
+            const idx = merged.findIndex((a) => a.email.toLowerCase() === liveAcc.email.toLowerCase());
+            if (idx >= 0) {
+              merged[idx] = { ...merged[idx], ...liveAcc };
+            } else {
+              merged.push(liveAcc);
+            }
+          });
+          void saveAccounts(merged);
+        }).catch(() => null);
+
+        return liveAccounts;
+      }
     }
   } catch (err) {
-    console.warn("Failed to load accounts from DB, using local storage");
+    console.warn("Failed to load accounts from DB, using local storage fallback:", err);
   }
 
   const accounts = await loadAccounts();
@@ -373,14 +393,18 @@ export const loadMitraAccounts = async (includeCustomers: boolean = true) => {
 
 export const updateAccountStatus = async (accountId: string, status: AuthAccount["status"], rejectionReason?: string, options?: { isOfficialBrandPartner?: boolean; approveBrandPartner?: boolean }) => {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(getApiUrl(`/auth/mitra/${accountId}/status`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status, rejectionReason, ...options }),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     const result = await res.json();
     if (result.success && result.data) {
-      return {
+      const updated = {
         id: result.data._id || result.data.id,
         role: result.data.role,
         name: result.data.name,
@@ -395,9 +419,14 @@ export const updateAccountStatus = async (accountId: string, status: AuthAccount
         createdAt: result.data.createdAt,
         updatedAt: result.data.updatedAt,
       };
+      // Keep local storage in sync
+      const accounts = await loadAccounts();
+      const updatedAccounts = accounts.map((account) => account.id === accountId ? { ...account, ...updated } : account);
+      await saveAccounts(updatedAccounts);
+      return updated;
     }
   } catch (err) {
-    console.warn("Failed to update status in DB, updating local storage");
+    console.warn("Failed to update status in DB, updating local storage:", err);
   }
 
   const accounts = await loadAccounts();
@@ -410,7 +439,10 @@ export const updateAccountStatus = async (accountId: string, status: AuthAccount
 
 export const fetchAdminStats = async () => {
   try {
-    const res = await fetch(getApiUrl("/auth/admin/stats"));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(getApiUrl("/auth/admin/stats"), { signal: controller.signal });
+    clearTimeout(timer);
     return await res.json();
   } catch (err) {
     console.error("fetchAdminStats error:", err);
@@ -420,10 +452,14 @@ export const fetchAdminStats = async () => {
 
 export const fetchAdminTransactions = async () => {
   try {
-    const res = await fetch(getApiUrl("/auth/admin/transactions"));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(getApiUrl("/auth/admin/transactions"), { signal: controller.signal });
+    clearTimeout(timer);
     return await res.json();
   } catch (err) {
     console.error("fetchAdminTransactions error:", err);
     return { success: false, data: [] };
   }
 };
+

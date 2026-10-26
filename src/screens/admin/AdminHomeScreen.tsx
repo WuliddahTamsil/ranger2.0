@@ -91,6 +91,7 @@ import {
 import { rp } from "../../utils/formatters";
 import { useTimeGreeting } from "../../utils/timeGreeting";
 import { getApiUrl } from "../../services/api";
+import { subscribeToAdminRealtime } from "../../services/userRealtime";
 import { AdminHomeHeroSection } from "../../components/AdminHomeHeroSection";
 import { AdminPgeInfoHubSection } from "../../components/AdminPgeInfoHubSection";
 import { MerchantVoucherManagementModal } from "../../components/MerchantVoucherManagementModal";
@@ -259,21 +260,24 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     return parts[0];
   };
 
-  // Fetch all live data
+  // Fetch all live data with Promise.allSettled to ensure accounts are NEVER lost
   const refreshData = async () => {
     setLoading(true);
     try {
-      const [mitras, statsRes, txRes] = await Promise.all([
-        loadMitraAccounts(),
+      const [mitrasResult, statsResult, txResult] = await Promise.allSettled([
+        loadMitraAccounts(true),
         fetchAdminStats(),
         fetchAdminTransactions(),
       ]);
-      setMitraAccounts(mitras || []);
-      if (statsRes?.success && statsRes.data) {
-        setStats(statsRes.data);
+
+      if (mitrasResult.status === "fulfilled" && Array.isArray(mitrasResult.value)) {
+        setMitraAccounts(mitrasResult.value);
       }
-      if (txRes?.success && Array.isArray(txRes.data)) {
-        setTransactions(txRes.data);
+      if (statsResult.status === "fulfilled" && statsResult.value?.success && statsResult.value.data) {
+        setStats(statsResult.value.data);
+      }
+      if (txResult.status === "fulfilled" && txResult.value?.success && Array.isArray(txResult.value.data)) {
+        setTransactions(txResult.value.data);
       }
     } catch (err) {
       console.warn("Failed to refresh admin data:", err);
@@ -283,7 +287,25 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   };
 
   useEffect(() => {
-    refreshData();
+    void refreshData();
+
+    // Auto-refresh periodically every 15s so new registrations from any device sync automatically
+    const interval = setInterval(() => {
+      void refreshData();
+    }, 15000);
+
+    // Subscribe to realtime push notifications for new user registrations
+    let unsubscribe: (() => void) | undefined;
+    void subscribeToAdminRealtime(() => {
+      void refreshData();
+    }).then((unsub) => {
+      unsubscribe = unsub;
+    });
+
+    return () => {
+      clearInterval(interval);
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   // Action: Approve / ACC Mitra
@@ -359,27 +381,37 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     });
   };
 
-  // Counts (Verification only applies to Mitra who require ACC, customer doesn't need ACC)
-  const pendingCount = mitraAccounts.filter((m) => m.role !== "customer" && m.status === "pending").length;
-  const approvedCount = mitraAccounts.filter((m) => m.role !== "customer" && m.status === "verified").length;
-  const rejectedCount = mitraAccounts.filter((m) => m.role !== "customer" && m.status === "rejected").length;
+  // Counts (Pending count includes any partner or customer awaiting verification)
+  const pendingCount = mitraAccounts.filter((m) => m.role !== "admin" && m.status === "pending").length;
+  const approvedCount = mitraAccounts.filter((m) => m.role !== "admin" && m.status === "verified").length;
+  const rejectedCount = mitraAccounts.filter((m) => m.role !== "admin" && m.status === "rejected").length;
   const customerAccounts = mitraAccounts.filter((m) => m.role === "customer");
   const totalRevenue = stats?.totalTransactionsAmount || 0;
 
-  // Filtered Mitra List for Tab 0 (Verifikasi) - strictly exclude customers as they don't need ACC
+  // Filtered List for Tab 0 (Verifikasi & Pendaftaran Pengguna)
   const filteredMitra = mitraAccounts
-    .filter((m) => m.role !== "customer")
+    .filter((m) => m.role !== "admin")
     .filter((m) => {
-      const matchesSearch =
-        m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        m.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (m.roleData?.businessName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (m.phone || "").includes(searchQuery);
-
+      if (roleFilter !== "semua" && m.role !== roleFilter) {
+        return false;
+      }
+      // If "semua" role is selected:
+      // When statusFilter is "pending", show all pending accounts (Mitra who need ACC)
+      // When statusFilter is "verified" or "rejected" or "semua", show matching accounts
       const matchesStatus = statusFilter === "semua" ? true : m.status === statusFilter;
-      const matchesRole = roleFilter === "semua" ? true : m.role === roleFilter;
+      if (!matchesStatus) return false;
 
-      return matchesSearch && matchesStatus && matchesRole;
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return true;
+
+      const matchesSearch =
+        m.name.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q) ||
+        (m.roleData?.businessName || "").toLowerCase().includes(q) ||
+        (m.phone || "").includes(q) ||
+        (m.address || "").toLowerCase().includes(q);
+
+      return matchesSearch;
     });
 
   // Filtered Directory for Tab 3 (Mitra & Pengguna) - INCLUDES CUSTOMERS!
@@ -767,7 +799,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           activeOpacity={0.7}
         >
           <Text style={[styles.statusPillText, statusFilter === "semua" && styles.statusPillTextActive]}>
-            Semua ({mitraAccounts.filter((m) => m.role !== "customer").length})
+            Semua ({mitraAccounts.filter((m) => m.role !== "admin").length})
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -776,12 +808,13 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsRow}>
         {[
           { key: "semua", label: "Semua Kategori", icon: Users },
-          { key: "pemilik_kos", label: "Kos & Kamar", icon: Home },
-          { key: "pemilik_laundry", label: "Laundry", icon: Shirt },
-          { key: "pemilik_catering", label: "Catering", icon: Utensils },
-          { key: "pemilik_marketplace", label: "Marketplace", icon: ShoppingBag },
-          { key: "pemilik_shop", label: "Kanyaah Shop", icon: ShoppingBag },
+          { key: "customer", label: "Pelanggan / Warga", icon: User },
           { key: "driver", label: "Driver", icon: Truck },
+          { key: "pemilik_catering", label: "Catering", icon: Utensils },
+          { key: "pemilik_laundry", label: "Laundry", icon: Shirt },
+          { key: "pemilik_kos", label: "Kos & Kamar", icon: Home },
+          { key: "pemilik_shop", label: "Kanyaah Shop", icon: ShoppingBag },
+          { key: "bank_sampah", label: "Bank Sampah", icon: Recycle },
         ].map((item) => {
           const IconComp = item.icon;
           const isActive = roleFilter === item.key;
@@ -811,6 +844,14 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               ? "Semua pendaftaran mitra telah diproses dan diverifikasi."
               : "Tidak ada data pendaftaran dengan filter yang dipilih."}
           </Text>
+          <TouchableOpacity
+            style={[styles.btnInspect, { marginTop: 14, paddingHorizontal: 16 }]}
+            onPress={refreshData}
+            activeOpacity={0.8}
+          >
+            <RefreshCw size={14} color="#1B7A4E" />
+            <Text style={styles.btnInspectText}>Segarkan Data</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <View style={[styles.mitraGridWrap, { flexDirection: isDesktop ? "row" : "column", flexWrap: "wrap", gap: 16 }]}>
@@ -901,35 +942,48 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 
                 {/* Action Buttons Footer */}
                 <View style={styles.mitraCardFooter}>
-                  <TouchableOpacity
-                    style={styles.btnInspect}
-                    onPress={() => setSelectedMitraForDetail(mitra)}
-                    activeOpacity={0.8}
-                  >
-                    <Eye size={14} color="#1B7A4E" />
-                    <Text style={styles.btnInspectText}>Periksa Berkas</Text>
-                  </TouchableOpacity>
-
-                  {mitra.status === "pending" && (
-                    <View style={styles.quickActionGroup}>
+                  {mitra.role === "customer" ? (
+                    <TouchableOpacity
+                      style={styles.btnInspect}
+                      onPress={() => setSelectedCustomerForDetail(mitra)}
+                      activeOpacity={0.8}
+                    >
+                      <Eye size={14} color="#1B7A4E" />
+                      <Text style={styles.btnInspectText}>Lihat Profil Pelanggan</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <>
                       <TouchableOpacity
-                        style={styles.btnQuickReject}
-                        onPress={() => handleOpenRejectModal(mitra)}
+                        style={styles.btnInspect}
+                        onPress={() => setSelectedMitraForDetail(mitra)}
                         activeOpacity={0.8}
                       >
-                        <X size={14} color="#DC2626" />
-                        <Text style={styles.btnQuickRejectText}>Tolak</Text>
+                        <Eye size={14} color="#1B7A4E" />
+                        <Text style={styles.btnInspectText}>Periksa Berkas</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.btnQuickApprove}
-                        onPress={() => handleApproveMitra(mitra)}
-                        activeOpacity={0.8}
-                      >
-                        <Check size={14} color="#FFFFFF" />
-                        <Text style={styles.btnQuickApproveText}>ACC</Text>
-                      </TouchableOpacity>
-                    </View>
+                      {mitra.status === "pending" && (
+                        <View style={styles.quickActionGroup}>
+                          <TouchableOpacity
+                            style={styles.btnQuickReject}
+                            onPress={() => handleOpenRejectModal(mitra)}
+                            activeOpacity={0.8}
+                          >
+                            <X size={14} color="#DC2626" />
+                            <Text style={styles.btnQuickRejectText}>Tolak</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.btnQuickApprove}
+                            onPress={() => handleApproveMitra(mitra)}
+                            activeOpacity={0.8}
+                          >
+                            <Check size={14} color="#FFFFFF" />
+                            <Text style={styles.btnQuickApproveText}>ACC</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </>
                   )}
                 </View>
               </View>
@@ -3680,11 +3734,23 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 
           <View style={styles.previewImageContainer}>
             {previewImageModal.url ? (
-              <Image
-                source={{ uri: previewImageModal.url }}
-                style={styles.previewFullImage}
-                resizeMode="contain"
-              />
+              <>
+                <Image
+                  source={{ uri: previewImageModal.url }}
+                  style={styles.previewFullImage}
+                  resizeMode="contain"
+                />
+                {previewImageModal.url.startsWith("file://") && (
+                  <View style={{ position: "absolute", bottom: 20, backgroundColor: "rgba(0,0,0,0.8)", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, maxWidth: "90%" }}>
+                    <Text style={{ color: "#F8FAFC", fontSize: 12, textAlign: "center", fontWeight: "600" }}>
+                      Berkas tersimpan pada perangkat pendaftar:
+                    </Text>
+                    <Text style={{ color: "#94A3B8", fontSize: 11, textAlign: "center", marginTop: 2 }}>
+                      {previewImageModal.url.split("/").pop()}
+                    </Text>
+                  </View>
+                )}
+              </>
             ) : null}
           </View>
         </View>

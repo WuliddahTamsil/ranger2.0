@@ -109,3 +109,51 @@ export const subscribeToUserRealtime = async (
     return () => undefined;
   }
 };
+
+export const subscribeToAdminRealtime = async (
+  onRefresh: () => void
+): Promise<() => void> => {
+  try {
+    if (!SOCKET_URL) {
+      return () => undefined;
+    }
+
+    const socket: Socket = io(SOCKET_URL, {
+      transports: ["websocket", "polling"],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      timeout: 8000,
+      autoConnect: true,
+    });
+
+    const triggerRefresh = () => {
+      try {
+        onRefresh();
+      } catch (e) {
+        console.warn("Realtime admin onRefresh error:", e);
+      }
+    };
+
+    socket.on("connect_error", () => {});
+    socket.on("error", () => {});
+
+    socket.on("new_registration", triggerRefresh);
+    socket.on("user_registered", triggerRefresh);
+    socket.on("mitra_status_updated", triggerRefresh);
+    socket.on("notification:new", triggerRefresh);
+
+    return () => {
+      try {
+        socket.off("new_registration", triggerRefresh);
+        socket.off("user_registered", triggerRefresh);
+        socket.off("mitra_status_updated", triggerRefresh);
+        socket.off("notification:new", triggerRefresh);
+        socket.disconnect();
+      } catch {}
+    };
+  } catch (err) {
+    console.warn("subscribeToAdminRealtime initialization error:", err);
+    return () => undefined;
+  }
+};
+
