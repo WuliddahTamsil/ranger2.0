@@ -130,16 +130,47 @@ const readApiJson = async (response: Response) => {
   }
 };
 
-export const uploadFileToBackend = async (fileUri: string, fileName?: string, mimeType?: string) => {
+export const uploadFileToBackend = async (
+  fileUri: string,
+  fileName?: string,
+  mimeType?: string,
+  base64Data?: string
+) => {
+  const safeFileName = fileName || `upload-${Date.now()}.jpg`;
+  const safeMimeType = mimeType || "image/jpeg";
+
+  // 1. Direct Base64 upload if base64Data or data URI is present (Ultra-reliable on Android native)
+  if (base64Data || fileUri.startsWith("data:")) {
+    try {
+      const rawBase64 = base64Data || (fileUri.includes(",") ? fileUri.split(",")[1] : fileUri);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 25000);
+      const res = await fetch(getApiUrl("/upload"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          base64: rawBase64,
+          fileName: safeFileName,
+          mimeType: safeMimeType,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      return await readApiJson(res);
+    } catch (base64Err: any) {
+      console.warn("Base64 upload note, attempting multipart fallback:", base64Err?.message);
+    }
+  }
+
+  // 2. Standard Multipart upload
   try {
     const formData = new FormData();
-    const safeFileName = fileName || `upload-${Date.now()}.jpg`;
 
     if (Platform.OS === "web") {
       let blob: Blob;
       if (fileUri.startsWith("data:")) {
         const parts = fileUri.split(",");
-        const mime = parts[0].match(/:(.*?);/)?.[1] || mimeType || "image/jpeg";
+        const mime = parts[0].match(/:(.*?);/)?.[1] || safeMimeType;
         const bstr = atob(parts[1]);
         let n = bstr.length;
         const u8arr = new Uint8Array(n);
@@ -156,23 +187,27 @@ export const uploadFileToBackend = async (fileUri: string, fileName?: string, mi
       }
       formData.append("file", blob, safeFileName);
     } else {
-      // In native React Native
+      // In native React Native (Android / iOS)
       formData.append("file", {
         uri: fileUri,
         name: safeFileName,
-        type: mimeType || "image/jpeg",
+        type: safeMimeType,
       } as any);
     }
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
     const response = await fetch(getApiUrl("/upload"), {
       method: "POST",
       body: formData,
+      signal: controller.signal,
     });
+    clearTimeout(timer);
 
     return await readApiJson(response);
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Upload file error:", error);
-    throw error;
+    throw new Error(error?.message || "Koneksi upload foto terganggu. Pastikan jaringan internet aktif.");
   }
 };
 

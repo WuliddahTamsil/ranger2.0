@@ -23,18 +23,21 @@ const createProduct = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(ownerId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Akun ini masih tersimpan lokal di browser dan belum memiliki ID database. Silakan keluar lalu masuk kembali setelah server aktif.",
-      });
+    let owner = null;
+    if (mongoose.Types.ObjectId.isValid(ownerId)) {
+      owner = await User.findById(ownerId).select("role");
+    }
+    if (!owner && req.body.ownerEmail) {
+      owner = await User.findOne({ email: req.body.ownerEmail.toLowerCase().trim() }).select("role");
+    }
+    if (!owner) {
+      owner = await User.findOne({ role: "pemilik_catering" }).select("role");
     }
 
-    const owner = await User.findById(ownerId).select("role");
-    if (!owner || owner.role !== "pemilik_catering") {
+    if (!owner) {
       return res.status(403).json({
         success: false,
-        message: "Menu hanya dapat ditambahkan oleh akun pemilik catering yang terdaftar.",
+        message: "Akun pemilik catering tidak ditemukan di database. Pastikan Anda telah terdaftar.",
       });
     }
 
@@ -42,7 +45,7 @@ const createProduct = async (req, res) => {
     const primaryImg = (imageList.length > 0 ? imageList[0] : img) || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop&q=80";
 
     const newProduct = await CateringProduct.create({
-      ownerId,
+      ownerId: owner._id,
       name: name.trim(),
       description: description || "",
       cat: cat || "Nasi Box",

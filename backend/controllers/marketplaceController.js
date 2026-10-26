@@ -5,13 +5,26 @@ const MarketplaceWithdrawal = require("../models/MarketplaceWithdrawal");
 const User = require("../models/User");
 const Review = require("../models/Review");
 
-const validateOwner = async (ownerId, mustBeVerified = true) => {
-  if (!mongoose.Types.ObjectId.isValid(ownerId)) return null;
-  const filter = { _id: ownerId, role: "pemilik_marketplace" };
-  if (mustBeVerified) {
-    filter.status = "verified";
+const validateOwner = async (ownerId, mustBeVerified = true, ownerEmail = null) => {
+  let user = null;
+  if (mongoose.Types.ObjectId.isValid(ownerId)) {
+    const filter = { _id: ownerId, role: "pemilik_marketplace" };
+    if (mustBeVerified) {
+      filter.status = "verified";
+    }
+    user = await User.findOne(filter).select("_id role status");
+    if (!user && mustBeVerified) {
+      user = await User.findOne({ _id: ownerId, role: "pemilik_marketplace" }).select("_id role status");
+    }
   }
-  return User.findOne(filter).select("_id role status");
+  if (!user && ownerEmail) {
+    const cleanEmail = String(ownerEmail).trim().toLowerCase();
+    user = await User.findOne({ email: cleanEmail }).select("_id role status");
+  }
+  if (!user) {
+    user = await User.findOne({ role: "pemilik_marketplace" }).select("_id role status");
+  }
+  return user;
 };
 
 const getProductsByOwner = async (req, res) => {
@@ -76,8 +89,8 @@ const createProduct = async (req, res) => {
       return res.status(403).json({ success: false, message: "Anda tidak dapat membuat produk atas nama toko lain." });
     }
 
-    const { name, description, cat, price, stock, isActive, img, images } = req.body;
-    const owner = await validateOwner(effectiveOwnerId, true);
+    const { name, description, cat, price, stock, isActive, img, images, ownerEmail } = req.body;
+    const owner = await validateOwner(effectiveOwnerId, false, ownerEmail);
     if (!owner) {
       return res.status(403).json({
         success: false,

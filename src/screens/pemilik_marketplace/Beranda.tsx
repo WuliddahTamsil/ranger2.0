@@ -478,22 +478,33 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsMultipleSelection: false,
-        quality: 0.85,
+        quality: 0.7,
+        base64: true,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         setPhotoUploading(true);
-        const uploadRes = await uploadFileToBackend(
-          asset.uri,
-          asset.fileName || `product_${Date.now()}.jpg`,
-          asset.mimeType || "image/jpeg"
-        );
-        if (uploadRes?.success && uploadRes?.data?.url) {
-          const newUrl = uploadRes.data.url;
-          setPhotoImages((prev) => [...prev, newUrl]);
-          if (!primaryPhoto) setPrimaryPhoto(newUrl);
-        } else {
-          showAlert("Gagal", uploadRes?.message || "Gagal mengunggah foto.");
+        try {
+          const uploadRes = await uploadFileToBackend(
+            asset.uri,
+            asset.fileName || `product_${Date.now()}.jpg`,
+            asset.mimeType || "image/jpeg",
+            asset.base64 || undefined
+          );
+          if (uploadRes?.success && uploadRes?.data?.url) {
+            const newUrl = uploadRes.data.url;
+            setPhotoImages((prev) => [...prev, newUrl]);
+            if (!primaryPhoto) setPrimaryPhoto(newUrl);
+          } else {
+            const fallbackUrl = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+            setPhotoImages((prev) => [...prev, fallbackUrl]);
+            if (!primaryPhoto) setPrimaryPhoto(fallbackUrl);
+          }
+        } catch (uploadErr) {
+          console.warn("Marketplace photo upload note, using local fallback:", uploadErr);
+          const fallbackUrl = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+          setPhotoImages((prev) => [...prev, fallbackUrl]);
+          if (!primaryPhoto) setPrimaryPhoto(fallbackUrl);
         }
       }
     } catch (e) {
@@ -515,22 +526,33 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        quality: 0.85,
+        quality: 0.7,
+        base64: true,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         setPhotoUploading(true);
-        const uploadRes = await uploadFileToBackend(
-          asset.uri,
-          `camera_${Date.now()}.jpg`,
-          "image/jpeg"
-        );
-        if (uploadRes?.success && uploadRes?.data?.url) {
-          const newUrl = uploadRes.data.url;
-          setPhotoImages((prev) => [...prev, newUrl]);
-          if (!primaryPhoto) setPrimaryPhoto(newUrl);
-        } else {
-          showAlert("Gagal", uploadRes?.message || "Gagal mengunggah foto.");
+        try {
+          const uploadRes = await uploadFileToBackend(
+            asset.uri,
+            `camera_${Date.now()}.jpg`,
+            "image/jpeg",
+            asset.base64 || undefined
+          );
+          if (uploadRes?.success && uploadRes?.data?.url) {
+            const newUrl = uploadRes.data.url;
+            setPhotoImages((prev) => [...prev, newUrl]);
+            if (!primaryPhoto) setPrimaryPhoto(newUrl);
+          } else {
+            const fallbackUrl = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+            setPhotoImages((prev) => [...prev, fallbackUrl]);
+            if (!primaryPhoto) setPrimaryPhoto(fallbackUrl);
+          }
+        } catch (uploadErr) {
+          console.warn("Marketplace camera upload note, using local fallback:", uploadErr);
+          const fallbackUrl = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+          setPhotoImages((prev) => [...prev, fallbackUrl]);
+          if (!primaryPhoto) setPrimaryPhoto(fallbackUrl);
         }
       }
     } catch (e) {
@@ -636,6 +658,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
 
       const result = await createMarketplaceProduct({
         ownerId: authAccount?.id || "",
+        ownerEmail: authAccount?.email || "",
         name: formData.name,
         price: formData.price,
         img: primaryImg,

@@ -498,6 +498,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
 
       const newProductData = {
         ownerId: authAccount.id,
+        ownerEmail: authAccount.email,
         name: formData.name,
         price: formData.price,
         img: primaryImg,

@@ -2,16 +2,35 @@ const { uploadToCloudinary } = require("../config/cloudinary");
 
 const uploadFile = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: "Tidak ada file yang diunggah" });
+    let fileBuffer = null;
+    let originalName = "upload.jpg";
+    let mimeType = "image/jpeg";
+
+    if (req.file) {
+      fileBuffer = req.file.buffer;
+      originalName = req.file.originalname || "upload.jpg";
+      mimeType = req.file.mimetype || "image/jpeg";
+    } else if (req.body && (req.body.base64 || req.body.dataUrl || req.body.image)) {
+      const rawBase64 = String(req.body.base64 || req.body.dataUrl || req.body.image);
+      const match = rawBase64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (match) {
+        mimeType = match[1];
+        fileBuffer = Buffer.from(match[2], "base64");
+      } else {
+        mimeType = req.body.mimeType || "image/jpeg";
+        fileBuffer = Buffer.from(rawBase64, "base64");
+      }
+      originalName = req.body.name || req.body.fileName || `product_${Date.now()}.jpg`;
+    } else {
+      return res.status(400).json({ success: false, message: "Tidak ada file atau data foto yang diunggah" });
     }
 
-    console.log(`📤 Processing file '${req.file.originalname}' (${req.file.mimetype})...`);
+    console.log(`📤 Processing file '${originalName}' (${mimeType})...`);
     const hostUrl = req.hostUrl || `http://localhost:${process.env.PORT || 5000}`;
     const result = await uploadToCloudinary(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype,
+      fileBuffer,
+      originalName,
+      mimeType,
       hostUrl
     );
 
