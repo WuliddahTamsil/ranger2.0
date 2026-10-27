@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kebijakan Privasi (Privacy Policy) - GEOVERSE</title>
+  <meta name="description" content="Kebijakan Privasi resmi aplikasi GEOVERSE oleh PT Pertamina Geothermal Energy (PGE) Kamojang. Informasi pengumpulan data, izin lokasi, kamera, dan penghapusan akun.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0D7A53;
+      --primary-dark: #09573B;
+      --primary-light: #E8F5EF;
+      --primary-border: #A7DCBE;
+      --slate-50: #F8FAFC;
+      --slate-100: #F1F5F9;
+      --slate-200: #E2E8F0;
+      --slate-600: #475569;
+      --slate-700: #334155;
+      --slate-800: #1E293B;
+      --slate-900: #0F172A;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--slate-50);
+      color: var(--slate-800);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    header {
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--slate-200);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(8px);
+    }
+    .nav-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: inherit;
+    }
+    .logo-badge {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, #0D7A53 0%, #15A06F 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 1.25rem;
+      box-shadow: 0 4px 10px rgba(13, 122, 83, 0.25);
+    }
+    .logo-text h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--primary);
+      margin: 0;
+      line-height: 1.2;
+    }
+    .logo-text span {
+      font-size: 0.75rem;
+      color: var(--slate-600);
+      font-weight: 500;
+    }
+    .nav-links {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .nav-links a {
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--slate-700);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .nav-links a:hover {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+    .nav-links a.active {
+      background: var(--primary);
+      color: #FFFFFF;
+    }
+    .hero {
+      background: linear-gradient(180deg, #FFFFFF 0%, #F1F8F4 100%);
+      border-bottom: 1px solid var(--slate-200);
+      padding: 3.5rem 1.5rem 3rem;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--primary-light);
+      border: 1px solid var(--primary-border);
+      color: var(--primary-dark);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+    .hero h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: var(--slate-900);
+      letter-spacing: -0.03em;
+      margin-bottom: 0.75rem;
+    }
+    .hero p {
+      max-width: 680px;
+      margin: 0 auto;
+      color: var(--slate-600);
+      font-size: 1rem;
+    }
+    .meta-box {
+      margin-top: 1.5rem;
+      display: inline-flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1.5rem;
+      font-size: 0.85rem;
+      color: var(--slate-600);
+      background: white;
+      padding: 0.6rem 1.25rem;
+      border-radius: 9999px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      border: 1px solid var(--slate-200);
+    }
+    .container {
+      max-width: 900px;
+      margin: 2.5rem auto 5rem;
+      padding: 0 1.5rem;
+    }
+    .card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      border: 1px solid var(--slate-200);
+      box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05);
+      padding: 2.5rem;
+      margin-bottom: 2rem;
+    }
+    .card h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--slate-900);
+      margin-top: 2rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      border-bottom: 1px solid var(--slate-100);
+      padding-bottom: 0.6rem;
+    }
+    .card h2:first-of-type {
+      margin-top: 0;
+    }
+    .card h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--slate-800);
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    .card p, .card ul {
+      color: var(--slate-700);
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+    }
+    .card ul {
+      padding-left: 1.5rem;
+    }
+    .card li {
+      margin-bottom: 0.4rem;
+    }
+    .permission-box {
+      background: var(--slate-50);
+      border: 1px solid var(--slate-200);
+      border-left: 4px solid var(--primary);
+      padding: 1.25rem;
+      border-radius: 8px;
+      margin: 1.25rem 0;
+    }
+    .permission-box strong {
+      color: var(--primary-dark);
+      display: block;
+      margin-bottom: 0.25rem;
+      font-size: 0.95rem;
+    }
+    .alert-box {
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      border-left: 4px solid #2563EB;
+      padding: 1.25rem;
+      border-radius: 8px;
+      margin: 1.5rem 0;
+      color: #1E3A8A;
+      font-size: 0.95rem;
+    }
+    .highlight-card {
+      background: var(--primary-light);
+      border: 1px solid var(--primary-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .highlight-card h4 {
+      color: var(--primary-dark);
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    footer {
+      background: #FFFFFF;
+      border-top: 1px solid var(--slate-200);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      color: var(--slate-600);
+      font-size: 0.85rem;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .footer-links a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 1.75rem; }
+      .card { padding: 1.5rem; }
+      .nav-links a { padding: 0.4rem 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="nav-container">
+      <a href="/" class="logo-area">
+        <div class="logo-badge">G</div>
+        <div class="logo-text">
+          <h1>GEOVERSE</h1>
+          <span>PGE Kamojang Community App</span>
+        </div>
+      </a>
+      <nav class="nav-links">
+        <a href="/" class="nav-item">Beranda</a>
+        <a href="/privacy" class="active">Privacy Policy</a>
+        <a href="/support" class="nav-item">Support & Bantuan</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Apple App Store Standard Compliance
+    </div>
+    <h1>Kebijakan Privasi (Privacy Policy)</h1>
+    <p>Komitmen perlindungan data pribadi dan transparansi penggunaan informasi pada aplikasi mobile GEOVERSE.</p>
+    <div class="meta-box">
+      <span><strong>Aplikasi:</strong> GEOVERSE</span>
+      <span><strong>Pengembang:</strong> PT Pertamina Geothermal Energy (PGE) Kamojang</span>
+      <span><strong>Bundle ID:</strong> com.wuliddahtamsil.geoverse</span>
+      <span><strong>Berlaku Sejak:</strong> 27 Oktober 2026</span>
+    </div>
+  </section>
+
+  <main class="container">
+    <article class="card">
+      <div class="alert-box">
+        <strong>English Summary for iOS App Review:</strong><br>
+        GEOVERSE ("We", "Our", or "App") is committed to protecting your privacy. This policy outlines how we handle user data including account credentials, foreground location (for driver dispatch & live order tracking), camera & photo library access (for profile pictures, partner registration verification, and proof-of-delivery receipts), transaction records, and how users can request permanent deletion of their account and associated personal data at any time.
+      </div>
+
+      <h2>1. Pendahuluan</h2>
+      <p>
+        Selamat datang di <strong>GEOVERSE</strong>, super app komunitas terintegrasi yang dikembangkan dengan dukungan <strong>PT Pertamina Geothermal Energy (PGE) Area Kamojang</strong>. GEOVERSE melayani ekosistem lokal yang mencakup pemesanan katering, marketplace produk UMKM lokal (Kanyaah Mart), layanan antar-jemput laundry, direktori dan pemesanan kamar kos, jasa transportasi armada driver (Ranger), serta program tabungan/setor sampah daur ulang ramah lingkungan.
+      </p>
+      <p>
+        Kami sangat menghargai privasi Anda dan berkomitmen untuk melindungi informasi pribadi yang Anda berikan kepada kami sesuai dengan regulasi perlindungan data yang berlaku di Republik Indonesia serta panduan ketat <em>Apple App Store Review Guidelines (Guideline 5.1.1)</em>.
+      </p>
+
+      <h2>2. Informasi yang Kami Kumpulkan</h2>
+      <p>Kami hanya mengumpulkan informasi yang secara langsung diperlukan untuk menjalankan fungsi dan layanan aplikasi:</p>
+      
+      <h3>A. Informasi Akun dan Identitas</h3>
+      <ul>
+        <li><strong>Nama Lengkap & Informasi Kontak:</strong> Nama, alamat email, dan nomor telepon/WhatsApp untuk registrasi akun, verifikasi keamanan (OTP), dan komunikasi kurir/merchant.</li>
+        <li><strong>Alamat Pengiriman / Domisili:</strong> Titik alamat tujuan pengantaran makanan, barang belanjaan, atau penjemputan cucian laundry.</li>
+        <li><strong>Dokumen Verifikasi Mitra (Khusus Driver, Pemilik Toko, Kos, dan Laundry):</strong> Foto identitas (KTP), SIM/STNK (untuk mitra driver), dan surat verifikasi terkait untuk keperluan otentikasi legal dan keselamatan komunitas.</li>
+      </ul>
+
+      <h3>B. Informasi Izin Akses Perangkat (Device Permissions)</h3>
+      
+      <div class="permission-box">
+        <strong>1. Izin Lokasi Perangkat (NSLocationWhenInUseUsageDescription)</strong>
+        GEOVERSE meminta izin lokasi ketika aplikasi digunakan untuk:
+        <ul style="margin-top: 0.5rem; margin-bottom: 0;">
+          <li>Menentukan titik penjemputan dan pengantaran armada driver secara presisi.</li>
+          <li>Pelacakan rute pengantaran pesanan secara langsung (real-time tracking).</li>
+          <li>Menampilkan rekomendasi merchant, warung katering, kos, dan laundry terdekat dari posisi Anda di sekitar Kamojang.</li>
+        </ul>
+        <em>Catatan: Kami tidak melacak lokasi Anda saat aplikasi ditutup (background location tidak aktif).</em>
+      </div>
+
+      <div class="permission-box">
+        <strong>2. Izin Kamera (NSCameraUsageDescription)</strong>
+        Digunakan secara langsung saat Anda ingin:
+        <ul style="margin-top: 0.5rem; margin-bottom: 0;">
+          <li>Mengambil foto profil pengguna.</li>
+          <li>Memfoto dokumen pendaftaran mitra (KTP/SIM/STNK).</li>
+          <li>Memfoto bukti serah terima pesanan atau bukti setoran sampah terpilah.</li>
+        </ul>
+      </div>
+
+      <div class="permission-box">
+        <strong>3. Izin Galeri Foto (NSPhotoLibraryUsageDescription & NSPhotoLibraryAddUsageDescription)</strong>
+        Digunakan untuk memilih gambar dokumen atau foto produk dari galeri ponsel Anda, serta izin opsional untuk menyimpan struk digital dan bukti transaksi serah terima ke galeri foto Anda.
+      </div>
+
+      <h3>C. Data Transaksi & Pembayaran</h3>
+      <p>
+        Data yang disimpan mencakup riwayat pesanan, nominal belanja, dan status pembayaran. Seluruh transaksi pembayaran non-tunai (QRIS & Virtual Account) diproses secara terenkripsi oleh Payment Gateway berizin resmi Bank Indonesia (<strong>Midtrans</strong>). <strong>GEOVERSE tidak pernah menyimpan nomor kartu kredit/debit atau PIN otorisasi perbankan Anda.</strong>
+      </p>
+
+      <h2>3. Penggunaan Informasi</h2>
+      <p>Informasi yang kami kumpulkan digunakan untuk tujuan-tujuan berikut:</p>
+      <ul>
+        <li>Memproses dan menyelesaikan pesanan layanan (marketplace, katering, laundry, kos, dan penjemputan armada).</li>
+        <li>Menghitung saldo dan akumulasi poin program penukaran sampah daur ulang (100 Pts = Rp 1).</li>
+        <li>Menghubungi pengguna perihal pembaruan status pesanan, verifikasi akun, atau penanganan komplain.</li>
+        <li>Menjaga keamanan ekosistem GEOVERSE dari tindakan penipuan atau penyalahgunaan akun.</li>
+        <li>Menganalisis dan meningkatkan performa serta kenyamanan penggunaan aplikasi GEOVERSE.</li>
+      </ul>
+
+      <h2>4. Berbagi Informasi dengan Pihak Ketiga</h2>
+      <p>
+        Kami <strong>TIDAK PERNAH MENJUAL, MENYEWAKAN, ATAU MEMPERDAGANGKAN</strong> data pribadi Anda kepada pihak mana pun untuk kepentingan periklanan pihak ketiga. Data hanya dibagikan secara terbatas untuk operasional berikut:
+      </p>
+      <ul>
+        <li><strong>Mitra Layanan Terkait:</strong> Driver yang mengantarkan pesanan Anda atau merchant yang menyiapkan pesanan Anda akan menerima nama, alamat tujuan, dan nomor telepon kontak Anda.</li>
+        <li><strong>Penyedia Layanan Pembayaran:</strong> Midtrans untuk pemrosesan pembayaran elektronik yang aman dan terenkripsi.</li>
+        <li><strong>Penyedia Infrastruktur Cloud:</strong> Server penyimpanan data dan media terenkripsi (Cloudinary dan penyedia hosting tersertifikasi) dengan standar keamanan industri.</li>
+        <li><strong>Kepatuhan Hukum:</strong> Jika diwajibkan oleh undang-undang atau perintah otoritas penegak hukum resmi di Republik Indonesia.</li>
+      </ul>
+
+      <h2>5. Keamanan dan Penyimpanan Data</h2>
+      <p>
+        Keamanan data Anda adalah prioritas utama kami. Kami menerapkan standar enkripsi industri (SSL/TLS HTTPS) pada setiap pengiriman data antara aplikasi mobile dan server kami. Seluruh kata sandi dienkripsi menggunakan algoritma hashing satu arah yang aman.
+      </p>
+
+      <h2>6. Hak Pengguna & Prosedur Penghapusan Akun (Account Deletion)</h2>
+      <div class="highlight-card">
+        <h4>Hak Penghapusan Akun (Sesuai Apple Guideline 5.1.1(v))</h4>
+        <p>
+          Setiap pengguna GEOVERSE memiliki hak penuh untuk meminta penghapusan akun serta seluruh data pribadi yang tersimpan pada server kami secara permanen kapan saja tanpa dikenakan biaya.
+        </p>
+        <p><strong>Cara mengajukan penghapusan akun:</strong></p>
+        <ol style="padding-left: 1.5rem; margin-top: 0.5rem;">
+          <li><strong>Melalui Aplikasi:</strong> Masuk ke tab <em>Profil</em> &rarr; Pilih menu <em>Pengaturan Akun</em> &rarr; Ketuk <em>Hapus Akun Saya</em>, lalu konfirmasi permintaan Anda.</li>
+          <li><strong>Melalui Email Layanan Pengguna:</strong> Kirim email resmi ke <a href="mailto:geoverse.pge@gmail.com" style="color: var(--primary); font-weight:700;">geoverse.pge@gmail.com</a> dengan subjek <code>Permohonan Hapus Akun GEOVERSE</code>, cantumkan alamat email dan nomor telepon terdaftar Anda. Tim kami akan memverifikasi dan memproses penghapusan dalam waktu maksimal 3x24 jam kerja.</li>
+        </ol>
+      </div>
+
+      <h2>7. Privasi Anak-Anak</h2>
+      <p>
+        Layanan GEOVERSE tidak ditujukan untuk anak-anak di bawah usia 13 tahun. Kami tidak secara sengaja mengumpulkan informasi pribadi dari anak-anak di bawah 13 tahun. Jika Anda adalah orang tua atau wali yang mengetahui anak Anda memberikan informasi kepada kami, silakan hubungi kami untuk penghapusan segera.
+      </p>
+
+      <h2>8. Perubahan pada Kebijakan Privasi</h2>
+      <p>
+        Kami dapat memperbarui Kebijakan Privasi ini dari waktu ke waktu agar selaras dengan pembaruan fitur aplikasi dan regulasi hukum. Setiap perubahan substansial akan diumumkan melalui notifikasi di dalam aplikasi atau melalui pembaruan tanggal "Berlaku Sejak" di bagian atas halaman ini.
+      </p>
+
+      <h2>9. Kontak dan Layanan Bantuan</h2>
+      <p>
+        Jika Anda memiliki pertanyaan, saran, atau kekhawatiran terkait Kebijakan Privasi ini atau pengelolaan data pribadi Anda, silakan hubungi Petugas Perlindungan Data kami melalui:
+      </p>
+      <ul>
+        <li><strong>Email Resmi:</strong> <a href="mailto:geoverse.pge@gmail.com" style="color:var(--primary); font-weight: 600;">geoverse.pge@gmail.com</a></li>
+        <li><strong>Layanan WhatsApp:</strong> +62 821-2345-6789</li>
+        <li><strong>Alamat Kantor:</strong> PT Pertamina Geothermal Energy (PGE) Area Kamojang, Kec. Ibun, Kabupaten Bandung, Jawa Barat 40384, Indonesia.</li>
+      </ul>
+    </article>
+  </main>
+
+  <footer>
+    <div class="footer-links">
+      <a href="/">Beranda</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/support">Pusat Bantuan & Support</a>
+    </div>
+    <p>&copy; 2026 GEOVERSE - Inisiatif Berdaya Bersama PT Pertamina Geothermal Energy (PGE) Kamojang. Hak Cipta Dilindungi.</p>
+  </footer>
+
+</body>
+</html>

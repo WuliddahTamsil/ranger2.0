@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pusat Bantuan & Layanan Dukungan (Support Center) - GEOVERSE</title>
+  <meta name="description" content="Pusat Bantuan Resmi GEOVERSE oleh PGE Kamojang. Kontak layanan pelanggan, FAQ cara pemesanan, setor sampah, sewa kos, laundry, dan tiket bantuan teknis.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0D7A53;
+      --primary-dark: #09573B;
+      --primary-light: #E8F5EF;
+      --primary-border: #A7DCBE;
+      --slate-50: #F8FAFC;
+      --slate-100: #F1F5F9;
+      --slate-200: #E2E8F0;
+      --slate-600: #475569;
+      --slate-700: #334155;
+      --slate-800: #1E293B;
+      --slate-900: #0F172A;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--slate-50);
+      color: var(--slate-800);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    header {
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--slate-200);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(8px);
+    }
+    .nav-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: inherit;
+    }
+    .logo-badge {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, #0D7A53 0%, #15A06F 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 1.25rem;
+      box-shadow: 0 4px 10px rgba(13, 122, 83, 0.25);
+    }
+    .logo-text h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--primary);
+      margin: 0;
+      line-height: 1.2;
+    }
+    .logo-text span {
+      font-size: 0.75rem;
+      color: var(--slate-600);
+      font-weight: 500;
+    }
+    .nav-links {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .nav-links a {
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--slate-700);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .nav-links a:hover {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+    .nav-links a.active {
+      background: var(--primary);
+      color: #FFFFFF;
+    }
+    .hero {
+      background: linear-gradient(180deg, #FFFFFF 0%, #F1F8F4 100%);
+      border-bottom: 1px solid var(--slate-200);
+      padding: 3.5rem 1.5rem 3rem;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--primary-light);
+      border: 1px solid var(--primary-border);
+      color: var(--primary-dark);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+    .hero h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: var(--slate-900);
+      letter-spacing: -0.03em;
+      margin-bottom: 0.75rem;
+    }
+    .hero p {
+      max-width: 680px;
+      margin: 0 auto;
+      color: var(--slate-600);
+      font-size: 1rem;
+    }
+    .container {
+      max-width: 1050px;
+      margin: 2.5rem auto 5rem;
+      padding: 0 1.5rem;
+    }
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    .contact-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      border: 1px solid var(--slate-200);
+      padding: 1.75rem;
+      box-shadow: 0 4px 15px -2px rgba(0,0,0,0.04);
+      transition: transform 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .contact-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 25px -4px rgba(0,0,0,0.08);
+    }
+    .contact-card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--primary-light);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+    }
+    .contact-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--slate-900);
+      margin-bottom: 0.35rem;
+    }
+    .contact-card p {
+      font-size: 0.9rem;
+      color: var(--slate-600);
+      margin-bottom: 1.25rem;
+      flex-grow: 1;
+    }
+    .contact-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.25rem;
+      border-radius: 10px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #FFFFFF;
+    }
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+    .btn-secondary {
+      background: var(--slate-100);
+      color: var(--slate-800);
+      border: 1px solid var(--slate-200);
+    }
+    .btn-secondary:hover {
+      background: var(--slate-200);
+    }
+    .section-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--slate-900);
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    .section-desc {
+      color: var(--slate-600);
+      margin-bottom: 1.75rem;
+      font-size: 0.95rem;
+    }
+    .faq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 3.5rem;
+    }
+    .faq-item {
+      background: #FFFFFF;
+      border: 1px solid var(--slate-200);
+      border-radius: 14px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .faq-item:hover {
+      border-color: var(--primary-border);
+    }
+    .faq-header {
+      padding: 1.25rem 1.5rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      color: var(--slate-800);
+      user-select: none;
+    }
+    .faq-header span {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .faq-icon-chevron {
+      transition: transform 0.2s;
+    }
+    .faq-item.open .faq-icon-chevron {
+      transform: rotate(180deg);
+    }
+    .faq-body {
+      display: none;
+      padding: 0 1.5rem 1.25rem;
+      color: var(--slate-700);
+      font-size: 0.95rem;
+      border-top: 1px solid var(--slate-100);
+      margin-top: 0.25rem;
+      padding-top: 1rem;
+    }
+    .faq-item.open .faq-body {
+      display: block;
+    }
+    .form-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      border: 1px solid var(--slate-200);
+      box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05);
+      padding: 2.5rem;
+    }
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--slate-700);
+      margin-bottom: 0.4rem;
+    }
+    .form-control {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--slate-200);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+      background: var(--slate-50);
+    }
+    .form-control:focus {
+      border-color: var(--primary);
+      background: #FFFFFF;
+      box-shadow: 0 0 0 3px rgba(13, 122, 83, 0.15);
+    }
+    textarea.form-control {
+      resize: vertical;
+      min-height: 120px;
+    }
+    .form-success {
+      display: none;
+      background: var(--primary-light);
+      border: 1px solid var(--primary-border);
+      color: var(--primary-dark);
+      padding: 1.25rem;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #15803D;
+      background: #DCFCE7;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      margin-bottom: 1.5rem;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22C55E;
+      box-shadow: 0 0 0 2px #86EFAC;
+    }
+    footer {
+      background: #FFFFFF;
+      border-top: 1px solid var(--slate-200);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      color: var(--slate-600);
+      font-size: 0.85rem;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .footer-links a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="nav-container">
+      <a href="/" class="logo-area">
+        <div class="logo-badge">G</div>
+        <div class="logo-text">
+          <h1>GEOVERSE</h1>
+          <span>PGE Kamojang Community App</span>
+        </div>
+      </a>
+      <nav class="nav-links">
+        <a href="/" class="nav-item">Beranda</a>
+        <a href="/privacy" class="nav-item">Privacy Policy</a>
+        <a href="/support" class="active">Support & Bantuan</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Apple App Store Support Guideline 1.5
+    </div>
+    <h1>Pusat Bantuan & Layanan Dukungan</h1>
+    <p>Kami siap membantu Anda kapan saja. Temukan jawaban seputar layanan GEOVERSE atau hubungi tim customer service kami secara langsung.</p>
+  </section>
+
+  <main class="container">
+    <div style="text-align: center;">
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        Semua Sistem Layanan Beroperasi Normal (All Systems Operational)
+      </div>
+    </div>
+
+    <!-- Contact Cards Grid -->
+    <div class="contact-grid">
+      <!-- WhatsApp Support -->
+      <div class="contact-card">
+        <div>
+          <div class="contact-card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </div>
+          <h3>WhatsApp Support</h3>
+          <p>Respons cepat langsung dengan tim bantuan operasional Ranger PGE Kamojang.</p>
+        </div>
+        <div>
+          <p style="font-size:0.8rem; color:var(--slate-600); margin-bottom:0.75rem;">Setiap Hari: 07.00 - 21.00 WIB</p>
+          <a href="https://wa.me/6282123456789?text=Halo%20Tim%20Support%20GEOVERSE,%20saya%20membutuhkan%20bantuan%20terkait%20aplikasi." target="_blank" rel="noopener" class="contact-btn btn-primary" style="width:100%;">
+            Chat WhatsApp
+          </a>
+        </div>
+      </div>
+
+      <!-- Email Support -->
+      <div class="contact-card">
+        <div>
+          <div class="contact-card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <h3>Email Resmi Bantuan</h3>
+          <p>Untuk pertanyaan teknis, verifikasi mitra, permintaan hapus akun, atau pengajuan kerjasama.</p>
+        </div>
+        <div>
+          <p style="font-size:0.8rem; color:var(--slate-600); margin-bottom:0.75rem;">Estimasi Balas: &le; 1x24 Jam Kerja</p>
+          <a href="mailto:geoverse.pge@gmail.com?subject=Permintaan%20Bantuan%20GEOVERSE" class="contact-btn btn-secondary" style="width:100%;">
+            geoverse.pge@gmail.com
+          </a>
+        </div>
+      </div>
+
+      <!-- Kantor Operasional -->
+      <div class="contact-card">
+        <div>
+          <div class="contact-card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <h3>Kantor Operasional</h3>
+          <p>Basecamp Komunitas Ranger & PT Pertamina Geothermal Energy (PGE) Area Kamojang.</p>
+        </div>
+        <div>
+          <p style="font-size:0.8rem; color:var(--slate-600); margin-bottom:0.75rem;">Kec. Ibun, Kab. Bandung, Jawa Barat 40384</p>
+          <a href="https://maps.google.com/?q=PGE+Kamojang" target="_blank" rel="noopener" class="contact-btn btn-secondary" style="width:100%;">
+            Buka Petunjuk Arah
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <h2 class="section-title">Pertanyaan yang Sering Diajukan (FAQ)</h2>
+    <p class="section-desc">Jawaban praktis untuk kendala dan panduan penggunaan aplikasi GEOVERSE.</p>
+
+    <div class="faq-list">
+      <div class="faq-item open">
+        <div class="faq-header" onclick="toggleFaq(this)">
+          <span>Bagaimana cara memesan katering atau produk UMKM di GEOVERSE?</span>
+          <svg class="faq-icon-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-body">
+          Buka aplikasi GEOVERSE, pilih menu <strong>Katering</strong> atau <strong>Marketplace</strong> di beranda. Telusuri katalog merchant di sekitar Kamojang, pilih menu atau produk yang diinginkan, tentukan jumlah pesanan, dan lanjut ke halaman pembayaran. Pesanan Anda akan langsung diproses oleh merchant dan diantar oleh armada kurir Ranger.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-header" onclick="toggleFaq(this)">
+          <span>Bagaimana cara kerja setor sampah daur ulang dan konversi poin?</span>
+          <svg class="faq-icon-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-body">
+          Kumpulkan sampah anorganik terpilah (plastik, kardus, kaleng, minyak jelantah). Bawa ke Bank Sampah binaan PGE Kamojang atau pesan jemputan melalui aplikasi. Petugas akan menimbang dan mencatat jumlah setoran Anda. Setiap kilogram sampah bernilai poin yang langsung masuk ke akun GEOVERSE Anda (standar konversi: <strong>100 Poin = Rp 1</strong>). Poin ini dapat digunakan untuk berbelanja produk di Kanyaah Mart atau dicairkan.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-header" onclick="toggleFaq(this)">
+          <span>Metode pembayaran apa saja yang didukung?</span>
+          <svg class="faq-icon-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-body">
+          GEOVERSE terintegrasi dengan Payment Gateway berlisensi Bank Indonesia (Midtrans). Anda dapat membayar menggunakan <strong>QRIS</strong> (GoPay, OVO, Dana, ShopeePay, BCA, Mandiri, dan seluruh aplikasi m-banking), Virtual Account bank nasional, serta saldo poin tabungan sampah Anda.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-header" onclick="toggleFaq(this)">
+          <span>Bagaimana jika pesanan saya bermasalah atau makanan belum tiba?</span>
+          <svg class="faq-icon-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-body">
+          Anda dapat memantau posisi pengantaran driver secara real-time pada halaman Lacak Pesanan. Jika mengalami kendala keterlambatan atau ketidaksesuaian barang, Anda dapat langsung menghubungi driver melalui fitur chat di aplikasi atau menghubungi WhatsApp Customer Service kami di +62 821-2345-6789 dengan menyertakan Nomor ID Pesanan.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-header" onclick="toggleFaq(this)">
+          <span>Bagaimana cara mendaftar sebagai Mitra Toko, Laundry, Kos, atau Driver?</span>
+          <svg class="faq-icon-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-body">
+          Pada layar login aplikasi, ketuk opsi <strong>"Daftar Sebagai Mitra"</strong>, lalu pilih kategori kemitraan Anda (Mitra Toko UMKM, Katering, Laundry, Kos-Kosan, atau Driver Ranger). Lengkapi data usaha dan unggah foto dokumen identitas untuk diverifikasi oleh tim admin PGE Kamojang.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-header" onclick="toggleFaq(this)">
+          <span>Bagaimana cara mengajukan penghapusan akun dan data pribadi?</span>
+          <svg class="faq-icon-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-body">
+          Anda dapat mengajukan penghapusan akun kapan saja melalui menu <em>Profil &rarr; Pengaturan &rarr; Hapus Akun</em> di aplikasi, atau mengirim email ke <strong>geoverse.pge@gmail.com</strong> dengan subjek "Permohonan Penghapusan Akun". Seluruh data akun Anda akan dihapus secara permanen dari server dalam 3x24 jam kerja.
+        </div>
+      </div>
+    </div>
+
+    <!-- Direct Support Form -->
+    <div class="form-card">
+      <h2 class="section-title" style="margin-bottom:0.25rem;">Kirim Pesan / Pengaduan</h2>
+      <p class="section-desc">Punya pertanyaan khusus yang belum terjawab? Kirim formulir ini dan tim dukungan kami akan membalas ke email Anda.</p>
+      
+      <div id="formSuccess" class="form-success">
+        Terima kasih! Pesan dan pengaduan Anda telah terkirim ke tim support GEOVERSE. Kami akan segera menghubungi Anda melalui email/WhatsApp dalam waktu 1x24 jam.
+      </div>
+
+      <form id="supportForm" onsubmit="handleSupportSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Nama Lengkap</label>
+          <input type="text" required class="form-control" placeholder="Contoh: Budi Santoso" id="inputName">
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Alamat Email</label>
+            <input type="email" required class="form-control" placeholder="nama@email.com" id="inputEmail">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nomor WhatsApp (Opsional)</label>
+            <input type="tel" class="form-control" placeholder="081234567890" id="inputPhone">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kategori Bantuan</label>
+          <select class="form-control" id="inputCategory" required>
+            <option value="">-- Pilih Kategori --</option>
+            <option value="pesanan">Masalah Pemesanan / Pengantaran</option>
+            <option value="pembayaran">Pembayaran & Midtrans / QRIS</option>
+            <option value="sampah">Program Setor Sampah & Poin</option>
+            <option value="mitra">Pendaftaran / Verifikasi Mitra</option>
+            <option value="akun">Kendala Akun / Hapus Akun</option>
+            <option value="lainnya">Pertanyaan Umum Lainnya</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Pesan / Detail Kendala</label>
+          <textarea required class="form-control" placeholder="Tuliskan detail pertanyaan atau keluhan Anda di sini (sertakan ID Pesanan jika ada)..." id="inputMessage"></textarea>
+        </div>
+        <button type="submit" class="contact-btn btn-primary" style="padding: 0.85rem 2rem; font-size:1rem; cursor:pointer; border:none;">
+          Kirim Pesan Bantuan
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-links">
+      <a href="/">Beranda</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/support">Pusat Bantuan & Support</a>
+    </div>
+    <p>&copy; 2026 GEOVERSE - Inisiatif Berdaya Bersama PT Pertamina Geothermal Energy (PGE) Kamojang. Hak Cipta Dilindungi.</p>
+  </footer>
+
+  <script>
+    function toggleFaq(elem) {
+      const parent = elem.closest('.faq-item');
+      parent.classList.toggle('open');
+    }
+
+    function handleSupportSubmit(e) {
+      e.preventDefault();
+      const form = document.getElementById('supportForm');
+      const success = document.getElementById('formSuccess');
+      form.style.display = 'none';
+      success.style.display = 'block';
+    }
+  </script>
+
+</body>
+</html>

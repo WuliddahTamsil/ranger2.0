@@ -6,6 +6,7 @@ const SESSION_KEY = "rangers.auth.session.v1";
 
 // SHA-256 hash of "12345678"
 const PW_12345678_HASH = "ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f";
+const PW_PASSWORD123_HASH = "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f";
 
 export const DEFAULT_ACCOUNTS: AuthAccount[] = [
   {
@@ -328,6 +329,31 @@ export const DEFAULT_ACCOUNTS: AuthAccount[] = [
       businessType: "Prasmanan",
       menuSpecialty: "Sunda",
       isDapurOpen: "true",
+    },
+    documents: {},
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  },
+  {
+    id: "6aa7fc9ba28bf4d6d90dae7f",
+    role: "pemilik_catering",
+    name: "Kanyaah Catering Sehat",
+    email: "cateringsehat@gmail.com",
+    phone: "+6286352354288",
+    address: "Bogor",
+    passwordHash: PW_PASSWORD123_HASH,
+    status: "verified",
+    token: "6aa7fc9ba28bf4d6d90dae7f",
+    roleData: {
+      businessName: "Catering sehat",
+      businessAddress: "Bogor",
+      businessType: "Nasi Box",
+      isDapurOpen: "true",
+      cateringBankAccountHolder: "Wuliddah Tamsil Barokah",
+      cateringBankAccountNumber: "198378687244",
+      cateringBankName: "BCA",
+      cateringBankTransferEnabled: "true",
+      cateringQrisEnabled: "true",
     },
     documents: {},
     createdAt: "2026-01-01T00:00:00.000Z",
