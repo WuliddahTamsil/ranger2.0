@@ -60,14 +60,6 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
     }
   };
 
-  const handleQuickAdminLogin = () => {
-    setEmail("geoverse.pge@gmail.com");
-    setPassword("12345678");
-    setError("");
-    setLoading(true);
-    void onLogin("geoverse.pge@gmail.com", "12345678").finally(() => setLoading(false));
-  };
-
   return (
     <ResponsiveSafeAreaView style={authStyles.container}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -157,16 +149,6 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
                   </>
                 )}
               </Pressable>
-
-              <TouchableOpacity
-                onPress={handleQuickAdminLogin}
-                disabled={loading || googleLoading}
-                style={styles.adminQuickBtn}
-                activeOpacity={0.8}
-              >
-                <ShieldCheck size={16} color="#DC2626" />
-                <Text style={styles.adminQuickBtnText}>Masuk Cepat Admin PGE Kamojang</Text>
-              </TouchableOpacity>
             </View>
 
             {/* Divider & Google Login (Hidden on iOS to comply with Apple Guideline 4.8 without Apple Sign In) */}
@@ -425,24 +407,6 @@ const styles = StyleSheet.create({
   submitBtn: {
     flexDirection: "row",
     gap: 8,
-  },
-  adminQuickBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FEF2F2",
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginTop: 10,
-    gap: 8,
-  },
-  adminQuickBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#DC2626",
   },
   pressed: {
     opacity: 0.9,
