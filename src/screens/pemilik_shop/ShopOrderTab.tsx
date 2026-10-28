@@ -1596,8 +1596,10 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    gap: 6,
     marginBottom: 8,
   },
   cardCode: {
@@ -1640,6 +1642,7 @@ const styles = StyleSheet.create({
   customerRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 6,
     paddingBottom: 8,
     borderBottomWidth: 1,
@@ -1649,11 +1652,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#334155",
+    flexShrink: 1,
   },
   customerAddr: {
     fontSize: 11,
     color: "#64748B",
-    flex: 1,
+    flexShrink: 1,
   },
   itemsBox: {
     paddingVertical: 8,
@@ -1704,6 +1708,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
     marginTop: 4,
+    flexWrap: "wrap",
+    gap: 8,
   },
   totalLabel: {
     fontSize: 10,

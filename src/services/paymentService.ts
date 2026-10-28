@@ -160,3 +160,50 @@ export const simulatePaymentSuccess = async (
   }
   return data.data;
 };
+
+export interface UpdateOrderPaymentMethodParams {
+  orderId: string;
+  orderType?: string;
+  paymentMethod: PaymentMethodType | string;
+}
+
+export const updateOrderPaymentMethod = async (
+  params: UpdateOrderPaymentMethodParams,
+  accountId?: string
+): Promise<{ success: boolean; message: string; data?: any }> => {
+  const headers = await getAuthHeaders(accountId);
+  const targetUrl = getApiUrl(`/payments/order/${params.orderId}/method`);
+  
+  try {
+    const res = await fetch(targetUrl, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify(params),
+    });
+
+    const data = await readJson(res);
+    if (!res.ok) {
+      throw new Error(data.message || "Gagal memperbarui metode pembayaran");
+    }
+    return data;
+  } catch (patchErr) {
+    // Fallback to POST /update-method
+    const fallbackUrl = getApiUrl("/payments/update-method");
+    const res = await fetch(fallbackUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify(params),
+    });
+    const data = await readJson(res);
+    if (!res.ok) {
+      throw new Error(data.message || "Gagal memperbarui metode pembayaran");
+    }
+    return data;
+  }
+};

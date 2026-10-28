@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import { Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ArrowRight } from "lucide-react-native";
 import { Nav } from "../../types";
 import { OnboardingVisual, OnboardingVisualKind } from "./components/OnboardingVisual";
@@ -29,9 +30,19 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
   const currentSlide = SLIDES[slide];
   const isLast = slide === SLIDES.length - 1;
 
+  const finishOnboarding = async () => {
+    try {
+      await AsyncStorage.setItem("@geoverse_onboarding_completed", "true");
+    } catch {}
+    navigate("c_home");
+  };
+
   const next = () => {
-    if (isLast) navigate("login");
-    else setSlide((current) => current + 1);
+    if (isLast) {
+      void finishOnboarding();
+    } else {
+      setSlide((current) => current + 1);
+    }
   };
 
   return (
@@ -41,7 +52,7 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
         <View style={styles.pgeBadge}>
           <Text style={styles.pgeBadgeText}>GEOVERSE 2.0 • PGE KAMOJANG</Text>
         </View>
-        <TouchableOpacity onPress={() => navigate("login")} activeOpacity={0.7} style={styles.skipBtn}>
+        <TouchableOpacity onPress={() => void finishOnboarding()} activeOpacity={0.7} style={styles.skipBtn}>
           <Text style={styles.skipText}>Lewati</Text>
         </TouchableOpacity>
       </View>
@@ -74,9 +85,20 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
           onPress={next}
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
         >
-          <Text style={styles.buttonText}>{isLast ? "Mulai Sekarang" : "Lanjutkan"}</Text>
+          <Text style={styles.buttonText}>{isLast ? "Mulai Jelajahi" : "Lanjutkan"}</Text>
           <ArrowRight size={17} color="#FFFFFF" />
         </Pressable>
+        {isLast && (
+          <TouchableOpacity
+            onPress={() => navigate("login")}
+            activeOpacity={0.7}
+            style={styles.loginLinkWrap}
+          >
+            <Text style={styles.loginLinkText}>
+              Sudah memiliki akun? <Text style={styles.loginLinkBold}>Masuk di sini</Text>
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </ResponsiveSafeAreaView>
   );
@@ -213,5 +235,19 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: "700",
     letterSpacing: 0.1,
+  },
+  loginLinkWrap: {
+    marginTop: 14,
+    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loginLinkText: {
+    fontSize: 13,
+    color: authColors.muted,
+  },
+  loginLinkBold: {
+    color: authColors.primary,
+    fontWeight: "700",
   },
 });

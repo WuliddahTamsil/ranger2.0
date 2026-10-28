@@ -735,12 +735,12 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
 
           <TouchableOpacity 
             style={styles.menuItem}
-            onPress={() => Alert.alert("Bantuan", "Gunakan tab Beranda untuk mengelola menu dapur, tab Order untuk memproses pesanan masuk, dan tab Pendapatan untuk penarikan saldo.")}
+            onPress={() => Linking.openURL("https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20mitra%20katering%20butuh%20bantuan.").catch(() => {})}
           >
             {renderMenuIcon(<HelpCircle size={16} color="#FF9F00" />, "#FFF5D8")}
             <View style={styles.menuItemBody}>
-              <Text style={styles.menuItemTitle}>Bantuan</Text>
-              <Text style={styles.menuItemSubtitle}>Pusat bantuan pemilik catering</Text>
+              <Text style={styles.menuItemTitle}>Pusat Bantuan & CS WhatsApp</Text>
+              <Text style={styles.menuItemSubtitle}>Hubungi admin di +62 815-1122-6089</Text>
             </View>
             <ChevronRight size={16} color="#9CA3AF" />
           </TouchableOpacity>

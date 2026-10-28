@@ -726,17 +726,22 @@ const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 6,
   },
   infoLabel: {
     fontSize: 13,
     color: "#6B7280",
+    flex: 1,
+    minWidth: 120,
   },
   infoValueBold: {
     fontSize: 13,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 0,
   },
   percentText: {
     fontSize: 12,
@@ -829,7 +834,9 @@ const styles = StyleSheet.create({
   },
   btnTolakDp: {
     flex: 1,
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: "#0D7A53",
@@ -838,13 +845,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   btnTolakDpText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: "800",
     color: "#0D7A53",
+    textAlign: "center",
   },
   btnVerifikasiDp: {
     flex: 1.4,
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderRadius: 16,
     backgroundColor: "#0D7A53",
     alignItems: "center",
@@ -854,6 +864,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
     color: "#FFFFFF",
+    textAlign: "center",
   },
 
   // Modal Overlay Centered

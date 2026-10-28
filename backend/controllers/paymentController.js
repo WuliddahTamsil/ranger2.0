@@ -309,6 +309,19 @@ const createPayment = async (req, res) => {
     const customerPhone = req.authUser?.phone || req.body.customerPhone || "";
     const customerEmail = req.authUser?.email || req.body.customerEmail || "customer@kanyaah.com";
 
+    // Cancel previous pending payment records for this order so no duplicate active payment sessions remain
+    await Payment.updateMany(
+      {
+        $or: [
+          { orderId },
+          { orderCode: orderId },
+          ...(orderCode ? [{ orderId: orderCode }, { orderCode }] : []),
+        ],
+        status: "PENDING",
+      },
+      { $set: { status: "CANCELLED", cancellationReason: "Digantikan oleh sesi pembayaran baru" } }
+    ).catch(() => undefined);
+
     const gatewayResult = await paymentGateway.createPayment({
       orderId,
       orderCode,
@@ -542,10 +555,149 @@ const simulatePaymentWebhook = async (req, res) => {
   }
 };
 
+/**
+ * PATCH /api/payments/order/:orderId/method
+ * POST /api/payments/update-method
+ * Updates paymentMethod on the pending bill/order without generating gateway transactions or payment sessions.
+ * Deactivates any prior pending digital payment session to prevent duplicate active instructions.
+ */
+const updateOrderPaymentMethod = async (req, res) => {
+  try {
+    const orderId = req.params.orderId || req.body.orderId;
+    const { orderType, paymentMethod } = req.body;
+
+    if (!orderId || !paymentMethod) {
+      return res.status(400).json({
+        success: false,
+        message: "orderId dan paymentMethod wajib disertakan.",
+      });
+    }
+
+    const normalizedOrderType = String(orderType || "").toUpperCase();
+    const query = {
+      $or: [
+        ...(mongoose.Types.ObjectId.isValid(orderId) ? [{ _id: orderId }] : []),
+        { orderCode: orderId },
+        { bookingCode: orderId },
+      ],
+    };
+
+    // 1. Cancel previous pending payment records for this order to prevent multiple active instructions
+    await Payment.updateMany(
+      {
+        $or: [
+          { orderId },
+          { orderCode: orderId },
+          ...(mongoose.Types.ObjectId.isValid(orderId) ? [{ orderId: String(orderId) }] : []),
+        ],
+        status: "PENDING",
+      },
+      { $set: { status: "CANCELLED", notes: `Payment method changed to ${paymentMethod}` } }
+    ).catch(() => undefined);
+
+    let updatedOrder = null;
+    let orderAmount = 0;
+
+    // 2. Update order payment method according to orderType or attempt matching models
+    if (normalizedOrderType === "RIDE") {
+      updatedOrder = await RideOrder.findOneAndUpdate(
+        query,
+        { paymentMethod },
+        { new: true }
+      );
+      if (updatedOrder) orderAmount = updatedOrder.totalAmount || updatedOrder.finalAmount || updatedOrder.fare || updatedOrder.estimatedFare || 0;
+    } else if (normalizedOrderType === "MARKETPLACE") {
+      updatedOrder = await MarketplaceOrder.findOneAndUpdate(
+        query,
+        { paymentMethod: String(paymentMethod).toLowerCase() },
+        { new: true }
+      );
+      if (updatedOrder) orderAmount = updatedOrder.totalAmount || 0;
+    } else if (normalizedOrderType === "CATERING") {
+      updatedOrder = await CateringOrder.findOneAndUpdate(
+        query,
+        { paymentMethod: String(paymentMethod).toLowerCase() },
+        { new: true }
+      );
+      if (updatedOrder) orderAmount = updatedOrder.remainingAmount || updatedOrder.totalAmount || 0;
+    } else if (normalizedOrderType === "LAUNDRY") {
+      updatedOrder = await LaundryOrder.findOneAndUpdate(
+        query,
+        { paymentMethod },
+        { new: true }
+      );
+      if (updatedOrder) orderAmount = updatedOrder.totalAmount || updatedOrder.finalAmount || 0;
+    } else if (normalizedOrderType === "SEND" || normalizedOrderType === "KANYAAH_SEND") {
+      updatedOrder = await SendOrder.findOneAndUpdate(
+        query,
+        { paymentMethod },
+        { new: true }
+      );
+      if (updatedOrder) orderAmount = updatedOrder.pricing?.finalFare || updatedOrder.totalAmount || 0;
+    } else if (normalizedOrderType === "KANYAAH_SHOP" || normalizedOrderType === "SHOP") {
+      updatedOrder = await ShopOrder.findOneAndUpdate(
+        query,
+        { paymentMethod: String(paymentMethod).toUpperCase() },
+        { new: true }
+      );
+      if (updatedOrder) orderAmount = updatedOrder.totalAmount || 0;
+    } else if (["KOS", "HOTEL", "WISATA", "HOMESTAY", "BOOKING"].includes(normalizedOrderType)) {
+      const Booking = require("../models/Booking");
+      updatedOrder = await Booking.findOneAndUpdate(
+        query,
+        { paymentMethod },
+        { new: true }
+      );
+      if (updatedOrder) orderAmount = updatedOrder.dpAmount || updatedOrder.totalAmount || 0;
+    } else {
+      // Auto-detect fallback across models
+      const [ride, mkt, send, shop, cat, lau] = await Promise.all([
+        RideOrder.findOneAndUpdate(query, { paymentMethod }, { new: true }),
+        MarketplaceOrder.findOneAndUpdate(query, { paymentMethod: String(paymentMethod).toLowerCase() }, { new: true }),
+        SendOrder.findOneAndUpdate(query, { paymentMethod }, { new: true }),
+        ShopOrder.findOneAndUpdate(query, { paymentMethod: String(paymentMethod).toUpperCase() }, { new: true }),
+        CateringOrder.findOneAndUpdate(query, { paymentMethod: String(paymentMethod).toLowerCase() }, { new: true }),
+        LaundryOrder.findOneAndUpdate(query, { paymentMethod }, { new: true }),
+      ]);
+      updatedOrder = ride || mkt || send || shop || cat || lau;
+      if (updatedOrder) {
+        orderAmount = updatedOrder.totalAmount || updatedOrder.pricing?.finalFare || updatedOrder.fare || updatedOrder.estimatedFare || 0;
+      }
+    }
+
+    if (!updatedOrder && orderId !== "temp-order-id") {
+      return res.status(404).json({
+        success: false,
+        message: "Pesanan atau tagihan tidak ditemukan di sistem. Metode pembayaran belum dapat diperbarui.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Metode pembayaran berhasil diperbarui.",
+      data: {
+        orderId,
+        orderType: normalizedOrderType || (updatedOrder ? "DETECTED" : "UNKNOWN"),
+        paymentMethod,
+        orderAmount,
+        updatedOrder,
+      },
+    });
+  } catch (error) {
+    console.error("❌ updateOrderPaymentMethod error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memperbarui metode pembayaran.",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createPayment,
   getOrderPayments,
   getPaymentStatus,
   handlePaymentWebhook,
   simulatePaymentWebhook,
+  updateOrderPaymentMethod,
 };

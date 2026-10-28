@@ -425,8 +425,21 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
     };
     if (submitting) return;
     if (!authAccount?.id || !authAccount.name) {
-      showMessage("Masuk diperlukan", "Masuk ke akun pelanggan sebelum membuat pesanan Catering.");
-      navigate("login");
+      Alert.alert(
+        "Login Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk memproses pesanan Catering ini.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk Sekarang",
+            onPress: () =>
+              navigate("login", {
+                targetScreen: "c_catering_detail",
+                reason: "Masuk ke akun GEOVERSE untuk memproses pemesanan catering.",
+              }),
+          },
+        ]
+      );
       return;
     }
     if (!address.trim()) {
@@ -751,13 +764,13 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
               <Text style={{ fontSize: 12.5, fontWeight: "800", color: "#92400E", marginBottom: 3 }}>
                 Kebijakan DP & Pelunasan Aman (Sistem Escrow)
               </Text>
-              <Text style={{ fontSize: 11, color: "#78350F", lineHeight: 16 }}>
+              <Text style={{ fontSize: 11, color: "#78350F", lineHeight: 16, textAlign: "justify" }}>
                 • <Text style={{ fontWeight: "700" }}>Uang Muka (DP):</Text> DP 30% atau 50% mengikat jadwal slot dapur dan pembelian bahan baku segar.
               </Text>
-              <Text style={{ fontSize: 11, color: "#78350F", lineHeight: 16 }}>
+              <Text style={{ fontSize: 11, color: "#78350F", lineHeight: 16, textAlign: "justify" }}>
                 • <Text style={{ fontWeight: "700" }}>Waktu Pelunasan:</Text> Sisa tagihan wajib dilunasi paling lambat H-1 sebelum pengiriman agar kurir dapat ditugaskan.
               </Text>
-              <Text style={{ fontSize: 11, color: "#78350F", lineHeight: 16 }}>
+              <Text style={{ fontSize: 11, color: "#78350F", lineHeight: 16, textAlign: "justify" }}>
                 • <Text style={{ fontWeight: "700" }}>Kebijakan Pembatalan:</Text> Batal ≥ H-2 DP kembali 100%. Batal H-1 atau hari H, DP hangus sebagai ganti rugi bahan baku dapur.
               </Text>
             </View>
@@ -1877,7 +1890,7 @@ const styles = StyleSheet.create({
   listRadioCheckActive: { backgroundColor: "#1B7A4E", borderColor: "#1B7A4E" },
 
   // Portions Counter
-  counterCard: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 15, borderWidth: 1, borderColor: "#E5E7EB", padding: 14, marginTop: 12 },
+  counterCard: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 10, backgroundColor: "#FFFFFF", borderRadius: 15, borderWidth: 1, borderColor: "#E5E7EB", padding: 14, marginTop: 12 },
   counter: { flexDirection: "row", alignItems: "center", gap: 12 },
   counterButton: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#E8F5EE", alignItems: "center", justifyContent: "center" },
   counterValue: { color: "#111827", fontSize: 15, fontWeight: "900" },
@@ -1907,7 +1920,7 @@ const styles = StyleSheet.create({
   paymentUnavailableText: { flex: 1, color: "#9A3412", fontSize: 11, lineHeight: 16 },
 
   // Bottom Checkout Bar
-  totalCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E5E7EB", padding: 14, marginTop: 22 },
+  totalCard: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E5E7EB", padding: 14, marginTop: 22 },
   totalText: { color: "#111827", fontSize: 16, fontWeight: "900", marginTop: 3 },
   primaryButtonSmall: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#1B7A4E", borderRadius: 11, paddingHorizontal: 13, paddingVertical: 11 },
   primaryButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#1B7A4E", borderRadius: 13, minHeight: 48, paddingHorizontal: 16, marginTop: 18 },
@@ -1921,7 +1934,7 @@ const styles = StyleSheet.create({
   mutedText: { color: "#6B7280", fontSize: 11, lineHeight: 17 },
   detailRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
   detailText: { flex: 1, color: "#374151", fontSize: 12 },
-  paymentSummaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 5 },
+  paymentSummaryRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 8, marginVertical: 5 },
   paidText: { color: "#1B7A4E", fontSize: 13, fontWeight: "900" },
   warningText: { color: "#166534" },
   reminderBox: { backgroundColor: "#E8F5EE", borderRadius: 12, padding: 11, marginTop: 11 },
@@ -1967,8 +1980,8 @@ const styles = StyleSheet.create({
   popupBadgeSpecial: { position: "absolute", bottom: 12, left: 12, backgroundColor: "rgba(17, 24, 39, 0.85)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 5 },
   popupBadgeSpecialText: { color: "#FEF08A", fontSize: 11, fontWeight: "800" },
   popupBody: { gap: 14 },
-  popupPriceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
-  popupTitle: { flex: 1, color: "#111827", fontSize: 19, fontWeight: "900", lineHeight: 25 },
+  popupPriceRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
+  popupTitle: { flex: 1, minWidth: 160, color: "#111827", fontSize: 19, fontWeight: "900", lineHeight: 25 },
   popupPrice: { color: "#1B7A4E", fontSize: 18, fontWeight: "900" },
   popupPillsRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   popupPillGreen: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#D1FAE5", paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
@@ -1977,13 +1990,13 @@ const styles = StyleSheet.create({
   popupPillGrayText: { color: "#475569", fontSize: 11, fontWeight: "700" },
   popupDescLabel: { color: "#374151", fontSize: 13, fontWeight: "800", marginTop: 4 },
   popupDescription: { color: "#4B5563", fontSize: 13, lineHeight: 20 },
-  popupPortionBox: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#F8FAFC", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0", padding: 14, marginTop: 4 },
+  popupPortionBox: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 10, backgroundColor: "#F8FAFC", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0", padding: 14, marginTop: 4 },
   popupPortionTitle: { color: "#111827", fontSize: 13, fontWeight: "800" },
   popupPortionSubtitle: { color: "#94A3B8", fontSize: 11, marginTop: 2 },
   popupCounter: { flexDirection: "row", alignItems: "center", gap: 12 },
   popupCounterBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: "#E8F5EE", alignItems: "center", justifyContent: "center" },
   popupCounterValue: { color: "#111827", fontSize: 15, fontWeight: "900" },
-  popupSubtotalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#E8F5EE", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  popupSubtotalRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 8, backgroundColor: "#E8F5EE", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
   popupSubtotalLabel: { color: "#065F46", fontSize: 12, fontWeight: "700" },
   popupSubtotalValue: { color: "#1B7A4E", fontSize: 16, fontWeight: "900" },
   popupActionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#1B7A4E", borderRadius: 14, paddingVertical: 14, marginTop: 8 },

@@ -1724,16 +1724,17 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   tabContainer: {
-    height: 38,
+    minHeight: 40,
     marginBottom: 16,
   },
   tabScroll: {
     paddingHorizontal: 20,
     gap: 8,
+    alignItems: "center",
   },
   tabChip: {
     paddingHorizontal: 16,
-    height: 34,
+    paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
     alignItems: "center",
@@ -1748,7 +1749,7 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
   },
   tabChipText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "700",
   },
   tabChipTextSelected: {
@@ -1777,10 +1778,23 @@ const styles = StyleSheet.create({
     columnGap: 8,
     rowGap: 6,
   },
+  cardHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    flexShrink: 1,
+    gap: 6,
+  },
+  cardDotSeparator: {
+    fontSize: 12,
+    color: "#94A3B8",
+    marginHorizontal: 1,
+  },
   orderId: {
-    fontSize: 16,
+    fontSize: 13.5,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   statusChip: {
     maxWidth: "100%",
@@ -3019,18 +3033,6 @@ const styles = StyleSheet.create({
   },
   cardMainClickable: {
     padding: 14,
-  },
-  cardHeaderLeft: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    flexShrink: 1,
-    minWidth: 0,
-    gap: 6,
-  },
-  cardDotSeparator: {
-    color: "#CBD5E1",
-    fontSize: 12,
   },
   customerPhoneSub: {
     fontSize: 11,

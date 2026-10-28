@@ -44,6 +44,7 @@ import * as ImagePicker from "expo-image-picker";
 import { CustomerChatModal } from "./CustomerChatModal";
 import { AuthAccount } from "../auth/authTypes";
 import { useRecycle } from "../../context/RecycleContext";
+import { rp } from "../../utils/formatters";
 import { uploadFileToBackend, createDigitalPayment, checkDigitalPaymentStatus } from "../../services/api";
 import {
   getActiveLaundryOrder,
@@ -1039,7 +1040,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                   <>
                     <Zap size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
                     <Text style={styles.btnSubmitPaymentText}>
-                      Buka Pembayaran Midtrans (Rp {finalPayableTotal.toLocaleString("id-ID")})
+                      Lakukan Pembayaran • {rp(finalPayableTotal)}
                     </Text>
                   </>
                 )}

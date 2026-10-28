@@ -311,6 +311,46 @@ export const CustomerAddressScreen: React.FC<CustomerAddressScreenProps> = ({ na
     </View>
   );
 
+  if (!authAccount?.id) {
+    return (
+      <ResponsiveSafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigate("c_home")} style={styles.backButton} accessibilityLabel="Kembali ke beranda">
+            <ChevronLeft size={22} color="#0F172A" />
+          </TouchableOpacity>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>Daftar Alamat</Text>
+            <Text style={styles.subtitle}>Informasi customer dan alamat pengiriman</Text>
+          </View>
+          <View style={{ width: 36 }} />
+        </View>
+
+        <View style={styles.guestAddressBox}>
+          <View style={styles.guestAddressIcon}>
+            <MapPin size={40} color="#0D7A53" />
+          </View>
+          <Text style={styles.guestAddressTitle}>Masuk untuk Menyimpan Alamat</Text>
+          <Text style={styles.guestAddressSub}>
+            Masuk ke akun GEOVERSE Anda untuk menyimpan alamat rumah, kos, atau kantor untuk kemudahan memesan ojek dan pengantaran makanan.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.guestAddressBtn}
+            onPress={() =>
+              navigate("login", {
+                targetScreen: "c_addresses",
+                reason: "Masuk ke akun GEOVERSE untuk mengelola daftar alamat tersimpan Anda.",
+              })
+            }
+            activeOpacity={0.85}
+          >
+            <Text style={styles.guestAddressBtnText}>Masuk ke Akun</Text>
+          </TouchableOpacity>
+        </View>
+      </ResponsiveSafeAreaView>
+    );
+  }
+
   return (
     <ResponsiveSafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -599,4 +639,57 @@ const styles = StyleSheet.create({
   checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1.5, borderColor: "#94A3B8", alignItems: "center", justifyContent: "center" },
   checkboxActive: { backgroundColor: "#1B7A4E", borderColor: "#1B7A4E" },
   primaryToggleText: { color: "#334155", fontSize: 12, fontWeight: "800" },
+  guestAddressBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    paddingVertical: 40,
+  },
+  guestAddressIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: "#86EFAC",
+  },
+  guestAddressTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  guestAddressSub: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: "#64748B",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  guestAddressBtn: {
+    backgroundColor: "#0D7A53",
+    width: "100%",
+    maxWidth: 280,
+    height: 48,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#0D7A53",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  guestAddressBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14.5,
+    fontWeight: "700",
+  },
 });

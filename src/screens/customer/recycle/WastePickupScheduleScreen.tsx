@@ -102,6 +102,25 @@ export const WastePickupScheduleScreen: React.FC<Props> = ({ navigate, authAccou
   const estimatedTotalFare = distanceKm < 4 ? 9500 : distanceFare + serviceFee;
 
   const handleSubmitPickup = async () => {
+    if (!authAccount?.id) {
+      Alert.alert(
+        "Masuk ke Akun Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk memesan penjemputan sampah.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk Sekarang",
+            onPress: () =>
+              navigate("login", {
+                targetScreen: "c_recycle_pickup_schedule",
+                reason: "Masuk ke akun GEOVERSE untuk memesan penjemputan sampah Kanyaah Recycle.",
+              }),
+          },
+        ]
+      );
+      return;
+    }
+
     if (!opStatus.isOpen) {
       Alert.alert(
         "Bank Sampah Sedang Tutup",

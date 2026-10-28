@@ -51,6 +51,7 @@ interface InboxProps {
   setChatThreads: (threads: CustomerChatThread[]) => void;
   setCustomerTab: (tabIndex: number) => void;
   authAccount?: AuthAccount | null;
+  navigate?: (screen: any, params?: any) => void;
 }
 
 type Message = CustomerChatMessage;
@@ -62,6 +63,7 @@ export const Inbox: React.FC<InboxProps> = ({
   setChatThreads,
   setCustomerTab,
   authAccount,
+  navigate,
 }) => {
   const [activeTab, setActiveTab] = useState<"Notifikasi" | "Chat">("Notifikasi");
   const [chatModalVisible, setChatModalVisible] = useState(false);
@@ -204,6 +206,40 @@ export const Inbox: React.FC<InboxProps> = ({
   };
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
+
+  if (!authAccount?.id) {
+    return (
+      <ResponsiveSafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Notifikasi & Inbox</Text>
+        </View>
+
+        <View style={styles.guestInboxContainer}>
+          <View style={styles.guestInboxIconCircle}>
+            <Bell size={42} color="#0D7A53" />
+          </View>
+          <Text style={styles.guestInboxTitle}>Masuk untuk Notifikasi & Chat</Text>
+          <Text style={styles.guestInboxSub}>
+            Dapatkan pembaruan langsung mengenai pesanan, promo eksklusif, dan pesan dari driver atau merchant mitra kami.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.guestInboxLoginBtn}
+            onPress={() =>
+              navigate?.("login", {
+                targetScreen: "c_home",
+                targetParams: { tab: 3 },
+                reason: "Masuk ke akun GEOVERSE untuk melihat notifikasi dan chat Anda.",
+              })
+            }
+            activeOpacity={0.85}
+          >
+            <Text style={styles.guestInboxLoginBtnText}>Masuk ke Akun</Text>
+          </TouchableOpacity>
+        </View>
+      </ResponsiveSafeAreaView>
+    );
+  }
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -631,5 +667,58 @@ const styles = StyleSheet.create({
     backgroundColor: "#1B7A4E",
     alignItems: "center",
     justifyContent: "center",
+  },
+  guestInboxContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    paddingVertical: 40,
+  },
+  guestInboxIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: "#86EFAC",
+  },
+  guestInboxTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  guestInboxSub: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: "#64748B",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  guestInboxLoginBtn: {
+    backgroundColor: "#0D7A53",
+    width: "100%",
+    maxWidth: 280,
+    height: 48,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#0D7A53",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  guestInboxLoginBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14.5,
+    fontWeight: "700",
   },
 });

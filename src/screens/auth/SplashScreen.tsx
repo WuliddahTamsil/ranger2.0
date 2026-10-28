@@ -1,13 +1,29 @@
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet, Platform, Image } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Nav } from "../../types";
 
 export const SplashScreen: React.FC<Nav> = ({ navigate }) => {
   useEffect(() => {
-    const timer = setTimeout(() => {
-      navigate("onboarding");
+    let isMounted = true;
+    const timer = setTimeout(async () => {
+      if (!isMounted) return;
+      try {
+        const completed = await AsyncStorage.getItem("@geoverse_onboarding_completed");
+        if (!isMounted) return;
+        if (completed === "true") {
+          navigate("c_home");
+        } else {
+          navigate("onboarding");
+        }
+      } catch {
+        if (isMounted) navigate("onboarding");
+      }
     }, 2000);
-    return () => clearTimeout(timer);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   return (

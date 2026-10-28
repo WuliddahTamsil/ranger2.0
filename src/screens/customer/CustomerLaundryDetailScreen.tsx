@@ -179,6 +179,25 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
   const isStoreOpen = store.isOpen !== false;
 
   const handleConfirmOrder = async () => {
+    if (!authAccount?.id) {
+      Alert.alert(
+        "Masuk ke Akun Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk membuat pesanan laundry.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk Sekarang",
+            onPress: () =>
+              navigate("login", {
+                targetScreen: "c_laundry",
+                reason: "Masuk ke akun GEOVERSE untuk memesan layanan laundry.",
+              }),
+          },
+        ]
+      );
+      return;
+    }
+
     if (!isStoreOpen) {
       Alert.alert("Toko Sedang Tutup", "Outlet laundry ini sedang tutup sementara dan tidak dapat menerima pesanan saat ini.");
       return;
@@ -193,9 +212,9 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
     try {
       const addressSnapshot = getPrimaryCustomerAddress(authAccount);
       const payload = {
-        customerId: authAccount?.id || authAccount?.email || "cust_demo",
-        customerName: authAccount?.name || "aisyahphr",
-        customerPhone: authAccount?.phone || "081234567890",
+        customerId: authAccount.id,
+        customerName: authAccount.name || "Pelanggan",
+        customerPhone: authAccount.phone || "",
         pickupAddress: address,
         pickupCoords: selectedMapPin?.coords || "",
         deliveryAddress: address,

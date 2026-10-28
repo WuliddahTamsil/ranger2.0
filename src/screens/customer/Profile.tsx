@@ -24,6 +24,7 @@ import {
   X,
   Trash2,
   ExternalLink,
+  MessageSquare,
 } from "lucide-react-native";
 import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
@@ -45,7 +46,7 @@ interface ProfileProps {
   authAccount?: AuthAccount | null;
   profilePhoto?: string;
   setProfilePhoto?: (photoUri: string) => void;
-  navigate: (screen: any) => void;
+  navigate: (screen: any, params?: any) => void;
 }
 
 export const Profile: React.FC<ProfileProps> = ({
@@ -124,6 +125,130 @@ export const Profile: React.FC<ProfileProps> = ({
       ]
     );
   };
+
+  if (!authAccount?.id) {
+    return (
+      <ResponsiveSafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Guest Header Hero */}
+          <View style={styles.guestHeroCard}>
+            <View style={styles.guestAvatarCircle}>
+              <User size={38} color="#0D7A53" />
+            </View>
+            <Text style={styles.guestHeroTitle}>Halo, Pengunjung!</Text>
+            <Text style={styles.guestHeroSub}>
+              Masuk ke akun GEOVERSE Anda untuk melihat profil, mengelola alamat tersimpan, riwayat pesanan, dan menikmati seluruh fitur personal.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.guestLoginBtn}
+              onPress={() =>
+                navigate("login", {
+                  targetScreen: "c_home",
+                  targetParams: { tab: 4 },
+                  reason: "Masuk ke akun GEOVERSE untuk melihat dan mengelola profil akun Anda.",
+                })
+              }
+              activeOpacity={0.85}
+            >
+              <Text style={styles.guestLoginBtnText}>Masuk ke Akun</Text>
+              <ChevronRight size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.guestRegisterBtn}
+              onPress={() => navigate("auth_register_role")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.guestRegisterBtnText}>Belum punya akun? Daftar Sekarang</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Section: Layanan Informasi & Bantuan */}
+          <Text style={styles.sectionLabel}>INFORMASI & BANTUAN</Text>
+          <View style={styles.menuGroup}>
+            <TouchableOpacity
+              style={styles.menuRow}
+              onPress={() =>
+                triggerInfoSheet(
+                  "Bantuan & FAQ",
+                  "Pusat Bantuan & Layanan Pelanggan GEOVERSE:\n\n• Email Dukungan: support@geoverse.id\n• Hotline/WhatsApp: +62 815-1122-6089\n• Jam Operasional: 24 Jam Setiap Hari\n• Area Layanan: Kawasan PGE Kamojang, Ibun, Paseh, Majalaya & Sekitarnya.\n\nTim kami siap membantu kendala perjalanan ojek, pesanan kuliner, maupun reservasi penginapan Anda."
+                )
+              }
+            >
+              <View style={[styles.menuIconBg, { backgroundColor: "#FFF5D8" }]}>
+                <HelpCircle size={16} color="#FF9F00" />
+              </View>
+              <Text style={styles.menuLabel}>Bantuan & FAQ</Text>
+              <ChevronRight size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity
+              style={styles.menuRow}
+              onPress={() =>
+                triggerInfoSheet(
+                  "Kebijakan Privasi & Keamanan",
+                  "Kebijakan Privasi & Perlindungan Data Pengguna GEOVERSE:\n\n1. Perlindungan Data Pribadi:\nSeluruh informasi akun, identitas, dan riwayat transaksi disimpan dalam sistem terenkripsi dengan standar keamanan tinggi sesuai peraturan perundang-undangan.\n\n2. Penggunaan Izin Perangkat:\nAkses lokasi GPS hanya digunakan saat Anda melakukan pemesanan aktif (ojek, kurir, atau pengantaran). Akses kamera hanya digunakan saat Anda mengunggah foto profil, bukti dokumen, atau bukti setoran sampah anorganik.\n\n3. Hak Akses & Penghapusan Akun:\nPengguna memiliki hak penuh untuk memperbarui data pribadi serta meminta penghapusan akun beserta seluruh data pribadi secara permanen melalui menu Pengaturan Akun."
+                )
+              }
+            >
+              <View style={[styles.menuIconBg, { backgroundColor: "#E9EEF0" }]}>
+                <Shield size={16} color="#607D8B" />
+              </View>
+              <Text style={styles.menuLabel}>Kebijakan Privasi & Keamanan</Text>
+              <ChevronRight size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity
+              style={styles.menuRow}
+              onPress={() => {
+                Linking.openURL("https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20butuh%20bantuan%20layanan.").catch(() => {});
+              }}
+            >
+              <View style={[styles.menuIconBg, { backgroundColor: "#DCFCE7" }]}>
+                <MessageSquare size={16} color="#15803D" />
+              </View>
+              <Text style={styles.menuLabel}>Hubungi CS via WhatsApp</Text>
+              <ChevronRight size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.footerVersion}>GEOVERSE 2.0 · PGE Kamojang</Text>
+        </ScrollView>
+
+        {/* Modal Info Bottom Sheet */}
+        <Modal visible={infoModalVisible} transparent animationType="slide">
+          <View style={styles.modalBgBottom}>
+            <View style={styles.sheetContainer}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>{infoTitle}</Text>
+                <TouchableOpacity onPress={() => setInfoModalVisible(false)}>
+                  <X size={20} color="#111827" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.infoMessageText}>{infoMessage}</Text>
+              {infoTitle === "Bantuan & FAQ" && (
+                <TouchableOpacity
+                  style={styles.sheetBtnWhatsApp}
+                  onPress={() => {
+                    setInfoModalVisible(false);
+                    Linking.openURL("https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20butuh%20bantuan%20layanan.").catch(() => {});
+                  }}
+                >
+                  <MessageSquare size={16} color="#FFFFFF" />
+                  <Text style={styles.sheetBtnWhatsAppText}>Chat CS WhatsApp (+62 815-1122-6089)</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </Modal>
+      </ResponsiveSafeAreaView>
+    );
+  }
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
@@ -219,7 +344,7 @@ export const Profile: React.FC<ProfileProps> = ({
 
           <TouchableOpacity 
             style={styles.menuRow}
-            onPress={() => triggerInfoSheet("Bantuan & FAQ", "Pusat Bantuan & Layanan Pelanggan GEOVERSE:\n\n• Email Dukungan: support@geoverse.id\n• Hotline/WhatsApp: +62 878-0598-7309\n• Jam Operasional: 24 Jam Setiap Hari\n• Area Layanan: Kawasan PGE Kamojang, Ibun, Paseh, Majalaya & Sekitarnya.\n\nTim kami siap membantu kendala perjalanan ojek, pesanan kuliner, maupun reservasi penginapan Anda.")}
+            onPress={() => triggerInfoSheet("Bantuan & FAQ", "Pusat Bantuan & Layanan Pelanggan GEOVERSE:\n\n• Email Dukungan: support@geoverse.id\n• Hotline/WhatsApp: +62 815-1122-6089\n• Jam Operasional: 24 Jam Setiap Hari\n• Area Layanan: Kawasan PGE Kamojang, Ibun, Paseh, Majalaya & Sekitarnya.\n\nTim kami siap membantu kendala perjalanan ojek, pesanan kuliner, maupun reservasi penginapan Anda.")}
           >
             <View style={[styles.menuIconBg, { backgroundColor: "#FFF5D8" }]}>
               <HelpCircle size={16} color="#FF9F00" />
@@ -232,7 +357,10 @@ export const Profile: React.FC<ProfileProps> = ({
 
           <TouchableOpacity 
             style={styles.menuRow}
-            onPress={() => triggerInfoSheet("Privasi & Keamanan", "Kebijakan Privasi & Perlindungan Data GEOVERSE:\n\n• Seluruh data akun & transaksi dienkripsi dengan standar keamanan tinggi.\n• Izin lokasi & kamera hanya digunakan saat Anda melakukan pemesanan aktif atau mengunggah bukti dokumen/foto.\n• Pengguna memiliki hak penuh untuk meminta penghapusan akun beserta data pribadi secara permanen melalui menu Pengaturan.")}
+            onPress={() => triggerInfoSheet(
+              "Kebijakan Privasi & Keamanan",
+              "Kebijakan Privasi & Perlindungan Data Pengguna GEOVERSE:\n\n1. Perlindungan Data Pribadi:\nSeluruh informasi akun, identitas, dan riwayat transaksi disimpan dalam sistem terenkripsi dengan standar keamanan tinggi sesuai peraturan perundang-undangan.\n\n2. Penggunaan Izin Perangkat:\nAkses lokasi GPS hanya digunakan saat Anda melakukan pemesanan aktif (ojek, kurir, atau pengantaran). Akses kamera hanya digunakan saat Anda mengunggah foto profil, bukti dokumen, atau bukti setoran sampah anorganik.\n\n3. Hak Akses & Penghapusan Akun:\nPengguna memiliki hak penuh untuk memperbarui data pribadi serta meminta penghapusan akun beserta seluruh data pribadi secara permanen melalui menu Pengaturan Akun."
+            )}
           >
             <View style={[styles.menuIconBg, { backgroundColor: "#E9EEF0" }]}>
               <Shield size={16} color="#607D8B" />
@@ -287,6 +415,20 @@ export const Profile: React.FC<ProfileProps> = ({
 
             <Text style={styles.infoMessageText}>{infoMessage}</Text>
 
+            {infoTitle === "Bantuan & FAQ" && (
+              <TouchableOpacity
+                style={styles.sheetBtnWhatsApp}
+                onPress={() => {
+                  setInfoModalVisible(false);
+                  Linking.openURL("https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20butuh%20bantuan%20layanan.").catch(() => {});
+                }}
+                activeOpacity={0.85}
+              >
+                <MessageSquare size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.sheetBtnWhatsAppText}>Chat WhatsApp CS (+62 815-1122-6089)</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity 
               style={styles.sheetBtnClose}
               onPress={() => setInfoModalVisible(false)}
@@ -336,7 +478,7 @@ export const Profile: React.FC<ProfileProps> = ({
                 <TouchableOpacity
                   style={styles.settingsLinkRow}
                   onPress={() => {
-                    const url = `${API_BASE_URL}/privacy`;
+                    const url = "https://ranger-eight.vercel.app/privacy";
                     Linking.openURL(url).catch(() => {
                       Alert.alert("Kebijakan Privasi", `Kunjungi kebijakan privasi kami di ${url}`);
                     });
@@ -349,7 +491,7 @@ export const Profile: React.FC<ProfileProps> = ({
                 <TouchableOpacity
                   style={[styles.settingsLinkRow, { borderBottomWidth: 0 }]}
                   onPress={() => {
-                    const url = `${API_BASE_URL}/support`;
+                    const url = "https://ranger-eight.vercel.app/support";
                     Linking.openURL(url).catch(() => {
                       Alert.alert("Bantuan & Dukungan", `Kunjungi laman dukungan kami di ${url}`);
                     });
@@ -642,8 +784,23 @@ const styles = StyleSheet.create({
   infoMessageText: {
     fontSize: 13,
     color: "#4B5563",
-    lineHeight: 18,
+    lineHeight: 20,
     marginVertical: 12,
+    textAlign: "justify",
+  },
+  sheetBtnWhatsApp: {
+    backgroundColor: "#25D366",
+    height: 48,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
+  sheetBtnWhatsAppText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
   },
   sheetBtnClose: {
     backgroundColor: "#1B7A4E",
@@ -651,7 +808,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 14,
+    marginTop: 10,
   },
   sheetBtnCloseText: {
     color: "#FFFFFF",
@@ -747,5 +904,75 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "700",
+  },
+  guestHeroCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  guestAvatarCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: "#A7F3D0",
+  },
+  guestHeroTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 6,
+  },
+  guestHeroSub: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#64748B",
+    textAlign: "center",
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  guestLoginBtn: {
+    backgroundColor: "#0D7A53",
+    width: "100%",
+    height: 48,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#0D7A53",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  guestLoginBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14.5,
+    fontWeight: "700",
+  },
+  guestRegisterBtn: {
+    marginTop: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  guestRegisterBtnText: {
+    color: "#0D7A53",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

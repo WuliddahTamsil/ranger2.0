@@ -49,6 +49,7 @@ import {
   uploadFileToBackend,
   getCateringOrdersForCustomer,
 } from "../../services/api";
+import { updateOrderPaymentMethod } from "../../services/paymentService";
 import {
   getCustomerOrders,
   updateCustomerOrder,
@@ -117,6 +118,10 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
 
   // Selected method for payment/pelunasan
   const [selectedPelunasanMethod, setSelectedPelunasanMethod] = useState<"qris" | "bca_va" | "mandiri_va" | "bank_transfer">("qris");
+  const [tempSelectedMethod, setTempSelectedMethod] = useState<"qris" | "bca_va" | "mandiri_va" | "bank_transfer">("qris");
+  const [showMethodPickerModal, setShowMethodPickerModal] = useState<boolean>(false);
+  const [showPaymentInstructions, setShowPaymentInstructions] = useState<boolean>(false);
+  const [updatingMethod, setUpdatingMethod] = useState<boolean>(false);
 
   // Determine pending and rejected payments from history
   const pendingPayment = useMemo(() => {
@@ -226,6 +231,62 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
+
+  const handleOpenMethodPicker = () => {
+    setTempSelectedMethod(selectedPelunasanMethod);
+    setShowMethodPickerModal(true);
+  };
+
+  const handleConfirmMethodChange = async () => {
+    if (!tempSelectedMethod) {
+      Alert.alert("Pilih Metode", "Silakan pilih salah satu metode pembayaran.");
+      return;
+    }
+
+    try {
+      setUpdatingMethod(true);
+      const targetOrderId = order?._id || order?.id || order?.orderCode;
+      if (targetOrderId && /^[a-f\d]{24}$/i.test(String(targetOrderId))) {
+        await updateOrderPaymentMethod(
+          {
+            orderId: String(targetOrderId),
+            orderType: "CATERING",
+            paymentMethod: tempSelectedMethod,
+          },
+          authAccount?.id
+        ).catch((err) => {
+          console.warn("Update catering payment method notice:", err);
+        });
+      }
+
+      setSelectedPelunasanMethod(tempSelectedMethod);
+      setShowMethodPickerModal(false);
+      // Decoupled: method change does not automatically show payment instructions
+      setShowPaymentInstructions(false);
+      Alert.alert("Metode Diperbarui", "Metode pembayaran berhasil diubah.");
+    } catch {
+      Alert.alert("Gagal", "Gagal memperbarui metode pembayaran.");
+    } finally {
+      setUpdatingMethod(false);
+    }
+  };
+
+  const handleCancelMethodPicker = () => {
+    setTempSelectedMethod(selectedPelunasanMethod);
+    setShowMethodPickerModal(false);
+  };
+
+  const handleStartPayment = () => {
+    if (!selectedPelunasanMethod) {
+      Alert.alert("Pilih Metode", "Silakan pilih metode pembayaran terlebih dahulu.");
+      return;
+    }
+    if (currentPayAmount <= 0) {
+      Alert.alert("Lunas", "Pesanan ini sudah tidak memiliki sisa tagihan.");
+      return;
+    }
+    setShowPaymentInstructions(true);
+  };
 
   // Sync with customer orders store
   useEffect(() => {
@@ -624,47 +685,92 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
           </View>
         )}
 
-        {/* 3. Method Selector Tabs (Visible when customer needs to pay/pelunasan) */}
+        {/* 3. Detail Metode Pembayaran Card */}
         {!isOrderFullyPaid && !pendingPayment && (
           <View style={styles.methodSelectorWrap}>
             <View style={styles.methodSelectorHeader}>
               <Wallet size={16} color="#0D7A53" />
               <Text style={styles.methodSelectorTitle}>
                 {isDpPaidStage
-                  ? `Pilih Metode Pelunasan (Sisa ${rp(remainingAmount)})`
-                  : "Pilih Metode Pembayaran"}
+                  ? `Detail Pelunasan (Sisa ${rp(remainingAmount)})`
+                  : "Detail Metode Pembayaran"}
               </Text>
             </View>
-            <View style={styles.methodTabsRow}>
-              {[
-                { id: "qris", label: "QRIS", icon: QrCode },
-                { id: "bca_va", label: "BCA VA", icon: CreditCard },
-                { id: "mandiri_va", label: "Mandiri VA", icon: CreditCard },
-                { id: "bank_transfer", label: "Transfer Bank", icon: Wallet },
-              ].map((tab) => {
-                const TabIcon = tab.icon;
-                const active = selectedPelunasanMethod === tab.id;
-                return (
-                  <TouchableOpacity
-                    key={tab.id}
-                    style={[styles.methodTabBtn, active && styles.methodTabBtnActive]}
-                    onPress={() => setSelectedPelunasanMethod(tab.id as any)}
-                    activeOpacity={0.75}
-                  >
-                    <TabIcon size={14} color={active ? "#FFFFFF" : "#475569"} />
-                    <Text style={[styles.methodTabText, active && styles.methodTabTextActive]}>
-                      {tab.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+
+            {/* Selected Method Display */}
+            <View style={styles.cateringSelectedMethodBox}>
+              <View style={[styles.methodIconBadge, { backgroundColor: "#E8F5EE" }]}>
+                {selectedPelunasanMethod === "qris" ? (
+                  <QrCode size={22} color="#0D7A53" />
+                ) : selectedPelunasanMethod.includes("va") ? (
+                  <CreditCard size={22} color="#0060AF" />
+                ) : (
+                  <Wallet size={22} color="#D97706" />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cateringSelectedMethodTitle}>
+                  {selectedPelunasanMethod === "qris"
+                    ? "QRIS Standar Nasional"
+                    : selectedPelunasanMethod === "bca_va"
+                    ? "BCA Virtual Account"
+                    : selectedPelunasanMethod === "mandiri_va"
+                    ? "Mandiri Virtual Account"
+                    : "Transfer Rekening Bank BCA"}
+                </Text>
+                <Text style={styles.cateringSelectedMethodDesc}>
+                  {selectedPelunasanMethod === "qris"
+                    ? "Scan QR via BCA, Livin, GoPay, OVO, DANA dll"
+                    : selectedPelunasanMethod.includes("va")
+                    ? "Transfer instan otomatis verifikasi"
+                    : "Transfer manual ke rekening resmi catering"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.cateringChangeMethodBtn}
+                onPress={handleOpenMethodPicker}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.cateringChangeMethodBtnText}>Ganti</Text>
+              </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={styles.cateringChangeMethodFullRow}
+              onPress={handleOpenMethodPicker}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.cateringChangeMethodFullText}>Ganti Metode Pembayaran</Text>
+              <ChevronRight size={16} color="#0D7A53" />
+            </TouchableOpacity>
+
+            {/* Decouple Payment CTA: Only starts instructions when clicked */}
+            {!showPaymentInstructions && (
+              <View style={{ marginTop: 12 }}>
+                <TouchableOpacity
+                  style={styles.cateringPrimaryPayBtn}
+                  onPress={handleStartPayment}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.cateringPrimaryPayBtnText}>
+                    Lakukan Pembayaran • {rp(currentPayAmount)}
+                  </Text>
+                  <ChevronRight size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
-        {/* 4. Payment Instruction Card by Selected Method */}
-        {!isOrderFullyPaid && !pendingPayment && (
+        {/* 4. Payment Instruction Card by Selected Method (Only visible after Lakukan Pembayaran is pressed) */}
+        {!isOrderFullyPaid && !pendingPayment && showPaymentInstructions && (
           <>
+            <View style={{ marginBottom: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>Instruksi Pembayaran</Text>
+              <TouchableOpacity onPress={handleOpenMethodPicker} activeOpacity={0.7}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#0D7A53" }}>Ganti Metode Pembayaran</Text>
+              </TouchableOpacity>
+            </View>
             {/* OPTION A: QRIS */}
             {selectedPelunasanMethod === "qris" && (
               <View style={styles.qrisCard}>
@@ -1339,6 +1445,140 @@ export const CustomerCateringQrisPaymentScreen: React.FC<CustomerCateringQrisPay
             <Text style={styles.lightboxFooterText}>
               Nominal: {rp(proposedAmount)} • Diajukan: {submissionDate}
             </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: Payment Method Picker Bottom Sheet */}
+      {/* ========================================================================= */}
+      <Modal
+        visible={showMethodPickerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCancelMethodPicker}
+      >
+        <View style={styles.sheetOverlay}>
+          <TouchableOpacity
+            style={styles.sheetBackdropTouch}
+            activeOpacity={1}
+            onPress={handleCancelMethodPicker}
+          />
+
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Ubah Metode Pembayaran</Text>
+                <Text style={styles.sheetInstruction}>
+                  Pilih metode pembayaran yang diinginkan untuk catering ini.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.sheetCloseBtn}
+                onPress={handleCancelMethodPicker}
+              >
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 10, marginVertical: 14 }}>
+              {[
+                {
+                  id: "qris" as const,
+                  title: "QRIS Standar Nasional",
+                  desc: "Scan QR via m-Banking atau E-Wallet",
+                  icon: <QrCode size={20} color="#0D7A53" />,
+                  badge: "Instan",
+                },
+                {
+                  id: "bca_va" as const,
+                  title: "BCA Virtual Account",
+                  desc: "Transfer via ATM, m-BCA, KlikBCA",
+                  icon: <CreditCard size={20} color="#0060AF" />,
+                  badge: "Otomatis",
+                },
+                {
+                  id: "mandiri_va" as const,
+                  title: "Mandiri Virtual Account",
+                  desc: "Transfer via Livin by Mandiri & ATM",
+                  icon: <CreditCard size={20} color="#0060AF" />,
+                  badge: "Otomatis",
+                },
+                {
+                  id: "bank_transfer" as const,
+                  title: "Transfer Rekening Bank BCA",
+                  desc: "Transfer manual ke rekening resmi catering",
+                  icon: <Wallet size={20} color="#D97706" />,
+                  badge: "Verifikasi Manual",
+                },
+              ].map((item) => {
+                const isSelected = tempSelectedMethod === item.id;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.methodOptionItem,
+                      isSelected && styles.methodOptionItemSelected,
+                    ]}
+                    onPress={() => setTempSelectedMethod(item.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.methodOptionIconBox,
+                        isSelected && { backgroundColor: "#E8F5EE" },
+                      ]}
+                    >
+                      {item.icon}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={styles.methodOptionTitle}>{item.title}</Text>
+                        <View style={styles.methodOptionTag}>
+                          <Text style={styles.methodOptionTagText}>{item.badge}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.methodOptionDesc}>{item.desc}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.methodRadioCircle,
+                        isSelected && styles.methodRadioCircleActive,
+                      ]}
+                    >
+                      {isSelected && <View style={styles.methodRadioDot} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+              <TouchableOpacity
+                style={styles.methodPickerCancelBtn}
+                onPress={handleCancelMethodPicker}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.methodPickerCancelText}>Batal</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.methodPickerConfirmBtn}
+                onPress={handleConfirmMethodChange}
+                disabled={updatingMethod}
+                activeOpacity={0.85}
+              >
+                {updatingMethod ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.methodPickerConfirmText}>
+                    Lanjutkan Ubah Metode Pembayaran
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -2382,4 +2622,163 @@ const styles = StyleSheet.create({
     color: "#E2E8F0",
     fontWeight: "600",
   },
+
+  methodIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cateringSelectedMethodBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 12,
+    marginBottom: 8,
+  },
+  cateringSelectedMethodTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  cateringSelectedMethodDesc: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  cateringChangeMethodBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#E8F5EE",
+  },
+  cateringChangeMethodBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  cateringChangeMethodFullRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  cateringChangeMethodFullText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  cateringPrimaryPayBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0D7A53",
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  cateringPrimaryPayBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  methodOptionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    gap: 12,
+  },
+  methodOptionItemSelected: {
+    borderColor: "#0D7A53",
+    backgroundColor: "#F0FDF4",
+  },
+  methodOptionIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  methodOptionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  methodOptionDesc: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  methodOptionTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: "#E2E8F0",
+  },
+  methodOptionTagText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  methodRadioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  methodRadioCircleActive: {
+    borderColor: "#0D7A53",
+  },
+  methodRadioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#0D7A53",
+  },
+  methodPickerCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  methodPickerCancelText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  methodPickerConfirmBtn: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#0D7A53",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  methodPickerConfirmText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
 });
+

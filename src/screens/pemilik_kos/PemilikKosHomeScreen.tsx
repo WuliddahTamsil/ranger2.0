@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -79,6 +79,7 @@ const DEFAULT_FALLBACK_UNITS: PartnerUnit[] = [
 ];
 
 export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("beranda");
 
   // Helper to construct partner units dynamically from authAccount / kostProperty
@@ -886,7 +887,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
       </ScrollView>
 
       {/* Bottom Navigation Bar */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <TouchableOpacity style={styles.navTab} onPress={() => setActiveTab("beranda")} activeOpacity={0.7}>
           <Home size={22} color={activeTab === "beranda" ? "#0D7A53" : "#9CA3AF"} />
           <Text style={[styles.navText, activeTab === "beranda" && styles.navTextActive]}>Beranda</Text>
@@ -1615,7 +1616,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   gridActionCard: {
-    width: "48%",
+    flex: 1,
+    minWidth: 140,
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     padding: 14,
@@ -1655,10 +1657,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
   },
   actionHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 1,
     gap: 8,
   },
   actionIconCircle: {
@@ -1672,6 +1677,7 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: "800",
     color: "#0F172A",
+    flexShrink: 1,
   },
   badgeGreen: {
     backgroundColor: "#DCFCE7",
@@ -1695,9 +1701,11 @@ const styles = StyleSheet.create({
   },
   btnOrangePill: {
     backgroundColor: "#FF6500",
+    minHeight: 36,
     paddingVertical: 8,
     borderRadius: 8,
     alignItems: "center",
+    justifyContent: "center",
     alignSelf: "flex-start",
     paddingHorizontal: 14,
     marginTop: 4,
@@ -1706,6 +1714,7 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: "800",
     color: "#FFFFFF",
+    textAlign: "center",
   },
   seeAllLink: {
     flexDirection: "row",
@@ -1724,18 +1733,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
-    paddingVertical: 8,
+    paddingTop: 8,
+    minHeight: 56,
   },
   navTab: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
+    paddingVertical: 2,
+    gap: 2,
   },
   navText: {
     fontSize: 10,
     color: "#9CA3AF",
     fontWeight: "600",
+    textAlign: "center",
   },
   navTextActive: {
     color: "#0D7A53",

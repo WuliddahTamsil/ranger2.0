@@ -1306,7 +1306,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           onClose={() => setPaymentModalVisible(false)}
           orderId={currentRide._id}
           orderModel="RideOrder"
-          amount={currentRide.totalAmount || currentRide.estimatedFare || 8000}
+          amount={currentRide.totalAmount || (currentRide as any)?.finalAmount || currentRide.estimatedFare || 9500}
           onPaymentSuccess={(payment) => {
             setCurrentRide((prev: any) => prev ? { ...prev, paymentStatus: payment.status, paymentMethod: payment.paymentMethod } : prev);
             setPaymentModalVisible(false);

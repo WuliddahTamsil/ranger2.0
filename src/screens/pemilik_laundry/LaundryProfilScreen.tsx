@@ -14,6 +14,7 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -562,15 +563,23 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
         {/* Group LAINNYA */}
         <Text style={styles.sectionTitle}>LAINNYA</Text>
         <View style={styles.groupCard}>
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.7}>
-            <View style={[styles.iconBg, { backgroundColor: "#F3F4F6" }]}>
-              <HelpCircle size={18} color="#4B5563" />
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => Linking.openURL("https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20mitra%20laundry%20butuh%20bantuan.").catch(() => {})}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconBg, { backgroundColor: "#DCFCE7" }]}>
+              <HelpCircle size={18} color="#15803D" />
             </View>
-            <Text style={styles.menuText}>Pusat Bantuan & Panduan Mitra</Text>
+            <Text style={styles.menuText}>Pusat Bantuan & CS WhatsApp</Text>
             <ChevronRight size={18} color="#9CA3AF" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.menuRow, { borderBottomWidth: 0 }]} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={[styles.menuRow, { borderBottomWidth: 0 }]}
+            onPress={() => Alert.alert("Kebijakan & Privasi", "Data akun, dokumen legalitas, dan riwayat pesanan laundry Anda dienkripsi dengan standar keamanan tinggi sesuai pedoman platform GEOVERSE.")}
+            activeOpacity={0.7}
+          >
             <View style={[styles.iconBg, { backgroundColor: "#F3F4F6" }]}>
               <Shield size={18} color="#4B5563" />
             </View>

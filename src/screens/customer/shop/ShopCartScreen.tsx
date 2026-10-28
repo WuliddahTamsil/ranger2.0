@@ -7,6 +7,7 @@ import {
   TextInput,
   StyleSheet,
   useWindowDimensions,
+  Alert,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -18,6 +19,7 @@ import {
   ShoppingBag,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
+import { AuthAccount } from "../../auth/authTypes";
 import { useShopCart } from "../../../context/ShopCartContext";
 import { CartItemCard } from "../../../components/shop/CartItemCard";
 import { SubstitutionSelector } from "../../../components/shop/SubstitutionSelector";
@@ -25,7 +27,11 @@ import { EmptyState } from "../../../components/shop/EmptyState";
 import { ConflictStoreModal } from "../../../components/shop/ConflictStoreModal";
 import { rp } from "../../../utils/formatters";
 
-export const ShopCartScreen: React.FC<Nav> = ({ navigate }) => {
+interface ShopCartScreenProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const ShopCartScreen: React.FC<ShopCartScreenProps> = ({ navigate, authAccount }) => {
   const { width } = useWindowDimensions();
   const isLarge = width >= 768;
 
@@ -66,6 +72,28 @@ export const ShopCartScreen: React.FC<Nav> = ({ navigate }) => {
       </ResponsiveSafeAreaView>
     );
   }
+
+  const handleProceedCheckout = () => {
+    if (!authAccount?.id) {
+      Alert.alert(
+        "Masuk ke Akun Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk melanjutkan checkout dan menyelesaikan pesanan belanja.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk Sekarang",
+            onPress: () =>
+              navigate("login", {
+                targetScreen: "c_shop_checkout",
+                reason: "Masuk ke akun GEOVERSE untuk menyelesaikan pesanan belanja Anda.",
+              }),
+          },
+        ]
+      );
+      return;
+    }
+    navigate("c_shop_checkout");
+  };
 
   return (
     <ResponsiveSafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -178,7 +206,7 @@ export const ShopCartScreen: React.FC<Nav> = ({ navigate }) => {
         </View>
         <TouchableOpacity
           style={styles.checkoutBtn}
-          onPress={() => navigate("c_shop_checkout")}
+          onPress={handleProceedCheckout}
           activeOpacity={0.88}
         >
           <Text style={styles.checkoutBtnText}>Lanjut ke Checkout</Text>

@@ -93,8 +93,9 @@ const resolveApiBaseUrl = (): string => {
 export const API_BASE_URL = resolveApiBaseUrl();
 
 export const getApiUrl = (endpoint: string) => {
+  const base = resolveApiBaseUrl();
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  return `${API_BASE_URL}${cleanEndpoint}`;
+  return `${base}${cleanEndpoint}`;
 };
 
 export const updateUserProfile = async (userId: string, profileData: Record<string, unknown>) => {
@@ -530,9 +531,15 @@ export const getMarketplaceOrdersForCustomer = async (customerId: string) => {
   try {
     const authHeaders = await getAuthHeaders(customerId);
     const res = await fetch(getApiUrl(`/marketplace/orders/customer/${customerId}?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
+    if (res.status === 403) {
+      return { success: false, data: [], message: "Aksi hanya tersedia untuk akun pelanggan." };
+    }
     return await readApiJson(res);
-  } catch (err) {
-    console.error("getMarketplaceOrdersForCustomer error:", err);
+  } catch (err: any) {
+    if (err?.message?.includes("Aksi ini hanya tersedia untuk akun pelanggan") || err?.message?.includes("403")) {
+      return { success: false, data: [], message: err.message };
+    }
+    console.warn("getMarketplaceOrdersForCustomer warning:", err instanceof Error ? err.message : err);
     return { success: false, data: [], message: err instanceof Error ? err.message : "Gagal mengambil pesanan Marketplace" };
   }
 };
@@ -854,9 +861,15 @@ export const getCateringOrdersForCustomer = async (customerId: string) => {
   try {
     const authHeaders = await getAuthHeaders(customerId);
     const res = await fetch(getApiUrl(`/catering/orders/customer/${customerId}`), { headers: authHeaders, cache: "no-store" });
+    if (res.status === 403) {
+      return { success: false, data: [], message: "Aksi hanya tersedia untuk akun pelanggan." };
+    }
     return await readApiJson(res);
-  } catch (err) {
-    console.error("getCateringOrdersForCustomer error:", err);
+  } catch (err: any) {
+    if (err?.message?.includes("Aksi ini hanya tersedia untuk akun pelanggan") || err?.message?.includes("403")) {
+      return { success: false, data: [], message: err.message };
+    }
+    console.warn("getCateringOrdersForCustomer warning:", err instanceof Error ? err.message : err);
     return { success: false, data: [], message: err instanceof Error ? err.message : "Gagal mengambil pesanan Catering" };
   }
 };
@@ -1077,7 +1090,7 @@ export const getChatConversations = async (
                 customerId: convRes.data.customerId,
                 customerName:
                   lastMsg?.sender === "customer"
-                    ? lastMsg.senderName || "Wuwu Customer"
+                    ? lastMsg.senderName || "Pelanggan"
                     : "Pelanggan",
                 driverId: convRes.data.driverId,
                 driverName: "Driver GEOVERSE",
@@ -1181,6 +1194,40 @@ export const deleteUserAccount = async (userId?: string): Promise<{ success: boo
   } catch (error: any) {
     console.error("❌ deleteUserAccount error:", error);
     return { success: false, message: error.message || "Gagal memproses penghapusan akun" };
+  }
+};
+
+export const updateOrderPaymentMethod = async (
+  params: { orderId: string; orderType?: string; paymentMethod: string },
+  userId?: string
+): Promise<{ success: boolean; message: string; data?: any }> => {
+  try {
+    const headers = await getAuthHeaders(userId);
+    let res = await fetch(getApiUrl(`/payments/order/${params.orderId}/method`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify(params),
+    });
+
+    if (!res.ok) {
+      res = await fetch(getApiUrl("/payments/update-method"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: JSON.stringify(params),
+      });
+    }
+
+    const data = await readApiJson(res);
+    return data;
+  } catch (error: any) {
+    console.error("❌ updateOrderPaymentMethod error:", error);
+    return { success: false, message: error.message || "Gagal memperbarui metode pembayaran" };
   }
 };
 

@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -92,6 +92,7 @@ interface MarketplaceHomeProps extends Nav {
 }
 
 export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState<number>(0);
   const [voucherModalVisible, setVoucherModalVisible] = useState(false);
 
@@ -856,7 +857,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
     { label: "Beranda", icon: Home },
     { label: "Order", icon: ShoppingBag },
     { label: "Riwayat", icon: HistoryIcon },
-    { label: "Pendapatan", icon: Wallet },
+    { label: "Keuangan", icon: Wallet },
     { label: "Profil", icon: UserIcon },
   ];
 
@@ -880,7 +881,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
               <Text style={styles.outletStatusLabel}>
                 {storeInfo.isOpen ? "OUTLET AKTIF" : "OUTLET NONAKTIF"}
               </Text>
-              <Text style={styles.storeNameText} numberOfLines={1} ellipsizeMode="tail">{storeInfo.storeName}</Text>
+              <Text style={styles.storeNameText} numberOfLines={2}>{storeInfo.storeName}</Text>
             </View>
             <TouchableOpacity 
               style={styles.outletToggleBtn} 
@@ -937,7 +938,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
             activeOpacity={0.8}
           >
             <Wallet size={18} color="#1B7A4E" />
-            <Text style={styles.summaryValue} numberOfLines={1}>{rp(totalRevenueVal)}</Text>
+            <Text style={styles.summaryValue} numberOfLines={2}>{rp(totalRevenueVal)}</Text>
             <Text style={styles.summaryLabel}>Pendapatan - Tercatat</Text>
           </TouchableOpacity>
 
@@ -1540,7 +1541,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
       <View style={styles.tabContentContainer}>{renderTabContent()}</View>
 
       {/* Custom Bottom Nav Bar */}
-      <View style={styles.bottomNavContainer}>
+      <View style={[styles.bottomNavContainer, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         {navItems.map((item, index) => {
           const active = currentTab === index;
           const IconComp = item.icon;
@@ -1554,7 +1555,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
               <View style={[styles.navIconBg, active ? styles.navIconBgActive : null]}>
                 <IconComp size={20} color={active ? "#1B7A4E" : "#9CA3AF"} />
               </View>
-              <Text style={[styles.navLabel, active ? styles.navLabelActive : null]}>
+              <Text style={[styles.navLabel, active ? styles.navLabelActive : null]} numberOfLines={1}>
                 {item.label}
               </Text>
             </TouchableOpacity>
@@ -2212,20 +2213,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomNavContainer: {
-    height: 72,
+    minHeight: 56,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    paddingBottom: 6,
+    paddingTop: 6,
+    paddingHorizontal: 8,
   },
   navItem: {
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
-    height: "100%",
+    paddingVertical: 2,
   },
   navIconBg: {
     paddingHorizontal: 12,
@@ -2239,10 +2241,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(27, 122, 78, 0.12)",
   },
   navLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "500",
     color: "#9CA3AF",
-    marginTop: 3,
+    marginTop: 2,
+    textAlign: "center",
   },
   navLabelActive: {
     color: "#1B7A4E",

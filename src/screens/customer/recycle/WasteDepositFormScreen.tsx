@@ -30,12 +30,17 @@ import {
   AlertTriangle,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
+import { AuthAccount } from "../../auth/authTypes";
 import { useRecycle } from "../../../context/RecycleContext";
 import { createWasteDeposit } from "../../../services/recycleService";
 import { WasteDepositUI } from "../../../types/recycleTypes";
 import { checkBankOperationalStatus } from "../../../utils/bankOperationalUtils";
 
-export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
+interface WasteDepositFormScreenProps extends Nav {
+  authAccount?: AuthAccount | null;
+}
+
+export const WasteDepositFormScreen: React.FC<WasteDepositFormScreenProps> = ({ navigate, authAccount }) => {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
@@ -93,6 +98,24 @@ export const WasteDepositFormScreen: React.FC<Nav> = ({ navigate }) => {
     if (method === "PICKUP") {
       navigate("c_recycle_pickup_schedule");
     } else {
+      if (!authAccount?.id) {
+        Alert.alert(
+          "Masuk ke Akun Diperlukan",
+          "Silakan masuk ke akun GEOVERSE Anda untuk membuat tiket setoran sampah.",
+          [
+            { text: "Batal", style: "cancel" },
+            {
+              text: "Masuk Sekarang",
+              onPress: () =>
+                navigate("login", {
+                  targetScreen: "c_recycle_deposit_form",
+                  reason: "Masuk ke akun GEOVERSE untuk membuat tiket setoran sampah Kanyaah Recycle.",
+                }),
+            },
+          ]
+        );
+        return;
+      }
       // DROP_OFF direct submit
       setSubmitting(true);
       try {

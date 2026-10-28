@@ -7,6 +7,13 @@ export const getResponsiveGutter = (width: number) => clamp(width * 0.05, 16, 24
 
 export const getResponsiveScale = (width: number) => clamp(width / 390, 0.9, 1.08);
 
+export const MAX_FONT_SCALE_MULTIPLIER = 1.15;
+
+export const scaleFont = (fontSize: number, width: number) => {
+  const fontRatio = clamp(width / 390, 0.88, 1.05);
+  return Math.round(fontSize * fontRatio);
+};
+
 export const useResponsiveLayout = () => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -18,8 +25,11 @@ export const useResponsiveLayout = () => {
     isLargePhone: width >= 430,
     gutter: getResponsiveGutter(width),
     scale: getResponsiveScale(width),
+    fontScaleLimit: MAX_FONT_SCALE_MULTIPLIER,
     topInset: insets.top,
     bottomInset: insets.bottom,
     safeBottom: insets.bottom + 16,
+    scaleText: (size: number) => scaleFont(size, width),
   };
 };
+

@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
-import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, UserPlus } from "lucide-react-native";
+import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, UserPlus } from "lucide-react-native";
 import { Nav } from "../../types";
 import { GoogleCredential } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
@@ -27,15 +27,31 @@ WebBrowser.maybeCompleteAuthSession();
 interface Props extends Nav {
   onLogin: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   onGoogleLogin: (credential: GoogleCredential) => Promise<void>;
+  loginReason?: string;
+  onCancel?: () => void;
 }
 
-export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin }) => {
+export const LoginScreen: React.FC<Props> = ({
+  navigate,
+  onLogin,
+  onGoogleLogin,
+  loginReason,
+  onCancel,
+}) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    } else {
+      navigate("c_home");
+    }
+  };
 
   const submit = async () => {
     setError("");
@@ -69,10 +85,45 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.cardContainer}>
+            {/* Top Navigation / Cancellation */}
+            <View style={styles.topNavRow}>
+              <TouchableOpacity
+                onPress={handleCancel}
+                activeOpacity={0.7}
+                style={styles.cancelBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Kembali ke beranda"
+              >
+                <ArrowLeft size={16} color={authColors.ink} />
+                <Text style={styles.cancelBtnText}>Kembali</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleCancel}
+                activeOpacity={0.7}
+                style={styles.guestBadgeBtn}
+              >
+                <Text style={styles.guestBadgeText}>Jelajah Tamu</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Header Brand */}
             <View style={styles.brandHeader}>
               <AuthBrand size={44} />
             </View>
+
+            {/* Contextual Reason Banner when login is prompted */}
+            {loginReason ? (
+              <View style={styles.reasonCard}>
+                <View style={styles.reasonIconBox}>
+                  <LockKeyhole size={16} color="#0D7A53" />
+                </View>
+                <View style={styles.reasonTextBox}>
+                  <Text style={styles.reasonTitle}>Fitur Memerlukan Akun</Text>
+                  <Text style={styles.reasonBody}>{loginReason}</Text>
+                </View>
+              </View>
+            ) : null}
 
             {/* Title & Introduction */}
             <View style={styles.heading}>
@@ -183,6 +234,15 @@ export const LoginScreen: React.FC<Props> = ({ navigate, onLogin, onGoogleLogin 
                 <ArrowRight size={14} color={authColors.primary} />
               </TouchableOpacity>
             </View>
+
+            {/* Guest Exploration Action */}
+            <TouchableOpacity
+              onPress={handleCancel}
+              style={styles.guestActionBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.guestActionText}>Lanjut Menjelajah sebagai Tamu</Text>
+            </TouchableOpacity>
 
             {/* Professional Security Footer */}
             <View style={styles.footerWrap}>
@@ -481,5 +541,88 @@ const styles = StyleSheet.create({
     color: authColors.subtle,
     fontSize: 11,
     lineHeight: 16,
+  },
+  topNavRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
+  cancelBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+  },
+  cancelBtnText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: authColors.ink,
+  },
+  guestBadgeBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  guestBadgeText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: authColors.primary,
+  },
+  reasonCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  reasonIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  reasonTextBox: {
+    flex: 1,
+  },
+  reasonTitle: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#166534",
+    marginBottom: 2,
+  },
+  reasonBody: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#15803D",
+  },
+  guestActionBtn: {
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guestActionText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
   },
 });

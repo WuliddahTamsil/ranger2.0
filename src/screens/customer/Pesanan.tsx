@@ -677,6 +677,44 @@ export const Pesanan: React.FC<PesananProps> = ({
     setInvoiceModalVisible(true);
   };
 
+  if (!authAccount?.id) {
+    return (
+      <ResponsiveSafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.title}>Riwayat Pesanan</Text>
+            <Text style={styles.subtitle}>Pantau status pengiriman & histori transaksi Anda</Text>
+          </View>
+        </View>
+
+        <View style={styles.guestOrdersContainer}>
+          <View style={styles.guestOrdersIconCircle}>
+            <Package size={42} color="#0D7A53" />
+          </View>
+          <Text style={styles.guestOrdersTitle}>Masuk untuk Melihat Riwayat Pesanan</Text>
+          <Text style={styles.guestOrdersSub}>
+            Masuk ke akun GEOVERSE Anda untuk memantau status pesanan, pelacakan kurir, dan riwayat belanja secara real-time.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.guestOrdersLoginBtn}
+            onPress={() =>
+              navigate?.("login", {
+                targetScreen: "c_home",
+                targetParams: { tab: 2 },
+                reason: "Masuk ke akun GEOVERSE untuk melihat dan mengelola pesanan Anda.",
+              })
+            }
+            activeOpacity={0.85}
+          >
+            <Text style={styles.guestOrdersLoginBtnText}>Masuk ke Akun</Text>
+            <ChevronRight size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </ResponsiveSafeAreaView>
+    );
+  }
+
   const currentList = getFilteredOrders();
 
   return (
@@ -2260,6 +2298,7 @@ const styles = StyleSheet.create({
   },
   cardHeaderTopRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 8,
@@ -2280,6 +2319,7 @@ const styles = StyleSheet.create({
   },
   cardHeaderRightBadges: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 6,
     flexShrink: 1,
@@ -2290,7 +2330,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3.5,
     borderRadius: 6,
     borderWidth: 1,
-    maxWidth: 150,
+    flexShrink: 1,
   },
   statusBadgeText: {
     fontSize: 10,
@@ -2308,6 +2348,7 @@ const styles = StyleSheet.create({
   },
   cardHeaderSubRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 8,
@@ -2392,8 +2433,10 @@ const styles = StyleSheet.create({
   },
   paymentReminderHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 6,
   },
   paymentReminderTitle: {
     color: "#9A3412",
@@ -2466,8 +2509,10 @@ const styles = StyleSheet.create({
   },
   cardPriceRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 8,
     marginBottom: 10,
   },
   priceLabelBox: {
@@ -3552,5 +3597,58 @@ const styles = StyleSheet.create({
     color: "#166534",
     marginTop: 6,
     lineHeight: 16,
+  },
+  guestOrdersContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    paddingVertical: 40,
+  },
+  guestOrdersIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: "#86EFAC",
+  },
+  guestOrdersTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  guestOrdersSub: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: "#64748B",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  guestOrdersLoginBtn: {
+    backgroundColor: "#0D7A53",
+    width: "100%",
+    maxWidth: 280,
+    height: 48,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#0D7A53",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  guestOrdersLoginBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14.5,
+    fontWeight: "700",
   },
 });

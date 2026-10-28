@@ -1093,14 +1093,14 @@ const getAllPlatformTransactions = async (req, res) => {
     const ShopOrder = require("../models/ShopOrder");
 
     const [marketplaceOrders, cateringOrders, laundryOrders, bookings, wasteDeposits, rideOrders, sendOrders, shopOrders] = await Promise.all([
-      MarketplaceOrder.find().sort({ createdAt: -1 }).limit(30),
-      CateringOrder.find().sort({ createdAt: -1 }).limit(30),
-      LaundryOrder.find().sort({ createdAt: -1 }).limit(30),
-      Booking.find().sort({ createdAt: -1 }).limit(30),
-      WasteDeposit.find().populate("customerId", "name").sort({ createdAt: -1 }).limit(30),
-      RideOrder.find().sort({ createdAt: -1 }).limit(30),
-      SendOrder.find().sort({ createdAt: -1 }).limit(30),
-      ShopOrder.find().sort({ createdAt: -1 }).limit(30),
+      MarketplaceOrder.find().select("orderNumber storeName customerName totalAmount status createdAt").sort({ createdAt: -1 }).limit(30),
+      CateringOrder.find().select("orderNumber restaurantName customerName totalAmount status createdAt").sort({ createdAt: -1 }).limit(30),
+      LaundryOrder.find().select("orderCode storeName serviceName customerName totalAmount status createdAt").sort({ createdAt: -1 }).limit(30),
+      Booking.find().select("bookingCode kostName customerName totalAmount status createdAt").sort({ createdAt: -1 }).limit(30),
+      WasteDeposit.find().select("depositCode categories actualTotalWeightKg estimatedTotalWeightKg finalRupiah estimatedRupiah status createdAt customerId").populate("customerId", "name").sort({ createdAt: -1 }).limit(30),
+      RideOrder.find().select("orderCode customerName fare totalFare status createdAt").sort({ createdAt: -1 }).limit(30),
+      SendOrder.find().select("orderCode customerName fare totalFare status createdAt").sort({ createdAt: -1 }).limit(30),
+      ShopOrder.find().select("orderCode storeName items customerName finalAmount totalAmount status createdAt").sort({ createdAt: -1 }).limit(30),
     ]);
 
     const allTx = [

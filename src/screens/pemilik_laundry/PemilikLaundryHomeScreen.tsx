@@ -235,7 +235,7 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
               <View style={[styles.statusDotInner, { backgroundColor: storeInfo?.isOpen !== false ? "#16A34A" : "#DC2626" }]} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.storeStatusTitle} numberOfLines={1}>
+              <Text style={styles.storeStatusTitle} numberOfLines={2}>
                 {storeInfo?.storeName || authAccount?.roleData?.businessName || (authAccount?.name ? `${authAccount.name} Laundry` : "Outlet Laundry")}
               </Text>
               <Text style={styles.storeStatusSub}>

@@ -122,9 +122,9 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
   const [expandedRoomNumber, setExpandedRoomNumber] = useState<string | null>(null);
 
   // Form Booking State
-  const [tenantName, setTenantName] = useState(authAccount?.name || "Aisyah Putri");
-  const [phone, setPhone] = useState(authAccount?.phone || "081298765432");
-  const [email, setEmail] = useState(authAccount?.email || "aisyahphr@gmail.com");
+  const [tenantName, setTenantName] = useState(authAccount?.name || "");
+  const [phone, setPhone] = useState(authAccount?.phone || "");
+  const [email, setEmail] = useState(authAccount?.email || "");
   const [startDate, setStartDate] = useState("2026-09-01");
   const [durationMonths, setDurationMonths] = useState("1");
   const [nightCount, setNightCount] = useState("1");
@@ -549,6 +549,24 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
 
   const saveBookingOrder = async () => {
     if (orderCreated) return;
+    if (!authAccount?.id) {
+      Alert.alert(
+        "Masuk ke Akun Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk melakukan reservasi atau pemesanan penginapan.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk Sekarang",
+            onPress: () =>
+              navigate("login", {
+                targetScreen: "c_kos",
+                reason: "Masuk ke akun GEOVERSE untuk memesan akomodasi atau tiket wisata.",
+              }),
+          },
+        ]
+      );
+      return;
+    }
     if (!proofImage) {
       Alert.alert(
         "Unggah Bukti Pembayaran",
@@ -617,9 +635,9 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
       _id: `booking_${Date.now()}`,
       bookingCode: `${orderPrefix}-${Date.now().toString().slice(-6)}`,
       categoryType: categoryType,
-      customerName: tenantName || authAccount?.name || "Customer",
-      customerPhone: phone || authAccount?.phone || "081234567890",
-      customerEmail: email || authAccount?.email || "customer@geoverse.id",
+      customerName: tenantName || authAccount?.name || "Pelanggan",
+      customerPhone: phone || authAccount?.phone || "",
+      customerEmail: email || authAccount?.email || "",
       kostId: kostData?._id || "",
       kostName: kostData?.name || "Properti Pilihan",
       kostAddress: kostData?.address,
@@ -657,7 +675,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
     // Persist real booking to backend MongoDB database if kostId exists
     if (kostData?._id) {
       createKostBooking({
-        customerId: authAccount?.id || authAccount?.email || "customer_1",
+        customerId: authAccount?.id || authAccount?.email || "",
         kostId: String(kostData._id),
         categoryType: categoryType,
         roomId: selectedRoom?._id || selectedHotelRoom?.roomId || selectedWisataTicket?.ticketId,
@@ -701,7 +719,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
       let createdBookingId = `booking_${Date.now()}`;
       if (kostData?._id) {
         const createRes = await createKostBooking({
-          customerId: authAccount?.id || authAccount?.email || "customer_1",
+          customerId: authAccount?.id || authAccount?.email || "",
           kostId: String(kostData._id),
           categoryType: categoryType,
           roomId: selectedRoom?._id || selectedHotelRoom?.roomId || selectedWisataTicket?.ticketId,
@@ -711,9 +729,9 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
               : categoryType === "wisata"
               ? selectedWisataTicket?.ticketName || "Tiket Masuk"
               : selectedRoom?.roomNumber || "101",
-          customerName: tenantName || "Customer",
-          customerPhone: phone || "081234567890",
-          customerEmail: email || "customer@geoverse.id",
+          customerName: tenantName || authAccount?.name || "Pelanggan",
+          customerPhone: phone || authAccount?.phone || "",
+          customerEmail: email || authAccount?.email || "",
           entryDate: startDate || new Date().toISOString(),
           checkOutDate: categoryType === "hotel" ? calculatedCheckOutIso : undefined,
           guestCount: categoryType === "hotel" ? (parseInt(guestCount) || 2) : undefined,
@@ -774,9 +792,9 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         _id: createdBookingId,
         bookingCode: bookingCode,
         categoryType: categoryType,
-        customerName: tenantName || authAccount?.name || "Customer",
-        customerPhone: phone || authAccount?.phone || "081234567890",
-        customerEmail: email || authAccount?.email || "customer@geoverse.id",
+        customerName: tenantName || authAccount?.name || "Pelanggan",
+        customerPhone: phone || authAccount?.phone || "",
+        customerEmail: email || authAccount?.email || "",
         kostId: kostData?._id || "",
         kostName: kostData?.name || "Properti Pilihan",
         kostAddress: kostData?.address,
@@ -1759,7 +1777,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                       ? "Kebijakan Pembatalan DP Reservasi (H-3)"
                       : "Kebijakan Pembatalan DP Sewa Kos (H-3)"}
                   </Text>
-                  <Text style={{ fontSize: 11, color: categoryType === "wisata" ? "#92400E" : "#166534", lineHeight: 15, marginTop: 2 }}>
+                  <Text style={{ fontSize: 11, color: categoryType === "wisata" ? "#92400E" : "#166534", lineHeight: 16, marginTop: 2, textAlign: "justify" }}>
                     {categoryType === "wisata"
                       ? "Tiket masuk resmi berlaku khusus pada tanggal kunjungan yang dipilih. Pastikan menunjukkan E-Ticket di loket masuk wahana."
                       : categoryType === "hotel"
@@ -1777,6 +1795,24 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                   categoryType === "wisata" && { backgroundColor: "#D97706" },
                 ]}
                 onPress={() => {
+                  if (!authAccount?.id) {
+                    Alert.alert(
+                      "Masuk ke Akun Diperlukan",
+                      "Silakan masuk ke akun GEOVERSE Anda untuk melanjutkan pemesanan.",
+                      [
+                        { text: "Batal", style: "cancel" },
+                        {
+                          text: "Masuk Sekarang",
+                          onPress: () =>
+                            navigate("login", {
+                              targetScreen: "c_kos",
+                              reason: "Masuk ke akun GEOVERSE untuk memesan akomodasi atau tiket wisata.",
+                            }),
+                        },
+                      ]
+                    );
+                    return;
+                  }
                   setIsBookingModalOpen(false);
                   setIsPaymentModalOpen(true);
                 }}
@@ -1893,9 +1929,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <Text style={styles.btnPayDpText}>
-                        {categoryType === "wisata"
-                          ? "Bayar Tiket Sekarang (Midtrans Snap)"
-                          : "Bayar DP via Midtrans Snap"}
+                        Lakukan Pembayaran • {rp(dpAmount)}
                       </Text>
                     )}
                   </TouchableOpacity>

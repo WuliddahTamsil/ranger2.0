@@ -51,7 +51,7 @@ export const RoleHeader: React.FC<RoleHeaderProps> = ({
       >
         <View style={styles.titleContainer}>
           <Text style={styles.greetingText} numberOfLines={1}>Halo, {greeting} 🌿</Text>
-          <Text style={[styles.nameText, { fontSize: Math.min(22, Math.max(17, 19 * scale)) }]} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={[styles.nameText, { fontSize: Math.min(20, Math.max(15, 17 * scale)), lineHeight: Math.min(25, Math.max(19, 21 * scale)) }]} numberOfLines={2} ellipsizeMode="tail">
             {name || "Nama Pengguna"}
           </Text>
         </View>

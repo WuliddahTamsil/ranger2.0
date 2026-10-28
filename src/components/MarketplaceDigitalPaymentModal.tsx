@@ -28,7 +28,10 @@ import {
   ChevronUp,
   CreditCard,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
+  Banknote,
+  Check,
 } from "lucide-react-native";
 import Svg, { Rect } from "react-native-svg";
 import { toQR } from "toqr";
@@ -36,6 +39,7 @@ import * as Clipboard from "expo-clipboard";
 import { rp } from "../utils/formatters";
 import { simulateMarketplacePayment } from "../services/api";
 import { simulateShopPayment } from "../services/shopService";
+import { updateOrderPaymentMethod } from "../services/paymentService";
 import { ToastBanner, ToastType } from "./CustomDialog";
 import { AuthAccount } from "../screens/auth/authTypes";
 
@@ -47,6 +51,54 @@ interface MarketplaceDigitalPaymentModalProps {
   authAccount?: AuthAccount | null;
 }
 
+type ModalView = "DETAIL" | "METHOD_PICKER" | "INSTRUCTION";
+
+interface PaymentOption {
+  id: string;
+  name: string;
+  desc: string;
+  category: "QRIS" | "VA" | "EWALLET" | "CASH";
+  color: string;
+}
+
+const AVAILABLE_PAYMENT_OPTIONS: PaymentOption[] = [
+  {
+    id: "qris",
+    name: "QRIS Nasional",
+    desc: "Scan QR lewat BCA, Mandiri, GoPay, OVO, DANA, ShopeePay",
+    category: "QRIS",
+    color: "#E11D48",
+  },
+  {
+    id: "bca_va",
+    name: "BCA Virtual Account",
+    desc: "Transfer via BCA Mobile, KlikBCA, atau ATM BCA",
+    category: "VA",
+    color: "#0060AF",
+  },
+  {
+    id: "mandiri_va",
+    name: "Mandiri Virtual Account",
+    desc: "Transfer via Livin' by Mandiri atau ATM Mandiri",
+    category: "VA",
+    color: "#003366",
+  },
+  {
+    id: "gopay",
+    name: "GoPay / E-Wallet",
+    desc: "Pembayaran instan langsung lewat aplikasi GoPay",
+    category: "EWALLET",
+    color: "#00AED6",
+  },
+  {
+    id: "cash",
+    name: "Bayar di Tempat (COD / Tunai)",
+    desc: "Bayar tunai kepada kurir saat barang sampai",
+    category: "CASH",
+    color: "#10B981",
+  },
+];
+
 export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentModalProps> = ({
   visible,
   onClose,
@@ -54,6 +106,11 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
   onPaymentSuccess,
   authAccount,
 }) => {
+  const [currentView, setCurrentView] = useState<ModalView>("DETAIL");
+  const [selectedMethod, setSelectedMethod] = useState<string>("qris");
+  const [tempSelectedMethod, setTempSelectedMethod] = useState<string>("qris");
+  const [updatingMethod, setUpdatingMethod] = useState<boolean>(false);
+
   const [secondsRemaining, setSecondsRemaining] = useState(900); // 15 minutes
   const [copied, setCopied] = useState<string | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -73,15 +130,14 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
 
   const orderCode = order?.orderCode || order?.id || "RNG-MKT";
   const amount = Number(order?.totalAmount || order?.total || 0);
-  const paymentMethod = String(order?.paymentMethod || "qris").toLowerCase();
-  const paymentDetails = order?.paymentDetails || {};
-  const isQris = paymentMethod === "qris";
-  const isVa = paymentMethod.includes("va") || paymentMethod.includes("bca") || paymentMethod.includes("mandiri") || paymentMethod.includes("bni") || paymentMethod.includes("bri");
-  const isEwallet = ["gopay", "dana", "ovo", "shopeepay"].includes(paymentMethod);
 
   // Initialize and countdown timer
   useEffect(() => {
     if (visible) {
+      const initialMethod = String(order?.paymentMethod || "qris").toLowerCase();
+      setSelectedMethod(initialMethod);
+      setTempSelectedMethod(initialMethod);
+      setCurrentView("DETAIL");
       setIsPaid(order?.paymentStatus === "Lunas" || order?.paymentStatus === "PAID");
       setSecondsRemaining(900);
       setCopied(null);
@@ -117,6 +173,97 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
     } catch {
       showToast("info", "Disalin", text);
     }
+  };
+
+  // 1. Open method picker (strictly decouples changing method from initiating payment)
+  const handleOpenMethodPicker = () => {
+    setTempSelectedMethod(selectedMethod);
+    setCurrentView("METHOD_PICKER");
+  };
+
+  // 2. Confirm method update WITHOUT starting payment
+  const handleConfirmMethodChange = async () => {
+    if (!tempSelectedMethod) {
+      showToast("error", "Pilih Metode", "Silakan pilih salah satu metode pembayaran.");
+      return;
+    }
+    if (updatingMethod) return;
+
+    try {
+      setUpdatingMethod(true);
+      const targetId = order?._id || order?.id || order?.orderCode;
+      const orderType =
+        order?.orderType ||
+        (String(order?.orderCode || "").includes("SHOP") ? "KANYAAH_SHOP" : "MARKETPLACE");
+
+      if (targetId) {
+        const updateRes = await updateOrderPaymentMethod(
+          {
+            orderId: String(targetId),
+            orderType,
+            paymentMethod: tempSelectedMethod,
+          },
+          authAccount?.id
+        );
+
+        if (!updateRes?.success) {
+          throw new Error(updateRes?.message || "Gagal memperbarui metode pembayaran di server.");
+        }
+      }
+
+      // Update state
+      setSelectedMethod(tempSelectedMethod);
+      if (order) {
+        order.paymentMethod = tempSelectedMethod;
+      }
+      setCurrentView("DETAIL");
+      showToast("success", "Metode Diperbarui", "Metode pembayaran berhasil diubah.");
+    } catch (err: any) {
+      showToast("error", "Gagal Mengubah Metode", err?.message || "Terjadi kesalahan saat memperbarui metode pembayaran.");
+    } finally {
+      setUpdatingMethod(false);
+    }
+  };
+
+  // Cancel picker and keep previous method
+  const handleCancelMethodPicker = () => {
+    setTempSelectedMethod(selectedMethod);
+    setCurrentView("DETAIL");
+  };
+
+  // 3. Explicit payment execution button "Lakukan Pembayaran"
+  const handleExecutePayment = () => {
+    if (!selectedMethod) {
+      showToast("error", "Pilih Metode", "Silakan pilih metode pembayaran terlebih dahulu.");
+      return;
+    }
+    if (amount <= 0) {
+      showToast("error", "Nominal Tidak Valid", "Total tagihan harus lebih dari Rp 0.");
+      return;
+    }
+
+    if (selectedMethod === "cash" || selectedMethod === "cod") {
+      Alert.alert(
+        "Konfirmasi Pembayaran COD",
+        `Pesanan #${orderCode} akan dibayar tunai sebesar ${rp(amount)} saat barang diantar. Lanjutkan?`,
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Konfirmasi COD",
+            onPress: () => {
+              if (onPaymentSuccess) {
+                onPaymentSuccess({ ...order, paymentMethod: "cash", paymentStatus: "Menunggu pembayaran di tempat" });
+              }
+              onClose();
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    // Digital payment -> reveal payment instructions (QR/VA/E-wallet)
+    setCurrentView("INSTRUCTION");
   };
 
   const handleSimulatePayment = async () => {
@@ -161,6 +308,7 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
   };
 
   const handleOpenEwallet = async () => {
+    const paymentDetails = order?.paymentDetails || {};
     const deepLink = paymentDetails.deepLinkUrl;
     if (deepLink) {
       try {
@@ -170,10 +318,10 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
           return;
         }
       } catch {
-        // Continue to fallback
+        // Fallback
       }
     }
-    showToast("info", "Aplikasi E-Wallet", `Buka aplikasi ${paymentMethod.toUpperCase()} di perangkat Anda untuk menyelesaikan pembayaran sebesar ${rp(amount)}.`);
+    showToast("info", "Aplikasi E-Wallet", `Buka aplikasi ${selectedMethod.toUpperCase()} di ponsel Anda untuk membayar sebesar ${rp(amount)}.`);
   };
 
   // Render SVG QR representation
@@ -211,7 +359,7 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
     } catch {
       return (
         <Image
-          source={{ uri: paymentDetails.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrPayload || orderCode)}` }}
+          source={{ uri: order?.paymentDetails?.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrPayload || orderCode)}` }}
           style={styles.qrFallbackImage}
           resizeMode="contain"
         />
@@ -219,9 +367,17 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
     }
   };
 
-  const qrString = paymentDetails.qrString || `00020101021226580016ID.CO.GEOVERSE.WWW0118936009990000010001520454115303360540${String(amount).length}${amount}5802ID5916GEOVERSE RANGERS6008BANDUNG61054013262070703A016304${orderCode}`;
-  const vaNumber = paymentDetails.vaNumber || `12899${String(orderCode).replace(/\D/g, "").slice(-8) || "89201923"}`;
-  const bankName = paymentDetails.bank || paymentMethod.replace("_va", "").toUpperCase() || "BCA";
+  const qrString = order?.paymentDetails?.qrString || `00020101021226580016ID.CO.GEOVERSE.WWW0118936009990000010001520454115303360540${String(amount).length}${amount}5802ID5916GEOVERSE RANGERS6008BANDUNG61054013262070703A016304${orderCode}`;
+  const vaNumber = order?.paymentDetails?.vaNumber || `12899${String(orderCode).replace(/\D/g, "").slice(-8) || "89201923"}`;
+  const bankName = selectedMethod.includes("mandiri") ? "Mandiri" : "BCA";
+
+  const isQris = selectedMethod === "qris";
+  const isVa = selectedMethod.includes("va") || selectedMethod.includes("bca") || selectedMethod.includes("mandiri");
+  const isEwallet = ["gopay", "dana", "ovo", "shopeepay"].includes(selectedMethod);
+  const isCash = selectedMethod === "cash" || selectedMethod === "cod";
+
+  const selectedMethodObj =
+    AVAILABLE_PAYMENT_OPTIONS.find((m) => m.id === selectedMethod) || AVAILABLE_PAYMENT_OPTIONS[0];
 
   if (!visible) return null;
 
@@ -231,223 +387,408 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
         <View style={styles.sheetContainer}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.headerInfo}>
-              <View style={styles.headerBadge}>
-                <ShieldCheck size={13} color="#0D7A53" />
-                <Text style={styles.headerBadgeText}>Pembayaran Aman Terenkripsi</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+              {currentView === "METHOD_PICKER" && (
+                <TouchableOpacity style={styles.backBtn} onPress={handleCancelMethodPicker} activeOpacity={0.7}>
+                  <ArrowLeft size={18} color="#0F172A" />
+                </TouchableOpacity>
+              )}
+              <View style={styles.headerInfo}>
+                <View style={styles.headerBadge}>
+                  <ShieldCheck size={13} color="#0D7A53" />
+                  <Text style={styles.headerBadgeText}>Pembayaran Aman Terenkripsi</Text>
+                </View>
+                <Text style={styles.headerTitle}>
+                  {currentView === "DETAIL"
+                    ? "Detail Pembayaran"
+                    : currentView === "METHOD_PICKER"
+                    ? "Pilih Metode Pembayaran"
+                    : "Instruksi Pembayaran"}
+                </Text>
+                <Text style={styles.headerSubtitle}>Order #{orderCode}</Text>
               </View>
-              <Text style={styles.headerTitle}>Selesaikan Pembayaran</Text>
-              <Text style={styles.headerSubtitle}>Order #{orderCode}</Text>
             </View>
+
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
-              <X size={20} color="#64748B" />
+              <X size={20} color="#6B7280" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-            {/* Success Banner if already paid */}
-            {isPaid ? (
-              <View style={styles.paidSuccessCard}>
-                <View style={styles.paidSuccessIconBg}>
-                  <CheckCircle2 size={36} color="#0D7A53" />
-                </View>
-                <Text style={styles.paidSuccessTitle}>Pembayaran Berhasil!</Text>
-                <Text style={styles.paidSuccessDesc}>
-                  Dana sebesar {rp(amount)} telah diterima toko. Pesanan Anda kini siap diproses oleh merchant.
-                </Text>
-                <TouchableOpacity style={styles.continueShoppingBtn} onPress={onClose}>
-                  <Text style={styles.continueShoppingBtnText}>Tutup & Lihat Pesanan</Text>
-                </TouchableOpacity>
+          {/* ================================================================= */}
+          {/* SUCCESS STATE                                                    */}
+          {/* ================================================================= */}
+          {isPaid ? (
+            <View style={styles.paidContentBox}>
+              <View style={styles.paidIconBox}>
+                <CheckCircle2 size={48} color="#0D7A53" />
               </View>
-            ) : (
-              <>
-                {/* Countdown Timer Banner */}
-                <View style={styles.timerCard}>
-                  <View style={styles.timerRow}>
-                    <Clock size={16} color="#D97706" />
-                    <Text style={styles.timerLabel}>Batas Waktu Pembayaran</Text>
-                  </View>
-                  <View style={styles.timerDigitsBadge}>
-                    <Text style={styles.timerDigitsText}>{formatTimer(secondsRemaining)}</Text>
-                  </View>
-                </View>
-
-                {/* Amount to Pay Card */}
-                <View style={styles.amountCard}>
-                  <Text style={styles.amountLabel}>Total Tagihan</Text>
-                  <View style={styles.amountRow}>
+              <Text style={styles.paidTitle}>Pembayaran Berhasil Diverifikasi!</Text>
+              <Text style={styles.paidSubtitle}>
+                Terima kasih, pembayaran sebesar {rp(amount)} telah lunas dan terverifikasi otomatis. Pesanan segera disiapkan oleh toko.
+              </Text>
+              <TouchableOpacity
+                style={styles.paidCloseBtn}
+                onPress={onClose}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.paidCloseBtnText}>Tutup & Cek Status Pesanan</Text>
+                <ArrowRight size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {/* ================================================================= */}
+              {/* VIEW 1: DETAIL PEMBAYARAN (Decoupled screen)                     */}
+              {/* ================================================================= */}
+              {currentView === "DETAIL" && (
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailContent}>
+                  {/* Total Tagihan Card */}
+                  <View style={styles.amountCard}>
+                    <Text style={styles.amountLabel}>Total Tagihan Pesanan</Text>
                     <Text style={styles.amountValue}>{rp(amount)}</Text>
+                    <Text style={styles.amountSubtext}>Harga sudah termasuk ongkos kirim dan biaya layanan</Text>
+                  </View>
+
+                  {/* Order Line Summary Card */}
+                  <View style={styles.summaryCard}>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Toko / Merchant</Text>
+                      <Text style={styles.summaryValue}>{order?.storeName || "Toko GEOVERSE"}</Text>
+                    </View>
+                    <View style={styles.summaryDivider} />
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Kode Pesanan</Text>
+                      <Text style={styles.summaryValue}>{orderCode}</Text>
+                    </View>
+                    <View style={styles.summaryDivider} />
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { fontWeight: "700", color: "#111827" }]}>Total Pembayaran</Text>
+                      <Text style={styles.summaryTotalVal}>{rp(amount)}</Text>
+                    </View>
+                  </View>
+
+                  {/* Selected Payment Method Card with "Ganti Metode Pembayaran" */}
+                  <View style={styles.methodSection}>
+                    <Text style={styles.sectionHeading}>Metode Pembayaran</Text>
+                    <View style={styles.selectedMethodBox}>
+                      <View style={[styles.methodIconBadge, { backgroundColor: selectedMethodObj.color + "15" }]}>
+                        {selectedMethodObj.category === "QRIS" ? (
+                          <QrCode size={22} color={selectedMethodObj.color} />
+                        ) : selectedMethodObj.category === "VA" ? (
+                          <Building2 size={22} color={selectedMethodObj.color} />
+                        ) : selectedMethodObj.category === "EWALLET" ? (
+                          <Wallet size={22} color={selectedMethodObj.color} />
+                        ) : (
+                          <Banknote size={22} color={selectedMethodObj.color} />
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.selectedMethodTitle}>{selectedMethodObj.name}</Text>
+                        <Text style={styles.selectedMethodSubtitle} numberOfLines={2}>
+                          {selectedMethodObj.desc}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.changeMethodSmallBtn}
+                        onPress={handleOpenMethodPicker}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.changeMethodSmallBtnText}>Ganti</Text>
+                      </TouchableOpacity>
+                    </View>
+
                     <TouchableOpacity
-                      style={styles.copyPill}
-                      onPress={() => handleCopy(String(amount), "nominal")}
+                      style={styles.changeMethodLinkRow}
+                      onPress={handleOpenMethodPicker}
                       activeOpacity={0.7}
                     >
-                      <Copy size={13} color="#0D7A53" />
-                      <Text style={styles.copyPillText}>
-                        {copied === "nominal" ? "Tersalin!" : "Salin Nominal"}
+                      <Text style={styles.changeMethodLinkText}>Ganti Metode Pembayaran</Text>
+                      <ArrowRight size={14} color="#0D7A53" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Decouple Explanation Notice */}
+                  <View style={styles.decoupleNoticeBox}>
+                    <ShieldCheck size={16} color="#0D7A53" />
+                    <Text style={styles.decoupleNoticeText}>
+                      Mengganti metode pembayaran hanya memperbarui opsi tagihan tanpa memicu transaksi baru. Pembayaran baru dimulai saat Anda menekan tombol di bawah.
+                    </Text>
+                  </View>
+
+                  {/* Primary CTA: "Lakukan Pembayaran" */}
+                  <View style={styles.footerActionContainer}>
+                    <TouchableOpacity
+                      style={styles.primaryPayBtn}
+                      onPress={handleExecutePayment}
+                      activeOpacity={0.88}
+                    >
+                      <Text style={styles.primaryPayBtnText}>
+                        Lakukan Pembayaran • {rp(amount)}
                       </Text>
+                      <ArrowRight size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              )}
+
+              {/* ================================================================= */}
+              {/* VIEW 2: METHOD PICKER (Select new method + Lanjutkan Ubah)       */}
+              {/* ================================================================= */}
+              {currentView === "METHOD_PICKER" && (
+                <View style={{ flex: 1 }}>
+                  <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.pickerListContent}>
+                    <Text style={styles.pickerInstructionText}>
+                      Pilih metode pembayaran baru untuk pesanan #{orderCode}. Tagihan Anda akan diperbarui sesuai pilihan:
+                    </Text>
+
+                    {AVAILABLE_PAYMENT_OPTIONS.map((item) => {
+                      const isSelected = tempSelectedMethod === item.id;
+                      return (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={[styles.pickerItemCard, isSelected && styles.pickerItemCardSelected]}
+                          onPress={() => setTempSelectedMethod(item.id)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={[styles.methodIconBadge, { backgroundColor: item.color + "15" }]}>
+                            {item.category === "QRIS" ? (
+                              <QrCode size={22} color={item.color} />
+                            ) : item.category === "VA" ? (
+                              <Building2 size={22} color={item.color} />
+                            ) : item.category === "EWALLET" ? (
+                              <Wallet size={22} color={item.color} />
+                            ) : (
+                              <Banknote size={22} color={item.color} />
+                            )}
+                          </View>
+
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.pickerItemName}>{item.name}</Text>
+                            <Text style={styles.pickerItemDesc} numberOfLines={2}>
+                              {item.desc}
+                            </Text>
+                          </View>
+
+                          <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                            {isSelected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {/* Footer with "Lanjutkan Ubah Metode Pembayaran" */}
+                  <View style={styles.pickerFooterBox}>
+                    <TouchableOpacity
+                      style={[styles.confirmMethodChangeBtn, updatingMethod && { opacity: 0.7 }]}
+                      onPress={handleConfirmMethodChange}
+                      disabled={updatingMethod}
+                      activeOpacity={0.88}
+                    >
+                      {updatingMethod ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <Text style={styles.confirmMethodChangeBtnText}>Lanjutkan Ubah Metode Pembayaran</Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.cancelPickerBtn}
+                      onPress={handleCancelMethodPicker}
+                      disabled={updatingMethod}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.cancelPickerBtnText}>Batal</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
+              )}
 
-                {/* QRIS SECTION */}
-                {isQris && (
-                  <View style={styles.qrisSection}>
-                    <View style={styles.qrisHeader}>
-                      <View style={styles.qrisLogoTag}>
-                        <Text style={styles.qrisLogoText}>QRIS</Text>
-                      </View>
-                      <Text style={styles.qrisSubtitle}>Standard Pembayaran Nasional</Text>
+              {/* ================================================================= */}
+              {/* VIEW 3: INSTRUCTION (Only shown after "Lakukan Pembayaran" clicked) */}
+              {/* ================================================================= */}
+              {currentView === "INSTRUCTION" && (
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.instructionScrollContent}>
+                  {/* Countdown Timer */}
+                  <View style={styles.timerBanner}>
+                    <View style={styles.timerRow}>
+                      <Clock size={16} color="#D97706" />
+                      <Text style={styles.timerLabel}>Sisa Waktu Pembayaran:</Text>
                     </View>
-
-                    <View style={styles.qrCodeBox}>
-                      {renderQrisMatrix(qrString)}
-                      <View style={styles.qrGpnBadge}>
-                        <Text style={styles.qrGpnText}>GPN • GEOVERSE</Text>
-                      </View>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.actionBtnOutline}
-                      onPress={() => handleCopy(qrString, "qris")}
-                      activeOpacity={0.7}
-                    >
-                      <Copy size={15} color="#0D7A53" />
-                      <Text style={styles.actionBtnOutlineText}>
-                        {copied === "qris" ? "Kode QRIS Disalin!" : "Salin String QRIS"}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.instructionsContainer}>
-                      <Text style={styles.instructionHeading}>Cara Pembayaran via QRIS:</Text>
-                      <Text style={styles.instructionStep}>1. Buka aplikasi m-Banking (BCA, Mandiri, BRI, BNI) atau E-Wallet (GoPay, OVO, DANA, ShopeePay).</Text>
-                      <Text style={styles.instructionStep}>2. Pilih menu "Scan" atau "Bayar dengan QRIS".</Text>
-                      <Text style={styles.instructionStep}>3. Pindai kode QR di atas atau gunakan tangkapan layar.</Text>
-                      <Text style={styles.instructionStep}>4. Periksa nama merchant (GEOVERSE) dan nominal ({rp(amount)}), lalu masukkan PIN Anda.</Text>
+                    <View style={styles.timerDigitsBadge}>
+                      <Text style={styles.timerDigitsText}>{formatTimer(secondsRemaining)}</Text>
                     </View>
                   </View>
-                )}
 
-                {/* VIRTUAL ACCOUNT SECTION */}
-                {isVa && (
-                  <View style={styles.vaSection}>
-                    <View style={styles.vaHeader}>
-                      <View style={styles.vaLogoTag}>
-                        <Building2 size={16} color="#FFFFFF" />
-                        <Text style={styles.vaLogoText}>{bankName} Virtual Account</Text>
+                  {/* QRIS SECTION */}
+                  {isQris && (
+                    <View style={styles.qrisSection}>
+                      <View style={styles.qrisHeader}>
+                        <View style={styles.qrisLogoTag}>
+                          <Text style={styles.qrisLogoText}>QRIS</Text>
+                        </View>
+                        <Text style={styles.qrisSubtitle}>Standard Pembayaran Nasional</Text>
+                      </View>
+
+                      <View style={styles.qrCodeBox}>
+                        {renderQrisMatrix(qrString)}
+                        <View style={styles.qrGpnBadge}>
+                          <Text style={styles.qrGpnText}>GPN • GEOVERSE</Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.actionBtnOutline}
+                        onPress={() => handleCopy(qrString, "qr")}
+                        activeOpacity={0.7}
+                      >
+                        <Copy size={16} color="#0D7A53" />
+                        <Text style={styles.actionBtnOutlineText}>
+                          {copied === "qr" ? "Kode QRIS Tersalin!" : "Salin Kode QRIS"}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <View style={styles.instructionsContainer}>
+                        <Text style={styles.instructionHeading}>Cara Bayar via QRIS:</Text>
+                        <Text style={styles.instructionStep}>1. Buka aplikasi m-Banking (BCA, Mandiri, BRI, BNI) atau e-wallet (GoPay, OVO, DANA, ShopeePay).</Text>
+                        <Text style={styles.instructionStep}>2. Pilih menu Bayar / Scan QR.</Text>
+                        <Text style={styles.instructionStep}>3. Arahkan kamera ke QR code di atas atau salin kode QRIS.</Text>
+                        <Text style={styles.instructionStep}>4. Periksa nama merchant (GEOVERSE) dan nominal ({rp(amount)}).</Text>
+                        <Text style={styles.instructionStep}>5. Konfirmasi pembayaran dan simpan struk transfer Anda.</Text>
                       </View>
                     </View>
+                  )}
 
-                    <View style={styles.vaBox}>
-                      <Text style={styles.vaNumberLabel}>Nomor Virtual Account:</Text>
-                      <View style={styles.vaNumberRow}>
-                        <Text style={styles.vaNumberValue}>{vaNumber}</Text>
+                  {/* VIRTUAL ACCOUNT SECTION */}
+                  {isVa && (
+                    <View style={styles.vaSection}>
+                      <View style={styles.vaCardHeader}>
+                        <View style={styles.vaBankBadge}>
+                          <Text style={styles.vaBankBadgeText}>{bankName}</Text>
+                        </View>
+                        <Text style={styles.vaBankTitle}>Virtual Account {bankName}</Text>
+                      </View>
+
+                      <View style={styles.vaBox}>
+                        <Text style={styles.vaBoxLabel}>Nomor Virtual Account</Text>
+                        <View style={styles.vaNumberRow}>
+                          <Text style={styles.vaNumberText}>{vaNumber}</Text>
+                          <TouchableOpacity
+                            style={styles.vaCopyBtn}
+                            onPress={() => handleCopy(vaNumber, "va")}
+                            activeOpacity={0.8}
+                          >
+                            <Copy size={16} color="#FFFFFF" />
+                            <Text style={styles.vaCopyBtnText}>
+                              {copied === "va" ? "Tersalin" : "Salin"}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.vaHolderName}>Nama Akun: GEOVERSE - {order.customerName || "CUSTOMER"}</Text>
+                      </View>
+
+                      {/* Instructions */}
+                      <View style={styles.tabsRow}>
                         <TouchableOpacity
-                          style={styles.vaCopyBtn}
-                          onPress={() => handleCopy(vaNumber, "va")}
-                          activeOpacity={0.7}
+                          style={[styles.instructionTab, activeInstructionTab === "mbanking" && styles.instructionTabActive]}
+                          onPress={() => setActiveInstructionTab("mbanking")}
                         >
-                          <Copy size={16} color="#FFFFFF" />
-                          <Text style={styles.vaCopyBtnText}>
-                            {copied === "va" ? "Tersalin" : "Salin"}
+                          <Text style={[styles.instructionTabText, activeInstructionTab === "mbanking" && styles.instructionTabTextActive]}>
+                            m-Banking
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.instructionTab, activeInstructionTab === "atm" && styles.instructionTabActive]}
+                          onPress={() => setActiveInstructionTab("atm")}
+                        >
+                          <Text style={[styles.instructionTabText, activeInstructionTab === "atm" && styles.instructionTabTextActive]}>
+                            ATM
                           </Text>
                         </TouchableOpacity>
                       </View>
-                      <Text style={styles.vaHolderName}>Nama Akun: GEOVERSE - {order.customerName || "CUSTOMER"}</Text>
-                    </View>
 
-                    {/* Collapsible Accordions for Instructions */}
-                    <View style={styles.tabsRow}>
+                      <View style={styles.instructionsContainer}>
+                        {activeInstructionTab === "mbanking" ? (
+                          <>
+                            <Text style={styles.instructionStep}>1. Buka aplikasi Mobile Banking {bankName}.</Text>
+                            <Text style={styles.instructionStep}>2. Pilih menu Transfer {">"} Virtual Account.</Text>
+                            <Text style={styles.instructionStep}>3. Masukkan nomor VA: {vaNumber}.</Text>
+                            <Text style={styles.instructionStep}>4. Pastikan tagihan sesuai ({rp(amount)}) dan konfirmasi PIN Anda.</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.instructionStep}>1. Masukkan kartu ATM {bankName} dan PIN Anda.</Text>
+                            <Text style={styles.instructionStep}>2. Pilih menu Transaksi Lainnya {">"} Transfer {">"} Virtual Account.</Text>
+                            <Text style={styles.instructionStep}>3. Masukkan nomor {vaNumber} lalu tekan Benar.</Text>
+                            <Text style={styles.instructionStep}>4. Periksa rincian pembayaran dan selesaikan transaksi.</Text>
+                          </>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* E-WALLET SECTION */}
+                  {isEwallet && (
+                    <View style={styles.ewalletSection}>
+                      <View style={styles.ewalletHeader}>
+                        <Wallet size={20} color="#0D7A53" />
+                        <Text style={styles.ewalletTitle}>Pembayaran via {selectedMethod.toUpperCase()}</Text>
+                      </View>
+                      <Text style={styles.ewalletDesc}>
+                        Ketuk tombol di bawah untuk membuka aplikasi {selectedMethod.toUpperCase()} langsung dari ponsel Anda.
+                      </Text>
+
                       <TouchableOpacity
-                        style={[styles.instructionTab, activeInstructionTab === "mbanking" && styles.instructionTabActive]}
-                        onPress={() => setActiveInstructionTab("mbanking")}
+                        style={styles.openEwalletBtn}
+                        onPress={handleOpenEwallet}
+                        activeOpacity={0.85}
                       >
-                        <Text style={[styles.instructionTabText, activeInstructionTab === "mbanking" && styles.instructionTabTextActive]}>
-                          m-Banking
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.instructionTab, activeInstructionTab === "atm" && styles.instructionTabActive]}
-                        onPress={() => setActiveInstructionTab("atm")}
-                      >
-                        <Text style={[styles.instructionTabText, activeInstructionTab === "atm" && styles.instructionTabTextActive]}>
-                          ATM
-                        </Text>
+                        <ExternalLink size={18} color="#FFFFFF" />
+                        <Text style={styles.openEwalletBtnText}>Buka Aplikasi {selectedMethod.toUpperCase()}</Text>
                       </TouchableOpacity>
                     </View>
+                  )}
 
-                    <View style={styles.instructionsContainer}>
-                      {activeInstructionTab === "mbanking" ? (
-                        <>
-                          <Text style={styles.instructionStep}>1. Buka aplikasi Mobile Banking {bankName}.</Text>
-                          <Text style={styles.instructionStep}>2. Pilih menu Transfer {">"} Virtual Account.</Text>
-                          <Text style={styles.instructionStep}>3. Masukkan nomor VA: {vaNumber}.</Text>
-                          <Text style={styles.instructionStep}>4. Pastikan tagihan sesuai ({rp(amount)}) dan konfirmasi PIN Anda.</Text>
-                        </>
+                  {/* Change Method Button from Instruction View */}
+                  <TouchableOpacity
+                    style={styles.changeMethodFromInstructionBtn}
+                    onPress={handleOpenMethodPicker}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.changeMethodFromInstructionText}>Ganti Metode Pembayaran</Text>
+                  </TouchableOpacity>
+
+                  {/* Sandbox Instant Simulation */}
+                  <View style={styles.sandboxBox}>
+                    <View style={styles.sandboxHeader}>
+                      <Sparkles size={16} color="#8B5CF6" />
+                      <Text style={styles.sandboxTitle}>Sandbox Mode / Pengujian Cepat</Text>
+                    </View>
+                    <Text style={styles.sandboxDesc}>
+                      Uji alur pesanan tanpa transfer sungguhan dengan menekan tombol di bawah:
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.sandboxBtn}
+                      onPress={handleSimulatePayment}
+                      disabled={isSimulating}
+                      activeOpacity={0.8}
+                    >
+                      {isSimulating ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
                         <>
-                          <Text style={styles.instructionStep}>1. Masukkan kartu ATM {bankName} dan PIN Anda.</Text>
-                          <Text style={styles.instructionStep}>2. Pilih menu Transaksi Lainnya {">"} Transfer {">"} Virtual Account.</Text>
-                          <Text style={styles.instructionStep}>3. Masukkan nomor {vaNumber} lalu tekan Benar.</Text>
-                          <Text style={styles.instructionStep}>4. Periksa rincian pembayaran dan selesaikan transaksi.</Text>
+                          <Zap size={16} color="#FFFFFF" />
+                          <Text style={styles.sandboxBtnText}>Simulasikan Bayar Berhasil (Instant Lunas)</Text>
                         </>
                       )}
-                    </View>
-                  </View>
-                )}
-
-                {/* E-WALLET SECTION */}
-                {isEwallet && (
-                  <View style={styles.ewalletSection}>
-                    <View style={styles.ewalletHeader}>
-                      <Wallet size={20} color="#0D7A53" />
-                      <Text style={styles.ewalletTitle}>Pembayaran via {paymentMethod.toUpperCase()}</Text>
-                    </View>
-                    <Text style={styles.ewalletDesc}>
-                      Ketuk tombol di bawah untuk membuka aplikasi {paymentMethod.toUpperCase()} langsung dari ponsel Anda.
-                    </Text>
-
-                    <TouchableOpacity
-                      style={styles.openEwalletBtn}
-                      onPress={handleOpenEwallet}
-                      activeOpacity={0.85}
-                    >
-                      <ExternalLink size={18} color="#FFFFFF" />
-                      <Text style={styles.openEwalletBtnText}>Buka Aplikasi {paymentMethod.toUpperCase()}</Text>
                     </TouchableOpacity>
                   </View>
-                )}
+                </ScrollView>
+              )}
+            </>
+          )}
 
-                {/* DEV / TESTING / SANDBOX SIMULATOR BUTTON */}
-                <View style={styles.sandboxBox}>
-                  <View style={styles.sandboxHeader}>
-                    <Sparkles size={16} color="#8B5CF6" />
-                    <Text style={styles.sandboxTitle}>Sandbox Mode / Pengujian Cepat</Text>
-                  </View>
-                  <Text style={styles.sandboxDesc}>
-                    Ingin langsung menguji alur pesanan tanpa transfer sungguhan? Tekan tombol di bawah untuk memverifikasi pembayaran secara instan:
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.sandboxBtn}
-                    onPress={handleSimulatePayment}
-                    disabled={isSimulating}
-                    activeOpacity={0.8}
-                  >
-                    {isSimulating ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <>
-                        <Zap size={16} color="#FFFFFF" />
-                        <Text style={styles.sandboxBtnText}>Simulasikan Bayar Berhasil (Instant Lunas)</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </ScrollView>
-
-          {/* Footer Actions */}
+          {/* Footer Close / Bayar Nanti */}
           <View style={styles.footer}>
             {!isPaid && (
               <TouchableOpacity
@@ -455,7 +796,7 @@ export const MarketplaceDigitalPaymentModal: React.FC<MarketplaceDigitalPaymentM
                 onPress={onClose}
                 activeOpacity={0.7}
               >
-                <Text style={styles.footerSecondaryBtnText}>Bayar Nanti (Cek di Pesanan)</Text>
+                <Text style={styles.footerSecondaryBtnText}>Tutup (Selesaikan Nanti di Pesanan)</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -488,12 +829,20 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
+  },
+  backBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerInfo: {
     flex: 1,
@@ -503,350 +852,569 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     backgroundColor: "#E8F5EE",
-    alignSelf: "flex-start",
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: 6,
-    marginBottom: 6,
+    alignSelf: "flex-start",
+    marginBottom: 4,
   },
   headerBadgeText: {
-    color: "#0D7A53",
     fontSize: 10,
     fontWeight: "700",
+    color: "#0D7A53",
   },
   headerTitle: {
-    color: "#0F172A",
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
+    color: "#111827",
   },
   headerSubtitle: {
-    color: "#64748B",
     fontSize: 12,
-    marginTop: 2,
+    color: "#6B7280",
+    marginTop: 1,
   },
   closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#F1F5F9",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 10,
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  detailContent: {
+    padding: 20,
     gap: 16,
   },
-  timerCard: {
+  amountCard: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1.5,
+    borderColor: "#86EFAC",
+    borderRadius: 18,
+    padding: 16,
+    alignItems: "center",
+  },
+  amountLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#166534",
+  },
+  amountValue: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#0D7A53",
+    marginTop: 4,
+  },
+  amountSubtext: {
+    fontSize: 11,
+    color: "#15803D",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  summaryCard: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  summaryLabel: {
+    fontSize: 13,
+    color: "#64748B",
+  },
+  summaryValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: "#E2E8F0",
+  },
+  summaryTotalVal: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0D7A53",
+  },
+  methodSection: {
+    gap: 8,
+  },
+  sectionHeading: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  selectedMethodBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#0D7A53",
+    backgroundColor: "#F0FDF4",
+    gap: 12,
+  },
+  methodIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selectedMethodTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  selectedMethodSubtitle: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  changeMethodSmallBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#0D7A53",
+    backgroundColor: "#FFFFFF",
+  },
+  changeMethodSmallBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  changeMethodLinkRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFFBEB",
-    paddingHorizontal: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  changeMethodLinkText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0D7A53",
+  },
+  decoupleNoticeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    padding: 12,
+    borderRadius: 12,
+    gap: 10,
+  },
+  decoupleNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    color: "#1E40AF",
+    lineHeight: 16,
+  },
+  footerActionContainer: {
+    marginTop: 8,
+  },
+  primaryPayBtn: {
+    backgroundColor: "#0D7A53",
+    borderRadius: 16,
+    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryPayBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  pickerListContent: {
+    padding: 20,
+    gap: 12,
+  },
+  pickerInstructionText: {
+    fontSize: 13,
+    color: "#64748B",
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  pickerItemCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    gap: 12,
+  },
+  pickerItemCardSelected: {
+    borderColor: "#0D7A53",
+    backgroundColor: "#F0FDF4",
+  },
+  pickerItemName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  pickerItemDesc: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  radioCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioCircleSelected: {
+    borderColor: "#0D7A53",
+    backgroundColor: "#0D7A53",
+  },
+  pickerFooterBox: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    gap: 10,
+    backgroundColor: "#FFFFFF",
+  },
+  confirmMethodChangeBtn: {
+    backgroundColor: "#0D7A53",
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0D7A53",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  confirmMethodChangeBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  cancelPickerBtn: {
     paddingVertical: 10,
-    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelPickerBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  instructionScrollContent: {
+    padding: 20,
+    paddingBottom: 20,
+  },
+  timerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FEF3C7",
     borderWidth: 1,
     borderColor: "#FDE68A",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
   },
   timerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   timerLabel: {
-    color: "#92400E",
     fontSize: 12,
     fontWeight: "600",
+    color: "#92400E",
   },
   timerDigitsBadge: {
     backgroundColor: "#D97706",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   timerDigitsText: {
-    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
-    fontVariant: ["tabular-nums"],
+    color: "#FFFFFF",
   },
-  amountCard: {
-    backgroundColor: "#F8FAFC",
-    padding: 16,
-    borderRadius: 16,
+  qrisSection: {
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 20,
+    padding: 20,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5E7EB",
+    marginBottom: 16,
   },
-  amountLabel: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  amountRow: {
+  qrisHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 6,
-  },
-  amountValue: {
-    color: "#0F172A",
-    fontSize: 22,
-    fontWeight: "900",
-  },
-  copyPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#E8F5EE",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  copyPillText: {
-    color: "#0D7A53",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  qrisSection: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    alignItems: "center",
-  },
-  qrisHeader: {
-    alignItems: "center",
-    marginBottom: 14,
+    width: "100%",
+    marginBottom: 16,
   },
   qrisLogoTag: {
-    backgroundColor: "#E11D48",
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    backgroundColor: "#DC2626",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: 6,
-    marginBottom: 4,
   },
   qrisLogoText: {
     color: "#FFFFFF",
-    fontSize: 14,
     fontWeight: "900",
-    letterSpacing: 1.5,
+    fontSize: 14,
+    letterSpacing: 1,
   },
   qrisSubtitle: {
-    color: "#64748B",
     fontSize: 11,
+    color: "#6B7280",
+    fontWeight: "600",
   },
   qrCodeBox: {
     backgroundColor: "#FFFFFF",
     padding: 16,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
     alignItems: "center",
-    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 3,
   },
   qrFallbackImage: {
-    width: 230,
-    height: 230,
+    width: 220,
+    height: 220,
   },
   qrGpnBadge: {
-    marginTop: 10,
+    marginTop: 8,
+    backgroundColor: "#F3F4F6",
     paddingHorizontal: 10,
-    paddingVertical: 3,
-    backgroundColor: "#F1F5F9",
+    paddingVertical: 4,
     borderRadius: 6,
   },
   qrGpnText: {
-    color: "#475569",
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 0.8,
+    color: "#374151",
   },
   actionBtnOutline: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     marginTop: 14,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1.5,
     borderColor: "#0D7A53",
     backgroundColor: "#FFFFFF",
   },
   actionBtnOutlineText: {
-    color: "#0D7A53",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700",
+    color: "#0D7A53",
+  },
+  instructionsContainer: {
+    width: "100%",
+    marginTop: 16,
+    padding: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    gap: 6,
+  },
+  instructionHeading: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  instructionStep: {
+    fontSize: 12,
+    color: "#4B5563",
+    lineHeight: 18,
   },
   vaSection: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F9FAFB",
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5E7EB",
+    marginBottom: 16,
   },
-  vaHeader: {
-    marginBottom: 12,
-  },
-  vaLogoTag: {
+  vaCardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "#0060AF",
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
+    gap: 8,
+    marginBottom: 14,
   },
-  vaLogoText: {
+  vaBankBadge: {
+    backgroundColor: "#003C93",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  vaBankBadgeText: {
     color: "#FFFFFF",
-    fontSize: 12,
     fontWeight: "800",
+    fontSize: 12,
+  },
+  vaBankTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
   },
   vaBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFFFFF",
     padding: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5E7EB",
+    marginBottom: 14,
   },
-  vaNumberLabel: {
-    color: "#64748B",
+  vaBoxLabel: {
     fontSize: 11,
     fontWeight: "600",
+    color: "#6B7280",
+    textTransform: "uppercase",
   },
   vaNumberRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 6,
+    marginVertical: 8,
   },
-  vaNumberValue: {
-    color: "#0F172A",
-    fontSize: 18,
-    fontWeight: "900",
-    letterSpacing: 1.5,
+  vaNumberText: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: 1.2,
   },
   vaCopyBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: "#0060AF",
+    gap: 4,
+    backgroundColor: "#0D7A53",
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 8,
   },
   vaCopyBtnText: {
-    color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
+    color: "#FFFFFF",
   },
   vaHolderName: {
-    color: "#64748B",
-    fontSize: 11,
-    marginTop: 8,
+    fontSize: 12,
+    color: "#6B7280",
   },
   tabsRow: {
     flexDirection: "row",
-    backgroundColor: "#F1F5F9",
-    borderRadius: 10,
-    padding: 3,
-    marginTop: 14,
+    gap: 8,
+    marginBottom: 10,
   },
   instructionTab: {
     flex: 1,
-    alignItems: "center",
     paddingVertical: 8,
+    alignItems: "center",
     borderRadius: 8,
+    backgroundColor: "#E5E7EB",
   },
   instructionTabActive: {
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: "#0D7A53",
   },
   instructionTabText: {
-    color: "#64748B",
     fontSize: 12,
     fontWeight: "600",
+    color: "#4B5563",
   },
   instructionTabTextActive: {
-    color: "#0F172A",
-    fontWeight: "800",
-  },
-  instructionsContainer: {
-    marginTop: 14,
-    backgroundColor: "#F8FAFC",
-    padding: 14,
-    borderRadius: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: "#0D7A53",
-    gap: 6,
-  },
-  instructionHeading: {
-    color: "#0F172A",
-    fontSize: 12,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  instructionStep: {
-    color: "#475569",
-    fontSize: 11,
-    lineHeight: 16,
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
   ewalletSection: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F9FAFB",
     borderRadius: 20,
-    padding: 18,
+    padding: 20,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E5E7EB",
+    marginBottom: 16,
+    alignItems: "center",
+    gap: 10,
   },
   ewalletHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 6,
   },
   ewalletTitle: {
-    color: "#0F172A",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "800",
+    color: "#111827",
   },
   ewalletDesc: {
-    color: "#64748B",
     fontSize: 12,
-    lineHeight: 17,
-    marginBottom: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 18,
   },
   openEwalletBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
     gap: 8,
-    backgroundColor: "#00AED6",
-    paddingVertical: 13,
-    borderRadius: 14,
+    backgroundColor: "#0D7A53",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 6,
   },
   openEwalletBtnText: {
-    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  changeMethodFromInstructionBtn: {
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  changeMethodFromInstructionText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0D7A53",
   },
   sandboxBox: {
-    backgroundColor: "#FAF5FF",
-    borderRadius: 16,
-    padding: 14,
+    backgroundColor: "#F5F3FF",
     borderWidth: 1,
-    borderColor: "#E9D5FF",
+    borderColor: "#DDD6FE",
+    borderRadius: 16,
+    padding: 16,
+    gap: 8,
   },
   sandboxHeader: {
     flexDirection: "row",
@@ -854,71 +1422,69 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sandboxTitle: {
-    color: "#6B21A8",
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6D28D9",
   },
   sandboxDesc: {
-    color: "#7E22CE",
     fontSize: 11,
+    color: "#7C3AED",
     lineHeight: 16,
-    marginTop: 4,
-    marginBottom: 10,
   },
   sandboxBtn: {
+    backgroundColor: "#7C3AED",
+    borderRadius: 12,
+    paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#7C3AED",
-    paddingVertical: 11,
-    borderRadius: 12,
+    gap: 6,
+    marginTop: 4,
   },
   sandboxBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
     color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "800",
   },
-  paidSuccessCard: {
+  paidContentBox: {
+    padding: 30,
     alignItems: "center",
-    backgroundColor: "#F0FDF4",
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    gap: 8,
+    gap: 12,
   },
-  paidSuccessIconBg: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+  paidIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: "#DCFCE7",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 6,
   },
-  paidSuccessTitle: {
-    color: "#0D7A53",
+  paidTitle: {
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "800",
+    color: "#111827",
+    textAlign: "center",
   },
-  paidSuccessDesc: {
-    color: "#166534",
-    fontSize: 12,
+  paidSubtitle: {
+    fontSize: 13,
+    color: "#4B5563",
     textAlign: "center",
     lineHeight: 18,
   },
-  continueShoppingBtn: {
-    marginTop: 12,
+  paidCloseBtn: {
     backgroundColor: "#0D7A53",
+    borderRadius: 14,
+    paddingVertical: 14,
     paddingHorizontal: 24,
-    paddingVertical: 11,
-    borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
   },
-  continueShoppingBtnText: {
+  paidCloseBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "800",
   },
   footer: {
     paddingHorizontal: 20,
@@ -927,13 +1493,13 @@ const styles = StyleSheet.create({
     borderTopColor: "#F1F5F9",
   },
   footerSecondaryBtn: {
+    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
   },
   footerSecondaryBtnText: {
-    color: "#64748B",
     fontSize: 13,
-    fontWeight: "700",
+    color: "#6B7280",
+    fontWeight: "600",
   },
 });

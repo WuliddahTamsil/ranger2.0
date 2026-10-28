@@ -5,8 +5,9 @@ const {
   handlePaymentWebhook,
   simulatePaymentWebhook,
   getOrderPayments,
+  updateOrderPaymentMethod,
 } = require("../controllers/paymentController");
-const { requireAuth } = require("../middleware/authMiddleware");
+const { requireAuth, optionalAuth } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -16,6 +17,10 @@ router.get("/webhook", (req, res) => {
   return res.status(200).json({ status: "OK", message: "Midtrans Webhook endpoint is active and listening." });
 });
 router.head("/webhook", (req, res) => res.status(200).end());
+
+// Payment method update (decoupled from payment execution)
+router.patch("/order/:orderId/method", optionalAuth, updateOrderPaymentMethod);
+router.post("/update-method", optionalAuth, updateOrderPaymentMethod);
 
 // Payment endpoints (support both REST and legacy style routes)
 router.post("/", createPayment);

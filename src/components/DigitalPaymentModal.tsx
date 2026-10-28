@@ -24,6 +24,10 @@ import {
   Clock,
   RefreshCw,
   Sparkles,
+  ShieldCheck,
+  ChevronRight,
+  ArrowLeft,
+  CreditCard,
 } from "lucide-react-native";
 import {
   PaymentMethodType,
@@ -31,6 +35,7 @@ import {
   createPayment,
   getPaymentStatus,
   simulatePaymentSuccess,
+  updateOrderPaymentMethod,
 } from "../services/paymentService";
 
 let setClipboardStringAsync: ((text: string) => Promise<boolean>) | null = null;
@@ -48,7 +53,7 @@ interface DigitalPaymentModalProps {
   visible: boolean;
   onClose: () => void;
   orderId: string;
-  orderModel?: "RideOrder" | "Order";
+  orderModel?: "RideOrder" | "Order" | string;
   amount: number;
   onPaymentSuccess: (payment: PaymentDetails) => void;
   initialMethod?: PaymentMethodType;
@@ -151,12 +156,14 @@ const PAYMENT_METHODS: MethodOption[] = [
   {
     id: "CASH",
     name: "Tunai (Bayar di Tempat)",
-    desc: "Bayar tunai langsung kepada Driver GEOVERSE saat perjalanan",
+    desc: "Bayar tunai langsung kepada mitra saat layanan selesai",
     category: "CASH",
     badgeColor: "#10B981",
     icon: "cash",
   },
 ];
+
+type ModalViewMode = "DETAIL" | "METHOD_PICKER" | "INSTRUCTION";
 
 export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
   visible,
@@ -167,29 +174,55 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
   onPaymentSuccess,
   initialMethod = "QRIS",
 }) => {
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethodType>(initialMethod);
+  const [currentView, setCurrentView] = useState<ModalViewMode>("DETAIL");
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethodType>(initialMethod || "QRIS");
+  const [tempSelectedMethod, setTempSelectedMethod] = useState<PaymentMethodType>(initialMethod || "QRIS");
   const [activeCategory, setActiveCategory] = useState<"ALL" | "QRIS" | "EWALLET" | "VA" | "CASH">("ALL");
   const [loading, setLoading] = useState<boolean>(false);
+  const [updatingMethod, setUpdatingMethod] = useState<boolean>(false);
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [checkingStatus, setCheckingStatus] = useState<boolean>(false);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(900); // 15 mins default
+  const [orderAmount, setOrderAmount] = useState<number>(amount > 0 ? amount : 0);
   const timerRef = useRef<any>(null);
 
   useEffect(() => {
+    if (amount > 0) {
+      setOrderAmount(amount);
+    }
+  }, [amount]);
+
+  const effectiveAmount =
+    orderAmount > 0
+      ? orderAmount
+      : amount > 0
+      ? amount
+      : paymentDetails?.amount && paymentDetails.amount > 0
+      ? paymentDetails.amount
+      : orderModel === "RideOrder"
+      ? 9500
+      : 0;
+
+  useEffect(() => {
     if (visible) {
-      setSelectedMethod(initialMethod);
+      setSelectedMethod(initialMethod || "QRIS");
+      setTempSelectedMethod(initialMethod || "QRIS");
       setPaymentDetails(null);
+      setCurrentView("DETAIL");
       setCopied(false);
       setSecondsRemaining(900);
+      if (amount > 0) {
+        setOrderAmount(amount);
+      }
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
-  }, [visible, initialMethod]);
+  }, [visible, initialMethod, amount]);
 
   // Countdown timer for pending invoice
   useEffect(() => {
-    if (paymentDetails && paymentDetails.status === "PENDING") {
+    if (currentView === "INSTRUCTION" && paymentDetails && paymentDetails.status === "PENDING") {
       timerRef.current = setInterval(() => {
         setSecondsRemaining((prev) => {
           if (prev <= 1) {
@@ -203,7 +236,7 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
         if (timerRef.current) clearInterval(timerRef.current);
       };
     }
-  }, [paymentDetails]);
+  }, [currentView, paymentDetails]);
 
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -211,27 +244,91 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleProceedPayment = async () => {
-    if (!orderId) {
-      Alert.alert("Perhatian", "ID Order belum tersedia.");
+  // Open the payment method selector sheet
+  const handleOpenMethodPicker = () => {
+    setTempSelectedMethod(selectedMethod);
+    setCurrentView("METHOD_PICKER");
+  };
+
+  // Confirm method change WITHOUT initiating payment
+  const handleConfirmMethodChange = async () => {
+    if (!tempSelectedMethod) {
+      Alert.alert("Pilih Metode", "Silakan pilih salah satu metode pembayaran terlebih dahulu.");
       return;
     }
+    if (updatingMethod) return; // Prevent duplicate rapid taps
+
+    try {
+      setUpdatingMethod(true);
+      if (orderId && orderId !== "temp-order-id") {
+        const updateRes = await updateOrderPaymentMethod({
+          orderId,
+          orderType: orderModel,
+          paymentMethod: tempSelectedMethod,
+        });
+
+        if (!updateRes?.success) {
+          throw new Error(updateRes?.message || "Gagal memperbarui metode pembayaran di server.");
+        }
+
+        if (updateRes.data?.orderAmount && Number(updateRes.data.orderAmount) > 0) {
+          setOrderAmount(Number(updateRes.data.orderAmount));
+        }
+      }
+
+      // Method update verified successfully -> apply selection and return to detail view
+      setSelectedMethod(tempSelectedMethod);
+      setPaymentDetails(null);
+      setCurrentView("DETAIL");
+    } catch (err: any) {
+      // Do NOT pretend success; preserve previous method and inform customer
+      Alert.alert(
+        "Gagal Mengubah Metode",
+        err?.message || "Terjadi kendala saat mengubah metode pembayaran. Metode sebelumnya tetap dipertahankan."
+      );
+    } finally {
+      setUpdatingMethod(false);
+    }
+  };
+
+  // Cancel method picker and retain previous selection
+  const handleCancelMethodPicker = () => {
+    setTempSelectedMethod(selectedMethod);
+    setCurrentView("DETAIL");
+  };
+
+  // Explicit action: "Lakukan Pembayaran"
+  const handleExecutePayment = async () => {
+    if (!selectedMethod) {
+      Alert.alert("Pilih Metode", "Silakan pilih metode pembayaran terlebih dahulu.");
+      return;
+    }
+    if (!orderId) {
+      Alert.alert("Perhatian", "ID Tagihan atau Pesanan belum tersedia.");
+      return;
+    }
+    if (effectiveAmount <= 0) {
+      Alert.alert("Nominal Tidak Valid", "Total tagihan harus lebih dari Rp 0.");
+      return;
+    }
+    if (loading) return; // Prevent double taps
 
     try {
       setLoading(true);
       const res = await createPayment({
         orderId,
-        orderModel,
+        orderModel: orderModel as any,
         paymentMethod: selectedMethod,
-        amount,
+        amount: effectiveAmount,
       });
       setPaymentDetails(res);
+      setCurrentView("INSTRUCTION");
 
       if (res.status === "PAID" || selectedMethod === "CASH") {
         onPaymentSuccess(res);
       }
     } catch (err: any) {
-      Alert.alert("Gagal Membuat Pembayaran", err.message || "Terjadi kesalahan jaringan");
+      Alert.alert("Gagal Memulai Pembayaran", err.message || "Terjadi kesalahan jaringan.");
     } finally {
       setLoading(false);
     }
@@ -309,6 +406,8 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
     }
   };
 
+  const selectedMethodObj = PAYMENT_METHODS.find((m) => m.id === selectedMethod) || PAYMENT_METHODS[0];
+
   const filteredMethods = PAYMENT_METHODS.filter((m) => {
     if (activeCategory === "ALL") return true;
     return m.category === activeCategory;
@@ -320,21 +419,237 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           {/* Header */}
           <View style={styles.header}>
-            <View>
-              <Text style={styles.headerTitle}>
-                {paymentDetails ? "Detail Pembayaran" : "Pilih Metode Pembayaran"}
-              </Text>
-              <Text style={styles.headerSubtitle}>
-                Total Tagihan: <Text style={styles.amountText}>Rp {amount.toLocaleString("id-ID")}</Text>
-              </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              {currentView === "METHOD_PICKER" && (
+                <TouchableOpacity style={styles.backBtn} onPress={handleCancelMethodPicker} activeOpacity={0.7}>
+                  <ArrowLeft size={18} color="#0F172A" />
+                </TouchableOpacity>
+              )}
+              <View>
+                <Text style={styles.headerTitle}>
+                  {currentView === "DETAIL"
+                    ? "Detail Pembayaran"
+                    : currentView === "METHOD_PICKER"
+                    ? "Pilih Metode Pembayaran"
+                    : "Instruksi Pembayaran"}
+                </Text>
+                <Text style={styles.headerSubtitle}>
+                  Total Tagihan: <Text style={styles.amountText}>Rp {effectiveAmount.toLocaleString("id-ID")}</Text>
+                </Text>
+              </View>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
               <X size={20} color="#64748B" />
             </TouchableOpacity>
           </View>
 
-          {/* INVOICE VIEW */}
-          {paymentDetails ? (
+          {/* ================================================================= */}
+          {/* VIEW 1: DETAIL PEMBAYARAN (Initial view with decoupled CTAs)      */}
+          {/* ================================================================= */}
+          {currentView === "DETAIL" && (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailContent}>
+              {/* Order Info Card */}
+              <View style={styles.billSummaryCard}>
+                <View style={styles.billRow}>
+                  <Text style={styles.billLabel}>Nomor Tagihan / Order</Text>
+                  <Text style={styles.billValue}>{orderId}</Text>
+                </View>
+                <View style={styles.billDivider} />
+                <View style={styles.billRow}>
+                  <Text style={styles.billLabel}>Layanan</Text>
+                  <Text style={styles.billValue}>{orderModel || "Layanan GEOVERSE"}</Text>
+                </View>
+                <View style={styles.billDivider} />
+                <View style={styles.billRow}>
+                  <Text style={[styles.billLabel, { fontWeight: "700", color: "#0F172A" }]}>Total Tagihan</Text>
+                  <Text style={styles.billTotalValue}>Rp {effectiveAmount.toLocaleString("id-ID")}</Text>
+                </View>
+              </View>
+
+              {/* Selected Payment Method Card with "Ganti Metode Pembayaran" */}
+              <View style={styles.methodSelectedSection}>
+                <Text style={styles.sectionTitle}>Metode Pembayaran</Text>
+                <View style={styles.selectedMethodCard}>
+                  <View style={[styles.methodIconBox, { backgroundColor: selectedMethodObj.badgeColor + "15" }]}>
+                    {selectedMethodObj.icon === "qris" ? (
+                      <QrCode size={22} color={selectedMethodObj.badgeColor} />
+                    ) : selectedMethodObj.icon === "wallet" ? (
+                      <Wallet size={22} color={selectedMethodObj.badgeColor} />
+                    ) : selectedMethodObj.icon === "bank" ? (
+                      <Building2 size={22} color={selectedMethodObj.badgeColor} />
+                    ) : (
+                      <Banknote size={22} color={selectedMethodObj.badgeColor} />
+                    )}
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.selectedMethodName}>{selectedMethodObj.name}</Text>
+                    <Text style={styles.selectedMethodDesc} numberOfLines={2}>
+                      {selectedMethodObj.desc}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.changeMethodBtnOutlined}
+                    onPress={handleOpenMethodPicker}
+                    activeOpacity={0.8}
+                    testID="btn-ubah-metode-detail"
+                    accessibilityLabel="Ubah Metode"
+                  >
+                    <Text style={styles.changeMethodBtnOutlinedText}>Ubah Metode</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.fullChangeMethodRow}
+                  onPress={handleOpenMethodPicker}
+                  activeOpacity={0.7}
+                  testID="btn-full-ubah-metode"
+                  accessibilityLabel="Ubah Metode Pembayaran"
+                >
+                  <Text style={styles.fullChangeMethodText}>Ubah Metode Pembayaran</Text>
+                  <ChevronRight size={16} color="#059669" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Security Banner */}
+              <View style={styles.securityBox}>
+                <ShieldCheck size={18} color="#059669" />
+                <Text style={styles.securityText}>
+                  Pembayaran diproses secara aman. Mengganti metode pembayaran hanya memperbarui tagihan dan tidak memulai transaksi baru.
+                </Text>
+              </View>
+
+              {/* Action Button: Bayar Sekarang */}
+              <View style={styles.footerActionBox}>
+                <TouchableOpacity
+                  style={[styles.payButton, loading && styles.payButtonDisabled]}
+                  onPress={handleExecutePayment}
+                  disabled={loading}
+                  activeOpacity={0.88}
+                  testID="btn-bayar-sekarang"
+                  accessibilityLabel="Bayar Sekarang"
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.payButtonText}>
+                      Bayar Sekarang • Rp {effectiveAmount.toLocaleString("id-ID")}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          )}
+
+          {/* ================================================================= */}
+          {/* VIEW 2: METHOD PICKER (Select new method + Lanjutkan Ubah)       */}
+          {/* ================================================================= */}
+          {currentView === "METHOD_PICKER" && (
+            <>
+              {/* Filter Tabs */}
+              <View style={styles.categoryTabs}>
+                {(["ALL", "QRIS", "EWALLET", "VA", "CASH"] as const).map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.catTab, activeCategory === cat && styles.catTabActive]}
+                    onPress={() => setActiveCategory(cat)}
+                  >
+                    <Text style={[styles.catTabText, activeCategory === cat && styles.catTabTextActive]}>
+                      {cat === "ALL"
+                        ? "Semua"
+                        : cat === "QRIS"
+                        ? "QRIS"
+                        : cat === "EWALLET"
+                        ? "E-Wallet"
+                        : cat === "VA"
+                        ? "Virtual Account"
+                        : "Tunai"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Methods list */}
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.methodsList}>
+                {filteredMethods.map((item) => {
+                  const isSelected = tempSelectedMethod === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.methodCard, isSelected && styles.methodCardSelected]}
+                      onPress={() => setTempSelectedMethod(item.id)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.methodIconBox, { backgroundColor: item.badgeColor + "15" }]}>
+                        {item.icon === "qris" ? (
+                          <QrCode size={22} color={item.badgeColor} />
+                        ) : item.icon === "wallet" ? (
+                          <Wallet size={22} color={item.badgeColor} />
+                        ) : item.icon === "bank" ? (
+                          <Building2 size={22} color={item.badgeColor} />
+                        ) : (
+                          <Banknote size={22} color={item.badgeColor} />
+                        )}
+                      </View>
+
+                      <View style={styles.methodInfo}>
+                        <View style={styles.methodTitleRow}>
+                          <Text style={styles.methodName}>{item.name}</Text>
+                          <View style={[styles.catBadge, { backgroundColor: item.badgeColor + "20" }]}>
+                            <Text style={[styles.catBadgeText, { color: item.badgeColor }]}>
+                              {item.category}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.methodDesc} numberOfLines={2}>
+                          {item.desc}
+                        </Text>
+                      </View>
+
+                      <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                        {isSelected && <View style={styles.radioInner} />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Footer Confirm & Cancel Buttons */}
+              <View style={styles.methodPickerFooter}>
+                <TouchableOpacity
+                  style={[styles.confirmMethodBtn, updatingMethod && { opacity: 0.7 }]}
+                  onPress={handleConfirmMethodChange}
+                  disabled={updatingMethod}
+                  activeOpacity={0.88}
+                  testID="btn-lanjutkan-ubah-metode"
+                  accessibilityLabel="Lanjutkan Ubah Metode Pembayaran"
+                >
+                  {updatingMethod ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.confirmMethodBtnText}>Lanjutkan Ubah Metode Pembayaran</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.cancelPickerBtn}
+                  onPress={handleCancelMethodPicker}
+                  disabled={updatingMethod}
+                  activeOpacity={0.7}
+                  testID="btn-batal-ubah-metode"
+                  accessibilityLabel="Batal"
+                >
+                  <Text style={styles.cancelPickerBtnText}>Batal</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
+          {/* ================================================================= */}
+          {/* VIEW 3: INSTRUCTION (Only shown after "Lakukan Pembayaran" clicked) */}
+          {/* ================================================================= */}
+          {currentView === "INSTRUCTION" && paymentDetails && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.invoiceContent}>
               <View style={styles.statusBadgeRow}>
                 <View
@@ -430,7 +745,9 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
                     <Text style={styles.instructionTitle}>Petunjuk Pembayaran:</Text>
                     <Text style={styles.instructionStep}>1. Buka aplikasi Mobile Banking atau ATM bank Anda.</Text>
                     <Text style={styles.instructionStep}>2. Pilih menu Transfer atau Pembayaran Virtual Account.</Text>
-                    <Text style={styles.instructionStep}>3. Masukkan nomor VA di atas dan verifikasi nominal Rp {amount.toLocaleString("id-ID")}.</Text>
+                    <Text style={styles.instructionStep}>
+                      3. Masukkan nomor VA di atas dan verifikasi nominal Rp {effectiveAmount.toLocaleString("id-ID")}.
+                    </Text>
                     <Text style={styles.instructionStep}>4. Selesaikan transaksi dan simpan bukti pembayaran.</Text>
                   </View>
                 </View>
@@ -442,7 +759,7 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
                   <Wallet size={40} color="#0284C7" />
                   <Text style={styles.ewalletTitle}>Pembayaran {paymentDetails.paymentMethod}</Text>
                   <Text style={styles.ewalletDesc}>
-                    Silakan buka aplikasi {paymentDetails.paymentMethod} Anda untuk mengonfirmasi pembayaran tagihan sebesar Rp {amount.toLocaleString("id-ID")}.
+                    Silakan buka aplikasi {paymentDetails.paymentMethod} Anda untuk mengonfirmasi pembayaran tagihan sebesar Rp {effectiveAmount.toLocaleString("id-ID")}.
                   </Text>
                   {Boolean(paymentDetails.deepLink || paymentDetails.deepLinkUrl) && (
                     <TouchableOpacity
@@ -454,6 +771,17 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
                       <Text style={styles.deepLinkBtnText}>Buka Aplikasi {paymentDetails.paymentMethod}</Text>
                     </TouchableOpacity>
                   )}
+                </View>
+              )}
+
+              {/* CASH SPECIFIC VIEW */}
+              {paymentDetails.paymentMethod === "CASH" && (
+                <View style={styles.ewalletBox}>
+                  <Banknote size={40} color="#10B981" />
+                  <Text style={styles.ewalletTitle}>Bayar Tunai di Tempat</Text>
+                  <Text style={styles.ewalletDesc}>
+                    Siapkan uang pas sebesar Rp {effectiveAmount.toLocaleString("id-ID")} saat mitra tiba di lokasi Anda.
+                  </Text>
                 </View>
               )}
 
@@ -501,100 +829,12 @@ export const DigitalPaymentModal: React.FC<DigitalPaymentModalProps> = ({
 
                 <TouchableOpacity
                   style={styles.changeMethodBtn}
-                  onPress={() => setPaymentDetails(null)}
+                  onPress={handleOpenMethodPicker}
                 >
                   <Text style={styles.changeMethodText}>Ganti Metode Pembayaran</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
-          ) : (
-            /* SELECTION VIEW */
-            <>
-              {/* Filter Tabs */}
-              <View style={styles.categoryTabs}>
-                {(["ALL", "QRIS", "EWALLET", "VA", "CASH"] as const).map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.catTab, activeCategory === cat && styles.catTabActive]}
-                    onPress={() => setActiveCategory(cat)}
-                  >
-                    <Text style={[styles.catTabText, activeCategory === cat && styles.catTabTextActive]}>
-                      {cat === "ALL"
-                        ? "Semua"
-                        : cat === "QRIS"
-                        ? "QRIS"
-                        : cat === "EWALLET"
-                        ? "E-Wallet"
-                        : cat === "VA"
-                        ? "Virtual Account"
-                        : "Tunai"}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Methods list */}
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.methodsList}>
-                {filteredMethods.map((item) => {
-                  const isSelected = selectedMethod === item.id;
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[styles.methodCard, isSelected && styles.methodCardSelected]}
-                      onPress={() => setSelectedMethod(item.id)}
-                      activeOpacity={0.8}
-                    >
-                      <View style={[styles.methodIconBox, { backgroundColor: item.badgeColor + "15" }]}>
-                        {item.icon === "qris" ? (
-                          <QrCode size={22} color={item.badgeColor} />
-                        ) : item.icon === "wallet" ? (
-                          <Wallet size={22} color={item.badgeColor} />
-                        ) : item.icon === "bank" ? (
-                          <Building2 size={22} color={item.badgeColor} />
-                        ) : (
-                          <Banknote size={22} color={item.badgeColor} />
-                        )}
-                      </View>
-
-                      <View style={styles.methodInfo}>
-                        <View style={styles.methodTitleRow}>
-                          <Text style={styles.methodName}>{item.name}</Text>
-                          <View style={[styles.catBadge, { backgroundColor: item.badgeColor + "20" }]}>
-                            <Text style={[styles.catBadgeText, { color: item.badgeColor }]}>
-                              {item.category}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={styles.methodDesc} numberOfLines={2}>
-                          {item.desc}
-                        </Text>
-                      </View>
-
-                      <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                        {isSelected && <View style={styles.radioInner} />}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {/* Footer Pay Button */}
-              <View style={styles.footer}>
-                <TouchableOpacity
-                  style={[styles.payButton, loading && styles.payButtonDisabled]}
-                  onPress={handleProceedPayment}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <Text style={styles.payButtonText}>
-                      Lanjutkan Pembayaran • Rp {amount.toLocaleString("id-ID")}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </>
           )}
         </Pressable>
       </Pressable>
@@ -630,8 +870,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
+  backBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     color: "#0F172A",
   },
@@ -648,6 +896,113 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 20,
     backgroundColor: "#F1F5F9",
+  },
+  detailContent: {
+    padding: 20,
+    gap: 16,
+  },
+  billSummaryCard: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  billRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  billLabel: {
+    fontSize: 13,
+    color: "#64748B",
+  },
+  billValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+  billDivider: {
+    height: 1,
+    backgroundColor: "#E2E8F0",
+  },
+  billTotalValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#059669",
+  },
+  methodSelectedSection: {
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  selectedMethodCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#059669",
+    backgroundColor: "#F0FDF4",
+    gap: 12,
+  },
+  selectedMethodName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  selectedMethodDesc: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  changeMethodBtnOutlined: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#059669",
+    backgroundColor: "#FFFFFF",
+  },
+  changeMethodBtnOutlinedText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#059669",
+  },
+  fullChangeMethodRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  fullChangeMethodText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#059669",
+  },
+  securityBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    padding: 12,
+    borderRadius: 12,
+    gap: 10,
+  },
+  securityText: {
+    flex: 1,
+    fontSize: 11,
+    color: "#166534",
+    lineHeight: 16,
+  },
+  footerActionBox: {
+    marginTop: 8,
   },
   categoryTabs: {
     flexDirection: "row",
@@ -746,9 +1101,37 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#059669",
   },
-  footer: {
+  methodPickerFooter: {
     paddingHorizontal: 20,
     paddingTop: 12,
+    gap: 10,
+  },
+  confirmMethodBtn: {
+    backgroundColor: "#059669",
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  confirmMethodBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  cancelPickerBtn: {
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelPickerBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748B",
   },
   payButton: {
     backgroundColor: "#059669",

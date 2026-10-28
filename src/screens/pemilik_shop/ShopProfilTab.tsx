@@ -11,6 +11,7 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Linking,
 } from "react-native";
 import {
   User,
@@ -763,17 +764,14 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
         <TouchableOpacity
           style={styles.menuRow}
           onPress={() =>
-            Alert.alert(
-              "Pusat Bantuan",
-              "Hubungi CS Mitra Kanyaah Shop jika Anda membutuhkan bantuan seputar produk, pesanan, atau payout."
-            )
+            Linking.openURL("https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20mitra%20shop%20butuh%20bantuan.").catch(() => {})
           }
           activeOpacity={0.7}
         >
-          <View style={[styles.iconBg, { backgroundColor: "#F3F4F6" }]}>
-            <HelpCircle size={18} color="#4B5563" />
+          <View style={[styles.iconBg, { backgroundColor: "#DCFCE7" }]}>
+            <HelpCircle size={18} color="#15803D" />
           </View>
-          <Text style={styles.menuText}>Pusat Bantuan & Panduan Mitra</Text>
+          <Text style={styles.menuText}>Pusat Bantuan & CS WhatsApp</Text>
           <ChevronRight size={18} color="#9CA3AF" />
         </TouchableOpacity>
 

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { Screen } from "./src/types";
 
 // Auth Screens
@@ -117,13 +117,25 @@ export default function App() {
   const [selectedShopStoreId, setSelectedShopStoreId] = useState<string>("");
   const [selectedShopOrderId, setSelectedShopOrderId] = useState<string>("");
   const [selectedPointRedemptionId, setSelectedPointRedemptionId] = useState<string>("");
+  const [postLoginTarget, setPostLoginTarget] = useState<{ screen: Screen; params?: Record<string, any> } | null>(null);
+  const [loginPromptReason, setLoginPromptReason] = useState<string>("");
+  const [lastPublicScreen, setLastPublicScreen] = useState<Screen>("c_home");
+  const [customerInitialTab, setCustomerInitialTab] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     let active = true;
-    void restoreStoredAccount().then(({ account }) => {
+    void restoreStoredAccount().then(async ({ account }) => {
       if (!active) return;
       if (Platform.OS !== "web") {
-        if (!account) return;
+        if (!account) {
+          try {
+            const completed = await AsyncStorage.getItem("@geoverse_onboarding_completed");
+            if (active && completed === "true") {
+              setCurrentScreen("c_home");
+            }
+          } catch {}
+          return;
+        }
         setCurrentAuthAccount(account);
         setCurrentScreen(roleToScreen(account.role, account.status));
         return;
@@ -133,7 +145,10 @@ export default function App() {
           const locSearch = (window as any).location.search;
           if (locSearch) {
             const urlParams = new URLSearchParams(locSearch);
-            const screenParam = urlParams.get("screen") as Screen | null;
+            const rawScreen = urlParams.get("screen");
+            let screenParam = rawScreen as Screen | null;
+            if (rawScreen === "c_shop") screenParam = "c_shop_home";
+            if (rawScreen === "bank_sampah_home") screenParam = "bank_sampah_dashboard";
             if (screenParam) {
           if (screenParam === "admin_home") {
             const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge") || true;
@@ -206,6 +221,8 @@ export default function App() {
               status: "verified",
               token: "6aadbb8c5513afda4c34d999",
             };
+            setCurrentAuthAccount(bankAcc);
+            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: bankAcc, accountId: bankAcc.id }));
           } else if (screenParam?.startsWith("pemilik_laundry") || urlParams.get("role") === "pemilik_laundry") {
             const laundryAcc: any = {
               id: "laundry_seed_001",
@@ -302,6 +319,10 @@ export default function App() {
             setCurrentAuthAccount(adminAcc);
             void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: adminAcc, accountId: adminAcc.id }));
           }
+          const tabParam = urlParams.get("tab");
+          if (tabParam !== null) {
+            setCustomerInitialTab(Number(tabParam));
+          }
           setCurrentScreen(screenParam);
           return;
         }
@@ -310,10 +331,24 @@ export default function App() {
   } catch {
     // Safe fallback for mobile environments
   }
-  if (!account) return;
-      setCurrentAuthAccount(account);
-      setCurrentScreen(roleToScreen(account.role, account.status));
-    });
+  if (!account) {
+    try {
+      const completed = await AsyncStorage.getItem("@geoverse_onboarding_completed");
+      if (active) {
+        if (completed === "true") {
+          setCurrentScreen("c_home");
+        } else {
+          setCurrentScreen("onboarding");
+        }
+      }
+    } catch {
+      if (active) setCurrentScreen("onboarding");
+    }
+    return;
+  }
+  setCurrentAuthAccount(account);
+  setCurrentScreen(roleToScreen(account.role, account.status));
+});
 
     if (Platform.OS === "web" && typeof document !== "undefined") {
       const styleId = "rnw-focus-reset";
@@ -336,17 +371,88 @@ export default function App() {
   }, []);
 
   const navigate = (screen: Screen, params?: Record<string, any>) => {
-    if (screen === "login" || screen === "onboarding") {
+    if (screen === "login") {
+      if (params?.targetScreen) {
+        setPostLoginTarget({ screen: params.targetScreen, params: params.targetParams });
+      }
+      if (params?.reason) {
+        setLoginPromptReason(params.reason);
+      }
+      if (currentAuthAccount) {
+        setCurrentAuthAccount(null);
+        setRegistrationResult(null);
+        setGoogleDraft(null);
+        setGoogleCredential(null);
+        void clearSession();
+      }
+    } else if (screen === "onboarding") {
       setCurrentAuthAccount(null);
       setRegistrationResult(null);
       setGoogleDraft(null);
       setGoogleCredential(null);
       void clearSession();
+    } else {
+      const publicScreens: Screen[] = [
+        "c_home",
+        "c_ride",
+        "c_send",
+        "c_send_package",
+        "c_send_recipient",
+        "c_send_fare",
+        "c_marketplace",
+        "c_catering",
+        "c_catering_detail",
+        "c_laundry",
+        "c_laundry_detail",
+        "c_kos",
+        "c_kos_detail",
+        "c_shop_home",
+        "c_shop_discovery",
+        "c_shop_store",
+        "c_shop_cart",
+        "c_recycle_home",
+        "c_recycle_banks",
+        "c_recycle_bank_detail",
+        "c_recycle_deposit_form",
+        "c_recycle_pickup_schedule",
+        "c_point_home",
+        "c_point_vouchers",
+        "c_point_how_it_works",
+        "c_point_ledger",
+        "c_addresses",
+      ];
+      if (publicScreens.includes(screen)) {
+        setLastPublicScreen(screen);
+      }
     }
+
     if (params?.storeId) setSelectedShopStoreId(params.storeId);
     if (params?.orderId) setSelectedShopOrderId(params.orderId);
     if (params?.redemptionId) setSelectedPointRedemptionId(params.redemptionId);
+    if (params?.tab !== undefined) {
+      setCustomerInitialTab(Number(params.tab));
+    }
     setCurrentScreen(screen);
+  };
+
+  const handleCancelLogin = () => {
+    const returnScreen = postLoginTarget?.screen || lastPublicScreen || "c_home";
+    const returnParams = postLoginTarget?.params;
+    setPostLoginTarget(null);
+    setLoginPromptReason("");
+    navigate(returnScreen, returnParams);
+  };
+
+  const completeAuthTransition = (account: AuthAccount) => {
+    if (postLoginTarget) {
+      const target = postLoginTarget;
+      setPostLoginTarget(null);
+      setLoginPromptReason("");
+      navigate(target.screen, target.params);
+      return;
+    }
+    setLoginPromptReason("");
+    navigate(roleToScreen(account.role, account.status));
   };
 
   const handleLogin = async (email: string, password: string) => {
@@ -397,7 +503,7 @@ export default function App() {
     if (!result.account) return { ok: false, error: result.error };
     setCurrentAuthAccount(result.account);
     await createAuthSession(result.account);
-    navigate(roleToScreen(result.account.role, result.account.status));
+    completeAuthTransition(result.account);
     return { ok: true };
   };
 
@@ -406,7 +512,7 @@ export default function App() {
     if (result.account) {
       setCurrentAuthAccount(result.account);
       await createAuthSession(result.account);
-      navigate(roleToScreen(result.account.role, result.account.status));
+      completeAuthTransition(result.account);
       return;
     }
     setGoogleDraft(result.profile);
@@ -421,6 +527,10 @@ export default function App() {
     setCurrentAuthAccount(result.account);
     setGoogleDraft(null);
     setGoogleCredential(null);
+    if (postLoginTarget) {
+      completeAuthTransition(result.account);
+      return { ok: true };
+    }
     navigate("auth_register_success");
     return { ok: true };
   };
@@ -498,7 +608,15 @@ export default function App() {
       case "onboarding":
         return <OnboardingScreen navigate={navigate} />;
       case "login":
-        return <LoginScreen navigate={navigate} onLogin={handleLogin} onGoogleLogin={handleGoogleLogin} />;
+        return (
+          <LoginScreen
+            navigate={navigate}
+            onLogin={handleLogin}
+            onGoogleLogin={handleGoogleLogin}
+            loginReason={loginPromptReason}
+            onCancel={handleCancelLogin}
+          />
+        );
       case "role":
         return <RoleScreen navigate={navigate} onSelectRole={handleRoleSelection} />;
       case "auth_register_role":
@@ -520,7 +638,13 @@ export default function App() {
         return registrationResult ? (
           <RegisterSuccessScreen navigate={navigate} account={registrationResult} onContinue={() => void startSession(registrationResult)} />
         ) : (
-          <LoginScreen navigate={navigate} onLogin={handleLogin} onGoogleLogin={handleGoogleLogin} />
+          <LoginScreen
+            navigate={navigate}
+            onLogin={handleLogin}
+            onGoogleLogin={handleGoogleLogin}
+            loginReason={loginPromptReason}
+            onCancel={handleCancelLogin}
+          />
         );
       case "daftar_mitra_step1":
         return <DaftarMitraStep1Screen navigate={navigate} />;
@@ -539,7 +663,14 @@ export default function App() {
 
       // 1. Customer
       case "c_home":
-        return <CustomerDashboardScreen navigate={navigate} authAccount={currentAuthAccount} onUpdateAccount={handleUpdateAccount} />;
+        return (
+          <CustomerDashboardScreen
+            navigate={navigate}
+            authAccount={currentAuthAccount}
+            onUpdateAccount={handleUpdateAccount}
+            initialTab={customerInitialTab}
+          />
+        );
       case "c_addresses":
         return <CustomerAddressScreen navigate={navigate} authAccount={currentAuthAccount} onUpdateAccount={handleUpdateAccount} />;
       case "c_marketplace":
@@ -596,7 +727,7 @@ export default function App() {
       case "c_recycle_bank_detail":
         return <BankSampahDetailScreen navigate={navigate} />;
       case "c_recycle_deposit_form":
-        return <WasteDepositFormScreen navigate={navigate} />;
+        return <WasteDepositFormScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_recycle_pickup_schedule":
         return <WastePickupScheduleScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_recycle_tracking":
@@ -633,7 +764,7 @@ export default function App() {
       case "c_shop_store":
         return <StoreDetailScreen navigate={navigate} storeId={selectedShopStoreId} />;
       case "c_shop_cart":
-        return <ShopCartScreen navigate={navigate} />;
+        return <ShopCartScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_shop_checkout":
         return <ShopCheckoutScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_shop_order_detail":
@@ -700,7 +831,7 @@ export default function App() {
   };
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <GeoverseGlobalDialog />
       <GeoversePointProvider>
         <RecycleProvider>

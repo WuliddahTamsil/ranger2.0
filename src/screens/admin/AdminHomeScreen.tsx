@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -126,10 +126,12 @@ const getRoleMeta = (role: string) => {
 };
 
 export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
   const isTablet = width >= 768 && width < 1024;
   const isMobile = width < 768;
+  const isCompactMobile = width < 380;
 
   // Navigation Tabs (6 tabs):
   // 0: verifikasi, 1: monitoring, 2: transaksi, 3: mitra, 4: konten beranda, 5: akun
@@ -519,12 +521,12 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 
   // Bottom Navigation Config
   const navItems = [
-    { label: "Verifikasi", icon: ShieldCheck, badge: pendingCount },
-    { label: "Monitoring", icon: TrendingUp },
-    { label: "Transaksi", icon: Receipt },
-    { label: "Mitra", icon: Store },
-    { label: "Konten & Hub", icon: Sparkles },
-    { label: "Akun", icon: User },
+    { label: "Verifikasi", shortLabel: "Verifikasi", icon: ShieldCheck, badge: pendingCount },
+    { label: "Monitoring", shortLabel: "Monitor", icon: TrendingUp },
+    { label: "Transaksi", shortLabel: "Transaksi", icon: Receipt },
+    { label: "Mitra", shortLabel: "Mitra", icon: Store },
+    { label: "Konten & Hub", shortLabel: "Konten", icon: Sparkles },
+    { label: "Akun", shortLabel: "Akun", icon: User },
   ];
 
   // ==========================================
@@ -554,226 +556,248 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 
     return (
     <View style={styles.tabContentWrap}>
-      {/* Responsive Executive KPI Metrics Grid (2x2 on Mobile, 4 in 1 Row on Desktop) */}
+      {/* 1. HIERARKI: RINGKASAN INFORMASI PENTING (Executive KPI Metrics Grid) */}
       <View
         style={[
           styles.kpiGridRow,
           {
             flexDirection: isDesktop ? "row" : "column",
-            gap: isDesktop ? 14 : 10,
+            gap: isDesktop ? 12 : 10,
           },
         ]}
       >
-        {/* Row 1: Pair 1 (KPI 1 & KPI 2) */}
-        <View style={{ flexDirection: "row", flex: isDesktop ? 1 : undefined, gap: isDesktop ? 14 : 10 }}>
+        {/* Row 1: Pair 1 (KPI 1: Menunggu & KPI 2: Disetujui) */}
+        <View style={{ flexDirection: "row", flex: isDesktop ? 1 : undefined, gap: isDesktop ? 12 : 10 }}>
           {/* KPI 1: Pending */}
-          <View
+          <TouchableOpacity
             style={[
               styles.kpiCardItem,
-              {
-                flex: 1,
-                padding: isDesktop ? 18 : 12,
-                borderColor: pendingCount > 0 ? "#FDE68A" : "#E2E8F0",
-              },
+              statusFilter === "pending" && styles.kpiCardItemActive,
+              { flex: 1 },
             ]}
+            onPress={() => setStatusFilter("pending")}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Filter Menunggu Verifikasi"
           >
-            <View style={[styles.kpiTopRow, { marginBottom: isDesktop ? 12 : 6 }]}>
-              <View style={[styles.kpiIconBox, { width: isDesktop ? 36 : 28, height: isDesktop ? 36 : 28, backgroundColor: "#FFFBEB" }]}>
-                <Clock size={isDesktop ? 18 : 14} color="#D97706" />
+            <View style={styles.kpiTopRow}>
+              <View style={[styles.kpiIconBox, { backgroundColor: "#FEF3C7" }]}>
+                <Clock size={16} color="#D97706" />
               </View>
-              <View style={[styles.kpiStatusPill, { paddingHorizontal: isDesktop ? 8 : 6, paddingVertical: isDesktop ? 3 : 2, backgroundColor: pendingCount > 0 ? "#FEF3C7" : "#F1F5F9" }]}>
-                <Text style={[styles.kpiStatusPillText, { fontSize: isDesktop ? 11 : 9.5, color: pendingCount > 0 ? "#B45309" : "#64748B" }]}>
-                  {pendingCount > 0 ? "Tinjau" : "Selesai"}
+              <View style={[styles.kpiStatusPill, { backgroundColor: pendingCount > 0 ? "#FEF3C7" : "#F1F5F9" }]}>
+                <Text style={[styles.kpiStatusPillText, { color: pendingCount > 0 ? "#B45309" : "#64748B" }]}>
+                  {pendingCount > 0 ? "Perlu Tinjau" : "Selesai"}
                 </Text>
               </View>
             </View>
-            <Text style={[styles.kpiCardVal, { fontSize: isDesktop ? 26 : 20 }]}>{pendingCount}</Text>
-            <Text style={[styles.kpiCardLabel, { fontSize: isDesktop ? 13 : 11 }]} numberOfLines={1}>Menunggu Verifikasi</Text>
-            <Text style={[styles.kpiCardSub, { fontSize: isDesktop ? 11.5 : 9.5 }]} numberOfLines={1}>
-              {pendingCount > 0 ? "Perlu ditinjau" : "Semua beres"}
+            <Text style={[styles.kpiCardVal, { color: pendingCount > 0 ? "#B45309" : "#0F172A" }]}>{pendingCount}</Text>
+            <Text style={styles.kpiCardLabel}>Menunggu</Text>
+            <Text style={styles.kpiCardSub}>
+              {pendingCount > 0 ? "Perlu tinjau" : "Selesai"}
             </Text>
-          </View>
+          </TouchableOpacity>
 
           {/* KPI 2: Approved */}
-          <View
+          <TouchableOpacity
             style={[
               styles.kpiCardItem,
-              {
-                flex: 1,
-                padding: isDesktop ? 18 : 12,
-                borderColor: "#A7F3D0",
-              },
+              statusFilter === "verified" && styles.kpiCardItemActive,
+              { flex: 1 },
             ]}
+            onPress={() => setStatusFilter("verified")}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Filter Mitra Disetujui"
           >
-            <View style={[styles.kpiTopRow, { marginBottom: isDesktop ? 12 : 6 }]}>
-              <View style={[styles.kpiIconBox, { width: isDesktop ? 36 : 28, height: isDesktop ? 36 : 28, backgroundColor: "#ECFDF5" }]}>
-                <CheckCircle2 size={isDesktop ? 18 : 14} color="#059669" />
+            <View style={styles.kpiTopRow}>
+              <View style={[styles.kpiIconBox, { backgroundColor: "#ECFDF5" }]}>
+                <CheckCircle2 size={16} color="#0D7A53" />
               </View>
-              <View style={[styles.kpiStatusPill, { paddingHorizontal: isDesktop ? 8 : 6, paddingVertical: isDesktop ? 3 : 2, backgroundColor: "#ECFDF5" }]}>
-                <Text style={[styles.kpiStatusPillText, { fontSize: isDesktop ? 11 : 9.5, color: "#065F46" }]}>Aktif</Text>
+              <View style={[styles.kpiStatusPill, { backgroundColor: "#ECFDF5" }]}>
+                <Text style={[styles.kpiStatusPillText, { color: "#065F46" }]}>Aktif</Text>
               </View>
             </View>
-            <Text style={[styles.kpiCardVal, { fontSize: isDesktop ? 26 : 20, color: "#059669" }]}>{approvedCount}</Text>
-            <Text style={[styles.kpiCardLabel, { fontSize: isDesktop ? 13 : 11 }]} numberOfLines={1}>Mitra Disetujui</Text>
-            <Text style={[styles.kpiCardSub, { fontSize: isDesktop ? 11.5 : 9.5 }]} numberOfLines={1}>Aktif di ekosistem</Text>
-          </View>
+            <Text style={[styles.kpiCardVal, { color: "#0D7A53" }]}>{approvedCount}</Text>
+            <Text style={styles.kpiCardLabel}>Disetujui</Text>
+            <Text style={styles.kpiCardSub}>Mitra aktif</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Row 2: Pair 2 (KPI 3 & KPI 4) */}
-        <View style={{ flexDirection: "row", flex: isDesktop ? 1 : undefined, gap: isDesktop ? 14 : 10 }}>
+        {/* Row 2: Pair 2 (KPI 3: Ditolak & KPI 4: Total) */}
+        <View style={{ flexDirection: "row", flex: isDesktop ? 1 : undefined, gap: isDesktop ? 12 : 10 }}>
           {/* KPI 3: Rejected */}
-          <View
+          <TouchableOpacity
             style={[
               styles.kpiCardItem,
-              {
-                flex: 1,
-                padding: isDesktop ? 18 : 12,
-                borderColor: "#FECDD3",
-              },
+              statusFilter === "rejected" && styles.kpiCardItemActive,
+              { flex: 1 },
             ]}
+            onPress={() => setStatusFilter("rejected")}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Filter Pendaftaran Ditolak"
           >
-            <View style={[styles.kpiTopRow, { marginBottom: isDesktop ? 12 : 6 }]}>
-              <View style={[styles.kpiIconBox, { width: isDesktop ? 36 : 28, height: isDesktop ? 36 : 28, backgroundColor: "#FFF1F2" }]}>
-                <AlertCircle size={isDesktop ? 18 : 14} color="#E11D48" />
+            <View style={styles.kpiTopRow}>
+              <View style={[styles.kpiIconBox, { backgroundColor: "#FEF2F2" }]}>
+                <AlertCircle size={16} color="#DC2626" />
               </View>
-              <View style={[styles.kpiStatusPill, { paddingHorizontal: isDesktop ? 8 : 6, paddingVertical: isDesktop ? 3 : 2, backgroundColor: "#FFE4E6" }]}>
-                <Text style={[styles.kpiStatusPillText, { fontSize: isDesktop ? 11 : 9.5, color: "#9F1239" }]}>Revisi</Text>
+              <View style={[styles.kpiStatusPill, { backgroundColor: "#FEF2F2" }]}>
+                <Text style={[styles.kpiStatusPillText, { color: "#991B1B" }]}>Ditolak</Text>
               </View>
             </View>
-            <Text style={[styles.kpiCardVal, { fontSize: isDesktop ? 26 : 20, color: "#E11D48" }]}>{rejectedCount}</Text>
-            <Text style={[styles.kpiCardLabel, { fontSize: isDesktop ? 13 : 11 }]} numberOfLines={1}>Pendaftaran Ditolak</Text>
-            <Text style={[styles.kpiCardSub, { fontSize: isDesktop ? 11.5 : 9.5 }]} numberOfLines={1}>Menunggu perbaikan</Text>
-          </View>
+            <Text style={[styles.kpiCardVal, { color: "#DC2626" }]}>{rejectedCount}</Text>
+            <Text style={styles.kpiCardLabel}>Ditolak</Text>
+            <Text style={styles.kpiCardSub}>Perlu revisi</Text>
+          </TouchableOpacity>
 
           {/* KPI 4: Total Applicants */}
-          <View
+          <TouchableOpacity
             style={[
               styles.kpiCardItem,
-              {
-                flex: 1,
-                padding: isDesktop ? 18 : 12,
-                borderColor: "#E2E8F0",
-              },
+              statusFilter === "semua" && styles.kpiCardItemActive,
+              { flex: 1 },
             ]}
+            onPress={() => setStatusFilter("semua")}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Filter Semua Pendaftar"
           >
-            <View style={[styles.kpiTopRow, { marginBottom: isDesktop ? 12 : 6 }]}>
-              <View style={[styles.kpiIconBox, { width: isDesktop ? 36 : 28, height: isDesktop ? 36 : 28, backgroundColor: "#EFF6FF" }]}>
-                <Users size={isDesktop ? 18 : 14} color="#2563EB" />
+            <View style={styles.kpiTopRow}>
+              <View style={[styles.kpiIconBox, { backgroundColor: "#F1F5F9" }]}>
+                <Users size={16} color="#475569" />
               </View>
-              <View style={[styles.kpiStatusPill, { paddingHorizontal: isDesktop ? 8 : 6, paddingVertical: isDesktop ? 3 : 2, backgroundColor: "#EFF6FF" }]}>
-                <Text style={[styles.kpiStatusPillText, { fontSize: isDesktop ? 11 : 9.5, color: "#1E40AF" }]}>Total</Text>
+              <View style={[styles.kpiStatusPill, { backgroundColor: "#F1F5F9" }]}>
+                <Text style={[styles.kpiStatusPillText, { color: "#334155" }]}>Total</Text>
               </View>
             </View>
-            <Text style={[styles.kpiCardVal, { fontSize: isDesktop ? 26 : 20, color: "#1E293B" }]}>{pendingCount + approvedCount + rejectedCount}</Text>
-            <Text style={[styles.kpiCardLabel, { fontSize: isDesktop ? 13 : 11 }]} numberOfLines={1}>Total Pendaftar</Text>
-            <Text style={[styles.kpiCardSub, { fontSize: isDesktop ? 11.5 : 9.5 }]} numberOfLines={1}>Riwayat pendaftaran</Text>
-          </View>
+            <Text style={styles.kpiCardVal}>{pendingCount + approvedCount + rejectedCount}</Text>
+            <Text style={styles.kpiCardLabel}>Total Mitra</Text>
+            <Text style={styles.kpiCardSub}>Semua berkas</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Visual Analytics Row: Pipeline Status & 7-Day Trend Chart */}
-      <View style={[styles.analyticsGridRow, { flexDirection: isDesktop ? "row" : "column", gap: 16 }]}>
-        {/* Card 1: Pipeline Status */}
-        <View style={[styles.analyticsCard, { flex: 1, marginBottom: isDesktop ? 0 : 16 }]}>
-          <View style={styles.analyticsHeaderRow}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, marginRight: 8 }}>
-              <View style={[styles.analyticsIconBg, { backgroundColor: "#ECFDF5" }]}>
-                <BarChart3 size={16} color="#0D7A53" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.analyticsCardTitle} numberOfLines={1}>Pipeline & Rasio Verifikasi</Text>
-                <Text style={styles.analyticsCardSub} numberOfLines={1}>Distribusi status pendaftaran mitra</Text>
-              </View>
+      {/* 2. HIERARKI: AKTIVITAS ATAU TINDAKAN YANG PERLU DIPERHATIKAN */}
+      {pendingCount > 0 ? (
+        <View style={styles.attentionBannerWrap}>
+          <View style={styles.attentionBannerLeft}>
+            <View style={styles.attentionIconBox}>
+              <Clock size={18} color="#D97706" />
             </View>
-            <View style={styles.analyticsBadgeLive}>
-              <Sparkles size={11} color="#0D7A53" />
-              <Text style={styles.analyticsBadgeLiveText}>Real-time</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.attentionBannerTitle}>
+                {pendingCount} Pendaftaran Mitra Menunggu Verifikasi
+              </Text>
+              <Text style={styles.attentionBannerDesc}>
+                Tinjau kelengkapan berkas legalitas dan data usaha mitra untuk persetujuan akun.
+              </Text>
             </View>
           </View>
+          {statusFilter !== "pending" && (
+            <TouchableOpacity
+              style={styles.attentionActionBtn}
+              onPress={() => setStatusFilter("pending")}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.attentionActionBtnText}>Tinjau Berkas</Text>
+              <ChevronRight size={14} color="#0D7A53" />
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : (
+        <View style={styles.attentionBannerReady}>
+          <CheckCircle2 size={16} color="#0D7A53" />
+          <Text style={styles.attentionBannerReadyText}>
+            Semua pengajuan pendaftaran mitra telah diproses dan diverifikasi.
+          </Text>
+        </View>
+      )}
 
-          {/* Segmented Pipeline Progress Bar */}
-          <View style={styles.pipelineBarWrap}>
-            <View style={[styles.pipelineSegment, { width: `${Math.max(approvedPct, approvedCount > 0 ? 8 : 0)}%`, backgroundColor: "#0D7A53" }]} />
-            <View style={[styles.pipelineSegment, { width: `${Math.max(pendingPct, pendingCount > 0 ? 8 : 0)}%`, backgroundColor: "#F59E0B" }]} />
-            <View style={[styles.pipelineSegment, { width: `${Math.max(rejectedPct, rejectedCount > 0 ? 8 : 0)}%`, backgroundColor: "#EF4444" }]} />
-          </View>
-
-          {/* Legend KPI Tags */}
-          <View style={styles.legendGrid}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: "#0D7A53" }]} />
-              <Text style={styles.legendLabel}>Disetujui ({approvedCount})</Text>
-              <Text style={[styles.legendVal, { color: "#0D7A53" }]}>{approvedPct}%</Text>
+      {/* 3. RINGKASAN ALUR & TREN PENDAFTARAN (Streamlined single card) */}
+      <View style={styles.analyticsCard}>
+        <View style={styles.analyticsHeaderRow}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, marginRight: 8 }}>
+            <View style={[styles.analyticsIconBg, { backgroundColor: "#ECFDF5" }]}>
+              <BarChart3 size={15} color="#0D7A53" />
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: "#F59E0B" }]} />
-              <Text style={styles.legendLabel}>Pending ({pendingCount})</Text>
-              <Text style={[styles.legendVal, { color: "#F59E0B" }]}>{pendingPct}%</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: "#EF4444" }]} />
-              <Text style={styles.legendLabel}>Ditolak ({rejectedCount})</Text>
-              <Text style={[styles.legendVal, { color: "#EF4444" }]}>{rejectedPct}%</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.analyticsCardTitle} numberOfLines={1}>Alur & Tren Pendaftaran</Text>
+              <Text style={styles.analyticsCardSub} numberOfLines={1}>Rasio kelulusan & volume 7 hari terakhir</Text>
             </View>
           </View>
         </View>
 
-        {/* Card 2: 7-Day Histogram Trend Bar Chart */}
-        <View style={[styles.analyticsCard, { flex: 1, marginBottom: isDesktop ? 0 : 16 }]}>
-          <View style={styles.analyticsHeaderRow}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, marginRight: 8 }}>
-              <View style={[styles.analyticsIconBg, { backgroundColor: "#EFF6FF" }]}>
-                <TrendingUp size={16} color="#2563EB" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.trendChartTitle}>Tren Pendaftaran (7 Hari)</Text>
-                <Text style={styles.trendChartSub}>Puncak: {maxDailyCount} pendaftaran/hari</Text>
-              </View>
-            </View>
+        {/* Segmented Pipeline Progress Bar */}
+        <View style={styles.pipelineBarWrap}>
+          <View style={[styles.pipelineSegment, { width: `${Math.max(approvedPct, approvedCount > 0 ? 8 : 0)}%`, backgroundColor: "#0D7A53" }]} />
+          <View style={[styles.pipelineSegment, { width: `${Math.max(pendingPct, pendingCount > 0 ? 8 : 0)}%`, backgroundColor: "#F59E0B" }]} />
+          <View style={[styles.pipelineSegment, { width: `${Math.max(rejectedPct, rejectedCount > 0 ? 8 : 0)}%`, backgroundColor: "#EF4444" }]} />
+        </View>
+
+        {/* Legend KPI Tags */}
+        <View style={styles.legendGrid}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: "#0D7A53" }]} />
+            <Text style={styles.legendLabel}>Disetujui</Text>
+            <Text style={[styles.legendVal, { color: "#0D7A53" }]}>{approvedPct}% ({approvedCount})</Text>
           </View>
-          <View style={styles.histogramRow}>
-            {trendData.map((item: any, idx: number) => {
-              const barHeightPct = Math.max(Math.round((item.count / maxDailyCount) * 100), item.count > 0 ? 25 : 8);
-              const isToday = idx === trendData.length - 1;
-              return (
-                <View key={idx} style={styles.histogramCol}>
-                  <Text style={[styles.histogramCountText, item.count > 0 && { color: "#0D7A53", fontWeight: "800" }]}>
-                    {item.count > 0 ? item.count : "-"}
-                  </Text>
-                  <View style={styles.histogramTrack}>
-                    <View
-                      style={[
-                        styles.histogramFill,
-                        {
-                          height: `${barHeightPct}%`,
-                          backgroundColor: item.count > 0 ? (isToday ? "#0D7A53" : "#34D399") : "#E2E8F0",
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.histogramDayText, isToday && styles.histogramDayToday]}>
-                    {item.day}
-                  </Text>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: "#F59E0B" }]} />
+            <Text style={styles.legendLabel}>Pending</Text>
+            <Text style={[styles.legendVal, { color: "#F59E0B" }]}>{pendingPct}% ({pendingCount})</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: "#EF4444" }]} />
+            <Text style={styles.legendLabel}>Ditolak</Text>
+            <Text style={[styles.legendVal, { color: "#EF4444" }]}>{rejectedPct}% ({rejectedCount})</Text>
+          </View>
+        </View>
+
+        <View style={styles.analyticsDivider} />
+
+        {/* 7-Day Histogram Bars */}
+        <View style={styles.histogramRow}>
+          {trendData.map((item: any, idx: number) => {
+            const barHeightPct = Math.max(Math.round((item.count / maxDailyCount) * 100), item.count > 0 ? 25 : 8);
+            const isToday = idx === trendData.length - 1;
+            return (
+              <View key={idx} style={styles.histogramCol}>
+                <Text style={[styles.histogramCountText, item.count > 0 && { color: "#0D7A53", fontWeight: "700" }]}>
+                  {item.count > 0 ? item.count : "-"}
+                </Text>
+                <View style={styles.histogramTrack}>
+                  <View
+                    style={[
+                      styles.histogramFill,
+                      {
+                        height: `${barHeightPct}%`,
+                        backgroundColor: item.count > 0 ? (isToday ? "#0D7A53" : "#34D399") : "#E2E8F0",
+                      },
+                    ]}
+                  />
                 </View>
-              );
-            })}
-          </View>
+                <Text style={[styles.histogramDayText, isToday && styles.histogramDayToday]}>
+                  {item.day}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       </View>
 
-      {/* Search Bar (Clean, rounded, matching theme) */}
+      {/* 4. PENCARIAN & PENYARINGAN BERKAS */}
       <View style={styles.searchBarWrap}>
-        <Search size={18} color="#1B7A4E" />
+        <Search size={18} color="#0D7A53" />
         <TextInput
           style={styles.searchBarInput}
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Cari nama mitra, nama usaha, atau nomor HP..."
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor="#94A3B8"
         />
         {searchQuery ? (
           <TouchableOpacity onPress={() => setSearchQuery("")}>
-            <X size={16} color="#9CA3AF" />
+            <X size={16} color="#94A3B8" />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -785,39 +809,6 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
         contentContainerStyle={styles.statusPillsRow}
       >
         <TouchableOpacity
-          style={[styles.statusPill, statusFilter === "pending" && styles.statusPillPendingActive]}
-          onPress={() => setStatusFilter("pending")}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.filterDot, { backgroundColor: "#D97706" }]} />
-          <Text style={[styles.statusPillText, statusFilter === "pending" && styles.statusPillTextPendingActive]}>
-            Menunggu ({pendingCount})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.statusPill, statusFilter === "verified" && styles.statusPillSuccessActive]}
-          onPress={() => setStatusFilter("verified")}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.filterDot, { backgroundColor: "#1B7A4E" }]} />
-          <Text style={[styles.statusPillText, statusFilter === "verified" && styles.statusPillTextSuccessActive]}>
-            Disetujui ({approvedCount})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.statusPill, statusFilter === "rejected" && styles.statusPillDangerActive]}
-          onPress={() => setStatusFilter("rejected")}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.filterDot, { backgroundColor: "#DC2626" }]} />
-          <Text style={[styles.statusPillText, statusFilter === "rejected" && styles.statusPillTextDangerActive]}>
-            Ditolak ({rejectedCount})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
           style={[styles.statusPill, statusFilter === "semua" && styles.statusPillActive]}
           onPress={() => setStatusFilter("semua")}
           activeOpacity={0.7}
@@ -826,13 +817,46 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             Semua ({mitraAccounts.filter((m) => m.role !== "admin").length})
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.statusPill, statusFilter === "pending" && styles.statusPillActive]}
+          onPress={() => setStatusFilter("pending")}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.filterDot, { backgroundColor: statusFilter === "pending" ? "#FFFFFF" : "#D97706" }]} />
+          <Text style={[styles.statusPillText, statusFilter === "pending" && styles.statusPillTextActive]}>
+            Menunggu ({pendingCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.statusPill, statusFilter === "verified" && styles.statusPillActive]}
+          onPress={() => setStatusFilter("verified")}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.filterDot, { backgroundColor: statusFilter === "verified" ? "#FFFFFF" : "#0D7A53" }]} />
+          <Text style={[styles.statusPillText, statusFilter === "verified" && styles.statusPillTextActive]}>
+            Disetujui ({approvedCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.statusPill, statusFilter === "rejected" && styles.statusPillActive]}
+          onPress={() => setStatusFilter("rejected")}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.filterDot, { backgroundColor: statusFilter === "rejected" ? "#FFFFFF" : "#DC2626" }]} />
+          <Text style={[styles.statusPillText, statusFilter === "rejected" && styles.statusPillTextActive]}>
+            Ditolak ({rejectedCount})
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Role Category Filter Chips */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipsRow}>
         {[
           { key: "semua", label: "Semua Kategori", icon: Users },
-          { key: "customer", label: "Pelanggan / Warga", icon: User },
+          { key: "customer", label: "Pelanggan", icon: User },
           { key: "driver", label: "Driver", icon: Truck },
           { key: "pemilik_catering", label: "Catering", icon: Utensils },
           { key: "pemilik_laundry", label: "Laundry", icon: Shirt },
@@ -849,7 +873,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               onPress={() => setRoleFilter(item.key)}
               activeOpacity={0.7}
             >
-              <IconComp size={13} color={isActive ? "#FFFFFF" : "#6B7280"} />
+              <IconComp size={13} color={isActive ? "#FFFFFF" : "#64748B"} />
               <Text style={[styles.categoryChipText, isActive && styles.categoryChipTextActive]}>
                 {item.label}
               </Text>
@@ -857,6 +881,14 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           );
         })}
       </ScrollView>
+
+      {/* Section Header: Daftar Pengajuan */}
+      <View style={styles.listSectionHeader}>
+        <Text style={styles.listSectionTitle}>Daftar Pengajuan Mitra</Text>
+        <View style={styles.listCountBadge}>
+          <Text style={styles.listCountBadgeText}>{filteredMitra.length} Berkas</Text>
+        </View>
+      </View>
 
       {/* Verification Cards List */}
       {filteredMitra.length === 0 ? (
@@ -2876,14 +2908,18 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             MOBILE / TABLET COMPACT LAYOUT (Edge-to-Edge Experience)
            ======================================================== */
         <View style={styles.mobileAppShell}>
-          {/* Mobile Top Header */}
-          <View style={styles.mobileTopHeader}>
+          {/* Mobile Top Header - Clean, Modern Executive Experience */}
+          <View
+            style={[
+              styles.mobileTopHeader,
+              { paddingTop: Math.max(insets.top, Platform.OS === "android" ? 14 : 12) + 6 },
+            ]}
+          >
             <View style={styles.mobileHeaderTopRow}>
-              <View style={styles.mobileHeaderLeft}>
-                <Text style={styles.mobileGreetingText}>Halo, {formattedGreeting.toLowerCase()} 🍃</Text>
-                <Text style={styles.mobileNameText} numberOfLines={1}>
-                  {getAdminDisplayName()}
-                </Text>
+              <View style={styles.mobileRolePill}>
+                <ShieldCheck size={14} color="#A7F3D0" strokeWidth={2.3} />
+                <Text style={styles.mobileRolePillText}>GEOVERSE • PGE KAMOJANG</Text>
+                <View style={styles.roleLiveDot} />
               </View>
 
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -2902,7 +2938,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                   activeOpacity={0.75}
                   accessibilityLabel="Buka notifikasi"
                 >
-                  <Bell size={18} color="#FFFFFF" strokeWidth={2} />
+                  <Bell size={17} color="#FFFFFF" strokeWidth={2.2} />
                   {pendingCount > 0 && (
                     <View style={styles.notifBadge}>
                       <Text style={styles.notifBadgeText}>
@@ -2914,10 +2950,12 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               </View>
             </View>
 
-            <View style={styles.mobileRolePill}>
-              <ShieldCheck size={13} color="#FFFFFF" strokeWidth={2.5} />
-              <Text style={styles.mobileRolePillText}>Super Admin • PGE Kamojang</Text>
-              <View style={styles.roleLiveDot} />
+            <View style={styles.mobileGreetingRow}>
+              <Text style={styles.mobileGreetingText}>Halo, {formattedGreeting}</Text>
+              <Text style={styles.mobileNameText} numberOfLines={1}>
+                {getAdminDisplayName()}
+              </Text>
+              <Text style={styles.mobileSublineText}>Pusat Kendali & Administrasi Platform</Text>
             </View>
           </View>
 
@@ -2925,7 +2963,10 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           <ScrollView
             showsVerticalScrollIndicator={false}
             style={styles.mobileScrollView}
-            contentContainerStyle={styles.mobileScrollContent}
+            contentContainerStyle={[
+              styles.mobileScrollContent,
+              { paddingBottom: Math.max(insets.bottom, 18) + 84 },
+            ]}
             refreshControl={
               <RefreshControl
                 refreshing={loading}
@@ -2938,28 +2979,49 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             {renderTabContent()}
           </ScrollView>
 
-          {/* Mobile Bottom Navigation */}
-          <View style={styles.mobileBottomNavContainer}>
+          {/* Mobile Bottom Navigation - Sederhana, Ikon Kecil & Konsisten */}
+          <View
+            style={[
+              styles.mobileBottomNavContainer,
+              { paddingBottom: Math.max(insets.bottom, Platform.OS === "ios" ? 14 : 8) },
+            ]}
+          >
             {navItems.map((item, index) => {
               const active = currentTab === index;
               const IconComp = item.icon;
+              const displayLabel = item.shortLabel || item.label;
               return (
                 <TouchableOpacity
                   key={index}
                   style={styles.mobileNavItem}
                   onPress={() => setCurrentTab(index)}
-                  activeOpacity={0.7}
+                  activeOpacity={0.75}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={item.label}
                 >
-                  <View style={[styles.mobileNavIconBg, active ? styles.mobileNavIconBgActive : null]}>
-                    <IconComp size={18} color={active ? "#0D7A53" : "#94A3B8"} strokeWidth={active ? 2.5 : 2} />
-                    {Boolean(item.badge && item.badge > 0) && (
+                  {/* Penanda menu aktif sederhana di bagian atas */}
+                  <View style={[styles.mobileNavIndicator, active && styles.mobileNavIndicatorActive]} />
+
+                  <View style={styles.mobileNavIconWrap}>
+                    <IconComp
+                      size={18}
+                      color={active ? "#0D7A53" : "#64748B"}
+                      strokeWidth={active ? 2.3 : 1.9}
+                    />
+                    {typeof item.badge === "number" && item.badge > 0 ? (
                       <View style={styles.mobileNavBadge}>
-                        <Text style={styles.mobileNavBadgeText}>{item.badge}</Text>
+                        <Text style={styles.mobileNavBadgeText}>
+                          {item.badge > 99 ? "99+" : item.badge}
+                        </Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
-                  <Text style={[styles.mobileNavLabel, active ? styles.mobileNavLabelActive : null]} numberOfLines={1}>
-                    {item.label}
+                  <Text
+                    style={[styles.mobileNavLabel, active && styles.mobileNavLabelActive]}
+                    numberOfLines={1}
+                  >
+                    {displayLabel}
                   </Text>
                 </TouchableOpacity>
               );
@@ -4272,15 +4334,20 @@ const styles = StyleSheet.create({
   mobileAppShell: {
     flex: 1,
     width: "100%",
-    backgroundColor: "#0D7A53",
+    backgroundColor: "#064E3B",
   },
   mobileTopHeader: {
-    backgroundColor: "#0D7A53",
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === "android" ? 14 : 10,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    backgroundColor: "#064E3B",
+    paddingHorizontal: 18,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
   },
   mobileHeaderTopRow: {
     flexDirection: "row",
@@ -4288,60 +4355,66 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  mobileHeaderLeft: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  mobileGreetingText: {
-    fontSize: 12.5,
-    color: "#D1FAE5",
-    fontWeight: "500",
-    marginBottom: 3,
-  },
-  mobileNameText: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: -0.3,
-  },
-  mobileSyncBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "rgba(255, 255, 255, 0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.25)",
-  },
-  mobileNotifBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "rgba(255, 255, 255, 0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.25)",
-    position: "relative",
-  },
   mobileRolePill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.25)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
     alignSelf: "flex-start",
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 16,
+    borderRadius: 12,
     gap: 6,
   },
   mobileRolePillText: {
     color: "#FFFFFF",
-    fontSize: 11.5,
+    fontSize: 10.5,
     fontWeight: "700",
-    letterSpacing: 0.2,
+    letterSpacing: 0.4,
+  },
+  mobileSyncBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  mobileNotifBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    position: "relative",
+  },
+  mobileGreetingRow: {
+    marginTop: 2,
+  },
+  mobileGreetingText: {
+    fontSize: 12,
+    color: "#A7F3D0",
+    fontWeight: "500",
+    letterSpacing: 0.1,
+  },
+  mobileNameText: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.3,
+    marginTop: 2,
+  },
+  mobileSublineText: {
+    fontSize: 11.5,
+    color: "rgba(209, 250, 229, 0.75)",
+    fontWeight: "500",
+    marginTop: 2,
   },
   mobileScrollView: {
     flex: 1,
@@ -4357,36 +4430,53 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
     flexDirection: "row",
-    paddingTop: 8,
-    paddingBottom: Platform.OS === "ios" ? 22 : 12,
-    paddingHorizontal: 4,
-    justifyContent: "space-around",
+    paddingTop: 6,
+    paddingHorizontal: 6,
+    justifyContent: "space-between",
+    alignItems: "center",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 8,
   },
   mobileNavItem: {
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
     paddingVertical: 2,
-  },
-  mobileNavIconBg: {
     position: "relative",
-    padding: 4,
-    borderRadius: 12,
   },
-  mobileNavIconBgActive: {
-    backgroundColor: "#ECFDF5",
+  mobileNavIndicator: {
+    height: 2.5,
+    width: 20,
+    borderRadius: 1.5,
+    backgroundColor: "transparent",
+    marginBottom: 4,
+  },
+  mobileNavIndicatorActive: {
+    backgroundColor: "#0D7A53",
+  },
+  mobileNavIconWrap: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 28,
+    height: 22,
   },
   mobileNavBadge: {
     position: "absolute",
-    top: -2,
-    right: -2,
-    backgroundColor: "#EF4444",
-    minWidth: 14,
-    height: 14,
-    borderRadius: 7,
+    top: -4,
+    right: -8,
+    backgroundColor: "#DC2626",
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
   },
   mobileNavBadgeText: {
     color: "#FFFFFF",
@@ -4395,72 +4485,175 @@ const styles = StyleSheet.create({
   },
   mobileNavLabel: {
     fontSize: 9.5,
-    color: "#94A3B8",
-    fontWeight: "600",
-    marginTop: 2,
+    color: "#64748B",
+    fontWeight: "500",
+    marginTop: 3,
     textAlign: "center",
+    letterSpacing: -0.1,
   },
   mobileNavLabelActive: {
     color: "#0D7A53",
-    fontWeight: "800",
+    fontWeight: "700",
+  },
+
+  // Attention Banner Styles
+  attentionBannerWrap: {
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    flexDirection: "column",
+    gap: 10,
+  },
+  attentionBannerLeft: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  attentionIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  attentionBannerTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#92400E",
+    marginBottom: 2,
+  },
+  attentionBannerDesc: {
+    fontSize: 11.5,
+    color: "#B45309",
+    lineHeight: 16,
+  },
+  attentionActionBtn: {
+    alignSelf: "flex-end",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  attentionActionBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  attentionBannerReady: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  attentionBannerReadyText: {
+    fontSize: 12,
+    color: "#065F46",
+    fontWeight: "600",
+    flex: 1,
   },
 
   // Responsive Grid Containers
   kpiGridRow: {
-    gap: 14,
-    marginBottom: 18,
+    gap: 10,
+    marginBottom: 14,
   },
   kpiCardItem: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 18,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowRadius: 4,
     elevation: 2,
+  },
+  kpiCardItemActive: {
+    borderColor: "#0D7A53",
+    borderWidth: 1.5,
   },
   kpiTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   kpiIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   kpiStatusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
   },
   kpiStatusPillText: {
-    fontSize: 11,
+    fontSize: 9.5,
     fontWeight: "700",
+    letterSpacing: 0.1,
   },
   kpiCardVal: {
-    fontSize: 26,
-    fontWeight: "900",
+    fontSize: 22,
+    fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.5,
-    marginBottom: 3,
-  },
-  kpiCardLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#334155",
+    letterSpacing: -0.4,
     marginBottom: 2,
   },
-  kpiCardSub: {
+  kpiCardLabel: {
     fontSize: 11.5,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 1,
+  },
+  kpiCardSub: {
+    fontSize: 10.5,
     color: "#64748B",
     fontWeight: "500",
+  },
+
+  // Section Header
+  listSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  listSectionTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.2,
+  },
+  listCountBadge: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  listCountBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#475569",
   },
 
   analyticsGridRow: {
@@ -4718,15 +4911,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusPillActive: {
-    backgroundColor: "#1B7A4E",
-    borderColor: "#1B7A4E",
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
   },
   statusPillPendingActive: {
     backgroundColor: "#FFFBEB",
     borderColor: "#FDE68A",
   },
   statusPillSuccessActive: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#ECFDF5",
     borderColor: "#A7F3D0",
   },
   statusPillDangerActive: {
@@ -4741,23 +4934,23 @@ const styles = StyleSheet.create({
   statusPillText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#6B7280",
+    color: "#64748B",
   },
   statusPillTextActive: {
     color: "#FFFFFF",
-    fontWeight: "800",
+    fontWeight: "700",
   },
   statusPillTextPendingActive: {
     color: "#D97706",
-    fontWeight: "800",
+    fontWeight: "700",
   },
   statusPillTextSuccessActive: {
-    color: "#1B7A4E",
-    fontWeight: "800",
+    color: "#0D7A53",
+    fontWeight: "700",
   },
   statusPillTextDangerActive: {
     color: "#DC2626",
-    fontWeight: "800",
+    fontWeight: "700",
   },
 
   // Category Filter Chips
@@ -4772,71 +4965,71 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E2E8F0",
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   categoryChipActive: {
-    backgroundColor: "#1B7A4E",
-    borderColor: "#1B7A4E",
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
   },
   categoryChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#6B7280",
+    color: "#64748B",
   },
   categoryChipTextActive: {
     color: "#FFFFFF",
-    fontWeight: "800",
+    fontWeight: "700",
   },
 
   // Mitra Cards (Clean white with subtle green touches)
   mitraCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    padding: 16,
+    borderColor: "#E2E8F0",
+    padding: 14,
     marginBottom: 12,
-    elevation: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 4,
+    elevation: 2,
   },
   mitraCardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   roleBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
     borderWidth: 1,
   },
   roleBadgeText: {
-    fontSize: 11,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "700",
   },
   badgeSuccess: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#ECFDF5",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3.5,
     borderRadius: 8,
   },
   badgeSuccessText: {
     fontSize: 10,
-    fontWeight: "800",
-    color: "#1B7A4E",
+    fontWeight: "700",
+    color: "#0D7A53",
   },
   badgePending: {
     flexDirection: "row",
@@ -4844,12 +5037,12 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: "#FFFBEB",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3.5,
     borderRadius: 8,
   },
   badgePendingText: {
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#D97706",
   },
   badgeDanger: {
@@ -4858,12 +5051,12 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: "#FEF2F2",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3.5,
     borderRadius: 8,
   },
   badgeDangerText: {
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#DC2626",
   },
   mitraCardBody: {
@@ -4872,33 +5065,35 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
   },
   avatarInitial: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
   },
   mitraBusinessName: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: "800",
-    color: "#111827",
+    color: "#0F172A",
   },
   mitraOwnerName: {
-    fontSize: 12,
-    color: "#6B7280",
+    fontSize: 11.5,
+    color: "#64748B",
     marginTop: 2,
   },
   mitraMetaContainer: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
     padding: 10,
     gap: 6,
-    marginBottom: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
   metaRow: {
     flexDirection: "row",
@@ -4907,22 +5102,22 @@ const styles = StyleSheet.create({
   },
   metaText: {
     flex: 1,
-    fontSize: 12,
-    color: "#4B5563",
+    fontSize: 11.5,
+    color: "#475569",
   },
   quickWaBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#ECFDF5",
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   quickWaBtnText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#1B7A4E",
+    color: "#0D7A53",
   },
   rejectionNoticeBox: {
     backgroundColor: "#FEF2F2",
@@ -4944,35 +5139,40 @@ const styles = StyleSheet.create({
   },
   btnInspect: {
     flex: 1,
+    minWidth: 120,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: "#BBF7D0",
+    borderColor: "#A7F3D0",
     paddingVertical: 9,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    borderRadius: 10,
   },
   btnInspectText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#1B7A4E",
+    color: "#065F46",
   },
   quickActionGroup: {
     flexDirection: "row",
-    gap: 6,
+    alignItems: "center",
+    gap: 8,
   },
   btnQuickReject: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 4,
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
     borderColor: "#FECACA",
     paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 12,
+    borderRadius: 10,
+    minWidth: 70,
   },
   btnQuickRejectText: {
     fontSize: 12,
@@ -4982,11 +5182,13 @@ const styles = StyleSheet.create({
   btnQuickApprove: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
-    backgroundColor: "#1B7A4E",
-    paddingHorizontal: 16,
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 14,
     paddingVertical: 9,
-    borderRadius: 12,
+    borderRadius: 10,
+    minWidth: 72,
   },
   btnQuickApproveText: {
     fontSize: 12,
@@ -6439,24 +6641,21 @@ const styles = StyleSheet.create({
   legendItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    flex: 1,
-    minWidth: "30%",
+    gap: 5,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   legendLabel: {
-    fontSize: 11,
-    color: "#4B5563",
+    fontSize: 10.5,
+    color: "#64748B",
     fontWeight: "600",
-    flex: 1,
   },
   legendVal: {
-    fontSize: 11,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "700",
   },
   analyticsDivider: {
     height: 1,

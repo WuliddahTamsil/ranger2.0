@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -501,6 +501,7 @@ const getDriverDocumentStatus = (account: AuthAccount | null | undefined, key: s
 };
 
 export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState<number>(0);
   const [selectedOrderIdForTab, setSelectedOrderIdForTab] = useState<string | null>(null);
   const [openedOrderFromBeranda, setOpenedOrderFromBeranda] = useState<boolean>(false);
@@ -2433,7 +2434,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
       <View style={styles.tabContainer}>{renderTabContent()}</View>
 
       {/* Bottom Nav Bar */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         {navItems.map((item, index) => {
           const active = currentTab === index;
           const IconComp = item.icon;

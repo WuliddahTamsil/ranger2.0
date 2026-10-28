@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  Alert,
 } from "react-native";
 import {
   ArrowLeft,
@@ -105,9 +106,27 @@ export const SendFareEstimateScreen: React.FC<SendFareEstimateScreenProps> = ({
 
   const handleCheckout = async () => {
     if (!fareEstimate || submitting) return;
+    if (!authAccount?.id) {
+      Alert.alert(
+        "Masuk ke Akun Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk memproses pesanan pengantaran Kanyaah Send.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk Sekarang",
+            onPress: () =>
+              navigate("login", {
+                targetScreen: "c_send_fare",
+                reason: "Masuk ke akun GEOVERSE untuk memesan pengantaran barang Kanyaah Send.",
+              }),
+          },
+        ]
+      );
+      return;
+    }
     setSubmitting(true);
     try {
-      const idempotencyKey = `SEND-${authAccount?.id || "anon"}-${Date.now()}`;
+      const idempotencyKey = `SEND-${authAccount.id}-${Date.now()}`;
       const payload = {
         sender,
         recipient,

@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -102,6 +102,7 @@ interface ManajemenPenghuniProps extends Nav {
 }
 
 export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("penghuni");
 
   // Category Tab: "kost" | "hotel" | "wisata"
@@ -1384,7 +1385,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
       </ScrollView>
 
       {/* Bottom Navigation Bar */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         <TouchableOpacity
           style={styles.navTab}
           onPress={() => navigate("pemilik_kos_home")}
@@ -2929,14 +2930,16 @@ const styles = StyleSheet.create({
   // Summary Cards Row
   summaryRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginBottom: 16,
   },
   summaryCard: {
     flex: 1,
+    minWidth: 90,
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    padding: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: "#F3F4F6",
     elevation: 2,
@@ -3026,6 +3029,7 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 6,
     marginBottom: 2,
   },
@@ -3033,6 +3037,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   badgeGreen: {
     backgroundColor: "#DCFCE7",
@@ -3138,21 +3143,25 @@ const styles = StyleSheet.create({
   // Bottom Nav
   bottomNav: {
     flexDirection: "row",
-    height: 64,
+    minHeight: 56,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
     alignItems: "center",
     justifyContent: "space-around",
+    paddingTop: 6,
   },
   navTab: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 2,
   },
   navText: {
     fontSize: 10,
     color: "#9CA3AF",
-    marginTop: 3,
+    marginTop: 2,
+    textAlign: "center",
   },
   navTextActive: {
     color: "#0D7A53",

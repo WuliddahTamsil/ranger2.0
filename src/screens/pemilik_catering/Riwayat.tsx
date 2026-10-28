@@ -273,19 +273,23 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 6,
     marginBottom: 8,
   },
   cardId: {
     fontSize: 13,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
+    flexShrink: 0,
   },
   statusText: {
     fontSize: 10,
@@ -303,8 +307,10 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 6,
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,

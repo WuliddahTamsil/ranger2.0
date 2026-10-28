@@ -36,6 +36,7 @@ import { AuthAccount } from "../../auth/authTypes";
 import { useSendContext } from "../../../context/SendContext";
 import { useRecycle } from "../../../context/RecycleContext";
 import { fetchSendOrderById, createSendOrder } from "../../../services/sendService";
+import { updateOrderPaymentMethod } from "../../../services/paymentService";
 import { rp } from "../../../utils/formatters";
 import { API_BASE_URL, getApiUrl } from "../../../services/api";
 import { SafeAreaBottomBar } from "../../../components/SafeAreaBottomBar";
@@ -91,6 +92,10 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
   const [selectedMethod, setSelectedMethod] = useState<string>(
     activeOrder?.paymentMethod || paymentMethod || "QRIS"
   );
+  const [tempSelectedMethod, setTempSelectedMethod] = useState<string>(
+    activeOrder?.paymentMethod || paymentMethod || "QRIS"
+  );
+  const [updatingMethod, setUpdatingMethod] = useState(false);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes
@@ -102,6 +107,53 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
   );
   const [activeInstructionTab, setActiveInstructionTab] = useState<"mbanking" | "atm">("mbanking");
   const timerRef = useRef<any>(null);
+
+  const handleOpenMethodPicker = () => {
+    setTempSelectedMethod(selectedMethod);
+    setPaymentModalVisible(true);
+  };
+
+  const handleConfirmMethodChange = async () => {
+    if (!tempSelectedMethod) {
+      showToast("Silakan pilih salah satu metode pembayaran.");
+      return;
+    }
+    if (updatingMethod) return;
+
+    try {
+      setUpdatingMethod(true);
+      if (activeOrder?._id) {
+        const updateRes = await updateOrderPaymentMethod(
+          {
+            orderId: activeOrder._id,
+            orderType: "KANYAAH_SEND",
+            paymentMethod: tempSelectedMethod,
+          },
+          authAccount?.id
+        );
+        if (!updateRes?.success) {
+          throw new Error(updateRes?.message || "Gagal memperbarui metode di server.");
+        }
+        setActiveOrder({
+          ...activeOrder,
+          paymentMethod: tempSelectedMethod,
+        });
+      }
+      setSelectedMethod(tempSelectedMethod);
+      setPaymentMethod(tempSelectedMethod);
+      setPaymentModalVisible(false);
+      showToast("Metode pembayaran berhasil diperbarui.");
+    } catch (err: any) {
+      showToast(err?.message || "Gagal memperbarui metode pembayaran.");
+    } finally {
+      setUpdatingMethod(false);
+    }
+  };
+
+  const handleCancelMethodPicker = () => {
+    setTempSelectedMethod(selectedMethod);
+    setPaymentModalVisible(false);
+  };
 
   const selectedPaymentObj =
     paymentMethods.find((m) => m.id === selectedMethod) || paymentMethods[1];
@@ -231,9 +283,27 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
 
   // Create Order if not created yet
   const handleProceedOrder = async () => {
+    if (!authAccount?.id) {
+      Alert.alert(
+        "Masuk ke Akun Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk memproses pembayaran pesanan Kanyaah Send.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk Sekarang",
+            onPress: () =>
+              navigate("login", {
+                targetScreen: "c_send_payment",
+                reason: "Masuk ke akun GEOVERSE untuk menyelesaikan pembayaran pesanan Kanyaah Send.",
+              }),
+          },
+        ]
+      );
+      return;
+    }
     setCreatingOrder(true);
     try {
-      const idempotencyKey = `SEND-${authAccount?.id || "anon"}-${Date.now()}`;
+      const idempotencyKey = `SEND-${authAccount.id}-${Date.now()}`;
       const payload = {
         sender,
         recipient,
@@ -398,7 +468,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
             {/* Clickable Selected Card opening Bottom Sheet */}
             <TouchableOpacity
               style={styles.paymentSelectedCard}
-              onPress={() => setPaymentModalVisible(true)}
+              onPress={handleOpenMethodPicker}
               activeOpacity={0.85}
             >
               <View style={styles.paymentIcon}>
@@ -406,7 +476,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.paymentName}>{selectedPaymentObj.name}</Text>
-                <Text style={styles.paymentSub}>Ketuk untuk mengganti metode pembayaran</Text>
+                <Text style={styles.paymentSub}>Ganti metode pembayaran</Text>
               </View>
               <ChevronRight size={18} color="#6B7280" />
             </TouchableOpacity>
@@ -546,6 +616,28 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
                       <Text style={styles.copyPillText}>
                         {copied === "Nominal" ? "Tersalin!" : "Salin Nominal"}
                       </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Active Payment Method Card with Ganti Metode Pembayaran */}
+                <View style={[styles.amountCard, { marginTop: 12, paddingVertical: 12 }]}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                      <View style={[styles.paymentIcon, { backgroundColor: `${selectedPaymentObj.color}15`, width: 36, height: 36, borderRadius: 10 }]}>
+                        <WalletCards size={18} color={selectedPaymentObj.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#111827" }}>{selectedPaymentObj.name}</Text>
+                        <Text style={{ fontSize: 11, color: "#6B7280" }}>Metode pembayaran aktif</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleOpenMethodPicker}
+                      style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: "#0D7A53", backgroundColor: "#FFFFFF" }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: "700", color: "#0D7A53" }}>Ganti Metode</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -750,9 +842,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
                 ? "Memproses…"
                 : totalAmount === 0
                 ? "Bayar Poin & Pesan Sekarang · Rp 0"
-                : selectedMethod === "CASH"
-                ? `Buat Pesanan COD · ${rp(totalAmount)}`
-                : `Lanjut Pembayaran · ${rp(totalAmount)}`}
+                : `Lakukan Pembayaran · ${rp(totalAmount)}`}
             </Text>
             <ChevronRight size={18} color="#FFFFFF" />
           </TouchableOpacity>
@@ -761,21 +851,21 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
 
       {/* ========================================================= */}
       {/* BOTTOM SHEET MODAL: PILIH METODE PEMBAYARAN */}
-      {/* Identical to Marketplace modal */}
+      {/* Decoupled flow with Lanjutkan Ubah Metode Pembayaran */}
       {/* ========================================================= */}
       <Modal
         visible={paymentModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setPaymentModalVisible(false)}
+        onRequestClose={handleCancelMethodPicker}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.paymentSheet}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Pilih Pembayaran</Text>
+              <Text style={styles.sheetTitle}>Pilih Metode Pembayaran</Text>
               <TouchableOpacity
-                onPress={() => setPaymentModalVisible(false)}
+                onPress={handleCancelMethodPicker}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <X size={20} color="#111827" />
@@ -783,19 +873,18 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
             </View>
 
             {paymentMethods.map((method) => {
-              const isSelected = selectedMethod === method.id;
+              const isSelected = tempSelectedMethod === method.id;
               return (
                 <TouchableOpacity
                   key={method.id}
-                  disabled={!method.available || creatingOrder}
+                  disabled={!method.available || updatingMethod}
                   style={[
                     styles.paymentOption,
                     isSelected && styles.paymentOptionSelected,
                     !method.available && { opacity: 0.48 },
                   ]}
                   onPress={() => {
-                    setSelectedMethod(method.id);
-                    setPaymentMethod(method.id);
+                    setTempSelectedMethod(method.id);
                   }}
                   activeOpacity={0.85}
                 >
@@ -819,12 +908,27 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
             })}
 
             <TouchableOpacity
-              style={styles.modalConfirmButton}
-              onPress={() => setPaymentModalVisible(false)}
+              style={[styles.modalConfirmButton, updatingMethod && { opacity: 0.7 }]}
+              onPress={handleConfirmMethodChange}
+              disabled={updatingMethod}
               activeOpacity={0.88}
             >
-              <Text style={styles.modalConfirmText}>Gunakan Metode Ini</Text>
-              <ChevronRight size={18} color="#FFFFFF" />
+              {updatingMethod ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.modalConfirmText}>Lanjutkan Ubah Metode Pembayaran</Text>
+                  <ChevronRight size={18} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ paddingVertical: 10, alignItems: "center", justifyContent: "center", marginTop: 4 }}
+              onPress={handleCancelMethodPicker}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Batal</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -82,6 +82,7 @@ interface LaporanKeuanganProps extends Nav {
 }
 
 export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("keuangan");
 
   // Selected Month state (Defaults dynamically to current month e.g. September 2026)
@@ -1412,7 +1413,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
       </TouchableOpacity>
 
       {/* Bottom Navigation Bar */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <TouchableOpacity
           style={styles.navTab}
           onPress={() => navigate("pemilik_kos_home")}

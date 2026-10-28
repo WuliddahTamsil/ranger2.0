@@ -20,13 +20,11 @@ const paymentSchema = new mongoose.Schema(
     orderType: {
       type: String,
       required: true,
-      enum: ["RIDE", "MARKETPLACE", "CATERING", "LAUNDRY", "SEND", "KANYAAH_SEND", "KANYAAH_SHOP", "SHOP"],
       index: true,
     },
     orderCategory: {
       type: String,
-      required: true,
-      enum: ["RIDE", "DELIVERY"],
+      default: "GENERAL",
       index: true,
     },
     customerId: {
@@ -78,7 +76,7 @@ const paymentSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["UNPAID", "PENDING", "PAID", "FAILED", "EXPIRED", "REFUNDED"],
+      enum: ["UNPAID", "PENDING", "PAID", "FAILED", "EXPIRED", "REFUNDED", "CANCELLED"],
       default: "PENDING",
       index: true,
     },

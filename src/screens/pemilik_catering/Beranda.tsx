@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -132,6 +132,7 @@ const resolveCateringPaymentFlag = (explicitValue: unknown, fallback: boolean) =
 };
 
 export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, onUpdateAccount }) => {
+  const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState<number>(0);
 
   const showAlert = (title: string, message: string) => {
@@ -665,7 +666,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
     { label: "Beranda", icon: Home },
     { label: "Order", icon: ShoppingBag },
     { label: "Riwayat", icon: HistoryIcon },
-    { label: "Pendapatan", icon: Wallet },
+    { label: "Keuangan", icon: Wallet },
     { label: "Profil", icon: UserIcon },
   ];
 
@@ -689,7 +690,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
               <Text style={styles.outletStatusLabel}>
                 {storeInfo.isOpen ? "DAPUR AKTIF" : "DAPUR NONAKTIF"}
               </Text>
-              <Text style={styles.storeNameText} numberOfLines={1} ellipsizeMode="tail">{storeInfo.storeName}</Text>
+              <Text style={styles.storeNameText} numberOfLines={2}>{storeInfo.storeName}</Text>
             </View>
             <TouchableOpacity 
               style={styles.outletToggleBtn} 
@@ -749,7 +750,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             activeOpacity={0.8}
           >
             <Wallet size={18} color="#1B7A4E" />
-            <Text style={styles.summaryValue} numberOfLines={1}>{rp(totalRevenueVal)}</Text>
+            <Text style={styles.summaryValue} numberOfLines={2}>{rp(totalRevenueVal)}</Text>
             <Text style={styles.summaryLabel}>Pendapatan - Tercatat</Text>
           </TouchableOpacity>
 
@@ -1446,7 +1447,12 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
       <View style={styles.tabContentContainer}>{renderTabContent()}</View>
 
       {/* Custom Bottom Nav Bar */}
-      <View style={styles.bottomNavContainer}>
+      <View
+        style={[
+          styles.bottomNavContainer,
+          { paddingBottom: Math.max(insets.bottom, 6) },
+        ]}
+      >
         {navItems.map((item, index) => {
           const active = currentTab === index;
           const IconComp = item.icon;
@@ -1456,11 +1462,12 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
               style={styles.navItem}
               onPress={() => setCurrentTab(index)}
               activeOpacity={0.7}
+              accessibilityLabel={item.label}
             >
               <View style={[styles.navIconBg, active ? styles.navIconBgActive : null]}>
                 <IconComp size={20} color={active ? "#1B7A4E" : "#9CA3AF"} />
               </View>
-              <Text style={[styles.navLabel, active ? styles.navLabelActive : null]}>
+              <Text style={[styles.navLabel, active ? styles.navLabelActive : null]} numberOfLines={1}>
                 {item.label}
               </Text>
             </TouchableOpacity>
@@ -1895,24 +1902,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomNavContainer: {
-    height: 72,
+    minHeight: 56,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    paddingBottom: 6,
+    paddingTop: 6,
+    paddingHorizontal: 8,
   },
   navItem: {
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
-    height: "100%",
+    paddingVertical: 2,
   },
   navIconBg: {
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
@@ -1922,10 +1930,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(27, 122, 78, 0.12)",
   },
   navLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "500",
     color: "#9CA3AF",
-    marginTop: 3,
+    marginTop: 2,
+    textAlign: "center",
   },
   navLabelActive: {
     color: "#1B7A4E",

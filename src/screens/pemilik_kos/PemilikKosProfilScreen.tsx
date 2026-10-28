@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -12,6 +12,7 @@ import {
   Modal,
   Image,
   Alert,
+  Linking,
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -45,6 +46,7 @@ interface PemilikKosProfilProps extends Nav {
 }
 
 export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "kamar" | "penghuni" | "keuangan" | "profil">("profil");
 
   // User Profile State matching image
@@ -365,7 +367,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
       </ScrollView>
 
       {/* Bottom Navigation Bar */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <TouchableOpacity
           style={styles.navTab}
           onPress={() => navigate("pemilik_kos_home")}
@@ -596,13 +598,13 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
               <Text style={{ fontSize: 12, fontWeight: "800", color: "#92400E" }}>
                 🛡️ Kebijakan Pembatalan & Pengembalian DP (H-3)
               </Text>
-              <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 15 }}>
+              <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 16, textAlign: "justify" }}>
                 • Pembatalan minimal 3 hari sebelum jadwal masuk (≥ H-3) berhak menerima pengembalian DP 50%.
               </Text>
-              <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 15 }}>
+              <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 16, textAlign: "justify" }}>
                 • Pembatalan kurang dari H-3 tidak memperoleh pengembalian (DP hangus).
               </Text>
-              <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 15, marginTop: 4 }}>
+              <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 16, marginTop: 4, textAlign: "justify" }}>
                 • Potongan komisi biaya layanan sistem aplikasi adalah Rp 2.000 (seperti pada Ride & Laundry).
               </Text>
             </View>
@@ -616,6 +618,89 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
               <Text style={styles.btnPrimaryText}>
                 {isSaving ? "Menyimpan ke Server..." : "Simpan Pengaturan DP"}
               </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: Pusat Bantuan & CS WhatsApp */}
+      <Modal visible={activeModal === "bantuan"} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Pusat Bantuan & Layanan CS</Text>
+              <TouchableOpacity onPress={() => setActiveModal(null)}>
+                <X size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 13, color: "#475569", lineHeight: 20, textAlign: "justify", marginBottom: 14 }}>
+              Pusat Layanan dan Dukungan Mitra Pengelola Kos & Homestay GEOVERSE:
+              {"\n\n"}
+              • WhatsApp CS: +62 815-1122-6089
+              {"\n"}
+              • Jam Operasional: 24 Jam Setiap Hari
+              {"\n"}
+              • Area Layanan: Kawasan PGE Kamojang, Ibun, Samarang & Garut
+              {"\n\n"}
+              Tim CS siap membantu verifikasi kamar, kendala pencairan dana (payout), maupun pengaturan sistem booking.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.btnPrimary, { backgroundColor: "#25D366", marginBottom: 10 }]}
+              onPress={() => {
+                setActiveModal(null);
+                Linking.openURL("https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20mitra%20pengelola%20kos%20butuh%20bantuan.").catch(() => {});
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnPrimaryText}>Chat WhatsApp CS (+62 815-1122-6089)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btnCancel, { paddingVertical: 12, alignItems: "center" }]}
+              onPress={() => setActiveModal(null)}
+            >
+              <Text style={styles.btnCancelText}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL: Kebijakan Privasi & Perlindungan Data */}
+      <Modal visible={activeModal === "privasi"} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.dragHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Kebijakan Privasi & Keamanan</Text>
+              <TouchableOpacity onPress={() => setActiveModal(null)}>
+                <X size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              <Text style={{ fontSize: 12.5, color: "#374151", lineHeight: 19, textAlign: "justify", marginBottom: 10 }}>
+                Kebijakan Privasi & Perlindungan Data Mitra Pengelola Properti GEOVERSE:
+              </Text>
+              <Text style={{ fontSize: 12, color: "#4B5563", lineHeight: 18, textAlign: "justify", marginBottom: 10 }}>
+                1. <Text style={{ fontWeight: "700" }}>Kerahasiaan Data Akun & Dokumen:</Text> Seluruh dokumen legalitas properti (KTP pemilik, sertifikat kepemilikan, dan nomor rekening) dienkripsi dengan protokol keamanan ketat serta hanya dipergunakan untuk proses verifikasi internal.
+              </Text>
+              <Text style={{ fontSize: 12, color: "#4B5563", lineHeight: 18, textAlign: "justify", marginBottom: 10 }}>
+                2. <Text style={{ fontWeight: "700" }}>Perlindungan Privasi Penghuni & Tamu:</Text> Data kontak penghuni kos hanya dapat diakses untuk keperluan konfirmasi reservasi dan administrasi hunian yang sah.
+              </Text>
+              <Text style={{ fontSize: 12, color: "#4B5563", lineHeight: 18, textAlign: "justify", marginBottom: 10 }}>
+                3. <Text style={{ fontWeight: "700" }}>Hak Hapus Akun:</Text> Mitra pengelola memiliki hak penuh untuk meminta penghapusan akun beserta seluruh data properti secara permanen sesuai standar privasi global (Apple Guideline 5.1.1(v)).
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.btnPrimary, { marginTop: 12 }]}
+              onPress={() => setActiveModal(null)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnPrimaryText}>Saya Mengerti</Text>
             </TouchableOpacity>
           </View>
         </View>

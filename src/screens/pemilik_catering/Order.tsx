@@ -2214,7 +2214,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
               >
                 <View style={styles.cardHeader}>
                   <View style={styles.cardHeaderLeft}>
-                    <Text style={styles.orderId} numberOfLines={1}>{item.orderCode || `#${item.id.slice(-8)}`}</Text>
+                    <Text style={styles.orderId} numberOfLines={1} ellipsizeMode="middle">{item.orderCode || `#${item.id.slice(-8)}`}</Text>
                     <Text style={styles.cardDotSeparator}>•</Text>
                     <View style={styles.timeRow}>
                       <Clock size={12} color="#94A3B8" />
@@ -2254,36 +2254,22 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
 
                 {/* Catering PO Info Pill */}
                 {item.cateringDate ? (
-                  <View style={{
-                    backgroundColor: "#EFF6FF",
-                    borderWidth: 1,
-                    borderColor: "#BFDBFE",
-                    borderRadius: 10,
-                    paddingHorizontal: 10,
-                    paddingVertical: 7,
-                    marginTop: 8,
-                    gap: 3,
-                  }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  <View style={styles.cateringPoPill}>
+                    <View style={styles.cateringPoHeaderRow}>
+                      <View style={styles.cateringPoDateWrap}>
                         <Calendar size={12} color="#1D4ED8" />
-                        <Text style={{ fontSize: 11, fontWeight: "800", color: "#1D4ED8" }}>
+                        <Text style={styles.cateringPoDateText}>
                           PO {item.cateringDate} • Jam {item.cateringTime || "11:00"}
                         </Text>
                       </View>
-                      <View style={{
-                        backgroundColor: "#DBEAFE",
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        borderRadius: 6,
-                      }}>
-                        <Text style={{ fontSize: 10, fontWeight: "800", color: "#1E40AF" }}>
+                      <View style={styles.cateringPoPortionBadge}>
+                        <Text style={styles.cateringPoPortionBadgeText}>
                           {item.portions || item.items[0]?.quantity || 10} pax
                         </Text>
                       </View>
                     </View>
                     {item.notes ? (
-                      <Text style={{ fontSize: 10.5, color: "#2563EB", fontStyle: "italic" }} numberOfLines={1}>
+                      <Text style={styles.cateringPoNotesText} numberOfLines={2}>
                         Catatan: {item.notes}
                       </Text>
                     ) : null}
@@ -2352,32 +2338,16 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
 
                 {/* Sisa Tagihan Pill & Quick Pelunasan when customer paid outside */}
                 {!hasPendingVerification && Number(item.remainingAmount || 0) > 0 && (
-                  <View style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    backgroundColor: "#FFFBEB",
-                    borderWidth: 1,
-                    borderColor: "#FDE68A",
-                    borderRadius: 10,
-                    paddingHorizontal: 10,
-                    paddingVertical: 7,
-                    marginTop: 8,
-                  }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>
+                  <View style={styles.cardRemainingAmountBox}>
+                    <View style={styles.cardRemainingAmountLeft}>
                       <Clock size={12} color="#D97706" />
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#B45309" }} numberOfLines={1}>
+                      <Text style={styles.cardRemainingAmountText}>
                         Sisa: {rp(item.remainingAmount)} ({item.paymentMethod === "bca_va" ? "BCA VA" : (item.paymentMethod || "VA").toUpperCase()})
                       </Text>
                     </View>
                     <TouchableOpacity
-                      style={{
-                        backgroundColor: "#16A34A",
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 6,
-                        marginLeft: 8,
-                      }}
+                      style={styles.cardConfirmLunasBtn}
+                      activeOpacity={0.8}
                       onPress={(e) => {
                         e.stopPropagation();
                         openValidatePaymentModal({
@@ -2389,7 +2359,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                         }, item);
                       }}
                     >
-                      <Text style={{ fontSize: 10.5, fontWeight: "800", color: "#FFFFFF" }}>
+                      <Text style={styles.cardConfirmLunasBtnText}>
                         Konfirmasi Lunas
                       </Text>
                     </TouchableOpacity>
@@ -2398,7 +2368,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
 
                 {/* Total Price */}
                 <View style={styles.cardTotalRow}>
-                  <View>
+                  <View style={{ flex: 1, minWidth: 120 }}>
                     <Text style={styles.totalPriceLabel} numberOfLines={1}>Total Pesanan</Text>
                     {item.paymentOption && item.paymentOption !== "lunas" ? (
                       <Text style={{ fontSize: 10, fontWeight: "700", color: "#D97706", marginTop: 1 }}>
@@ -2409,6 +2379,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                   <Text style={styles.totalPrice} numberOfLines={1}>{rp(item.total)}</Text>
                 </View>
               </TouchableOpacity>
+
 
               {/* Bottom Clean Action Bar */}
               <View style={styles.cardBottomBar}>
@@ -2471,6 +2442,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "flex-start",
     paddingHorizontal: 20,
@@ -2479,10 +2451,12 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 720,
     alignSelf: "center",
+    rowGap: 8,
   },
   headerText: {
     flex: 1,
-    paddingRight: 10,
+    minWidth: 150,
+    paddingRight: 8,
   },
   title: {
     fontSize: 22,
@@ -2533,7 +2507,7 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   tabContainer: {
-    height: 38,
+    minHeight: 40,
     marginBottom: 16,
     width: "100%",
     maxWidth: 720,
@@ -2542,10 +2516,11 @@ const styles = StyleSheet.create({
   tabScroll: {
     paddingHorizontal: 20,
     gap: 8,
+    alignItems: "center",
   },
   tabChip: {
     paddingHorizontal: 16,
-    height: 34,
+    paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
     alignItems: "center",
@@ -2560,7 +2535,7 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
   },
   tabChipText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "700",
   },
   tabChipTextSelected: {
@@ -2590,26 +2565,130 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
-    gap: 8,
+    columnGap: 8,
+    rowGap: 6,
+  },
+  cardHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    flexShrink: 1,
+    gap: 6,
+  },
+  cardDotSeparator: {
+    fontSize: 12,
+    color: "#94A3B8",
+    marginHorizontal: 1,
   },
   orderId: {
-    fontSize: 16,
+    fontSize: 13.5,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   statusChip: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
     flexShrink: 0,
+    alignSelf: "flex-start",
   },
   statusChipText: {
     fontSize: 10,
     fontWeight: "800",
     textTransform: "uppercase",
+  },
+  cateringPoPill: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 8,
+    gap: 4,
+  },
+  cateringPoHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    rowGap: 4,
+    columnGap: 8,
+  },
+  cateringPoDateWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    flexShrink: 1,
+  },
+  cateringPoDateText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#1D4ED8",
+    lineHeight: 16,
+  },
+  cateringPoPortionBadge: {
+    backgroundColor: "#DBEAFE",
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  cateringPoPortionBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#1E40AF",
+  },
+  cateringPoNotesText: {
+    fontSize: 10.5,
+    color: "#2563EB",
+    fontStyle: "italic",
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  cardRemainingAmountBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 8,
+    rowGap: 6,
+    columnGap: 8,
+  },
+  cardRemainingAmountLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    flexShrink: 1,
+  },
+  cardRemainingAmountText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#B45309",
+    lineHeight: 16,
+  },
+  cardConfirmLunasBtn: {
+    backgroundColor: "#16A34A",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  cardConfirmLunasBtnText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
   customerRow: {
     flexDirection: "row",
@@ -3768,15 +3847,6 @@ const styles = StyleSheet.create({
   cardMainClickable: {
     padding: 14,
   },
-  cardHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  cardDotSeparator: {
-    color: "#CBD5E1",
-    fontSize: 12,
-  },
   customerPhoneSub: {
     fontSize: 11,
     color: "#94A3B8",
@@ -3792,6 +3862,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#DCFCE7",
     borderWidth: 1,
     borderColor: "#86EFAC",
+    flexShrink: 0,
   },
   driverAssignedTagText: {
     fontSize: 11,
@@ -3806,8 +3877,10 @@ const styles = StyleSheet.create({
   },
   cardTotalRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     marginTop: 10,
     paddingTop: 8,
     borderTopWidth: 1,
@@ -3829,6 +3902,8 @@ const styles = StyleSheet.create({
     borderTopColor: "#F1F5F9",
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
+    flexWrap: "wrap",
+    gap: 8,
   },
   cardChatBtn: {
     flexDirection: "row",
@@ -3840,6 +3915,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#BBF7D0",
     backgroundColor: "#FFFFFF",
+    flexShrink: 0,
   },
   cardChatBtnText: {
     fontSize: 12,
@@ -3856,9 +3932,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    flex: 1,
+    flexShrink: 1,
     justifyContent: "flex-end",
-    minWidth: 0,
     flexWrap: "wrap",
   },
   cardCookBtn: {

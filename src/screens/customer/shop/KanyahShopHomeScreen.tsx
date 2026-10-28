@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   Platform,
 } from "react-native";
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   X,
   MapPin,
@@ -184,6 +184,7 @@ export const KanyahShopHomeScreen: React.FC<KanyahShopHomeScreenProps> = ({
   navigate,
   authAccount,
 }) => {
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isLargeScreen = width >= 768;
   const isDesktop = width >= 1024;
@@ -707,7 +708,7 @@ export const KanyahShopHomeScreen: React.FC<KanyahShopHomeScreenProps> = ({
       )}
 
       {/* Bottom Navigation Bar (Inspired by Reference Screenshots: Eksplor, Promos, Kategori, Belanjaan) */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <TouchableOpacity
           style={styles.bottomNavItem}
           onPress={() => setBottomNav("eksplor")}

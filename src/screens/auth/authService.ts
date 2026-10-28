@@ -479,8 +479,12 @@ export const fetchAdminStats = async () => {
     const res = await fetch(getApiUrl("/auth/admin/stats"), { signal: controller.signal });
     clearTimeout(timer);
     return await res.json();
-  } catch (err) {
-    console.error("fetchAdminStats error:", err);
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      console.warn("fetchAdminStats request timed out (aborted)");
+    } else {
+      console.error("fetchAdminStats error:", err);
+    }
     return { success: false, data: null };
   }
 };
@@ -492,8 +496,12 @@ export const fetchAdminTransactions = async () => {
     const res = await fetch(getApiUrl("/auth/admin/transactions"), { signal: controller.signal });
     clearTimeout(timer);
     return await res.json();
-  } catch (err) {
-    console.error("fetchAdminTransactions error:", err);
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      console.warn("fetchAdminTransactions request timed out (aborted)");
+    } else {
+      console.error("fetchAdminTransactions error:", err);
+    }
     return { success: false, data: [] };
   }
 };

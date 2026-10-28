@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
@@ -40,6 +40,7 @@ interface LaundryPendapatanProps extends Nav {
 }
 
 export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [activeNavTab, setActiveNavTab] = useState<"beranda" | "order" | "user" | "keuangan" | "profil">("keuangan");
   const [chartFilter, setChartFilter] = useState<"minggu" | "bulan">("minggu");
   const [orders, setOrders] = useState<LaundryOrder[]>([]);
@@ -332,7 +333,7 @@ export const LaundryPendapatanScreen: React.FC<LaundryPendapatanProps> = ({ navi
       </ScrollView>
 
       {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_laundry_home")}>
           <Home size={22} color="#9CA3AF" />
           <Text style={styles.navText}>Beranda</Text>

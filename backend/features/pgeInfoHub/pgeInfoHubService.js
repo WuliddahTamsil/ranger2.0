@@ -99,12 +99,10 @@ const getPublishedInfoHubItems = async (category = null) => {
         .sort({ publishedAt: -1, createdAt: -1 })
         .lean();
 
-      if (dbItems && dbItems.length > 0) {
-        return dbItems.map((item) => ({
-          ...item,
-          id: item.itemId || String(item._id),
-        }));
-      }
+      return (dbItems || []).map((item) => ({
+        ...item,
+        id: item.itemId || String(item._id),
+      }));
     }
   } catch (err) {
     console.warn("⚠️ PgeInfoHub DB query fallback to memory:", err.message);

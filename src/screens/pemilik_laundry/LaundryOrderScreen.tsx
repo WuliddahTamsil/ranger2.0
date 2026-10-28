@@ -623,7 +623,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
 
                     {/* Stage 5: Menunggu Customer bayar (belum upload) */}
                     {isWeighed && !isPaid && !isVerifying && (
-                      <View style={{ flex: 1, flexDirection: "row", gap: 8 }}>
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "stretch" }}>
                         <TouchableOpacity
                           style={styles.actionBtnReWeigh}
                           onPress={() => handleOpenWeighModal(o)}
@@ -1119,8 +1119,10 @@ const styles = StyleSheet.create({
   },
   orderTopRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 6,
     marginBottom: 8,
   },
   orderIdBadge: {
@@ -1141,10 +1143,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 10,
+    flexShrink: 1,
   },
   statusPillText: {
     fontSize: 11,
     fontWeight: "800",
+    flexShrink: 1,
   },
   custName: {
     fontSize: 15,
@@ -1163,8 +1167,10 @@ const styles = StyleSheet.create({
   },
   priceBreakdownRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 8,
     marginTop: 10,
     paddingTop: 8,
     borderTopWidth: 1,
@@ -1211,7 +1217,9 @@ const styles = StyleSheet.create({
   },
   actionBtnWeigh: {
     backgroundColor: "#0D7A53",
-    height: 42,
+    minHeight: 42,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -1222,10 +1230,14 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+    textAlign: "center",
+    flexShrink: 1,
   },
   actionBtnCheckProof: {
     backgroundColor: "#D97706",
-    height: 42,
+    minHeight: 42,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -1236,12 +1248,15 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+    textAlign: "center",
+    flexShrink: 1,
   },
   actionBtnReWeigh: {
     borderWidth: 1,
     borderColor: "#0D7A53",
     paddingHorizontal: 12,
-    height: 42,
+    paddingVertical: 8,
+    minHeight: 40,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -1255,10 +1270,12 @@ const styles = StyleSheet.create({
   },
   waitingCustPayBanner: {
     flex: 1,
+    minWidth: 150,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFF7ED",
     paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 12,
     gap: 6,
   },
@@ -1266,10 +1283,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#C2410C",
     fontWeight: "700",
+    flexShrink: 1,
   },
   actionBtnFinish: {
     backgroundColor: "#0D7A53",
-    height: 44,
+    minHeight: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -1280,6 +1300,8 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+    textAlign: "center",
+    flexShrink: 1,
   },
   driverDeliveringBanner: {
     flexDirection: "row",

@@ -599,7 +599,7 @@ Madu TJ Murni 150g, Kesehatan, 23500, 25, botol, Tresno Joyo, 8997001600055, htt
           </View>
           <View style={styles.heroCopy}>
             <View style={styles.storeTitleRow}>
-              <Text style={styles.heroTitle} numberOfLines={1}>
+              <Text style={styles.heroTitle} numberOfLines={2}>
                 {store?.outletName || store?.name || authAccount?.roleData?.outletName || "Outlet Kanyaah Shop"}
               </Text>
               {store?.isOfficialBrandPartner && (

@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -34,6 +34,7 @@ interface LaundryRiwayatProps extends Nav {
 }
 
 export const LaundryRiwayatScreen: React.FC<LaundryRiwayatProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
   const [orders, setOrders] = useState<LaundryOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -147,7 +148,7 @@ export const LaundryRiwayatScreen: React.FC<LaundryRiwayatProps> = ({ navigate, 
       </ScrollView>
 
       {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_laundry_home")}>
           <Home size={22} color="#9CA3AF" />
           <Text style={styles.navText}>Beranda</Text>

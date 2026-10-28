@@ -1,4 +1,5 @@
 import { registerRootComponent } from 'expo';
+import { Text, TextInput } from 'react-native';
 
 // ============================================================================
 // GLOBAL CRASH-GUARD SHIMS (Hermes Android & React Native Safe)
@@ -53,6 +54,28 @@ try {
   };
 } catch {
   // Silent failover
+}
+
+// ============================================================================
+// GLOBAL FONT SCALING & RESPONSIVENESS GUARD
+// Caps maxFontSizeMultiplier to 1.15 globally across Text & TextInput
+// Prevents extreme system font scales (e.g. Android Large/Largest) from causing
+// text overlap, clipping, badge overflowing, and layout breakage while preserving
+// accessibility and graceful scaling on all devices and screen sizes.
+// ============================================================================
+try {
+  const MAX_FONT_SCALE = 1.15;
+  if ((Text as any).defaultProps == null) {
+    (Text as any).defaultProps = {};
+  }
+  (Text as any).defaultProps.maxFontSizeMultiplier = MAX_FONT_SCALE;
+
+  if ((TextInput as any).defaultProps == null) {
+    (TextInput as any).defaultProps = {};
+  }
+  (TextInput as any).defaultProps.maxFontSizeMultiplier = MAX_FONT_SCALE;
+} catch {
+  // Silent fallback
 }
 
 import App from './App';

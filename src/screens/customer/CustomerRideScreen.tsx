@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
@@ -12,6 +12,7 @@ import {
   Platform,
   Switch,
   Image,
+  Modal,
 } from "react-native";
 import {
   ArrowLeft,
@@ -33,6 +34,8 @@ import {
   ChevronRight,
   ArrowRight,
   Sparkles,
+  X,
+  CreditCard,
 } from "lucide-react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -40,6 +43,7 @@ import { Nav, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { useRecycle } from "../../context/RecycleContext";
 import { addCustomerOrder } from "./customerOrderStore";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import {
   createRideBooking,
   estimateRideFareBreakdown,
@@ -94,6 +98,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   navigate,
   authAccount,
 }) => {
+  const insets = useSafeAreaInsets();
   // Pickup state initialized dynamically from cached user location or default location
   const [pickup, setPickup] = useState<RideLocation>(() => {
     if (Platform.OS === "web" && typeof window !== "undefined" && window.localStorage) {
@@ -138,7 +143,9 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   const [customerNote, setCustomerNote] = useState("");
 
   // Payment method state
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodType>("CASH");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodType | null>("CASH");
+  const [methodPickerModalVisible, setMethodPickerModalVisible] = useState(false);
+  const [tempDraftMethod, setTempDraftMethod] = useState<PaymentMethodType>("CASH");
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [createdOrderForPayment, setCreatedOrderForPayment] = useState<RideOrderData | null>(null);
   // Location Picker Modal state
@@ -161,6 +168,41 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [routeError, setRouteError] = useState("");
   const routeRequestRef = useRef(0);
+
+  // Restore draft choices if guest just logged in or returned to ride screen
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const savedDraft = await AsyncStorage.getItem("GEOVERSE_RIDE_DRAFT_V1");
+        if (savedDraft && mounted) {
+          const parsed = JSON.parse(savedDraft);
+          if (parsed.pickup?.address) setPickup(parsed.pickup);
+          if (parsed.destination?.address) setDestination(parsed.destination);
+          if (parsed.selectedVehicle) setSelectedVehicle(parsed.selectedVehicle);
+          if (parsed.customerNote) setCustomerNote(parsed.customerNote);
+          if (parsed.selectedPaymentMethod) setSelectedPaymentMethod(parsed.selectedPaymentMethod);
+        }
+      } catch {}
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Persist draft choices whenever user modifies ride selection
+  useEffect(() => {
+    try {
+      const draft = {
+        pickup,
+        destination,
+        selectedVehicle,
+        customerNote,
+        selectedPaymentMethod,
+      };
+      void AsyncStorage.setItem("GEOVERSE_RIDE_DRAFT_V1", JSON.stringify(draft));
+    } catch {}
+  }, [pickup, destination, selectedVehicle, customerNote, selectedPaymentMethod]);
 
   // Calculate an actual road route whenever both selected coordinates change.
   useEffect(() => {
@@ -523,6 +565,25 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   const handleOrderRide = async () => {
     if (isSubmittingRef.current || isSubmitting) return;
 
+    if (!authAccount?.id) {
+      Alert.alert(
+        "Masuk ke Akun Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk memesan perjalanan Kanyaah Ride dan terhubung dengan driver.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk Sekarang",
+            onPress: () =>
+              navigate("login", {
+                targetScreen: "c_ride",
+                reason: "Masuk ke akun GEOVERSE untuk memesan layanan perjalanan Kanyaah Ride.",
+              }),
+          },
+        ]
+      );
+      return;
+    }
+
     if (activeRideOrder) {
       Alert.alert(
         "Perjalanan Aktif Ditemukan",
@@ -571,6 +632,23 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       Alert.alert("Alamat Tidak Valid", "Lokasi penjemputan dan tujuan tidak boleh sama.");
       return;
     }
+    if (!selectedPaymentMethod && finalPayableFare > 0) {
+      Alert.alert(
+        "Metode Pembayaran Belum Dipilih",
+        "Silakan pilih metode pembayaran terlebih dahulu sebelum melanjutkan pemesanan dan pembayaran.",
+        [
+          {
+            text: "Pilih Metode Pembayaran",
+            onPress: () => {
+              setTempDraftMethod("CASH");
+              setMethodPickerModalVisible(true);
+            },
+          },
+          { text: "Batal", style: "cancel" },
+        ]
+      );
+      return;
+    }
 
     isSubmittingRef.current = true;
     setIsSubmitting(true);
@@ -584,7 +662,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         destination,
         customerNote: customerNote.trim(),
         vehicleType: "MOTOR",
-        paymentMethod: finalPayableFare === 0 ? "GEOVERSE_POINT" : selectedPaymentMethod,
+        paymentMethod: finalPayableFare === 0 ? "GEOVERSE_POINT" : (selectedPaymentMethod || "CASH"),
         pointsUsed: pointsToDebit,
         pointDiscount,
         estimatedDistance: calculatedDistance,
@@ -619,7 +697,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         date: "Baru Saja",
         createdAt: res.data.createdAt || new Date().toISOString(),
         total: res.data.totalAmount || res.data.estimatedFare || finalPayableFare,
-        paymentMethod: res.data.paymentMethod || selectedPaymentMethod,
+        paymentMethod: res.data.paymentMethod || selectedPaymentMethod || "CASH",
         paymentStatus: res.data.paymentStatus || (finalPayableFare === 0 ? "Lunas" : "Menunggu Pembayaran"),
         pickup: (res.data.pickup || pickup) ? {
           address: (res.data.pickup || pickup).address,
@@ -636,6 +714,9 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         rawOrder: res.data,
       };
       addCustomerOrder(rideOrderItem);
+
+      // Clear saved draft once order is created successfully
+      void AsyncStorage.removeItem("GEOVERSE_RIDE_DRAFT_V1");
 
       if (selectedPaymentMethod === "CASH" || finalPayableFare === 0) {
         navigate("c_ride_tracking");
@@ -1032,17 +1113,45 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
         <View style={styles.card}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <Text style={styles.cardSectionLabel}>METODE PEMBAYARAN</Text>
-            <TouchableOpacity onPress={() => setPaymentModalVisible(true)} activeOpacity={0.7}>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#1B7A4E" }}>Ubah</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setTempDraftMethod(selectedPaymentMethod || "CASH");
+                setMethodPickerModalVisible(true);
+              }}
+              activeOpacity={0.7}
+              testID="btn-ubah-metode"
+              accessibilityLabel="Ubah Metode"
+            >
+              <Text style={{ fontSize: 12, fontWeight: "700", color: "#1B7A4E" }}>Ubah Metode</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={styles.paymentMethodRow}
-            onPress={() => setPaymentModalVisible(true)}
+            onPress={() => {
+              setTempDraftMethod(selectedPaymentMethod || "CASH");
+              setMethodPickerModalVisible(true);
+            }}
             activeOpacity={0.8}
+            testID="card-metode-pembayaran"
+            accessibilityLabel="Pilih Metode Pembayaran"
           >
-            <View style={[styles.paymentMethodIconBg, { backgroundColor: selectedPaymentMethod === "QRIS" ? "#FFE4E6" : selectedPaymentMethod === "CASH" ? "#E8F5EE" : "#E0F2FE" }]}>
-              {selectedPaymentMethod === "QRIS" ? (
+            <View
+              style={[
+                styles.paymentMethodIconBg,
+                {
+                  backgroundColor: !selectedPaymentMethod
+                    ? "#F1F5F9"
+                    : selectedPaymentMethod === "QRIS"
+                    ? "#FFE4E6"
+                    : selectedPaymentMethod === "CASH"
+                    ? "#E8F5EE"
+                    : "#E0F2FE",
+                },
+              ]}
+            >
+              {!selectedPaymentMethod ? (
+                <CreditCard size={20} color="#64748B" />
+              ) : selectedPaymentMethod === "QRIS" ? (
                 <QrCode size={20} color="#E11D48" />
               ) : selectedPaymentMethod === "CASH" ? (
                 <Banknote size={20} color="#1B7A4E" />
@@ -1054,7 +1163,9 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
             </View>
             <View style={styles.paymentMethodBody}>
               <Text style={styles.paymentMethodTitle}>
-                {selectedPaymentMethod === "CASH"
+                {!selectedPaymentMethod
+                  ? "Pilih Metode Pembayaran"
+                  : selectedPaymentMethod === "CASH"
                   ? "Bayar Tunai (COD)"
                   : selectedPaymentMethod === "QRIS"
                   ? "QRIS Nasional"
@@ -1063,14 +1174,26 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                   : `E-Wallet ${selectedPaymentMethod}`}
               </Text>
               <Text style={styles.paymentMethodSub}>
-                {selectedPaymentMethod === "CASH"
+                {!selectedPaymentMethod
+                  ? "Ketuk untuk memilih metode pembayaran"
+                  : selectedPaymentMethod === "CASH"
                   ? "Bayar langsung ke driver setelah perjalanan"
                   : "Pembayaran digital instan & otomatis terverifikasi"}
               </Text>
             </View>
-            <View style={styles.paymentMethodBadge}>
-              <Text style={styles.paymentMethodBadgeText}>
-                {selectedPaymentMethod === "CASH" ? "Tunai" : "Digital"}
+            <View
+              style={[
+                styles.paymentMethodBadge,
+                !selectedPaymentMethod && { backgroundColor: "#F1F5F9" },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.paymentMethodBadgeText,
+                  !selectedPaymentMethod && { color: "#64748B" },
+                ]}
+              >
+                {!selectedPaymentMethod ? "Pilih" : selectedPaymentMethod === "CASH" ? "Tunai" : "Digital"}
               </Text>
             </View>
           </TouchableOpacity>
@@ -1121,6 +1244,8 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
                 <Text style={styles.summaryVal}>
                   {finalPayableFare === 0
                     ? "GEOVERSE Point (100%)"
+                    : !selectedPaymentMethod
+                    ? "Belum dipilih"
                     : selectedPaymentMethod === "CASH"
                     ? "Bayar Tunai"
                     : selectedPaymentMethod === "QRIS"
@@ -1197,7 +1322,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
       </ScrollView>
 
       {/* Sticky Bottom Order Button */}
-      <View style={styles.stickyFooter}>
+      <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={styles.footerPriceCol}>
           <Text style={styles.footerPriceLabel}>Estimasi Tarif</Text>
           <Text style={styles.footerPriceVal}>
@@ -1210,17 +1335,124 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
           onPress={handleOrderRide}
           disabled={isSubmitting}
           activeOpacity={0.85}
+          testID="btn-bayar-sekarang"
+          accessibilityLabel="Bayar Sekarang"
         >
           {isSubmitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
             <>
               <Bike size={18} color="#FFFFFF" />
-              <Text style={styles.orderButtonText}>Pesan Kanyaah Ride</Text>
+              <Text style={styles.orderButtonText}>Bayar Sekarang</Text>
             </>
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Modal Pemilihan Metode Pembayaran (Draft) */}
+      <Modal
+        visible={methodPickerModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setTempDraftMethod(selectedPaymentMethod || "CASH");
+          setMethodPickerModalVisible(false);
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.6)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "80%" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <View>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: "#0F172A" }}>Pilih Metode Pembayaran</Text>
+                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                  Estimasi Total: Rp {(estimatedFare > 0 ? estimatedFare : 9500).toLocaleString("id-ID")}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setTempDraftMethod(selectedPaymentMethod || "CASH");
+                  setMethodPickerModalVisible(false);
+                }}
+                style={{ padding: 6, borderRadius: 20, backgroundColor: "#F1F5F9" }}
+                accessibilityLabel="Tutup Pemilihan Metode"
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
+              {[
+                { id: "CASH", name: "Bayar Tunai (COD)", desc: "Bayar tunai ke driver setelah perjalanan selesai", icon: Banknote, color: "#16A34A" },
+                { id: "QRIS", name: "QRIS Nasional", desc: "Scan QR lewat BCA, Mandiri, GoPay, OVO, DANA, ShopeePay", icon: QrCode, color: "#E11D48" },
+                { id: "GOPAY", name: "GoPay / E-Wallet", desc: "Pembayaran instan langsung via GoPay", icon: Wallet, color: "#00AED6" },
+                { id: "BCA_VA", name: "BCA Virtual Account", desc: "Transfer otomatis via BCA Mobile, myBCA, ATM", icon: Building2, color: "#0060AF" },
+                { id: "MANDIRI_VA", name: "Mandiri Virtual Account", desc: "Transfer via Livin' by Mandiri atau ATM", icon: Building2, color: "#003366" },
+              ].map((opt) => {
+                const isSelected = tempDraftMethod === opt.id;
+                const IconComp = opt.icon;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      padding: 14,
+                      borderRadius: 16,
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? "#16A34A" : "#E2E8F0",
+                      backgroundColor: isSelected ? "#F0FDF4" : "#FFFFFF",
+                      gap: 12,
+                    }}
+                    onPress={() => setTempDraftMethod(opt.id as PaymentMethodType)}
+                    activeOpacity={0.8}
+                    testID={`method-option-${opt.id}`}
+                    accessibilityLabel={opt.name}
+                  >
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: opt.color + "15", alignItems: "center", justifyContent: "center" }}>
+                      <IconComp size={20} color={opt.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>{opt.name}</Text>
+                      <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{opt.desc}</Text>
+                    </View>
+                    <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: isSelected ? "#16A34A" : "#CBD5E1", alignItems: "center", justifyContent: "center" }}>
+                      {isSelected && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#16A34A" }} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={{ gap: 10, paddingTop: 8 }}>
+              <TouchableOpacity
+                style={{ backgroundColor: "#16A34A", borderRadius: 16, paddingVertical: 15, alignItems: "center", justifyContent: "center" }}
+                onPress={() => {
+                  setSelectedPaymentMethod(tempDraftMethod);
+                  setMethodPickerModalVisible(false);
+                }}
+                activeOpacity={0.88}
+                testID="btn-lanjutkan-ubah-metode"
+                accessibilityLabel="Lanjutkan Ubah Metode Pembayaran"
+              >
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>Lanjutkan Ubah Metode Pembayaran</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ paddingVertical: 10, alignItems: "center", justifyContent: "center" }}
+                onPress={() => {
+                  setTempDraftMethod(selectedPaymentMethod || "CASH");
+                  setMethodPickerModalVisible(false);
+                }}
+                activeOpacity={0.7}
+                testID="btn-batal-ubah-metode"
+                accessibilityLabel="Batal"
+              >
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Batal</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Digital Payment Modal */}
       <DigitalPaymentModal
@@ -1232,8 +1464,14 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
           }
         }}
         orderId={createdOrderForPayment?._id || "temp-order-id"}
-        amount={estimatedFare}
-        initialMethod={selectedPaymentMethod}
+        orderModel="RideOrder"
+        amount={
+          createdOrderForPayment?.totalAmount ||
+          (createdOrderForPayment as any)?.finalAmount ||
+          createdOrderForPayment?.estimatedFare ||
+          (estimatedFare > 0 ? estimatedFare : 9500)
+        }
+        initialMethod={selectedPaymentMethod || "QRIS"}
         onPaymentSuccess={(payment) => {
           setSelectedPaymentMethod(payment.paymentMethod);
           setPaymentModalVisible(false);
@@ -1772,7 +2010,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#1B7A4E",
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: 14,
     gap: 8,
   },

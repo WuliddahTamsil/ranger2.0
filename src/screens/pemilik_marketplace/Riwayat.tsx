@@ -255,18 +255,22 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 6,
     marginBottom: 7,
   },
   cardId: {
     fontSize: 14,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   statusText: {
     fontSize: 12,
     fontWeight: "700",
+    flexShrink: 0,
   },
   statusSuccess: {
     color: "#15803D",
@@ -287,8 +291,10 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 6,
   },
   totalText: {
     fontSize: 14,

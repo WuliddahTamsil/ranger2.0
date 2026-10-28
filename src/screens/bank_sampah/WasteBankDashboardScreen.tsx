@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,10 +15,15 @@ import {
   AppStateStatus,
   Platform,
   useWindowDimensions,
+  StatusBar,
 } from "react-native";
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  ArrowLeft,
+  Home,
+  ClipboardList,
+  Tag,
+  Wallet,
+  User,
   Building2,
   Scale,
   Sparkles,
@@ -30,21 +35,38 @@ import {
   LogOut,
   RefreshCw,
   Search,
-  Tag,
   DollarSign,
   Phone,
   MapPin,
   X,
   Check,
-  User,
   ShieldCheck,
   Calendar,
+  ArrowLeft,
+  Filter,
+  ArrowRight,
+  Coins,
+  HelpCircle,
+  SlidersHorizontal,
+  Layers,
+  FileText,
+  CheckCheck,
+  CreditCard,
+  Bell,
+  Store,
+  Lock,
+  Pencil,
+  Trash2,
+  Shield,
 } from "lucide-react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
-import { loadAccounts, saveAccounts, loadSession, saveSession } from "../auth/authStorage";
+import { loadAccounts, saveAccounts } from "../auth/authStorage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRecycle } from "../../context/RecycleContext";
+import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
+import { updateUserProfile, deleteUserAccount } from "../../services/api";
+import { updateCachedAccount } from "../auth/authService";
 import {
   getBankDeposits,
   getWasteBanks,
@@ -61,12 +83,13 @@ import {
   rejectRedemption,
 } from "../../features/geoversePoint/services/geoversePointService";
 import { PointRedemptionUI } from "../../features/geoversePoint/types/pointTypes";
+import { RoleHeader } from "../../components/RoleHeader";
 
 interface Props extends Nav {
   authAccount?: AuthAccount | null;
 }
 
-type TabQueue = "WEIGHING" | "WAITING" | "COMPLETED" | "REDEMPTIONS";
+type TabQueue = "WEIGHING" | "WAITING" | "COMPLETED";
 
 const PRESET_HOURS = [
   "Senin - Sabtu, 08:00 - 16:00",
@@ -75,9 +98,33 @@ const PRESET_HOURS = [
   "Senin - Minggu, 08:00 - 17:00",
 ];
 
+const WASTE_CATEGORIES = [
+  "Semua",
+  "Plastik",
+  "Kertas & Kardus",
+  "Logam & Besi",
+  "Kaca & Botol",
+  "Minyak Jelantah",
+  "Elektronik",
+];
+
 export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
+
+  // Active Bottom Tab: 0 = Beranda, 1 = Antrean, 2 = Katalog, 3 = Keuangan, 4 = Akun
+  const [currentTab, setCurrentTab] = useState<number>(() => {
+    if (typeof window !== "undefined" && window.location?.search) {
+      const p = new URLSearchParams(window.location.search);
+      const t = p.get("tab")?.toLowerCase();
+      if (t === "antrean" || t === "queue" || t === "1") return 1;
+      if (t === "katalog" || t === "catalog" || t === "prices" || t === "2") return 2;
+      if (t === "keuangan" || t === "finance" || t === "pencairan" || t === "wallet" || t === "3") return 3;
+      if (t === "akun" || t === "profile" || t === "settings" || t === "account" || t === "4") return 4;
+    }
+    return 0;
+  });
 
   const { setSelectedDeposit, setSelectedBank } = useRecycle();
   const [bank, setBank] = useState<WasteBankUI | null>(null);
@@ -88,14 +135,21 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Search by code
+  // Search by code in Beranda & Queue
   const [searchCode, setSearchCode] = useState("");
   const [searchError, setSearchError] = useState("");
 
-  // Price Catalog View Modal (Read-only standardized prices)
-  const [priceModalVisible, setPriceModalVisible] = useState(false);
+  // Price Catalog Tab State
   const [priceCatalog, setPriceCatalog] = useState<WasteCategoryPriceUI[]>([]);
   const [loadingPrices, setLoadingPrices] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [selectedCatalogCat, setSelectedCatalogCat] = useState("Semua");
+
+  // Redemptions Tab Filter
+  const [redemptionFilter, setRedemptionFilter] = useState<"ALL" | "REQUESTED" | "PAID" | "REJECTED">("ALL");
+
+  // Notifications Modal
+  const [notifModalVisible, setNotifModalVisible] = useState(false);
 
   // Operating Hours Management Modal
   const [hoursModalVisible, setHoursModalVisible] = useState(false);
@@ -115,8 +169,50 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
   const [savingHours, setSavingHours] = useState(false);
   const [hoursSuccessMsg, setHoursSuccessMsg] = useState("");
 
-  // Logout Confirm Modal
+  // Logout / Switch Role Modal
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  // Profile & Account Management States (Standardized with other partner dashboards)
+  const [avatarUri, setAvatarUri] = useState<string | null>(authAccount?.profilePhoto || null);
+  const [officerName, setOfficerName] = useState<string>(authAccount?.name || "Agalagan");
+  const [officerPhone, setOfficerPhone] = useState<string>(
+    authAccount?.phone || authAccount?.roleData?.phone || "+6287805987309"
+  );
+  const [officerEmail, setOfficerEmail] = useState<string>(
+    authAccount?.email || "banksampah@geoverse.com"
+  );
+  const [isOpenLoket, setIsOpenLoket] = useState<boolean>(true);
+  const [editUnitAddress, setEditUnitAddress] = useState<string>(
+    authAccount?.roleData?.businessAddress ||
+      authAccount?.roleData?.alamat_unit ||
+      authAccount?.address ||
+      "Pakuan, Bogor, Jawa Barat"
+  );
+
+  // Sub-Modals
+  const [accountModalVisible, setAccountModalVisible] = useState(false);
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [addressModalVisible, setAddressModalVisible] = useState(false);
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+
+  // Form states
+  const [editOfficerName, setEditOfficerName] = useState(authAccount?.name || "Agalagan");
+  const [editOfficerPhone, setEditOfficerPhone] = useState(
+    authAccount?.phone || authAccount?.roleData?.phone || "+6287805987309"
+  );
+  const [editOfficerEmail, setEditOfficerEmail] = useState(
+    authAccount?.email || "banksampah@geoverse.com"
+  );
+  const [currPassword, setCurrPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [tempAddress, setTempAddress] = useState(
+    authAccount?.roleData?.businessAddress ||
+      authAccount?.roleData?.alamat_unit ||
+      authAccount?.address ||
+      "Pakuan, Bogor, Jawa Barat"
+  );
 
   const registeredUnitName =
     authAccount?.roleData?.businessName ||
@@ -133,15 +229,14 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     registeredUnitName ||
     bank?.name ||
     authAccount?.name ||
-    "Bank Sampah Induk";
+    "Bank Sampah Pakuan";
 
   const displayUnitAddress =
     registeredUnitAddress ||
     bank?.address ||
-    "Garut, Jawa Barat";
+    "Pakuan, Bogor, Jawa Barat";
 
   useEffect(() => {
-    // 1. Immediately hydrate from AsyncStorage on mount
     const hydrateSettings = async () => {
       try {
         const storedHours = await AsyncStorage.getItem(storageHoursKey);
@@ -169,7 +264,6 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
   const loadDashboard = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      // Find bank belonging to this owner / officer or fallback to first active bank
       const banksRes = await getWasteBanks();
       if (banksRes.success && Array.isArray(banksRes.data) && banksRes.data.length > 0) {
         const userEmail = (authAccount?.email || "").toLowerCase().trim();
@@ -254,7 +348,6 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
           setDeposits(depRes.data);
         }
 
-        // Load point cashout redemptions for this Bank Sampah
         try {
           const rdmRes = await fetchAdminRedemptions({ status: "ALL", limit: 50 });
           if (rdmRes.success && rdmRes.data?.redemptions) {
@@ -262,6 +355,16 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
           }
         } catch (rdmErr) {
           console.warn("loadRedemptions error:", rdmErr);
+        }
+
+        // Preload prices
+        try {
+          const prcRes = await getWasteBankPrices(myBank._id);
+          if (prcRes.success && Array.isArray(prcRes.data)) {
+            setPriceCatalog(prcRes.data);
+          }
+        } catch (prcErr) {
+          console.warn("loadPrices error:", prcErr);
         }
       }
     } catch (err) {
@@ -276,7 +379,6 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     let isMounted = true;
     loadDashboard();
 
-    // AppState change listener for React Native
     const appStateSub = AppState.addEventListener("change", (nextState: AppStateStatus) => {
       if (nextState === "active" && isMounted) {
         loadDashboard(true);
@@ -293,7 +395,6 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
       window.addEventListener("focus", onWindowFocus);
     }
 
-    // Refresh every 10 seconds to catch tickets without overwhelming the phone
     const interval = setInterval(() => {
       if (isMounted) {
         loadDashboard(true);
@@ -335,22 +436,6 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     }
   };
 
-  const handleOpenPriceModal = async () => {
-    if (!bank) return;
-    setPriceModalVisible(true);
-    setLoadingPrices(true);
-    try {
-      const res = await getWasteBankPrices(bank._id);
-      if (res.success && Array.isArray(res.data)) {
-        setPriceCatalog(res.data);
-      }
-    } catch (err) {
-      console.error("fetch prices error:", err);
-    } finally {
-      setLoadingPrices(false);
-    }
-  };
-
   const handleOpenHoursModal = () => {
     setInputHours(activeOpeningHours || bank?.openingHours || registeredHours || "Senin - Sabtu, 08:00 - 15:15");
     setPickupEnabled(bank?.acceptsPickup !== false);
@@ -363,7 +448,6 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     const hours = inputHours.trim();
     if (!hours) return;
 
-    // Immediately update active state and UI
     setActiveOpeningHours(hours);
     const updatedBank: WasteBankUI = {
       ...bank,
@@ -375,49 +459,18 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     setBank(updatedBank);
     setSelectedBank(updatedBank);
 
-    // Persist to storage immediately
     try {
-      const unitKey = (displayUnitName || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
-      const unitKeyRaw = (displayUnitName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       await AsyncStorage.setItem(storageHoursKey, hours);
       await AsyncStorage.setItem(storagePickupKey, String(pickupEnabled));
       if (bank?._id) {
         await AsyncStorage.setItem(`@waste_bank_hours_${bank._id}`, hours);
         await AsyncStorage.setItem(`@waste_bank_pickup_${bank._id}`, String(pickupEnabled));
       }
-      if (unitKey) {
-        await AsyncStorage.setItem(`@waste_bank_hours_${unitKey}`, hours);
-        await AsyncStorage.setItem(`@waste_bank_pickup_${unitKey}`, String(pickupEnabled));
-      }
-      if (unitKeyRaw) {
-        await AsyncStorage.setItem(`@waste_bank_hours_${unitKeyRaw}`, hours);
-        await AsyncStorage.setItem(`@waste_bank_pickup_${unitKeyRaw}`, String(pickupEnabled));
-      }
-      await AsyncStorage.setItem(`@waste_bank_hours_pakuan`, hours);
-      await AsyncStorage.setItem(`@waste_bank_pickup_pakuan`, String(pickupEnabled));
-      await AsyncStorage.setItem(`@waste_bank_hours_bank_sampah_pakuan`, hours);
-      await AsyncStorage.setItem(`@waste_bank_pickup_bank_sampah_pakuan`, String(pickupEnabled));
-
-      if (authAccount?.email) {
-        await AsyncStorage.setItem(`@waste_bank_hours_${authAccount.email.toLowerCase()}`, hours);
-        await AsyncStorage.setItem(`@waste_bank_pickup_${authAccount.email.toLowerCase()}`, String(pickupEnabled));
-      }
-      if (authAccount?.id) {
-        await AsyncStorage.setItem(`@waste_bank_hours_${authAccount.id}`, hours);
-        await AsyncStorage.setItem(`@waste_bank_pickup_${authAccount.id}`, String(pickupEnabled));
-      }
-
       if (authAccount) {
         const accounts = await loadAccounts();
         for (let i = 0; i < accounts.length; i++) {
           const a = accounts[i];
-          const isMatch =
-            a.id === authAccount.id ||
-            a.email.toLowerCase() === (authAccount.email || "").toLowerCase() ||
-            a.role === "bank_sampah" ||
-            (a.name && a.name.toLowerCase().includes("pakuan")) ||
-            (a.roleData?.businessName && a.roleData.businessName.toLowerCase().includes("pakuan"));
-          if (isMatch) {
+          if (a.id === authAccount.id || a.email.toLowerCase() === (authAccount.email || "").toLowerCase()) {
             accounts[i].roleData = {
               ...(accounts[i].roleData || {}),
               openingHours: hours,
@@ -435,46 +488,28 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     setSavingHours(true);
     setHoursSuccessMsg("");
     try {
-      const res = await updateWasteBankOperational(bank._id || "bank_pakuan_001", {
+      await updateWasteBankOperational(bank._id || "bank_pakuan_001", {
         name: displayUnitName,
         address: displayUnitAddress,
         openingHours: hours,
         acceptsPickup: pickupEnabled,
       });
-      if (res.success && res.data) {
-        setBank({
-          ...res.data,
-          name: displayUnitName,
-          address: displayUnitAddress,
-          openingHours: hours,
-          acceptsPickup: pickupEnabled,
-        });
-        setSelectedBank({
-          ...res.data,
-          name: displayUnitName,
-          address: displayUnitAddress,
-          openingHours: hours,
-          acceptsPickup: pickupEnabled,
-        });
-      }
       setHoursSuccessMsg("Pengaturan operasional berhasil disimpan!");
       setTimeout(() => {
         setHoursModalVisible(false);
         setHoursSuccessMsg("");
-      }, 800);
+      }, 700);
     } catch (err) {
-      console.error("save operating hours error:", err);
-      setHoursSuccessMsg("Pengaturan operasional tersimpan di unit!");
+      setHoursSuccessMsg("Pengaturan operasional tersimpan lokal!");
       setTimeout(() => {
         setHoursModalVisible(false);
         setHoursSuccessMsg("");
-      }, 800);
+      }, 700);
     } finally {
       setSavingHours(false);
     }
   };
 
-  // Quick ticket search
   const handleSearchTicket = async () => {
     setSearchError("");
     const query = searchCode.trim().toUpperCase();
@@ -500,7 +535,7 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
       setSearchCode("");
       navigate("bank_sampah_weighing");
     } else {
-      setSearchError(`Tiket "${query}" tidak ditemukan dalam antrean aktif unit ini.`);
+      setSearchError(`Tiket "${query}" tidak ditemukan dalam antrean unit ini.`);
     }
   };
 
@@ -517,7 +552,7 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
             try {
               const res = await payRedemption(redemption._id);
               if (res.success) {
-                Alert.alert("Sukses", "Pencairan kas berhasil dikonfirmasi dan status diperbarui menjadi PAID.");
+                Alert.alert("Sukses", "Pencairan kas berhasil dikonfirmasi (PAID).");
                 loadDashboard(true);
               } else {
                 Alert.alert("Gagal", res.message || "Gagal memproses pembayaran.");
@@ -547,7 +582,7 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
             try {
               const res = await rejectRedemption(redemption._id, "Ditolak oleh petugas Bank Sampah.");
               if (res.success) {
-                Alert.alert("Sukses", "Permintaan ditolak dan saldo poin nasabah telah dikembalikan utuh.");
+                Alert.alert("Sukses", "Permintaan ditolak dan saldo poin nasabah telah dikembalikan.");
                 loadDashboard(true);
               } else {
                 Alert.alert("Gagal", res.message || "Gagal menolak permintaan.");
@@ -563,9 +598,8 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     );
   };
 
-  const pendingRedemptionsCount = redemptions.filter((r) => r.status === "REQUESTED").length;
-
   // Metrics
+  const pendingRedemptionsCount = redemptions.filter((r) => r.status === "REQUESTED").length;
   const waitingWeighing = deposits.filter((d) =>
     ["REQUESTED", "ACCEPTED", "PICKED_UP", "AT_BANK", "WEIGHING"].includes(d.status)
   );
@@ -581,7 +615,11 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     0
   );
   const totalPointsIssued = completedDeposits.reduce((sum, d) => sum + (d.finalPoint || 0), 0);
+  const totalCashDisbursed = redemptions
+    .filter((r) => r.status === "PAID")
+    .reduce((sum, r) => sum + (r.rupiahValue || 0), 0);
 
+  // Filtered Queue
   const getFilteredQueue = () => {
     switch (activeQueue) {
       case "WEIGHING":
@@ -595,249 +633,377 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
     }
   };
 
-  return (
-    <ResponsiveSafeAreaView style={styles.container}>
-      {/* Top App Bar with Operations Cockpit Styling */}
-      <View style={styles.headerBar}>
-        <View style={styles.headerInner}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigate("role")}
-            activeOpacity={0.7}
-          >
-            <ArrowLeft size={18} color="#1E293B" />
-          </TouchableOpacity>
+  // Filtered Price Catalog
+  const filteredPrices = useMemo(() => {
+    return priceCatalog.filter((item) => {
+      const matchCat =
+        selectedCatalogCat === "Semua" ||
+        item.category.toLowerCase().includes(selectedCatalogCat.toLowerCase()) ||
+        (selectedCatalogCat === "Kertas & Kardus" && item.category.toLowerCase().includes("kertas")) ||
+        (selectedCatalogCat === "Logam & Besi" && item.category.toLowerCase().includes("logam"));
+      const matchSearch =
+        !catalogSearch.trim() ||
+        item.category.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+        (item.subCategory && item.subCategory.toLowerCase().includes(catalogSearch.toLowerCase()));
+      return matchCat && matchSearch;
+    });
+  }, [priceCatalog, selectedCatalogCat, catalogSearch]);
 
-          <View style={styles.headerTitleCol}>
-            <View style={styles.headerBadgeRow}>
-              <View style={styles.headerLiveDot} />
-              <Text style={styles.headerBadgeText}>OFFICER PORTAL</Text>
+  // Filtered Redemptions
+  const filteredRedemptions = useMemo(() => {
+    return redemptions.filter((r) => {
+      if (redemptionFilter === "ALL") return true;
+      return r.status === redemptionFilter;
+    });
+  }, [redemptions, redemptionFilter]);
+
+  // 5 Navigation Tabs
+  const navTabs = [
+    { key: "beranda", label: "Beranda", icon: Home, badge: 0 },
+    {
+      key: "antrean",
+      label: "Antrean",
+      icon: ClipboardList,
+      badge: waitingWeighing.length + (disputedCount > 0 ? disputedCount : 0),
+      badgeColor: disputedCount > 0 ? "#DC2626" : "#059669",
+    },
+    { key: "katalog", label: "Katalog", icon: Tag, badge: 0 },
+    {
+      key: "keuangan",
+      label: "Keuangan",
+      icon: Wallet,
+      badge: pendingRedemptionsCount,
+      badgeColor: "#EA580C",
+    },
+    { key: "akun", label: "Akun", icon: User, badge: 0 },
+  ];
+
+  // -------------------------------------------------------------
+  // TAB 0: BERANDA (Unified Dashboard)
+  // -------------------------------------------------------------
+  const renderBerandaTab = () => (
+    <ScrollView
+      contentContainerStyle={[styles.scrollContent, isWide && styles.scrollContentWide]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#059669"]} />}
+    >
+      <RoleHeader
+        name={displayUnitName}
+        role="Pemilik Bank Sampah"
+        icon={Scale}
+        notificationCount={pendingRedemptionsCount + disputedCount}
+        onNotificationPress={() => setNotifModalVisible(true)}
+        onRolePress={() => setLogoutModalVisible(true)}
+      />
+
+      {/* Unit Overview Card */}
+      <View style={styles.unitHeroCard}>
+        <View style={styles.unitHeroTop}>
+          <View style={styles.unitHeroAvatar}>
+            <Building2 size={22} color="#0E6641" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
+            <View style={styles.unitTagRow}>
+              <View style={styles.statusLivePill}>
+                <View style={styles.livePulseDot} />
+                <Text style={styles.statusLiveText}>Menerima Setoran</Text>
+              </View>
+              {pickupEnabled ? (
+                <View style={styles.pickupPillActive}>
+                  <Truck size={10} color="#0284C7" />
+                  <Text style={styles.pickupPillTextActive}>Pickup Aktif</Text>
+                </View>
+              ) : (
+                <View style={styles.pickupPillInactive}>
+                  <Truck size={10} color="#64748B" />
+                  <Text style={styles.pickupPillTextInactive}>Pickup Nonaktif</Text>
+                </View>
+              )}
             </View>
-            <Text style={styles.headerMainTitle} numberOfLines={1}>Panel Bank Sampah</Text>
-            <Text style={styles.headerSubUnit} numberOfLines={1}>
-              {displayUnitName}
+            <View style={styles.unitHeroNameRow}>
+              <Text style={styles.unitHeroName} numberOfLines={2}>
+                {displayUnitName}
+              </Text>
+              <ShieldCheck size={15} color="#0E6641" style={{ flexShrink: 0, marginTop: 2 }} />
+            </View>
+            <Text style={styles.unitHeroOfficer} numberOfLines={1}>
+              Petugas: {authAccount?.name || "Pengelola Bank Sampah"}
             </Text>
           </View>
+        </View>
 
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.refreshBtn}
-              onPress={() => onRefresh()}
-              activeOpacity={0.7}
-            >
-              <RefreshCw size={14} color="#059669" />
-            </TouchableOpacity>
+        <View style={styles.unitAddressRow}>
+          <MapPin size={13} color="#64748B" style={{ flexShrink: 0, marginTop: 1 }} />
+          <Text style={styles.unitAddressText} numberOfLines={2}>
+            {displayUnitAddress}
+          </Text>
+        </View>
 
-            <TouchableOpacity
-              style={styles.btnSwitchCustomer}
-              onPress={() => navigate("c_home")}
-              activeOpacity={0.7}
-            >
-              <User size={13} color="#059669" />
-              <Text style={styles.btnSwitchCustomerText}>Customer</Text>
-            </TouchableOpacity>
+        <View style={styles.unitHoursBanner}>
+          <Clock size={13} color="#0E6641" style={{ flexShrink: 0, marginTop: 1 }} />
+          <Text style={styles.unitHoursBannerText} numberOfLines={2}>
+            Jam Operasional: {activeOpeningHours || "Senin - Sabtu, 08:00 - 15:15"}
+          </Text>
+        </View>
 
-            <TouchableOpacity
-              style={styles.logoutBtn}
-              onPress={() => setLogoutModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <LogOut size={15} color="#DC2626" />
-            </TouchableOpacity>
-          </View>
+        {/* Quick Settings Action Buttons */}
+        <View style={styles.unitActionGrid}>
+          <TouchableOpacity
+            style={styles.unitActionBtnHours}
+            onPress={handleOpenHoursModal}
+            activeOpacity={0.8}
+            accessibilityLabel="Atur Jam Buka-Tutup"
+          >
+            <Clock size={13} color="#0E6641" />
+            <Text style={styles.unitActionBtnHoursText} numberOfLines={2}>Atur Jam Operasional</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.unitActionBtnCatalog}
+            onPress={() => setCurrentTab(2)}
+            activeOpacity={0.8}
+            accessibilityLabel="Lihat Katalog Harga"
+          >
+            <Tag size={13} color="#0284C7" />
+            <Text style={styles.unitActionBtnCatalogText} numberOfLines={2}>Katalog Harga</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
+      {/* Quick Search & Timbang Bar */}
+      <View style={styles.searchSection}>
+        <Text style={styles.searchSectionTitle}>Cari & Timbang Tiket Nasabah</Text>
+        <View style={styles.searchBox}>
+          <Search size={16} color="#0E6641" style={{ marginLeft: 4 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Masukkan kode setor (cth: RNG-RCY-...)"
+            placeholderTextColor="#94A3B8"
+            value={searchCode}
+            onChangeText={(text) => {
+              setSearchCode(text);
+              if (searchError) setSearchError("");
+            }}
+            onSubmitEditing={handleSearchTicket}
+            autoCapitalize="characters"
+          />
+          {searchCode.length > 0 && (
+            <TouchableOpacity
+              style={styles.btnSearchAction}
+              onPress={handleSearchTicket}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.btnSearchActionText}>Timbang</Text>
+              <ChevronRight size={13} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+        </View>
+        {searchError ? <Text style={styles.searchErrorText}>{searchError}</Text> : null}
+      </View>
+
+      {/* Executive Metric Cards Grid (Clean, Decoupled & Responsive) */}
+      <View style={styles.metricsContainer}>
+        <View style={styles.metricsRow}>
+          <TouchableOpacity
+            style={styles.metricCardGreen}
+            onPress={() => {
+              setActiveQueue("COMPLETED");
+              setCurrentTab(1);
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconCircleGreen}>
+                <Scale size={15} color="#0E6641" />
+              </View>
+              <View style={styles.metricBadgeGreen}>
+                <Text style={styles.metricBadgeTextGreen}>Sampah</Text>
+              </View>
+            </View>
+            <View style={styles.metricValRow}>
+              <Text style={styles.metricVal} numberOfLines={1}>{totalKg.toFixed(1)}</Text>
+              <Text style={styles.metricUnit}>kg</Text>
+            </View>
+            <Text style={styles.metricLabel} numberOfLines={2}>Total Sampah Masuk</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.metricCardAmber}
+            onPress={() => setCurrentTab(3)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconCircleAmber}>
+                <Sparkles size={15} color="#D97706" />
+              </View>
+              <View style={styles.metricBadgeAmber}>
+                <Text style={styles.metricBadgeTextAmber}>Poin</Text>
+              </View>
+            </View>
+            <View style={styles.metricValRow}>
+              <Text style={styles.metricVal} numberOfLines={1}>{totalPointsIssued.toLocaleString("id-ID")}</Text>
+              <Text style={styles.metricUnit}>Pts</Text>
+            </View>
+            <Text style={styles.metricLabel} numberOfLines={2}>Poin Nasabah Terbit</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.metricsRow}>
+          <TouchableOpacity
+            style={styles.metricCardOrange}
+            onPress={() => {
+              setActiveQueue("WEIGHING");
+              setCurrentTab(1);
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconCircleOrange}>
+                <Clock size={15} color="#EA580C" />
+              </View>
+              <View style={styles.metricBadgeOrange}>
+                <Text style={styles.metricBadgeTextOrange}>Antrean</Text>
+              </View>
+            </View>
+            <View style={styles.metricValRow}>
+              <Text style={styles.metricVal} numberOfLines={1}>{waitingWeighing.length}</Text>
+              <Text style={styles.metricUnit}>Tiket</Text>
+            </View>
+            <Text style={styles.metricLabel} numberOfLines={2}>Menunggu Ditimbang</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.metricCardBlue}
+            onPress={() => {
+              setActiveQueue("COMPLETED");
+              setCurrentTab(1);
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={styles.metricCardHeader}>
+              <View style={styles.metricIconCircleBlue}>
+                <CheckCircle2 size={15} color="#2563EB" />
+              </View>
+              <View style={styles.metricBadgeBlue}>
+                <Text style={styles.metricBadgeTextBlue}>Berhasil</Text>
+              </View>
+            </View>
+            <View style={styles.metricValRow}>
+              <Text style={styles.metricVal} numberOfLines={1}>{completedDeposits.length}</Text>
+              <Text style={styles.metricUnit}>Selesai</Text>
+            </View>
+            <Text style={styles.metricLabel} numberOfLines={2}>Setoran Selesai</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Quick Action Navigation Buttons */}
+      <View style={styles.quickNavCard}>
+        <Text style={styles.quickNavCardTitle}>Aksi Cepat Pengelola</Text>
+        <View style={styles.quickNavGrid}>
+          <TouchableOpacity
+            style={styles.quickNavItem}
+            onPress={() => {
+              setActiveQueue("WEIGHING");
+              setCurrentTab(1);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickNavIconWrap, { backgroundColor: "#DCFCE7" }]}>
+              <Scale size={18} color="#0E6641" />
+            </View>
+            <Text style={styles.quickNavLabel} numberOfLines={2}>Timbang Antrean</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickNavItem}
+            onPress={() => setCurrentTab(2)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickNavIconWrap, { backgroundColor: "#E0F2FE" }]}>
+              <Tag size={18} color="#0284C7" />
+            </View>
+            <Text style={styles.quickNavLabel} numberOfLines={2}>Katalog Harga</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickNavItem}
+            onPress={() => setCurrentTab(3)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickNavIconWrap, { backgroundColor: "#FEF3C7" }]}>
+              <Wallet size={18} color="#D97706" />
+            </View>
+            <Text style={styles.quickNavLabel} numberOfLines={2}>Pencairan Kas</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickNavItem}
+            onPress={() => navigate("c_home")}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickNavIconWrap, { backgroundColor: "#F3E8FF" }]}>
+              <User size={18} color="#7E22CE" />
+            </View>
+            <Text style={styles.quickNavLabel} numberOfLines={2}>Mode Customer</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Urgent Queue Snippet */}
+      <View style={styles.sectionHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+          <Text style={styles.sectionTitle} numberOfLines={1}>Antrean Perlu Ditimbang</Text>
+          <Text style={styles.sectionSubtitle} numberOfLines={1}>Prioritas tiket setor nasabah yang baru masuk</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => {
+            setActiveQueue("WEIGHING");
+            setCurrentTab(1);
+          }}
+          activeOpacity={0.7}
+          style={styles.seeAllBtn}
+        >
+          <Text style={styles.seeAllText}>Semua ({waitingWeighing.length}) →</Text>
+        </TouchableOpacity>
+      </View>
+
+      {waitingWeighing.length === 0 ? (
+        <View style={styles.emptyCardMini}>
+          <CheckCheck size={28} color="#0E6641" />
+          <Text style={styles.emptyCardMiniTitle}>Semua Antrean Selesai Ditimbang!</Text>
+          <Text style={styles.emptyCardMiniText}>
+            Tidak ada tiket setor yang menunggu penimbangan saat ini.
+          </Text>
+        </View>
+      ) : (
+        waitingWeighing.slice(0, 3).map((item) => renderDepositCard(item))
+      )}
+
+      <View style={{ height: 24 }} />
+    </ScrollView>
+  );
+
+  // -------------------------------------------------------------
+  // TAB 1: ANTREAN & PENIMBANGAN (Queue Management)
+  // -------------------------------------------------------------
+  const renderAntreanTab = () => {
+    const queueList = getFilteredQueue();
+
+    return (
       <ScrollView
         contentContainerStyle={[styles.scrollContent, isWide && styles.scrollContentWide]}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#059669"]} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#059669"]} />}
       >
-        {/* Officer & Unit Profile Card */}
-        <View style={styles.unitCard}>
-          <View style={styles.unitCardTop}>
-            <View style={styles.unitAvatar}>
-              <Building2 size={24} color="#059669" />
-            </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={styles.unitTagRow}>
-                <View style={styles.statusLivePill}>
-                  <View style={styles.livePulseDot} />
-                  <Text style={styles.statusLiveText}>Menerima Setoran</Text>
-                </View>
-                {bank?.acceptsPickup !== false ? (
-                  <View style={styles.pickupPill}>
-                    <Truck size={10} color="#0284C7" />
-                    <Text style={styles.pickupPillText}>Pickup Aktif</Text>
-                  </View>
-                ) : (
-                  <View style={[styles.pickupPill, { backgroundColor: "#F1F5F9", borderColor: "#E2E8F0" }]}>
-                    <Truck size={10} color="#64748B" />
-                    <Text style={[styles.pickupPillText, { color: "#64748B" }]}>Pickup Nonaktif</Text>
-                  </View>
-                )}
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                <Text style={styles.unitFullName} numberOfLines={1}>
-                  {displayUnitName}
-                </Text>
-                <ShieldCheck size={16} color="#059669" />
-              </View>
-              <Text style={styles.officerName} numberOfLines={1}>
-                Petugas: {authAccount?.name || "Pengelola Bank Sampah"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.unitAddressRow}>
-            <MapPin size={13} color="#64748B" />
-            <Text style={styles.unitAddressText} numberOfLines={1}>
-              {displayUnitAddress}
-            </Text>
-          </View>
-
-          <View style={styles.unitHoursBanner}>
-            <Clock size={13} color="#059669" />
-            <Text style={styles.unitHoursBannerText} numberOfLines={1}>
-              Jam Operasional: {activeOpeningHours || bank?.openingHours || "Senin - Sabtu, 08:00 - 15:15"}
-            </Text>
-          </View>
-
-          {/* Quick Action Buttons: Atur Jam & Lihat Katalog Harga */}
-          <View style={styles.unitActionGrid}>
-            <TouchableOpacity
-              style={styles.unitActionBtnHours}
-              onPress={handleOpenHoursModal}
-              activeOpacity={0.8}
-            >
-              <Clock size={14} color="#059669" />
-              <Text style={styles.unitActionBtnHoursText}>Atur Jam Buka-Tutup</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.unitActionBtnCatalog}
-              onPress={handleOpenPriceModal}
-              activeOpacity={0.8}
-            >
-              <Tag size={14} color="#0284C7" />
-              <Text style={styles.unitActionBtnCatalogText}>Katalog Harga</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.pageHeaderBox}>
+          <Text style={styles.pageTitle}>Antrean & Penimbangan</Text>
+          <Text style={styles.pageSubtitle}>
+            Kelola proses penimbangan tiket nasabah dan verifikasi setoran sampah
+          </Text>
         </View>
 
-        {/* Quick Search Ticket by Code */}
-        <View style={styles.searchSection}>
-          <Text style={styles.searchSectionTitle}>Cari & Timbang Tiket Nasabah</Text>
-          <View style={styles.searchBox}>
-            <Search size={16} color="#059669" style={{ marginLeft: 4 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Masukkan kode setor (cth: RNG-RCY-...)"
-              placeholderTextColor="#94A3B8"
-              value={searchCode}
-              onChangeText={(text) => {
-                setSearchCode(text);
-                if (searchError) setSearchError("");
-              }}
-              onSubmitEditing={handleSearchTicket}
-              autoCapitalize="characters"
-            />
-            {searchCode.length > 0 && (
-              <TouchableOpacity
-                style={styles.btnSearchAction}
-                onPress={handleSearchTicket}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.btnSearchActionText}>Timbang</Text>
-                <ChevronRight size={13} color="#FFFFFF" />
-              </TouchableOpacity>
-            )}
-          </View>
-          {searchError ? <Text style={styles.searchErrorText}>{searchError}</Text> : null}
-        </View>
-
-        {/* Executive Metric Cards Grid */}
-        <View style={styles.metricsContainer}>
-          <View style={styles.metricsRow}>
-            <View style={styles.metricCardGreen}>
-              <View style={styles.metricCardHeader}>
-                <View style={styles.metricIconCircleGreen}>
-                  <Scale size={16} color="#059669" />
-                </View>
-                <View style={styles.metricBadgeGreen}>
-                  <Text style={styles.metricBadgeTextGreen}>Sampah</Text>
-                </View>
-              </View>
-              <View style={styles.metricValRow}>
-                <Text style={styles.metricVal}>{totalKg.toFixed(1)}</Text>
-                <Text style={styles.metricUnit}>kg</Text>
-              </View>
-              <Text style={styles.metricLabel}>Total Sampah Masuk</Text>
-            </View>
-
-            <View style={styles.metricCardAmber}>
-              <View style={styles.metricCardHeader}>
-                <View style={styles.metricIconCircleAmber}>
-                  <Sparkles size={16} color="#D97706" />
-                </View>
-                <View style={styles.metricBadgeAmber}>
-                  <Text style={styles.metricBadgeTextAmber}>Poin</Text>
-                </View>
-              </View>
-              <View style={styles.metricValRow}>
-                <Text style={styles.metricVal}>{totalPointsIssued.toLocaleString("id-ID")}</Text>
-                <Text style={styles.metricUnit}>Pts</Text>
-              </View>
-              <Text style={styles.metricLabel}>Poin Nasabah Terbit</Text>
-            </View>
-          </View>
-
-          <View style={styles.metricsRow}>
-            <View style={styles.metricCardOrange}>
-              <View style={styles.metricCardHeader}>
-                <View style={styles.metricIconCircleOrange}>
-                  <Clock size={16} color="#EA580C" />
-                </View>
-                <View style={styles.metricBadgeOrange}>
-                  <Text style={styles.metricBadgeTextOrange}>Antrean</Text>
-                </View>
-              </View>
-              <View style={styles.metricValRow}>
-                <Text style={styles.metricVal}>{waitingWeighing.length}</Text>
-                <Text style={styles.metricUnit}>Tiket</Text>
-              </View>
-              <Text style={styles.metricLabel}>Menunggu Ditimbang</Text>
-            </View>
-
-            <View style={styles.metricCardBlue}>
-              <View style={styles.metricCardHeader}>
-                <View style={styles.metricIconCircleBlue}>
-                  <CheckCircle2 size={16} color="#2563EB" />
-                </View>
-                <View style={styles.metricBadgeBlue}>
-                  <Text style={styles.metricBadgeTextBlue}>Berhasil</Text>
-                </View>
-              </View>
-              <View style={styles.metricValRow}>
-                <Text style={styles.metricVal}>{completedDeposits.length}</Text>
-                <Text style={styles.metricUnit}>Selesai</Text>
-              </View>
-              <Text style={styles.metricLabel}>Setoran Selesai</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Queue Section */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Antrean & Penimbangan Sampah</Text>
-          <View style={styles.sectionBadgeBox}>
-            <Text style={styles.sectionBadge}>{deposits.length} Tiket Aktif</Text>
-          </View>
-        </View>
-
-        {/* Segmented Queue Tabs (Single Line, No Wrap) */}
+        {/* Segmented Queue Tabs */}
         <View style={styles.queueTabBar}>
           <TouchableOpacity
             style={[styles.queueTab, activeQueue === "WEIGHING" && styles.queueTabActive]}
@@ -913,42 +1079,9 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
               </Text>
             </View>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.queueTab, activeQueue === "REDEMPTIONS" && styles.queueTabActive]}
-            onPress={() => setActiveQueue("REDEMPTIONS")}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.queueTabText,
-                activeQueue === "REDEMPTIONS" && styles.queueTabTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              Pencairan
-            </Text>
-            <View
-              style={[
-                styles.queueTabBadge,
-                activeQueue === "REDEMPTIONS" && styles.queueTabBadgeActive,
-                pendingRedemptionsCount > 0 && { backgroundColor: "#F59E0B" },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.queueTabBadgeText,
-                  activeQueue === "REDEMPTIONS" && styles.queueTabBadgeTextActive,
-                  pendingRedemptionsCount > 0 && { color: "#FFFFFF" },
-                ]}
-              >
-                {pendingRedemptionsCount}
-              </Text>
-            </View>
-          </TouchableOpacity>
         </View>
 
-        {/* Dispute Notice Banner under Tabs if any */}
+        {/* Dispute Notice Banner */}
         {disputedCount > 0 && activeQueue === "WAITING" && (
           <View style={styles.disputeTopBanner}>
             <AlertCircle size={15} color="#DC2626" />
@@ -961,233 +1094,249 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
         {/* Queue Items */}
         {loading ? (
           <View style={{ paddingVertical: 40, alignItems: "center" }}>
-            <ActivityIndicator size="large" color="#15803D" />
+            <ActivityIndicator size="large" color="#0E6641" />
             <Text style={{ marginTop: 10, color: "#64748B", fontSize: 12 }}>
               Memuat antrean...
             </Text>
           </View>
-        ) : activeQueue === "REDEMPTIONS" ? (
-          redemptions.length === 0 ? (
-            <View style={styles.emptyQueueCard}>
-              <CheckCircle2 size={32} color="#9CA3AF" />
-              <Text style={styles.emptyQueueText}>
-                Belum ada permintaan pencairan poin / kas dari nasabah.
-              </Text>
-            </View>
-          ) : (
-            redemptions.map((rdm) => {
-              const isPending = rdm.status === "REQUESTED";
-              const isPaid = rdm.status === "PAID";
-              const isRejected = rdm.status === "REJECTED";
-              const isProcessing = processingRedemptionId === rdm._id;
-
-              return (
-                <View key={rdm._id} style={styles.depositCard}>
-                  <View style={styles.depositCardHeader}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <View style={styles.codeRow}>
-                        <Text style={styles.depositCode}>{rdm.redemptionCode}</Text>
-                        <View
-                          style={[
-                            styles.methodBadge,
-                            rdm.type === "CASH" ? styles.methodBadgeDropOff : styles.methodBadgePickup,
-                          ]}
-                        >
-                          <DollarSign size={10} color={rdm.type === "CASH" ? "#0284C7" : "#047857"} />
-                          <Text
-                            style={[
-                              styles.methodBadgeText,
-                              rdm.type === "CASH" ? styles.methodBadgeTextDropOff : styles.methodBadgeTextPickup,
-                            ]}
-                          >
-                            {rdm.type === "CASH"
-                              ? "Tunai Bank Sampah"
-                              : rdm.type === "BANK_TRANSFER"
-                              ? "Transfer Bank"
-                              : "E-Wallet"}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.customerRow}>
-                        <User size={11} color="#64748B" />
-                        <Text style={styles.customerName} numberOfLines={1}>
-                          {typeof rdm.userId === "object" ? (rdm.userId as any)?.name || "Nasabah" : "Nasabah"}
-                          {typeof rdm.userId === "object" && (rdm.userId as any)?.phone ? ` (${(rdm.userId as any).phone})` : ""}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.statusPill,
-                        isPaid
-                          ? styles.statusPillGreen
-                          : isRejected
-                          ? styles.statusPillRed
-                          : styles.statusPillAmber,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusPillText,
-                          isPaid
-                            ? styles.statusPillTextGreen
-                            : isRejected
-                            ? styles.statusPillTextRed
-                            : styles.statusPillTextAmber,
-                        ]}
-                      >
-                        {isPaid ? "Selesai / Dibayar" : isRejected ? "Ditolak" : "Menunggu Bayar"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: "#F1F5F9", marginTop: 6 }}>
-                    <Text style={{ fontSize: 11, color: "#64748B" }}>Tujuan Pencairan:</Text>
-                    <Text style={{ fontSize: 12.5, fontWeight: "700", color: "#1E293B", marginTop: 2 }}>
-                      {rdm.payoutDestination?.channel === "CASH_AT_BANK"
-                        ? "Pengambilan Uang Tunai di Lokasi Bank Sampah"
-                        : `${rdm.payoutDestination?.channel || "Transfer"} - ${rdm.payoutDestination?.accountNumber || "-"} a/n ${rdm.payoutDestination?.accountName || "-"}`}
-                    </Text>
-                    {rdm.rejectionReason ? (
-                      <Text style={{ fontSize: 11, color: "#DC2626", marginTop: 4 }}>
-                        Alasan penolakan: {rdm.rejectionReason} (Poin telah dikembalikan)
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  <View style={styles.depositCardFooter}>
-                    <View>
-                      <Text style={styles.footerWeightLabel}>Nominal Penarikan:</Text>
-                      <Text style={[styles.footerWeightVal, { color: "#15803D" }]}>
-                        Rp {rdm.rupiahValue?.toLocaleString("id-ID")}
-                      </Text>
-                      <Text style={styles.footerPointVal}>
-                        {rdm.points?.toLocaleString("id-ID")} Poin
-                      </Text>
-                    </View>
-
-                    {isPending && (
-                      <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-                        <TouchableOpacity
-                          style={{
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: "#EF4444",
-                            backgroundColor: "#FEF2F2",
-                          }}
-                          onPress={() => handleRejectRedemption(rdm)}
-                          disabled={isProcessing}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={{ fontSize: 11.5, fontWeight: "700", color: "#DC2626" }}>Tolak</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={{
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
-                            borderRadius: 8,
-                            backgroundColor: "#15803D",
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                          onPress={() => handlePayRedemption(rdm)}
-                          disabled={isProcessing}
-                          activeOpacity={0.8}
-                        >
-                          {isProcessing ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                          ) : (
-                            <>
-                              <Check size={13} color="#FFFFFF" />
-                              <Text style={{ fontSize: 11.5, fontWeight: "800", color: "#FFFFFF" }}>Konfirmasi Bayar</Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })
-          )
-        ) : getFilteredQueue().length === 0 ? (
+        ) : queueList.length === 0 ? (
           <View style={styles.emptyQueueCard}>
-            <CheckCircle2 size={32} color="#9CA3AF" />
+            <CheckCircle2 size={36} color="#9CA3AF" />
             <Text style={styles.emptyQueueText}>
               {activeQueue === "WEIGHING"
-                ? "Belum ada antrean setoran yang perlu ditimbang."
+                ? "Tidak ada tiket dalam antrean timbang."
                 : activeQueue === "WAITING"
-                ? "Tidak ada setoran yang menunggu persetujuan nasabah."
+                ? "Tidak ada tiket yang menunggu konfirmasi."
                 : "Belum ada riwayat setoran selesai."}
             </Text>
           </View>
         ) : (
-          getFilteredQueue().map((item) => (
+          queueList.map((item) => renderDepositCard(item))
+        )}
+
+        <View style={{ height: 24 }} />
+      </ScrollView>
+    );
+  };
+
+  // -------------------------------------------------------------
+  // TAB 2: KATALOG HARGA (Price Catalog)
+  // -------------------------------------------------------------
+  const renderKatalogTab = () => (
+    <ScrollView
+      contentContainerStyle={[styles.scrollContent, isWide && styles.scrollContentWide]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#059669"]} />}
+    >
+      <View style={styles.pageHeaderBox}>
+        <Text style={styles.pageTitle}>Katalog Harga Sampah</Text>
+        <Text style={styles.pageSubtitle}>
+          Daftar acuan harga terstandarisasi resmi komunitas GEOVERSE Kamojang
+        </Text>
+      </View>
+
+      {/* Official Standard Notice Banner */}
+      <View style={styles.officialNoticeCard}>
+        <ShieldCheck size={18} color="#0E6641" />
+        <View style={{ flex: 1, marginLeft: 8 }}>
+          <Text style={styles.officialNoticeTitle}>Standarisasi Harga Resmi</Text>
+          <Text style={styles.officialNoticeText}>
+            100 Poin GEOVERSE setara dengan Rp 1. Harga dijamin transparan dan seragam untuk seluruh nasabah dan mitra.
+          </Text>
+        </View>
+      </View>
+
+      {/* Search Input */}
+      <View style={styles.catalogSearchWrap}>
+        <Search size={16} color="#0E6641" style={{ marginLeft: 4 }} />
+        <TextInput
+          style={styles.catalogSearchInput}
+          placeholder="Cari jenis sampah (PET, kardus, tembaga...)"
+          placeholderTextColor="#94A3B8"
+          value={catalogSearch}
+          onChangeText={setCatalogSearch}
+        />
+        {catalogSearch.length > 0 && (
+          <TouchableOpacity onPress={() => setCatalogSearch("")} style={{ padding: 4 }}>
+            <X size={15} color="#64748B" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Category Filter Chips */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catChipsWrap}>
+        {WASTE_CATEGORIES.map((cat) => {
+          const isSelected = selectedCatalogCat === cat;
+          return (
             <TouchableOpacity
-              key={item._id}
-              style={styles.depositCard}
-              onPress={() => {
-                if (item.method === "PICKUP" && item.status === "REQUESTED") {
-                  handleAcceptAndCallDriver(item);
-                } else if (
-                  item.method === "PICKUP" &&
-                  (item.status === "ACCEPTED" || item.status === "DRIVER_ASSIGNED" || item.status === "PICKED_UP")
-                ) {
-                  Alert.alert(
-                    "Status Penjemputan Sampah",
-                    `Tiket #${item.depositCode}\nStatus: ${
-                      item.status === "ACCEPTED"
-                        ? "Menunggu konfirmasi penerimaan oleh driver."
-                        : item.status === "DRIVER_ASSIGNED"
-                        ? `Driver (${typeof item.driverId === "object" ? item.driverId?.name : "Driver"}) sedang menuju lokasi nasabah.`
-                        : "Driver telah mengambil sampah & sedang menuju Bank Sampah."
-                    }\n\nSetelah sampah tiba di Bank Sampah, Anda dapat langsung menimbang.`
-                  );
-                } else {
-                  setSelectedDeposit(item);
-                  navigate("bank_sampah_weighing");
-                }
-              }}
-              activeOpacity={0.85}
+              key={cat}
+              style={[styles.catChip, isSelected && styles.catChipActive]}
+              onPress={() => setSelectedCatalogCat(cat)}
+              activeOpacity={0.7}
             >
+              <Text style={[styles.catChipText, isSelected && styles.catChipTextActive]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Price Cards List */}
+      {filteredPrices.length === 0 ? (
+        <View style={styles.emptyQueueCard}>
+          <Tag size={32} color="#94A3B8" />
+          <Text style={styles.emptyQueueText}>Tidak ditemukan jenis sampah yang cocok.</Text>
+        </View>
+      ) : (
+        <View style={styles.catalogGrid}>
+          {filteredPrices.map((item, idx) => (
+            <View key={item._id || `cat-prc-${idx}`} style={styles.priceItemCard}>
+              <View style={styles.priceCardTop}>
+                <View style={styles.priceIconBox}>
+                  <Scale size={18} color="#0E6641" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.priceCatName}>{item.category}</Text>
+                  <Text style={styles.priceSubCatName} numberOfLines={1}>
+                    {item.subCategory || "Standar Terpilah"}
+                  </Text>
+                </View>
+                <View style={styles.priceValueBadge}>
+                  <Text style={styles.priceValueText}>{rp(item.pricePerKg)}</Text>
+                  <Text style={styles.priceUnitText}>/{item.unit || "kg"}</Text>
+                </View>
+              </View>
+
+              <View style={styles.priceCardDivider} />
+
+              <View style={styles.priceCardBottom}>
+                <View style={styles.pointsBadge}>
+                  <Sparkles size={12} color="#D97706" />
+                  <Text style={styles.pointsBadgeText}>
+                    {(item.pricePerKg * 100).toLocaleString("id-ID")} Pts/{item.unit || "kg"}
+                  </Text>
+                </View>
+                <Text style={styles.minWeightText}>
+                  Min. setor: {item.minWeightKg ? `${item.minWeightKg} kg` : "0.1 kg"}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <View style={{ height: 24 }} />
+    </ScrollView>
+  );
+
+  // -------------------------------------------------------------
+  // TAB 3: KEUANGAN & PENCAIRAN POIN (Cashouts & Payouts)
+  // -------------------------------------------------------------
+  const renderKeuanganTab = () => (
+    <ScrollView
+      contentContainerStyle={[styles.scrollContent, isWide && styles.scrollContentWide]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#059669"]} />}
+    >
+      <View style={styles.pageHeaderBox}>
+        <Text style={styles.pageTitle}>Pencairan Kas & Poin</Text>
+        <Text style={styles.pageSubtitle}>
+          Kelola verifikasi penarikan poin nasabah menjadi uang kas di loket unit
+        </Text>
+      </View>
+
+      {/* Financial Summary Cards */}
+      <View style={styles.financeSummaryCard}>
+        <View style={styles.financeSummaryItem}>
+          <Text style={styles.financeSummaryLabel}>Total Kas Dibayarkan</Text>
+          <Text style={styles.financeSummaryVal}>{rp(totalCashDisbursed)}</Text>
+          <Text style={styles.financeSummarySub}>Pencairan sukses</Text>
+        </View>
+        <View style={styles.financeDividerV} />
+        <View style={styles.financeSummaryItem}>
+          <Text style={styles.financeSummaryLabel}>Menunggu Bayar</Text>
+          <Text style={[styles.financeSummaryVal, { color: pendingRedemptionsCount > 0 ? "#DC2626" : "#0E6641" }]}>
+            {pendingRedemptionsCount}
+          </Text>
+          <Text style={styles.financeSummarySub}>Permintaan nasabah</Text>
+        </View>
+      </View>
+
+      {/* Redemption Status Filters */}
+      <View style={styles.redemptionFilterRow}>
+        {(["ALL", "REQUESTED", "PAID", "REJECTED"] as const).map((filter) => {
+          const isSelected = redemptionFilter === filter;
+          return (
+            <TouchableOpacity
+              key={filter}
+              style={[styles.redemptionFilterBtn, isSelected && styles.redemptionFilterBtnActive]}
+              onPress={() => setRedemptionFilter(filter)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.redemptionFilterBtnText, isSelected && styles.redemptionFilterBtnTextActive]}>
+                {filter === "ALL"
+                  ? "Semua"
+                  : filter === "REQUESTED"
+                  ? `Menunggu (${pendingRedemptionsCount})`
+                  : filter === "PAID"
+                  ? "Selesai"
+                  : "Ditolak"}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Redemptions List */}
+      {filteredRedemptions.length === 0 ? (
+        <View style={styles.emptyQueueCard}>
+          <Coins size={36} color="#9CA3AF" />
+          <Text style={styles.emptyQueueText}>
+            {redemptionFilter === "REQUESTED"
+              ? "Tidak ada permintaan pencairan yang menunggu persetujuan."
+              : "Belum ada data pencairan untuk kategori ini."}
+          </Text>
+        </View>
+      ) : (
+        filteredRedemptions.map((rdm) => {
+          const isPending = rdm.status === "REQUESTED";
+          const isPaid = rdm.status === "PAID";
+          const isRejected = rdm.status === "REJECTED";
+          const isProcessing = processingRedemptionId === rdm._id;
+
+          return (
+            <View key={rdm._id} style={styles.depositCard}>
               <View style={styles.depositCardHeader}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <View style={styles.codeRow}>
-                    <Text style={styles.depositCode}>{item.depositCode}</Text>
+                    <Text style={styles.depositCode}>{rdm.redemptionCode}</Text>
                     <View
                       style={[
                         styles.methodBadge,
-                        item.method === "PICKUP" ? styles.methodBadgePickup : styles.methodBadgeDropOff,
+                        rdm.type === "CASH" ? styles.methodBadgeDropOff : styles.methodBadgePickup,
                       ]}
                     >
-                      {item.method === "PICKUP" ? (
-                        <Truck size={10} color="#047857" />
-                      ) : (
-                        <MapPin size={10} color="#0284C7" />
-                      )}
+                      <DollarSign size={10} color={rdm.type === "CASH" ? "#0284C7" : "#0E6641"} />
                       <Text
                         style={[
                           styles.methodBadgeText,
-                          item.method === "PICKUP"
-                            ? styles.methodBadgeTextPickup
-                            : styles.methodBadgeTextDropOff,
+                          rdm.type === "CASH" ? styles.methodBadgeTextDropOff : styles.methodBadgeTextPickup,
                         ]}
                       >
-                        {item.method === "PICKUP" ? "Pickup" : "Antar"}
+                        {rdm.type === "CASH"
+                          ? "Tunai Loket"
+                          : rdm.type === "BANK_TRANSFER"
+                          ? "Transfer Bank"
+                          : "E-Wallet"}
                       </Text>
                     </View>
                   </View>
                   <View style={styles.customerRow}>
                     <User size={11} color="#64748B" />
                     <Text style={styles.customerName} numberOfLines={1}>
-                      {typeof item.customerId === "object"
-                        ? item.customerId?.name || "Nasabah GEOVERSE"
-                        : "Nasabah GEOVERSE"}
+                      {typeof rdm.userId === "object" ? (rdm.userId as any)?.name || "Nasabah" : "Nasabah"}
+                      {typeof rdm.userId === "object" && (rdm.userId as any)?.phone ? ` (${(rdm.userId as any).phone})` : ""}
                     </Text>
                   </View>
                 </View>
@@ -1195,371 +1344,1326 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
                 <View
                   style={[
                     styles.statusPill,
-                    item.status === "COMPLETED" || item.status === "POINT_ISSUED"
+                    isPaid
                       ? styles.statusPillGreen
-                      : item.status === "DISPUTED"
+                      : isRejected
                       ? styles.statusPillRed
-                      : item.status === "WAITING_CUSTOMER_CONFIRMATION"
-                      ? styles.statusPillAmber
-                      : item.method === "PICKUP" && item.status === "REQUESTED"
-                      ? { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }
-                      : item.method === "PICKUP" && item.status === "ACCEPTED"
-                      ? { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }
-                      : item.method === "PICKUP" && (item.status === "DRIVER_ASSIGNED" || item.status === "PICKED_UP")
-                      ? { backgroundColor: "#FAF5FF", borderColor: "#E9D5FF" }
-                      : styles.statusPillBlue,
+                      : styles.statusPillAmber,
                   ]}
                 >
                   <Text
                     style={[
                       styles.statusPillText,
-                      item.status === "COMPLETED" || item.status === "POINT_ISSUED"
+                      isPaid
                         ? styles.statusPillTextGreen
-                        : item.status === "DISPUTED"
+                        : isRejected
                         ? styles.statusPillTextRed
-                        : item.status === "WAITING_CUSTOMER_CONFIRMATION"
-                        ? styles.statusPillTextAmber
-                        : item.method === "PICKUP" && item.status === "REQUESTED"
-                        ? { color: "#1D4ED8", fontWeight: "700" }
-                        : item.method === "PICKUP" && item.status === "ACCEPTED"
-                        ? { color: "#15803D", fontWeight: "700" }
-                        : item.method === "PICKUP" && item.status === "DRIVER_ASSIGNED"
-                        ? { color: "#7E22CE", fontWeight: "700" }
-                        : item.method === "PICKUP" && item.status === "PICKED_UP"
-                        ? { color: "#9333EA", fontWeight: "700" }
-                        : styles.statusPillTextBlue,
+                        : styles.statusPillTextAmber,
                     ]}
                   >
-                    {item.status === "DISPUTED"
-                      ? "Komplain / Ditolak"
-                      : item.status === "WAITING_CUSTOMER_CONFIRMATION"
-                      ? "Menunggu ACC"
-                      : item.status === "COMPLETED" || item.status === "POINT_ISSUED"
-                      ? "Poin Terbit"
-                      : item.method === "PICKUP" && item.status === "REQUESTED"
-                      ? "Panggil Driver"
-                      : item.method === "PICKUP" && item.status === "ACCEPTED"
-                      ? "Cari Driver"
-                      : item.method === "PICKUP" && item.status === "DRIVER_ASSIGNED"
-                      ? "Driver Menuju Nasabah"
-                      : item.method === "PICKUP" && item.status === "PICKED_UP"
-                      ? "Diantar ke Bank"
-                      : item.method === "PICKUP" && item.status === "AT_BANK"
-                      ? "Tiba di Bank"
-                      : "Perlu Timbang"}
+                    {isPaid ? "Selesai Dibayar" : isRejected ? "Ditolak" : "Perlu Dibayar"}
                   </Text>
                 </View>
               </View>
 
-              {/* Dispute Alert Box inside Card */}
-              {item.status === "DISPUTED" && (
-                <View style={styles.cardDisputeNotice}>
-                  <AlertCircle size={14} color="#DC2626" />
-                  <Text style={styles.cardDisputeNoticeText} numberOfLines={2}>
-                    Komplain Nasabah: "{item.disputeReason || 'Hasil timbang tidak sesuai'}"
+              <View style={styles.redemptionDetailBox}>
+                <View style={styles.redemptionRow}>
+                  <Text style={styles.redemptionLabel}>Nominal Uang Kas:</Text>
+                  <Text style={styles.redemptionValueHighlight}>{rp(rdm.rupiahValue || 0)}</Text>
+                </View>
+                <View style={styles.redemptionRow}>
+                  <Text style={styles.redemptionLabel}>Poin Ditukarkan:</Text>
+                  <Text style={styles.redemptionValuePoints}>
+                    -{(rdm.points || 0).toLocaleString("id-ID")} Pts
                   </Text>
                 </View>
-              )}
-
-              {/* Categories list */}
-              <View style={styles.categoryTagsWrap}>
-                {(item.categories || []).map((cat, idx) => (
-                  <View key={`${cat.category}-${idx}`} style={styles.categoryTag}>
-                    <Text style={styles.categoryTagText}>
-                      {cat.category}: {cat.actualWeightKg ? `${cat.actualWeightKg} kg` : `~${cat.estimatedWeightKg || 0} kg`}
+                {(rdm.payoutDestination || (rdm as any).payoutTarget) && (
+                  <View style={styles.redemptionRow}>
+                    <Text style={styles.redemptionLabel}>Rekening / E-Wallet:</Text>
+                    <Text style={styles.redemptionValueTarget}>
+                      {rdm.payoutDestination
+                        ? `${rdm.payoutDestination.channel} - ${rdm.payoutDestination.accountNumber}${rdm.payoutDestination.accountName ? ` (${rdm.payoutDestination.accountName})` : ""}`
+                        : (rdm as any).payoutTarget}
                     </Text>
                   </View>
-                ))}
+                )}
               </View>
 
-              <View style={styles.depositCardFooter}>
-                <View>
-                  <Text style={styles.footerWeightLabel}>
-                    {item.actualTotalWeightKg ? "Total Aktual:" : "Estimasi Nasabah:"}
-                  </Text>
-                  <Text style={styles.footerWeightVal}>
-                    {(item.actualTotalWeightKg || item.estimatedTotalWeightKg || 0).toFixed(1)} kg
-                  </Text>
-                  {item.finalPoint > 0 && (
-                    <Text style={styles.footerPointVal}>+{item.finalPoint.toLocaleString("id-ID")} Pts</Text>
-                  )}
-                </View>
-
-                {item.method === "PICKUP" && item.status === "REQUESTED" ? (
+              {isPending && (
+                <View style={styles.redemptionActionRow}>
                   <TouchableOpacity
-                    style={[styles.btnTimbangAction, { backgroundColor: "#0284C7" }]}
-                    onPress={() => handleAcceptAndCallDriver(item)}
+                    style={styles.btnRejectRedemption}
+                    onPress={() => handleRejectRedemption(rdm)}
+                    disabled={isProcessing}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.btnRejectRedemptionText}>Tolak</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.btnPayRedemption, isProcessing && { opacity: 0.7 }]}
+                    onPress={() => handlePayRedemption(rdm)}
+                    disabled={isProcessing}
                     activeOpacity={0.85}
                   >
-                    <Truck size={13} color="#FFFFFF" />
-                    <Text style={styles.btnTimbangActionText}>Setujui & Panggil Driver</Text>
-                    <ChevronRight size={13} color="#FFFFFF" />
+                    {isProcessing ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Check size={14} color="#FFFFFF" />
+                        <Text style={styles.btnPayRedemptionText}>Bayarkan Sekarang</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
-                ) : item.method === "PICKUP" && item.status === "ACCEPTED" ? (
-                  <View style={[styles.btnTimbangAction, { backgroundColor: "#64748B" }]}>
-                    <Clock size={13} color="#FFFFFF" />
-                    <Text style={styles.btnTimbangActionText}>Mencari Driver...</Text>
-                  </View>
-                ) : item.method === "PICKUP" && (item.status === "DRIVER_ASSIGNED" || item.status === "PICKUP_ON_THE_WAY") ? (
-                  <View style={[styles.btnTimbangAction, { backgroundColor: "#2563EB" }]}>
-                    <Truck size={13} color="#FFFFFF" />
-                    <Text style={styles.btnTimbangActionText}>Driver Menjemput</Text>
-                  </View>
-                ) : item.method === "PICKUP" && item.status === "PICKED_UP" ? (
-                  <View style={[styles.btnTimbangAction, { backgroundColor: "#9333EA" }]}>
-                    <Truck size={13} color="#FFFFFF" />
-                    <Text style={styles.btnTimbangActionText}>Menuju Bank</Text>
-                  </View>
-                ) : (
-                  <View
-                    style={[
-                      styles.btnTimbangAction,
-                      item.status === "COMPLETED" || item.status === "POINT_ISSUED"
-                        ? { backgroundColor: "#047857" }
-                        : item.status === "DISPUTED"
-                        ? { backgroundColor: "#DC2626" }
-                        : item.status === "WAITING_CUSTOMER_CONFIRMATION"
-                        ? { backgroundColor: "#D97706" }
-                        : { backgroundColor: "#059669" },
-                    ]}
-                  >
-                    <Scale size={13} color="#FFFFFF" />
-                    <Text style={styles.btnTimbangActionText}>
-                      {item.status === "DISPUTED"
-                        ? "Tinjau Komplain & Timbang Ulang"
-                        : item.status === "WAITING_CUSTOMER_CONFIRMATION"
-                        ? "Lihat Hasil"
-                        : item.status === "COMPLETED" || item.status === "POINT_ISSUED"
-                        ? "Rincian"
-                        : "Timbang"}
-                    </Text>
-                    <ChevronRight size={13} color="#FFFFFF" />
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
+                </View>
+              )}
+            </View>
+          );
+        })
+      )}
 
-        {/* Operating Hours Modal (Atur Jam Buka-Tutup) */}
-        <Modal
-          visible={hoursModalVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setHoursModalVisible(false)}
+      <View style={{ height: 24 }} />
+    </ScrollView>
+  );
+
+  const handleSaveAccount = async () => {
+    if (!editOfficerName.trim()) {
+      Alert.alert("Perhatian", "Nama petugas PIC tidak boleh kosong.");
+      return;
+    }
+    setOfficerName(editOfficerName.trim());
+    setOfficerPhone(editOfficerPhone.trim());
+    setOfficerEmail(editOfficerEmail.trim());
+
+    try {
+      if (authAccount) {
+        const updatedAccount: AuthAccount = {
+          ...authAccount,
+          name: editOfficerName.trim(),
+          phone: editOfficerPhone.trim(),
+          email: editOfficerEmail.trim(),
+          updatedAt: new Date().toISOString(),
+        };
+        await updateCachedAccount(updatedAccount);
+      }
+      if (authAccount?.id) {
+        await updateUserProfile(authAccount.id, {
+          name: editOfficerName.trim(),
+          phone: editOfficerPhone.trim(),
+        });
+      }
+      setAccountModalVisible(false);
+      Alert.alert("Sukses", "Informasi akun petugas berhasil disimpan.");
+    } catch (e: any) {
+      Alert.alert("Gagal Menyimpan", e?.message || "Terjadi kendala saat menyimpan profil.");
+    }
+  };
+
+  const handleSavePassword = () => {
+    if (!currPassword.trim() || !newPassword.trim()) {
+      Alert.alert("Perhatian", "Harap isi kata sandi saat ini dan kata sandi baru.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert("Perhatian", "Kata sandi baru minimal 6 karakter.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Perhatian", "Konfirmasi kata sandi baru tidak cocok.");
+      return;
+    }
+    setPasswordModalVisible(false);
+    setCurrPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    Alert.alert("Sukses", "Kata sandi akun Anda berhasil diperbarui.");
+  };
+
+  const handleSaveAddress = async () => {
+    if (!tempAddress.trim()) {
+      Alert.alert("Perhatian", "Alamat lokasi Bank Sampah tidak boleh kosong.");
+      return;
+    }
+    setEditUnitAddress(tempAddress.trim());
+    try {
+      if (bank?._id) {
+        await updateWasteBankOperational(bank._id, {
+          name: displayUnitName,
+          address: tempAddress.trim(),
+          openingHours: activeOpeningHours,
+          acceptsPickup: pickupEnabled,
+        });
+      }
+      if (authAccount) {
+        const updatedAccount: AuthAccount = {
+          ...authAccount,
+          address: tempAddress.trim(),
+          roleData: {
+            ...authAccount.roleData,
+            businessAddress: tempAddress.trim(),
+            alamat_unit: tempAddress.trim(),
+            unitAddress: tempAddress.trim(),
+          },
+        };
+        await updateCachedAccount(updatedAccount);
+      }
+      setAddressModalVisible(false);
+      Alert.alert("Tersimpan", "Alamat lokasi loket Bank Sampah berhasil diperbarui.");
+    } catch (e: any) {
+      Alert.alert("Gagal", e?.message || "Gagal memperbarui alamat.");
+    }
+  };
+
+  const handleToggleOpenLoket = (val: boolean) => {
+    setIsOpenLoket(val);
+    Alert.alert(
+      val ? "Loket Dibuka" : "Loket Ditutup Sementara",
+      val
+        ? "Bank Sampah sekarang aktif menerima setoran sampah dari nasabah & armada driver."
+        : "Loket ditutup sementara. Nasabah akan melihat status loket sedang tutup."
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Hapus Akun Mitra Bank Sampah",
+      "Apakah Anda yakin ingin menghapus akun mitra Bank Sampah GEOVERSE beserta seluruh profil loket dan riwayat transaksi secara permanen?\n\nSesuai standar privasi Apple (Guideline 5.1.1(v)), tindakan ini tidak dapat dibatalkan.",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus Akun",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await deleteUserAccount(authAccount?.id);
+              if (res.success) {
+                Alert.alert(
+                  "Akun Dihapus",
+                  "Akun mitra Bank Sampah Anda telah berhasil dihapus secara permanen dari platform GEOVERSE.",
+                  [{ text: "OK", onPress: () => navigate("login") }]
+                );
+              } else {
+                Alert.alert("Gagal", res.message || "Gagal memproses penghapusan akun. Silakan coba kembali.");
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Terjadi kendala saat menghapus akun.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // -------------------------------------------------------------
+  // TAB 4: AKUN & PENGATURAN UNIT (Standardized Partner Profile)
+  // -------------------------------------------------------------
+  const renderAkunTab = () => (
+    <ScrollView
+      contentContainerStyle={[styles.akunScrollContent, isWide && styles.scrollContentWide]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#059669"]} />}
+    >
+      {/* 1. Header Banner Profil Mitra (Identik dengan Pemilik Catering, Kos, Shop) */}
+      <View style={styles.profileHeader}>
+        <ProfilePhotoEditor
+          userId={authAccount?.id}
+          name={officerName}
+          photoUri={avatarUri}
+          size={88}
+          backgroundColor="#FFFFFF"
+          iconColor="#0E6641"
+          onSaved={async (newUri) => {
+            setAvatarUri(newUri);
+            if (authAccount) {
+              const updatedAccount: AuthAccount = {
+                ...authAccount,
+                profilePhoto: newUri,
+                updatedAt: new Date().toISOString(),
+              };
+              await updateCachedAccount(updatedAccount);
+            }
+          }}
+        />
+
+        <Text style={styles.profileOwnerName} numberOfLines={2}>
+          {officerName}
+        </Text>
+        <View style={styles.profileUnitNameRow}>
+          <Text style={styles.profileUnitNameText} numberOfLines={2}>
+            {displayUnitName}
+          </Text>
+          <ShieldCheck size={14} color="#86EFAC" style={{ flexShrink: 0 }} />
+        </View>
+        <Text style={styles.profilePhoneText} numberOfLines={1}>
+          {officerPhone}
+        </Text>
+
+        {/* 3 Stats Row (Profil | Status Loket | Terverifikasi) */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCol}>
+            <Text style={styles.statVal}>Siap</Text>
+            <Text style={styles.statLbl}>Profil</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statVal}>{isOpenLoket ? "Buka" : "Tutup"}</Text>
+            <Text style={styles.statLbl}>Status Loket</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statVal}>Aktif</Text>
+            <Text style={styles.statLbl}>Terverifikasi</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* 2. Group: AKUN */}
+      <Text style={styles.groupTitle}>AKUN</Text>
+      <View style={styles.groupCard}>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
+            setEditOfficerName(officerName);
+            setEditOfficerPhone(officerPhone);
+            setEditOfficerEmail(officerEmail);
+            setAccountModalVisible(true);
+          }}
+          activeOpacity={0.7}
         >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalSheet}>
-              <View style={styles.modalHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle}>Atur Jam Operasional Unit</Text>
-                  <Text style={styles.modalSub}>
-                    Sesuaikan jam buka-tutup agar nasabah mengetahui waktu setor sampah
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.modalCloseBtn}
-                  onPress={() => setHoursModalVisible(false)}
-                >
-                  <X size={18} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
+          <View style={[styles.menuIconBg, { backgroundColor: "#E8F5EE" }]}>
+            <User size={18} color="#0D7A53" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Detail Akun & Petugas</Text>
+            <Text style={styles.menuItemSubtitle} numberOfLines={1}>
+              {officerEmail} • PIC: {officerName}
+            </Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
 
-              <Text style={styles.inputSectionLabel}>Jam Buka - Tutup Setoran:</Text>
-              <View style={styles.inputHoursBox}>
-                <Clock size={16} color="#15803D" style={{ marginLeft: 4 }} />
-                <TextInput
-                  style={styles.hoursInput}
-                  placeholder="Contoh: Senin - Sabtu, 08:00 - 16:00"
-                  placeholderTextColor="#94A3B8"
-                  value={inputHours}
-                  onChangeText={setInputHours}
-                />
-              </View>
+        <View style={styles.divider} />
 
-              <Text style={styles.presetSectionLabel}>Pilih Cepat Jadwal Standar:</Text>
-              <View style={styles.presetWrap}>
-                {PRESET_HOURS.map((preset, idx) => {
-                  const isSelected = inputHours === preset;
-                  return (
-                    <TouchableOpacity
-                      key={`preset-hour-${idx}`}
-                      style={[styles.presetHourPill, isSelected && styles.presetHourPillActive]}
-                      onPress={() => setInputHours(preset)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.presetHourPillText, isSelected && styles.presetHourPillTextActive]}>
-                        {preset}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
+            setCurrPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+            setPasswordModalVisible(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#E8F5EE" }]}>
+            <Lock size={18} color="#0D7A53" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Ubah Password</Text>
+            <Text style={styles.menuItemSubtitle}>Perbarui kata sandi akun petugas</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
 
-              {/* Toggle Pickup Service */}
-              <View style={styles.toggleRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.toggleTitle}>Terima Penjemputan (Pickup Driver)</Text>
-                  <Text style={styles.toggleSub}>Aktifkan jika unit Anda menerima pesanan jemput dari kurir/driver</Text>
-                </View>
-                <Switch
-                  value={pickupEnabled}
-                  onValueChange={setPickupEnabled}
-                  trackColor={{ false: "#CBD5E1", true: "#86EFAC" }}
-                  thumbColor={pickupEnabled ? "#15803D" : "#94A3B8"}
-                />
-              </View>
+        <View style={styles.divider} />
 
-              {hoursSuccessMsg ? (
-                <View style={styles.successMessageBox}>
-                  <CheckCircle2 size={16} color="#15803D" />
-                  <Text style={styles.successMessageText}>{hoursSuccessMsg}</Text>
-                </View>
-              ) : null}
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
+            setEditOfficerName(officerName);
+            setEditOfficerPhone(officerPhone);
+            setEditOfficerEmail(officerEmail);
+            setAccountModalVisible(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#E0F2FE" }]}>
+            <Phone size={18} color="#0284C7" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Nomor WhatsApp Loket</Text>
+            <Text style={styles.menuItemSubtitle}>{officerPhone}</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
 
-              <TouchableOpacity
-                style={[styles.btnSaveHours, savingHours && { opacity: 0.7 }]}
-                onPress={handleSaveOperatingHours}
-                disabled={savingHours}
-                activeOpacity={0.85}
+      {/* 3. Group: OPERASIONAL BANK SAMPAH */}
+      <Text style={styles.groupTitle}>OPERASIONAL BANK SAMPAH</Text>
+      <View style={styles.groupCard}>
+        {/* Toggle Status Buka Loket Langsung di List */}
+        <View style={styles.menuItem}>
+          <View
+            style={[
+              styles.menuIconBg,
+              { backgroundColor: isOpenLoket ? "#E8F5EE" : "#FEE2E2" },
+            ]}
+          >
+            <Scale size={18} color={isOpenLoket ? "#0D7A53" : "#DC2626"} />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Status Loket Bank Sampah</Text>
+            <Text
+              style={[
+                styles.menuItemSubtitle,
+                { color: isOpenLoket ? "#0D7A53" : "#DC2626", fontWeight: "700" },
+              ]}
+            >
+              {isOpenLoket ? "Buka (Menerima Setoran)" : "Tutup Sementara"}
+            </Text>
+          </View>
+          <Switch
+            value={isOpenLoket}
+            onValueChange={handleToggleOpenLoket}
+            trackColor={{ false: "#CBD5E1", true: "#86EFAC" }}
+            thumbColor={isOpenLoket ? "#0E6641" : "#94A3B8"}
+          />
+        </View>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={handleOpenHoursModal}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#DCFCE7" }]}>
+            <Clock size={18} color="#0D7A53" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Atur Jam Operasional</Text>
+            <Text style={styles.menuItemSubtitle} numberOfLines={1}>
+              {activeOpeningHours || "Senin - Sabtu, 08:00 - 16:00"}
+            </Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <View style={styles.menuItem}>
+          <View style={[styles.menuIconBg, { backgroundColor: "#E0F2FE" }]}>
+            <Truck size={18} color="#0284C7" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Layanan Pickup Driver</Text>
+            <Text style={styles.menuItemSubtitle}>
+              {pickupEnabled ? "Menerima jemputan armada driver" : "Penjemputan dinonaktifkan"}
+            </Text>
+          </View>
+          <Switch
+            value={pickupEnabled}
+            onValueChange={async (val) => {
+              setPickupEnabled(val);
+              try {
+                await AsyncStorage.setItem(storagePickupKey, String(val));
+                if (bank?._id) {
+                  await updateWasteBankOperational(bank._id, {
+                    name: displayUnitName,
+                    address: editUnitAddress,
+                    openingHours: activeOpeningHours,
+                    acceptsPickup: val,
+                  });
+                }
+              } catch (e) {}
+            }}
+            trackColor={{ false: "#CBD5E1", true: "#86EFAC" }}
+            thumbColor={pickupEnabled ? "#0E6641" : "#94A3B8"}
+          />
+        </View>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => {
+            setTempAddress(editUnitAddress);
+            setAddressModalVisible(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#F3E8FF" }]}>
+            <MapPin size={18} color="#7C3AED" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Alamat & Titik Loket</Text>
+            <Text style={styles.menuItemSubtitle} numberOfLines={1}>
+              {editUnitAddress}
+            </Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => setCurrentTab(2)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#FEF3C7" }]}>
+            <Tag size={18} color="#D97706" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Katalog Harga Sampah</Text>
+            <Text style={styles.menuItemSubtitle}>Acuan harga resmi per kg & poin GEOVERSE</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* 4. Group: NAVIGASI & DUKUNGAN */}
+      <Text style={styles.groupTitle}>NAVIGASI & DUKUNGAN</Text>
+      <View style={styles.groupCard}>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigate("c_home")}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#F3E8FF" }]}>
+            <User size={18} color="#7E22CE" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Beralih ke Aplikasi Customer</Text>
+            <Text style={styles.menuItemSubtitle}>Buka antarmuka pelanggan GEOVERSE</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigate("role")}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#DCFCE7" }]}>
+            <Store size={18} color="#0D7A53" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Ganti Peran Mitra</Text>
+            <Text style={styles.menuItemSubtitle}>Pilih peran catering, kos, laundry, atau lainnya</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => setHelpModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#FEF3C7" }]}>
+            <HelpCircle size={18} color="#D97706" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Bantuan & SOP Penimbangan</Text>
+            <Text style={styles.menuItemSubtitle}>Panduan alur timbang & penerbitan poin</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => setPrivacyModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.menuIconBg, { backgroundColor: "#F1F5F9" }]}>
+            <Shield size={18} color="#475569" />
+          </View>
+          <View style={styles.menuItemBody}>
+            <Text style={styles.menuItemTitle}>Privasi & Keamanan</Text>
+            <Text style={styles.menuItemSubtitle}>Kebijakan data & kepatuhan privasi GEOVERSE</Text>
+          </View>
+          <ChevronRight size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* 5. Group: KELUAR & HAPUS AKUN (Apple Guideline 5.1.1(v) Compliant) */}
+      <TouchableOpacity
+        style={styles.logoutBtn}
+        onPress={() => setLogoutModalVisible(true)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.logoutIconBg}>
+          <LogOut size={18} color="#DC2626" />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.logoutBtnText}>Keluar dari Akun</Text>
+          <Text style={styles.logoutBtnSub}>Akhiri sesi masuk pada perangkat ini</Text>
+        </View>
+        <ChevronRight size={16} color="#DC2626" />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.deleteAccountBtn}
+        onPress={handleDeleteAccount}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.logoutIconBg, { backgroundColor: "#FEE2E2" }]}>
+          <Trash2 size={18} color="#DC2626" />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.deleteAccountBtnText}>Hapus Akun Mitra Bank Sampah</Text>
+          <Text style={styles.deleteAccountBtnSub}>
+            Hapus akun & seluruh data unit secara permanen (Guideline 5.1.1(v))
+          </Text>
+        </View>
+        <ChevronRight size={16} color="#DC2626" />
+      </TouchableOpacity>
+
+      <Text style={styles.footerVersion}>GEOVERSE 2.0 • Mitra Bank Sampah</Text>
+      <Text style={styles.footerSubVersion}>
+        Platform Pengelolaan Limbah Berkelanjutan PGE Kamojang
+      </Text>
+
+      <View style={{ height: 28 }} />
+    </ScrollView>
+  );
+
+  // Helper to render individual deposit card
+  const renderDepositCard = (item: WasteDepositUI) => (
+    <TouchableOpacity
+      key={item._id}
+      style={styles.depositCard}
+      onPress={() => {
+        setSelectedDeposit(item);
+        navigate("bank_sampah_weighing");
+      }}
+      activeOpacity={0.88}
+    >
+      <View style={styles.depositCardHeader}>
+        <View style={{ flex: 1, marginRight: 8, minWidth: 0 }}>
+          <View style={styles.codeRow}>
+            <Text style={styles.depositCode}>{item.depositCode}</Text>
+            <View
+              style={[
+                styles.methodBadge,
+                item.method === "DROP_OFF" ? styles.methodBadgeDropOff : styles.methodBadgePickup,
+              ]}
+            >
+              {item.method === "DROP_OFF" ? (
+                <MapPin size={10} color="#0284C7" />
+              ) : (
+                <Truck size={10} color="#0E6641" />
+              )}
+              <Text
+                style={[
+                  styles.methodBadgeText,
+                  item.method === "DROP_OFF"
+                    ? styles.methodBadgeTextDropOff
+                    : styles.methodBadgeTextPickup,
+                ]}
               >
-                {savingHours ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Check size={16} color="#FFFFFF" />
-                    <Text style={styles.btnSaveHoursText}>Simpan Jam Operasional</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                {item.method === "DROP_OFF" ? "Antar" : "Pickup"}
+              </Text>
             </View>
           </View>
-        </Modal>
+          <View style={styles.customerRow}>
+            <User size={11} color="#64748B" />
+            <Text style={styles.customerName} numberOfLines={1}>
+              {(typeof item.customerId === "object" && item.customerId !== null && (item.customerId as any).name)
+                ? (item.customerId as any).name
+                : (item as any).customerName || "Nasabah GEOVERSE"}
+            </Text>
+          </View>
+        </View>
 
-        {/* Read-Only Official Price Catalog Modal */}
-        <Modal
-          visible={priceModalVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setPriceModalVisible(false)}
+        <View
+          style={[
+            styles.statusPill,
+            item.status === "COMPLETED" || item.status === "POINT_ISSUED"
+              ? styles.statusPillGreen
+              : item.status === "DISPUTED"
+              ? styles.statusPillRed
+              : item.status === "WAITING_CUSTOMER_CONFIRMATION"
+              ? styles.statusPillAmber
+              : styles.statusPillBlue,
+          ]}
         >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalSheet}>
-              <View style={styles.modalHeader}>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={styles.modalTitle}>Katalog Harga Resmi</Text>
-                    <View style={styles.badgeAdminOfficial}>
-                      <ShieldCheck size={11} color="#047857" />
-                      <Text style={styles.badgeAdminOfficialText}>Standar Admin</Text>
-                    </View>
+          <Text
+            style={[
+              styles.statusPillText,
+              item.status === "COMPLETED" || item.status === "POINT_ISSUED"
+                ? styles.statusPillTextGreen
+                : item.status === "DISPUTED"
+                ? styles.statusPillTextRed
+                : item.status === "WAITING_CUSTOMER_CONFIRMATION"
+                ? styles.statusPillTextAmber
+                : styles.statusPillTextBlue,
+            ]}
+          >
+            {item.status === "COMPLETED" || item.status === "POINT_ISSUED"
+              ? "Selesai"
+              : item.status === "DISPUTED"
+              ? "Komplain"
+              : item.status === "WAITING_CUSTOMER_CONFIRMATION"
+              ? "Menunggu Nasabah"
+              : item.method === "PICKUP" && item.status === "REQUESTED"
+              ? "Permintaan Jemput"
+              : item.method === "PICKUP" && item.status === "ACCEPTED"
+              ? "Mencari Driver"
+              : item.method === "PICKUP" && (item.status === "DRIVER_ASSIGNED" || item.status === "PICKUP_ON_THE_WAY")
+              ? "Driver OTW"
+              : item.method === "PICKUP" && item.status === "PICKED_UP"
+              ? "Menuju Bank"
+              : "Perlu Timbang"}
+          </Text>
+        </View>
+      </View>
+
+      {/* Dispute Alert Box inside Card */}
+      {item.status === "DISPUTED" && (
+        <View style={styles.cardDisputeNotice}>
+          <AlertCircle size={14} color="#DC2626" />
+          <Text style={styles.cardDisputeNoticeText} numberOfLines={2}>
+            Komplain: "{item.disputeReason || 'Hasil timbang tidak sesuai'}"
+          </Text>
+        </View>
+      )}
+
+      {/* Categories tags list */}
+      <View style={styles.categoryTagsWrap}>
+        {(item.categories || []).map((cat, idx) => (
+          <View key={`${cat.category}-${idx}`} style={styles.categoryTag}>
+            <Text style={styles.categoryTagText}>
+              {cat.category}: {cat.actualWeightKg ? `${cat.actualWeightKg} kg` : `~${cat.estimatedWeightKg || 0} kg`}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.depositCardFooter}>
+        <View>
+          <Text style={styles.footerWeightLabel}>
+            {item.actualTotalWeightKg ? "Total Aktual:" : "Estimasi Nasabah:"}
+          </Text>
+          <Text style={styles.footerWeightVal}>
+            {(item.actualTotalWeightKg || item.estimatedTotalWeightKg || 0).toFixed(1)} kg
+          </Text>
+          {item.finalPoint > 0 && (
+            <Text style={styles.footerPointVal}>+{item.finalPoint.toLocaleString("id-ID")} Pts</Text>
+          )}
+        </View>
+
+        {item.method === "PICKUP" && item.status === "REQUESTED" ? (
+          <TouchableOpacity
+            style={[styles.btnTimbangAction, { backgroundColor: "#0284C7" }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleAcceptAndCallDriver(item);
+            }}
+            activeOpacity={0.85}
+          >
+            <Truck size={13} color="#FFFFFF" />
+            <Text style={styles.btnTimbangActionText}>Panggil Driver</Text>
+            <ChevronRight size={13} color="#FFFFFF" />
+          </TouchableOpacity>
+        ) : (
+          <View
+            style={[
+              styles.btnTimbangAction,
+              item.status === "COMPLETED" || item.status === "POINT_ISSUED"
+                ? { backgroundColor: "#047857" }
+                : item.status === "DISPUTED"
+                ? { backgroundColor: "#DC2626" }
+                : item.status === "WAITING_CUSTOMER_CONFIRMATION"
+                ? { backgroundColor: "#D97706" }
+                : { backgroundColor: "#0E6641" },
+            ]}
+          >
+            <Scale size={13} color="#FFFFFF" />
+            <Text style={styles.btnTimbangActionText}>
+              {item.status === "DISPUTED"
+                ? "Timbang Ulang"
+                : item.status === "WAITING_CUSTOMER_CONFIRMATION"
+                ? "Lihat Hasil"
+                : item.status === "COMPLETED" || item.status === "POINT_ISSUED"
+                ? "Rincian"
+                : "Timbang"}
+            </Text>
+            <ChevronRight size={13} color="#FFFFFF" />
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+
+  return (
+    <ResponsiveSafeAreaView style={styles.container} edges={["left", "right"]}>
+      <StatusBar barStyle="light-content" backgroundColor="#0E6641" />
+
+      {/* Main Tab Content */}
+      <View style={styles.mainTabBody}>
+        {currentTab === 0 && renderBerandaTab()}
+        {currentTab === 1 && renderAntreanTab()}
+        {currentTab === 2 && renderKatalogTab()}
+        {currentTab === 3 && renderKeuanganTab()}
+        {currentTab === 4 && renderAkunTab()}
+      </View>
+
+      {/* 5-Tab Bottom Navigation Bar (Standardized with other partners) */}
+      <View style={[styles.bottomNavContainer, { paddingBottom: Math.max(insets.bottom, 6) }]}>
+        {navTabs.map((tab, idx) => {
+          const active = currentTab === idx;
+          const IconComp = tab.icon;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              testID={`bottom-tab-${tab.key}`}
+              style={styles.navItem}
+              onPress={() => {
+                setCurrentTab(idx);
+                if (typeof window !== "undefined" && window.history?.replaceState) {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("tab", tab.key);
+                  window.history.replaceState({}, "", url.toString());
+                }
+              }}
+              activeOpacity={0.7}
+              accessibilityLabel={tab.label}
+            >
+              <View style={[styles.navIconBg, active && styles.navIconBgActive]}>
+                <IconComp size={20} color={active ? "#0E6641" : "#94A3B8"} strokeWidth={active ? 2.5 : 2} />
+                {tab.badge > 0 && !active && (
+                  <View style={[styles.navBadgeCircle, { backgroundColor: tab.badgeColor || "#0E6641" }]}>
+                    <Text style={styles.navBadgeText}>
+                      {tab.badge > 99 ? "99+" : tab.badge}
+                    </Text>
                   </View>
-                  <Text style={styles.modalSub}>
-                    Harga seragam di seluruh unit Bank Sampah GEOVERSE. (100 Poin = Rp 1)
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.modalCloseBtn}
-                  onPress={() => setPriceModalVisible(false)}
-                >
-                  <X size={18} color="#6B7280" />
-                </TouchableOpacity>
+                )}
               </View>
+              <Text style={[styles.navLabel, active && styles.navLabelActive]} numberOfLines={1}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
-              {loadingPrices ? (
-                <View style={{ paddingVertical: 30, alignItems: "center" }}>
-                  <ActivityIndicator size="small" color="#15803D" />
-                  <Text style={{ marginTop: 8, fontSize: 12, color: "#64748B" }}>
-                    Memuat katalog harga resmi...
-                  </Text>
-                </View>
+      {/* 1. Operating Hours Modal (Atur Jam Buka-Tutup) */}
+      <Modal
+        visible={hoursModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setHoursModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Atur Jam Operasional Unit</Text>
+                <Text style={styles.modalSub}>
+                  Sesuaikan waktu setor sampah agar nasabah mengetahui jam buka loket
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setHoursModalVisible(false)}
+              >
+                <X size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputSectionLabel}>Jadwal Buka - Tutup Loket:</Text>
+            <View style={styles.inputHoursBox}>
+              <Clock size={16} color="#0E6641" style={{ marginLeft: 4 }} />
+              <TextInput
+                style={styles.hoursInput}
+                placeholder="Contoh: Senin - Sabtu, 08:00 - 16:00"
+                placeholderTextColor="#94A3B8"
+                value={inputHours}
+                onChangeText={setInputHours}
+              />
+            </View>
+
+            <Text style={styles.presetSectionLabel}>Pilih Cepat Jadwal Standar:</Text>
+            <View style={styles.presetWrap}>
+              {PRESET_HOURS.map((preset, idx) => {
+                const isSelected = inputHours === preset;
+                return (
+                  <TouchableOpacity
+                    key={`preset-hour-${idx}`}
+                    style={[styles.presetHourPill, isSelected && styles.presetHourPillActive]}
+                    onPress={() => setInputHours(preset)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.presetHourPillText, isSelected && styles.presetHourPillTextActive]}>
+                      {preset}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Toggle Pickup Service */}
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={styles.toggleTitle}>Terima Penjemputan (Pickup Driver)</Text>
+                <Text style={styles.toggleSub}>Aktifkan jika unit Anda menerima pesanan jemput dari kurir/driver</Text>
+              </View>
+              <Switch
+                value={pickupEnabled}
+                onValueChange={setPickupEnabled}
+                trackColor={{ false: "#CBD5E1", true: "#86EFAC" }}
+                thumbColor={pickupEnabled ? "#0E6641" : "#94A3B8"}
+              />
+            </View>
+
+            {hoursSuccessMsg ? (
+              <View style={styles.successMessageBox}>
+                <CheckCircle2 size={16} color="#0E6641" />
+                <Text style={styles.successMessageText}>{hoursSuccessMsg}</Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.btnSaveHours, savingHours && { opacity: 0.7 }]}
+              onPress={handleSaveOperatingHours}
+              disabled={savingHours}
+              activeOpacity={0.85}
+            >
+              {savingHours ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-                  {priceCatalog.map((p) => (
-                    <View key={p._id} style={styles.priceCatalogRow}>
-                      <View style={{ flex: 1, paddingRight: 8 }}>
-                        <Text style={styles.priceCategoryName}>{p.category}</Text>
-                        <Text style={styles.priceSubName}>{p.subCategory}</Text>
-                      </View>
+                <>
+                  <Check size={16} color="#FFFFFF" />
+                  <Text style={styles.btnSaveHoursText}>Simpan Jam Operasional</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
-                      <View style={styles.priceOfficialPill}>
-                        <Text style={styles.priceOfficialValue}>{rp(p.pricePerKg)}/kg</Text>
-                      </View>
-                    </View>
-                  ))}
-                </ScrollView>
+      {/* 2. Notifications Modal */}
+      <Modal visible={notifModalVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Notifikasi Bank Sampah</Text>
+                <Text style={styles.modalSub}>Aktivitas penting yang membutuhkan perhatian Anda</Text>
+              </View>
+              <TouchableOpacity onPress={() => setNotifModalVisible(false)} style={styles.modalCloseBtn}>
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 10, marginVertical: 10 }}>
+              {disputedCount > 0 && (
+                <TouchableOpacity
+                  style={styles.notifCardItem}
+                  onPress={() => {
+                    setNotifModalVisible(false);
+                    setActiveQueue("WAITING");
+                    setCurrentTab(1);
+                  }}
+                >
+                  <View style={[styles.notifIconWrap, { backgroundColor: "#FEE2E2" }]}>
+                    <AlertCircle size={18} color="#DC2626" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.notifTitle, { color: "#DC2626" }]}>
+                      {disputedCount} Komplain Hasil Timbang
+                    </Text>
+                    <Text style={styles.notifSub}>Nasabah mengajukan sanggahan timbangan tiket.</Text>
+                  </View>
+                </TouchableOpacity>
               )}
 
-              <TouchableOpacity
-                style={styles.btnCloseCatalog}
-                onPress={() => setPriceModalVisible(false)}
-              >
-                <Text style={styles.btnCloseCatalogText}>Tutup Katalog</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Logout / Switch Role Modal */}
-        <Modal
-          visible={logoutModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setLogoutModalVisible(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={[styles.modalSheet, { paddingBottom: 24 }]}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Keluar / Ganti Peran</Text>
+              {pendingRedemptionsCount > 0 && (
                 <TouchableOpacity
-                  style={styles.modalCloseBtn}
-                  onPress={() => setLogoutModalVisible(false)}
+                  style={styles.notifCardItem}
+                  onPress={() => {
+                    setNotifModalVisible(false);
+                    setRedemptionFilter("REQUESTED");
+                    setCurrentTab(3);
+                  }}
                 >
-                  <X size={18} color="#6B7280" />
+                  <View style={[styles.notifIconWrap, { backgroundColor: "#FEF3C7" }]}>
+                    <Coins size={18} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.notifTitle, { color: "#D97706" }]}>
+                      {pendingRedemptionsCount} Permintaan Pencairan Poin
+                    </Text>
+                    <Text style={styles.notifSub}>Nasabah menunggu pembayaran kas di loket.</Text>
+                  </View>
                 </TouchableOpacity>
-              </View>
-              <Text style={{ fontSize: 13, color: "#475569", marginBottom: 16 }}>
-                Pilih aksi yang ingin Anda lakukan untuk sesi akun ini:
+              )}
+
+              {disputedCount === 0 && pendingRedemptionsCount === 0 && (
+                <View style={styles.emptyNotifBox}>
+                  <CheckCheck size={32} color="#0E6641" />
+                  <Text style={styles.emptyNotifText}>Semua tugas selesai, tidak ada peringatan aktif!</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 3. Logout / Role Switcher Modal */}
+      <Modal
+        visible={logoutModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalSheet, { paddingBottom: 24 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Keluar / Ganti Peran</Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setLogoutModalVisible(false)}
+              >
+                <X size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: "#475569", marginBottom: 16 }}>
+              Pilih tindakan yang ingin Anda lakukan untuk sesi akun ini:
+            </Text>
+
+            <TouchableOpacity
+              style={styles.modalMenuActionBtn}
+              onPress={() => {
+                setLogoutModalVisible(false);
+                navigate("role");
+              }}
+            >
+              <Store size={16} color="#0E6641" />
+              <Text style={styles.modalMenuActionText}>Pilih Peran Lain (Role Switcher)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalMenuActionBtn}
+              onPress={() => {
+                setLogoutModalVisible(false);
+                navigate("c_home");
+              }}
+            >
+              <User size={16} color="#0284C7" />
+              <Text style={styles.modalMenuActionText}>Beralih ke Aplikasi Customer</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalMenuActionBtn, { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" }]}
+              onPress={() => {
+                setLogoutModalVisible(false);
+                navigate("login");
+              }}
+            >
+              <LogOut size={16} color="#DC2626" />
+              <Text style={[styles.modalMenuActionText, { color: "#DC2626", fontWeight: "800" }]}>
+                Logout dan Masuk dengan Akun Lain
               </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
+      {/* 4. Edit Account & PIC Modal */}
+      <Modal
+        visible={accountModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAccountModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Detail Akun & Petugas</Text>
+                <Text style={styles.modalSub}>Perbarui data identitas kontak petugas Bank Sampah</Text>
+              </View>
               <TouchableOpacity
-                style={styles.modalMenuActionBtn}
-                onPress={() => {
-                  setLogoutModalVisible(false);
-                  navigate("role");
-                }}
+                style={styles.modalCloseBtn}
+                onPress={() => setAccountModalVisible(false)}
               >
-                <Building2 size={16} color="#15803D" />
-                <Text style={styles.modalMenuActionText}>Pilih Peran Lain (Role Switcher)</Text>
+                <X size={18} color="#64748B" />
               </TouchableOpacity>
+            </View>
 
+            <Text style={styles.modalInputLabel}>Nama Petugas PIC:</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={editOfficerName}
+              onChangeText={setEditOfficerName}
+              placeholder="Nama lengkap petugas"
+              placeholderTextColor="#94A3B8"
+            />
+
+            <Text style={styles.modalInputLabel}>Nomor WhatsApp / HP:</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={editOfficerPhone}
+              onChangeText={setEditOfficerPhone}
+              placeholder="Contoh: 0812-3456-7890"
+              placeholderTextColor="#94A3B8"
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.modalInputLabel}>Alamat Email:</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={editOfficerEmail}
+              onChangeText={setEditOfficerEmail}
+              placeholder="email@geoverse.com"
+              placeholderTextColor="#94A3B8"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <View style={styles.modalBtnRow}>
               <TouchableOpacity
-                style={styles.modalMenuActionBtn}
-                onPress={() => {
-                  setLogoutModalVisible(false);
-                  navigate("c_home");
-                }}
+                style={styles.modalBtnCancel}
+                onPress={() => setAccountModalVisible(false)}
               >
-                <User size={16} color="#0284C7" />
-                <Text style={styles.modalMenuActionText}>Beralih ke Dashboard Customer</Text>
+                <Text style={styles.modalBtnCancelText}>Batal</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[styles.modalMenuActionBtn, { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" }]}
-                onPress={() => {
-                  setLogoutModalVisible(false);
-                  navigate("login");
-                }}
+                style={styles.modalBtnSubmit}
+                onPress={handleSaveAccount}
+                activeOpacity={0.85}
               >
-                <LogOut size={16} color="#DC2626" />
-                <Text style={[styles.modalMenuActionText, { color: "#DC2626", fontWeight: "800" }]}>
-                  Logout dan Masuk dengan Akun Lain
-                </Text>
+                <Check size={16} color="#FFFFFF" />
+                <Text style={styles.modalBtnSubmitText}>Simpan Perubahan</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </Modal>
-      </ScrollView>
+        </View>
+      </Modal>
+
+      {/* 5. Change Password Modal */}
+      <Modal
+        visible={passwordModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPasswordModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Ubah Kata Sandi</Text>
+                <Text style={styles.modalSub}>Pastikan kata sandi baru kuat dan aman</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setPasswordModalVisible(false)}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalInputLabel}>Kata Sandi Saat Ini:</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={currPassword}
+              onChangeText={setCurrPassword}
+              placeholder="Masukkan kata sandi lama"
+              placeholderTextColor="#94A3B8"
+              secureTextEntry
+            />
+
+            <Text style={styles.modalInputLabel}>Kata Sandi Baru:</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Minimal 6 karakter"
+              placeholderTextColor="#94A3B8"
+              secureTextEntry
+            />
+
+            <Text style={styles.modalInputLabel}>Konfirmasi Kata Sandi Baru:</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Ketik ulang kata sandi baru"
+              placeholderTextColor="#94A3B8"
+              secureTextEntry
+            />
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => setPasswordModalVisible(false)}
+              >
+                <Text style={styles.modalBtnCancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalBtnSubmit}
+                onPress={handleSavePassword}
+                activeOpacity={0.85}
+              >
+                <Check size={16} color="#FFFFFF" />
+                <Text style={styles.modalBtnSubmitText}>Perbarui Password</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 6. Address & Location Modal */}
+      <Modal
+        visible={addressModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddressModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Alamat & Titik Lokasi Loket</Text>
+                <Text style={styles.modalSub}>Alamat resmi untuk panduan nasabah & armada pickup</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setAddressModalVisible(false)}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalInputLabel}>Alamat Lengkap Loket:</Text>
+            <TextInput
+              style={[styles.modalTextInput, { height: 72, textAlignVertical: "top" }]}
+              value={tempAddress}
+              onChangeText={setTempAddress}
+              placeholder="Contoh: Jl. Kamojang No. 8, Samarang, Garut"
+              placeholderTextColor="#94A3B8"
+              multiline
+            />
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => setAddressModalVisible(false)}
+              >
+                <Text style={styles.modalBtnCancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalBtnSubmit}
+                onPress={handleSaveAddress}
+                activeOpacity={0.85}
+              >
+                <Check size={16} color="#FFFFFF" />
+                <Text style={styles.modalBtnSubmitText}>Simpan Alamat</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 7. Help & SOP Modal */}
+      <Modal
+        visible={helpModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setHelpModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalSheet, { maxHeight: "80%" }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Bantuan & SOP Penimbangan</Text>
+                <Text style={styles.modalSub}>Pedoman operasional standar Bank Sampah GEOVERSE</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setHelpModalVisible(false)}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 8 }}>
+              <View style={styles.helpSectionCard}>
+                <Text style={styles.helpSectionHeading}>1. Alur Penimbangan Loket</Text>
+                <Text style={styles.helpSectionBody}>
+                  Cek kode tiket setor nasabah pada menu Antrean. Timbang masing-masing kategori sampah (Plastik, Kertas, Logam, dsb) secara transparan. Masukkan bobot aktual hasil timbangan.
+                </Text>
+              </View>
+
+              <View style={styles.helpSectionCard}>
+                <Text style={styles.helpSectionHeading}>2. Konversi Poin & Rupiah</Text>
+                <Text style={styles.helpSectionBody}>
+                  Setiap nominal setoran sampah terstandarisasi dengan rasio 100 Poin GEOVERSE = Rp 1. Poin akan langsung dikreditkan ke saldo akun nasabah saat verifikasi selesai.
+                </Text>
+              </View>
+
+              <View style={styles.helpSectionCard}>
+                <Text style={styles.helpSectionHeading}>3. Penanganan Komplain / Dispute</Text>
+                <Text style={styles.helpSectionBody}>
+                  Jika nasabah merasa hasil timbang berbeda dari estimasi awal, tiket akan berstatus Komplain (Dispute). Petugas dapat melakukan penimbangan ulang bersama nasabah.
+                </Text>
+              </View>
+
+              <View style={styles.helpSectionCard}>
+                <Text style={styles.helpSectionHeading}>4. Layanan Pencairan Kas Loket</Text>
+                <Text style={styles.helpSectionBody}>
+                  Nasabah dapat menukarkan saldo poin menjadi kas tunai di loket Anda melalui menu Keuangan. Serahkan uang tunai fisik setelah menekan tombol "Bayarkan Sekarang".
+                </Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.modalBtnSubmit, { width: "100%" }]}
+              onPress={() => setHelpModalVisible(false)}
+            >
+              <Text style={styles.modalBtnSubmitText}>Tutup Panduan</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 8. Privacy & Policy Modal */}
+      <Modal
+        visible={privacyModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPrivacyModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalSheet, { maxHeight: "75%" }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Privasi & Keamanan Data</Text>
+                <Text style={styles.modalSub}>Kebijakan standar ekosistem mitra GEOVERSE</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setPrivacyModalVisible(false)}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 8 }}>
+              <Text style={styles.privacyBodyText}>
+                GEOVERSE berkomitmen menjaga kerahasiaan data pribadi petugas dan seluruh nasabah Bank Sampah. Seluruh transaksi penimbangan, riwayat penerbitan poin, dan mutasi kas terlindungi enkripsi standar industri.
+              </Text>
+              <Text style={styles.privacyBodyText}>
+                Data nomor telepon dan alamat hanya dipergunakan untuk keperluan operasional penjemputan sampah dan konfirmasi tiket setor nasabah. Sesuai Apple App Store Guideline 5.1.1(v), setiap mitra memiliki hak penuh untuk mengajukan penghapusan akun beserta riwayat unit secara permanen kapan saja.
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.modalBtnSubmit, { width: "100%" }]}
+              onPress={() => setPrivacyModalVisible(false)}
+            >
+              <Text style={styles.modalBtnSubmitText}>Mengerti</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ResponsiveSafeAreaView>
   );
 };
@@ -1569,152 +2673,117 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FAFC",
   },
-  headerBar: {
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
-  headerInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    maxWidth: 1140,
-    width: "100%",
-    alignSelf: "center",
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitleCol: {
+  mainTabBody: {
     flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
-  },
-  headerBadgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  headerLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#10B981",
-  },
-  headerBadgeText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#059669",
-    letterSpacing: 0.8,
-  },
-  headerMainTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#0F172A",
-    letterSpacing: -0.3,
-    marginTop: 1,
-  },
-  headerSubUnit: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#059669",
-    marginTop: 1,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  refreshBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#DCFCE7",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  btnSwitchCustomer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#F0FDF4",
-    paddingVertical: 6,
-    paddingHorizontal: 9,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "#DCFCE7",
-  },
-  btnSwitchCustomerText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#059669",
-  },
-  logoutBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    backgroundColor: "#FEF2F2",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#FEE2E2",
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-    maxWidth: 1140,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+  },
+  scrollContentWide: {
+    maxWidth: 960,
     width: "100%",
     alignSelf: "center",
   },
-  scrollContentWide: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-  },
-  // Unit Card
-  unitCard: {
+
+  // Bottom Navigation Bar
+  bottomNavContainer: {
+    flexDirection: "row",
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    paddingTop: 8,
+    alignItems: "center",
+    justifyContent: "space-around",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
+      },
+      android: { elevation: 8 },
+      web: { boxShadow: "0 -2px 10px rgba(0, 0, 0, 0.05)" } as any,
+    }),
+  },
+  navItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 4,
+  },
+  navIconBg: {
+    width: 36,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    position: "relative",
+  },
+  navIconBgActive: {
+    backgroundColor: "#E8F5EE",
+  },
+  navLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#94A3B8",
+    marginTop: 2,
+  },
+  navLabelActive: {
+    color: "#0E6641",
+    fontWeight: "800",
+  },
+  navBadgeCircle: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  navBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+
+  // Unit Hero Card
+  unitHeroCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 13,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    marginTop: 10,
+    marginBottom: 12,
+    ...Platform.select({
+      ios: { shadowColor: "#0F172A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6 },
+      android: { elevation: 2 },
+    }),
   },
-  unitCardTop: {
+  unitHeroTop: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 12,
   },
-  unitAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#ECFDF5",
+  unitHeroAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#E8F5EE",
     borderWidth: 1,
-    borderColor: "#A7F3D0",
-    justifyContent: "center",
+    borderColor: "#BBF7D0",
     alignItems: "center",
+    justifyContent: "center",
   },
   unitTagRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    flexWrap: "wrap",
+    gap: 5,
     marginBottom: 4,
   },
   statusLivePill: {
@@ -1722,11 +2791,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     backgroundColor: "#ECFDF5",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#A7F3D0",
-    paddingVertical: 2.5,
-    paddingHorizontal: 8,
-    borderRadius: 6,
   },
   livePulseDot: {
     width: 6,
@@ -1737,112 +2806,148 @@ const styles = StyleSheet.create({
   statusLiveText: {
     fontSize: 9.5,
     fontWeight: "700",
-    color: "#059669",
+    color: "#0E6641",
   },
-  pickupPill: {
+  pickupPillActive: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: 4,
     backgroundColor: "#F0F9FF",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#BAE6FD",
-    paddingVertical: 2.5,
-    paddingHorizontal: 8,
-    borderRadius: 6,
   },
-  pickupPillText: {
+  pickupPillTextActive: {
     fontSize: 9.5,
     fontWeight: "700",
     color: "#0284C7",
   },
-  unitFullName: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#0F172A",
-    letterSpacing: -0.3,
+  pickupPillInactive: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
   },
-  officerName: {
-    fontSize: 11,
+  pickupPillTextInactive: {
+    fontSize: 9.5,
+    fontWeight: "600",
     color: "#64748B",
+  },
+  unitHeroNameRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 5,
+    marginTop: 2,
+    flexWrap: "wrap",
+  },
+  unitHeroName: {
+    fontSize: 14.5,
+    fontWeight: "800",
+    color: "#0F172A",
+    lineHeight: 18,
+    flexShrink: 1,
+  },
+  unitHeroOfficer: {
+    fontSize: 10.5,
+    color: "#64748B",
+    fontWeight: "500",
     marginTop: 2,
   },
   unitAddressRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
+    alignItems: "flex-start",
+    gap: 5,
+    marginTop: 8,
   },
   unitAddressText: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: "#475569",
     flex: 1,
+    lineHeight: 15,
   },
   unitHoursBanner: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    alignItems: "flex-start",
+    gap: 5,
     backgroundColor: "#F0FDF4",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 8,
     borderWidth: 1,
     borderColor: "#DCFCE7",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    marginBottom: 12,
   },
   unitHoursBannerText: {
-    fontSize: 11.5,
+    fontSize: 10.5,
     fontWeight: "700",
-    color: "#065F46",
+    color: "#0E6641",
     flex: 1,
+    lineHeight: 14,
   },
   unitActionGrid: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
+    marginTop: 10,
   },
   unitActionBtnHours: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
+    minHeight: 40,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     backgroundColor: "#F0FDF4",
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#A7F3D0",
-    paddingVertical: 10,
-    borderRadius: 12,
+    borderColor: "#BBF7D0",
   },
   unitActionBtnHoursText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#059669",
+    color: "#0E6641",
+    textAlign: "center",
+    lineHeight: 14,
   },
   unitActionBtnCatalog: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
+    minHeight: 40,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     backgroundColor: "#F0F9FF",
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#BAE6FD",
-    paddingVertical: 10,
-    borderRadius: 12,
   },
   unitActionBtnCatalogText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: "700",
     color: "#0284C7",
+    textAlign: "center",
+    lineHeight: 14,
   },
-  // Search section
+
+  // Search Section
   searchSection: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   searchSectionTitle: {
     fontSize: 12.5,
     fontWeight: "800",
-    color: "#1E293B",
+    color: "#0F172A",
     marginBottom: 6,
-    letterSpacing: 0.2,
   },
   searchBox: {
     flexDirection: "row",
@@ -1850,237 +2955,285 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     color: "#0F172A",
-    paddingHorizontal: 8,
     paddingVertical: 6,
+    paddingHorizontal: 6,
   },
   btnSearchAction: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: "#059669",
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 9,
+    backgroundColor: "#0E6641",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   btnSearchActionText: {
-    fontSize: 11.5,
-    fontWeight: "700",
     color: "#FFFFFF",
+    fontSize: 10.5,
+    fontWeight: "700",
   },
   searchErrorText: {
     fontSize: 11,
     color: "#DC2626",
     marginTop: 4,
+    marginLeft: 4,
   },
-  // Metrics Grid
+
+  // Executive Metric Cards
   metricsContainer: {
-    marginBottom: 18,
+    gap: 8,
+    marginBottom: 12,
   },
   metricsRow: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 10,
+    gap: 8,
   },
   metricCardGreen: {
     flex: 1,
-    borderRadius: 16,
     backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 10,
     borderWidth: 1,
-    borderColor: "#A7F3D0",
-    padding: 12,
-    shadowColor: "#059669",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 1,
+    borderColor: "#BBF7D0",
   },
   metricCardAmber: {
     flex: 1,
-    borderRadius: 16,
     backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 10,
     borderWidth: 1,
     borderColor: "#FDE68A",
-    padding: 12,
-    shadowColor: "#D97706",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 1,
   },
   metricCardOrange: {
     flex: 1,
-    borderRadius: 16,
     backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 10,
     borderWidth: 1,
     borderColor: "#FED7AA",
-    padding: 12,
-    shadowColor: "#EA580C",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 1,
   },
   metricCardBlue: {
     flex: 1,
-    borderRadius: 16,
     backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 10,
     borderWidth: 1,
     borderColor: "#BFDBFE",
-    padding: 12,
-    shadowColor: "#2563EB",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 1,
   },
   metricCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  metricIconCircleGreen: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#ECFDF5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  metricIconCircleAmber: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#FFFBEB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  metricIconCircleOrange: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#FFF7ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  metricIconCircleBlue: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   metricBadgeGreen: {
-    backgroundColor: "#ECFDF5",
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 5,
   },
   metricBadgeTextGreen: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#059669",
+    color: "#0E6641",
   },
   metricBadgeAmber: {
-    backgroundColor: "#FFFBEB",
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 5,
   },
   metricBadgeTextAmber: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#D97706",
+    color: "#B45309",
   },
   metricBadgeOrange: {
-    backgroundColor: "#FFF7ED",
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
+    backgroundColor: "#FFEDD5",
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 5,
   },
   metricBadgeTextOrange: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#EA580C",
+    color: "#C2410C",
   },
   metricBadgeBlue: {
-    backgroundColor: "#EFF6FF",
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
+    backgroundColor: "#DBEAFE",
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 5,
   },
   metricBadgeTextBlue: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#2563EB",
-  },
-  metricIconCircleGreen: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: "#ECFDF5",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  metricIconCircleAmber: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: "#FFFBEB",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  metricIconCircleOrange: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: "#FFF7ED",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  metricIconCircleBlue: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center",
+    color: "#1D4ED8",
   },
   metricValRow: {
     flexDirection: "row",
     alignItems: "baseline",
-    gap: 3,
+    gap: 2,
   },
   metricVal: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "900",
     color: "#0F172A",
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   metricUnit: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "700",
     color: "#64748B",
   },
   metricLabel: {
     fontSize: 10.5,
-    fontWeight: "600",
     color: "#64748B",
+    fontWeight: "600",
     marginTop: 2,
+    minHeight: 26,
+    lineHeight: 13,
   },
+
+  // Quick Nav Card
+  quickNavCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 14,
+  },
+  quickNavCardTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 10,
+  },
+  quickNavGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  quickNavItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  quickNavIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  quickNavLabel: {
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: "#334155",
+    textAlign: "center",
+    lineHeight: 12,
+  },
+
   // Section Headers
   sectionHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   sectionTitle: {
     fontSize: 13.5,
     fontWeight: "800",
     color: "#0F172A",
   },
-  sectionBadgeBox: {
-    backgroundColor: "#ECFDF5",
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
+  sectionSubtitle: {
+    fontSize: 10.5,
+    color: "#64748B",
+    marginTop: 1,
   },
-  sectionBadge: {
-    fontSize: 10,
+  seeAllBtn: {
+    flexShrink: 0,
+    paddingVertical: 4,
+    paddingLeft: 6,
+  },
+  seeAllText: {
+    fontSize: 11.5,
     fontWeight: "700",
-    color: "#059669",
+    color: "#0E6641",
   },
+
+  // Mini Empty Card
+  emptyCardMini: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyCardMiniTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0E6641",
+    marginTop: 6,
+    textAlign: "center",
+  },
+  emptyCardMiniText: {
+    fontSize: 11,
+    color: "#166534",
+    textAlign: "center",
+    marginTop: 2,
+    lineHeight: 15,
+  },
+
+  // Queue Segmented Tab Bar
   queueTabBar: {
     flexDirection: "row",
     backgroundColor: "#F1F5F9",
-    borderRadius: 14,
     padding: 4,
-    marginBottom: 14,
+    borderRadius: 14,
+    marginBottom: 12,
     gap: 4,
   },
   queueTab: {
@@ -2088,39 +3241,37 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
     paddingVertical: 8,
-    paddingHorizontal: 4,
     borderRadius: 10,
+    gap: 4,
   },
   queueTabActive: {
-    backgroundColor: "#059669",
-    shadowColor: "#059669",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: "#FFFFFF",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2 },
+      android: { elevation: 2 },
+    }),
   },
   queueTabText: {
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 11.5,
+    fontWeight: "700",
     color: "#64748B",
   },
   queueTabTextActive: {
-    color: "#FFFFFF",
+    color: "#0E6641",
     fontWeight: "800",
   },
   queueTabBadge: {
-    minWidth: 17,
-    height: 17,
-    borderRadius: 8.5,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: "#E2E8F0",
     paddingHorizontal: 4,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
   queueTabBadgeActive: {
-    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    backgroundColor: "#0E6641",
   },
   queueTabBadgeText: {
     fontSize: 9.5,
@@ -2130,71 +3281,38 @@ const styles = StyleSheet.create({
   queueTabBadgeTextActive: {
     color: "#FFFFFF",
   },
-  tabDisputeDot: {
-    backgroundColor: "#DC2626",
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 4,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  tabDisputeDotActive: {
-    backgroundColor: "#EF4444",
-    borderWidth: 1,
-    borderColor: "#FFFFFF",
-  },
-  tabDisputeDotText: {
-    fontSize: 9,
-    fontWeight: "900",
-    color: "#FFFFFF",
-  },
+
+  // Dispute Notice
   disputeTopBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
     backgroundColor: "#FEF2F2",
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#FECACA",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 12,
+    padding: 10,
+    marginBottom: 10,
   },
   disputeTopBannerText: {
-    flex: 1,
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#991B1B",
-    lineHeight: 15,
-  },
-  emptyQueueCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 24,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  emptyQueueText: {
     fontSize: 11.5,
-    color: "#64748B",
-    marginTop: 6,
-    textAlign: "center",
+    color: "#DC2626",
+    fontWeight: "700",
+    flex: 1,
   },
-  // Deposit Card
+
+  // Deposit Cards
   depositCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 14,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    marginBottom: 10,
+    ...Platform.select({
+      ios: { shadowColor: "#0F172A", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4 },
+      android: { elevation: 2 },
+    }),
   },
   depositCardHeader: {
     flexDirection: "row",
@@ -2207,205 +3325,582 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   depositCode: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.2,
+    letterSpacing: 0.2,
   },
   methodBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    paddingVertical: 2.5,
-    paddingHorizontal: 7,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 6,
   },
-  methodBadgePickup: {
-    backgroundColor: "#ECFDF5",
-    borderWidth: 1,
-    borderColor: "#A7F3D0",
-  },
   methodBadgeDropOff: {
-    backgroundColor: "#F0F9FF",
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
+    backgroundColor: "#E0F2FE",
+  },
+  methodBadgePickup: {
+    backgroundColor: "#DCFCE7",
   },
   methodBadgeText: {
     fontSize: 9.5,
     fontWeight: "700",
   },
-  methodBadgeTextPickup: {
-    color: "#059669",
-  },
   methodBadgeTextDropOff: {
-    color: "#0284C7",
+    color: "#0369A1",
+  },
+  methodBadgeTextPickup: {
+    color: "#0E6641",
   },
   customerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
     marginTop: 4,
   },
   customerName: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11.5,
     color: "#475569",
+    fontWeight: "600",
   },
   statusPill: {
-    paddingVertical: 3,
     paddingHorizontal: 8,
-    borderRadius: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
-  statusPillBlue: {
-    backgroundColor: "#E0F2FE",
-  },
-  statusPillAmber: {
-    backgroundColor: "#FEF3C7",
-  },
-  statusPillGreen: {
-    backgroundColor: "#DCFCE7",
-  },
-  statusPillRed: {
-    backgroundColor: "#FEE2E2",
-  },
-  statusPillText: {
-    fontSize: 9.5,
-    fontWeight: "700",
-  },
-  statusPillTextBlue: {
-    color: "#0369A1",
-  },
-  statusPillTextAmber: {
-    color: "#B45309",
-  },
-  statusPillTextGreen: {
-    color: "#059669",
-  },
-  statusPillTextRed: {
-    color: "#DC2626",
-  },
+  statusPillGreen: { backgroundColor: "#DCFCE7" },
+  statusPillRed: { backgroundColor: "#FEE2E2" },
+  statusPillAmber: { backgroundColor: "#FEF3C7" },
+  statusPillBlue: { backgroundColor: "#DBEAFE" },
+  statusPillText: { fontSize: 10, fontWeight: "800" },
+  statusPillTextGreen: { color: "#0E6641" },
+  statusPillTextRed: { color: "#DC2626" },
+  statusPillTextAmber: { color: "#B45309" },
+  statusPillTextBlue: { color: "#1D4ED8" },
+
   cardDisputeNotice: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     backgroundColor: "#FEF2F2",
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    padding: 6,
     marginTop: 8,
-    marginBottom: 4,
   },
   cardDisputeNoticeText: {
-    flex: 1,
     fontSize: 10.5,
-    fontWeight: "700",
-    color: "#991B1B",
+    color: "#DC2626",
+    fontWeight: "600",
+    flex: 1,
   },
   categoryTagsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 4,
     marginTop: 8,
   },
   categoryTag: {
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingVertical: 3,
-    paddingHorizontal: 8,
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
     borderRadius: 6,
   },
   categoryTagText: {
     fontSize: 10,
-    fontWeight: "600",
     color: "#475569",
+    fontWeight: "600",
   },
   depositCardFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 12,
-    paddingTop: 10,
+    alignItems: "flex-end",
+    marginTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
   },
   footerWeightLabel: {
-    fontSize: 9.5,
-    fontWeight: "600",
+    fontSize: 10,
     color: "#64748B",
+    fontWeight: "500",
   },
   footerWeightVal: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "800",
     color: "#0F172A",
-    marginTop: 1,
   },
   footerPointVal: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#059669",
-    marginTop: 1,
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#D97706",
   },
   btnTimbangAction: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 9,
-    shadowColor: "#059669",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
   },
   btnTimbangActionText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  emptyQueueCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 10,
+  },
+  emptyQueueText: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "600",
+    marginTop: 8,
+    textAlign: "center",
+  },
+
+  // Page Headers
+  pageHeaderBox: {
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  pageTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: -0.4,
+  },
+  pageSubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+
+  // Katalog Styles
+  officialNoticeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  officialNoticeTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0E6641",
+  },
+  officialNoticeText: {
+    fontSize: 10.5,
+    color: "#166534",
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  catalogSearchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  catalogSearchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: "#0F172A",
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+  },
+  catChipsWrap: {
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: 12,
+    paddingBottom: 2,
+  },
+  catChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  catChipActive: {
+    backgroundColor: "#0E6641",
+    borderColor: "#0E6641",
+  },
+  catChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  catChipTextActive: {
+    color: "#FFFFFF",
+  },
+  catalogGrid: {
+    gap: 10,
+  },
+  priceItemCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  priceCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  priceIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  priceCatName: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  priceSubCatName: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  priceValueBadge: {
+    alignItems: "flex-end",
+  },
+  priceValueText: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#0E6641",
+  },
+  priceUnitText: {
+    fontSize: 10,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  priceCardDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 8,
+  },
+  priceCardBottom: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  pointsBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  pointsBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#B45309",
+  },
+  minWeightText: {
+    fontSize: 10,
+    color: "#64748B",
+  },
+
+  // Keuangan Styles
+  financeSummaryCard: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 12,
+  },
+  financeSummaryItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  financeSummaryLabel: {
+    fontSize: 10.5,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  financeSummaryVal: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#0E6641",
+    letterSpacing: -0.4,
+    marginVertical: 2,
+  },
+  financeSummarySub: {
+    fontSize: 9.5,
+    color: "#94A3B8",
+  },
+  financeDividerV: {
+    width: 1,
+    backgroundColor: "#E2E8F0",
+    marginHorizontal: 8,
+  },
+  redemptionFilterRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: 12,
+  },
+  redemptionFilterBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  redemptionFilterBtnActive: {
+    backgroundColor: "#0E6641",
+    borderColor: "#0E6641",
+  },
+  redemptionFilterBtnText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  redemptionFilterBtnTextActive: {
+    color: "#FFFFFF",
+  },
+  redemptionDetailBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    gap: 4,
+  },
+  redemptionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  redemptionLabel: {
+    fontSize: 11,
+    color: "#64748B",
+  },
+  redemptionValueHighlight: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#0E6641",
+  },
+  redemptionValuePoints: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#D97706",
+  },
+  redemptionValueTarget: {
+    fontSize: 11,
+    color: "#0F172A",
+    fontWeight: "600",
+  },
+  redemptionActionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  btnRejectRedemption: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    backgroundColor: "#FEF2F2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnRejectRedemptionText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  btnPayRedemption: {
+    flex: 2,
+    flexDirection: "row",
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#0E6641",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnPayRedemptionText: {
     fontSize: 11.5,
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  // Modal styles
+
+  // Akun Tab Styles
+  accountCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 14,
+  },
+  accountCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  accountAvatarBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#E8F5EE",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  accountUnitName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  accountRoleText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0E6641",
+    marginTop: 1,
+  },
+  accountOfficerText: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  accountDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 12,
+  },
+  accountInfoGrid: {
+    gap: 8,
+  },
+  accountInfoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  accountInfoLabel: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#64748B",
+    width: 90,
+  },
+  accountInfoValue: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#0F172A",
+    flex: 1,
+  },
+  settingsSectionCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 14,
+  },
+  settingsSectionTitle: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 10,
+  },
+  settingsRowClickable: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  settingsRowSwitch: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  settingsIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  settingsRowTitle: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  settingsRowSub: {
+    fontSize: 10.5,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  settingsRowDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 4,
+  },
+
+  // Modal Styles
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
     justifyContent: "flex-end",
   },
   modalSheet: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    padding: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
     maxHeight: "85%",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    marginBottom: 14,
   },
   modalTitle: {
-    fontSize: 15,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "800",
     color: "#0F172A",
   },
   modalSub: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: "#64748B",
     marginTop: 2,
   },
   modalCloseBtn: {
-    padding: 5,
-    borderRadius: 6,
+    padding: 4,
+    borderRadius: 20,
     backgroundColor: "#F1F5F9",
   },
   inputSectionLabel: {
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "700",
     color: "#334155",
     marginBottom: 6,
   },
@@ -2413,65 +3908,67 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F8FAFC",
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    paddingHorizontal: 8,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 10,
     paddingVertical: 4,
     marginBottom: 12,
   },
   hoursInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12.5,
     color: "#0F172A",
-    fontWeight: "600",
+    paddingVertical: 8,
     paddingHorizontal: 8,
-    paddingVertical: 6,
   },
   presetSectionLabel: {
     fontSize: 11.5,
     fontWeight: "700",
-    color: "#475569",
-    marginBottom: 6,
+    color: "#334155",
+    marginBottom: 8,
   },
   presetWrap: {
-    flexDirection: "column",
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
     marginBottom: 14,
   },
   presetHourPill: {
-    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
   },
   presetHourPillActive: {
     backgroundColor: "#DCFCE7",
-    borderColor: "#86EFAC",
+    borderColor: "#0E6641",
   },
   presetHourPillText: {
-    fontSize: 11.5,
-    color: "#334155",
+    fontSize: 11,
     fontWeight: "600",
+    color: "#475569",
   },
   presetHourPillTextActive: {
-    color: "#15803D",
+    color: "#0E6641",
     fontWeight: "800",
   },
   toggleRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    marginBottom: 10,
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+    marginBottom: 14,
   },
   toggleTitle: {
-    fontSize: 12.5,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "700",
     color: "#0F172A",
   },
   toggleSub: {
@@ -2484,103 +3981,345 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     backgroundColor: "#DCFCE7",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 10,
     marginBottom: 10,
   },
   successMessageText: {
     fontSize: 11.5,
-    color: "#15803D",
     fontWeight: "700",
+    color: "#0E6641",
   },
   btnSaveHours: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#15803D",
-    borderRadius: 10,
+    backgroundColor: "#0E6641",
+    borderRadius: 14,
     paddingVertical: 12,
-    marginTop: 4,
   },
   btnSaveHoursText: {
-    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+    color: "#FFFFFF",
   },
-  badgeAdminOfficial: {
+
+  // Notification Modal Items
+  notifCardItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    backgroundColor: "#DCFCE7",
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 6,
+    gap: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  badgeAdminOfficialText: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: "#047857",
-  },
-  priceCatalogRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  notifIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: "center",
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    justifyContent: "center",
   },
-  priceCategoryName: {
+  notifTitle: {
     fontSize: 12.5,
     fontWeight: "800",
-    color: "#0F172A",
   },
-  priceSubName: {
-    fontSize: 10.5,
+  notifSub: {
+    fontSize: 11,
     color: "#64748B",
     marginTop: 1,
   },
-  priceOfficialPill: {
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-  priceOfficialValue: {
-    fontSize: 12.5,
-    fontWeight: "900",
-    color: "#15803D",
-  },
-  btnCloseCatalog: {
-    backgroundColor: "#F1F5F9",
-    borderRadius: 10,
-    paddingVertical: 10,
+  emptyNotifBox: {
+    padding: 24,
     alignItems: "center",
-    marginTop: 12,
+    justifyContent: "center",
+    gap: 8,
   },
-  btnCloseCatalogText: {
-    color: "#475569",
-    fontSize: 12.5,
-    fontWeight: "800",
+  emptyNotifText: {
+    fontSize: 12,
+    color: "#0E6641",
+    fontWeight: "700",
+    textAlign: "center",
   },
+
+  // Logout Modal Menu
   modalMenuActionBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: "#F8FAFC",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
     marginBottom: 8,
   },
   modalMenuActionText: {
     fontSize: 12.5,
     fontWeight: "700",
     color: "#1E293B",
+  },
+
+  // Akun Tab Standardized Styles (Matching Pemilik Catering, Kos, Shop)
+  akunScrollContent: {
+    paddingBottom: 32,
+  },
+  profileHeader: {
+    backgroundColor: "#0E6641",
+    paddingTop: 28,
+    paddingBottom: 22,
+    alignItems: "center",
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  profileOwnerName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginTop: 8,
+    paddingHorizontal: 16,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  profileUnitNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: 2,
+    paddingHorizontal: 16,
+    flexWrap: "wrap",
+  },
+  profileUnitNameText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#E8F5EE",
+    textAlign: "center",
+    lineHeight: 16,
+  },
+  profilePhoneText: {
+    fontSize: 12,
+    color: "#E8F5EE",
+    marginTop: 2,
+    textAlign: "center",
+  },
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 18,
+    width: "100%",
+  },
+  statCol: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "center",
+  },
+  statVal: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  statLbl: {
+    fontSize: 10,
+    color: "#E8F5EE",
+    marginTop: 2,
+    textAlign: "center",
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "rgba(255,255,255,0.25)",
+  },
+  groupTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 22,
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  groupCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginHorizontal: 16,
+    overflow: "hidden",
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+  },
+  menuIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuItemBody: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  menuItemTitle: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  menuItemSubtitle: {
+    fontSize: 11.5,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginLeft: 62,
+  },
+  logoutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#FEE2E2",
+    borderWidth: 1,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    padding: 14,
+    marginTop: 20,
+  },
+  logoutIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#FFF0F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logoutBtnText: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  logoutBtnSub: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginTop: 1,
+  },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    borderWidth: 1,
+    borderRadius: 20,
+    marginHorizontal: 16,
+    padding: 14,
+    marginTop: 10,
+  },
+  deleteAccountBtnText: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  deleteAccountBtnSub: {
+    fontSize: 11,
+    color: "#EF4444",
+    marginTop: 1,
+  },
+  footerVersion: {
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#94A3B8",
+    marginTop: 24,
+  },
+  footerSubVersion: {
+    textAlign: "center",
+    fontSize: 10,
+    color: "#CBD5E1",
+    marginTop: 2,
+  },
+  modalInputLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  modalTextInput: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: "#0F172A",
+  },
+  modalBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 18,
+  },
+  modalBtnCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBtnCancelText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  modalBtnSubmit: {
+    flex: 2,
+    flexDirection: "row",
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#0E6641",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  modalBtnSubmitText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  helpSectionCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 8,
+  },
+  helpSectionHeading: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#0E6641",
+    marginBottom: 4,
+  },
+  helpSectionBody: {
+    fontSize: 11.5,
+    color: "#475569",
+    lineHeight: 17,
+  },
+  privacyBodyText: {
+    fontSize: 12,
+    color: "#475569",
+    lineHeight: 18,
+    marginBottom: 10,
   },
 });

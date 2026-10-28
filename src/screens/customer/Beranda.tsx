@@ -1,4 +1,4 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -128,12 +128,37 @@ const calculateDistanceKm = (from: SearchCoordinates, to: SearchCoordinates) => 
 interface CustomerHomeProps extends Nav {
   authAccount?: AuthAccount | null;
   onUpdateAccount?: (account: AuthAccount) => Promise<void>;
+  initialTab?: number;
 }
 
-export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, onUpdateAccount }) => {
+export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, onUpdateAccount, initialTab }) => {
+  const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const isCompact = windowWidth < 380;
-  const [currentTab, setCurrentTab] = useState<number>(0);
+  const [currentTab, setCurrentTab] = useState<number>(initialTab ?? 0);
+
+  useEffect(() => {
+    if (typeof initialTab === "number" && initialTab >= 0 && initialTab <= 4) {
+      setCurrentTab(initialTab);
+    }
+  }, [initialTab]);
+
+  const handleOpenRide = () => {
+    navigate("c_ride");
+  };
+
+  const handleOpenSend = () => {
+    navigate("c_send");
+  };
+
+  const handleOpenProfile = () => {
+    setCurrentTab(4);
+  };
+
+  const handleTabPress = (index: number) => {
+    setCurrentTab(index);
+  };
+
   const { wallet: recycleWallet } = useRecycle();
   const {
     wallet: pointWallet,
@@ -412,7 +437,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   }, [productsReloadKey]);
 
   useEffect(() => {
-    if (!authAccount?.id) {
+    if (!authAccount?.id || (authAccount.role && authAccount.role !== "customer")) {
       ordersAccountIdRef.current = null;
       ordersRef.current = [];
       setOrders([]);
@@ -1128,8 +1153,8 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             onOpenCatering={() => navigate("c_catering")}
             onOpenLaundry={() => navigate("c_laundry")}
             onOpenKos={() => navigate("c_kos")}
-            onOpenRide={() => navigate("c_ride")}
-            onOpenSend={() => navigate("c_send")}
+            onOpenRide={handleOpenRide}
+            onOpenSend={handleOpenSend}
             onOpenShop={() => navigate("c_shop_home")}
             onOpenRecycle={() => navigate("c_recycle_home")}
             onOpenPoint={() => navigate("c_point_home")}
@@ -1170,6 +1195,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             setChatThreads={setChatThreads}
             setCustomerTab={setCurrentTab}
             authAccount={authAccount}
+            navigate={navigate}
           />
         );
       case 4:
@@ -1239,7 +1265,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           customerLocation={customerLocation}
           customerProfilePhoto={customerProfilePhoto}
           unreadNotifCount={unreadNotifCount}
-          onPressProfile={() => setCurrentTab(4)}
+          onPressProfile={handleOpenProfile}
           onPressSearch={() => setSearchModalVisible(true)}
           onPressInfoHub={() => setPgeInfoHubVisible(true)}
           onNavigateLocation={() => navigate("c_addresses")}
@@ -1332,7 +1358,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             {/* 1. GoRide / Kanyaah Ride */}
             <TouchableOpacity
               style={styles.launcherItem}
-              onPress={() => navigate("c_ride")}
+              onPress={handleOpenRide}
               activeOpacity={0.75}
             >
               <View style={[styles.launcherSquircle, { backgroundColor: "#DCFCE7" }]}>
@@ -1345,13 +1371,13 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Ride</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Ride</Text>
             </TouchableOpacity>
 
             {/* 2. GoSend / Kanyaah Send */}
             <TouchableOpacity
               style={styles.launcherItem}
-              onPress={() => navigate("c_send")}
+              onPress={handleOpenSend}
               activeOpacity={0.75}
             >
               <View style={[styles.launcherSquircle, { backgroundColor: "#FEF3C7" }]}>
@@ -1364,7 +1390,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Send</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Send</Text>
             </TouchableOpacity>
 
             {/* 3. GoFood / Kanyaah Catering */}
@@ -1383,7 +1409,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Katering</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Katering</Text>
             </TouchableOpacity>
 
             {/* 4. GoMart / Kanyaah Shop */}
@@ -1402,7 +1428,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Shop</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Shop</Text>
             </TouchableOpacity>
           </View>
 
@@ -1504,7 +1530,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     resizeMode="cover"
                   />
                 </View>
-                <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Mart</Text>
+                <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Mart</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1522,7 +1548,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     resizeMode="cover"
                   />
                 </View>
-                <Text style={styles.launcherLabel} numberOfLines={1}>Kanyaah Homestay</Text>
+                <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Homestay</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1540,7 +1566,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             <View style={styles.greenValueIconCircle}>
               <Plus size={12} color="#0D7A53" />
             </View>
-            <Text style={styles.greenValueText} numberOfLines={1}>
+            <Text style={styles.greenValueText} numberOfLines={2}>
               Diskon s.d. 10rb/transaksi. Kumpulkan GEOVERSE Point!
             </Text>
           </View>
@@ -1803,7 +1829,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             {/* Promo Card 3: Kanyaah Send */}
             <TouchableOpacity
               style={[styles.promoCard, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}
-              onPress={() => navigate("c_send")}
+              onPress={handleOpenSend}
               activeOpacity={0.85}
             >
               <View style={styles.promoCardTop}>
@@ -1854,7 +1880,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             {/* Promo Card 5: Kanyaah Ride */}
             <TouchableOpacity
               style={[styles.promoCard, { backgroundColor: "#DCFCE7", borderColor: "#BBF7D0" }]}
-              onPress={() => navigate("c_ride")}
+              onPress={handleOpenRide}
               activeOpacity={0.85}
             >
               <View style={styles.promoCardTop}>
@@ -2054,7 +2080,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         {/* ============================================================ */}
         {/* FIXED BOTTOM NAVIGATION BAR (Exact Gojek 5-Menu Polish) */}
         {/* ============================================================ */}
-        <View style={styles.bottomNavBar}>
+        <View style={[styles.bottomNavBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
           {navItems.map((item, index) => {
             const active = currentTab === index;
             const IconComp = item.icon;
@@ -2062,7 +2088,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               <TouchableOpacity
                 key={index}
                 style={styles.bottomNavItem}
-                onPress={() => setCurrentTab(index)}
+                onPress={() => handleTabPress(index)}
                 activeOpacity={0.7}
                 accessibilityLabel={item.label}
               >
@@ -2420,7 +2446,13 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                       style={styles.searchShortcutCard}
                       onPress={() => {
                         setSearchModalVisible(false);
-                        navigate(s.route as any);
+                        if (s.route === "c_ride") {
+                          handleOpenRide();
+                        } else if (s.route === "c_send") {
+                          handleOpenSend();
+                        } else {
+                          navigate(s.route as any);
+                        }
                       }}
                       activeOpacity={0.8}
                     >
@@ -2658,7 +2690,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <TouchableOpacity
                   style={styles.piknikSecondaryCta}
                   onPress={() => {
-                    Linking.openURL("https://wa.me/6281234567890?text=Halo%20Admin%20GEOVERSE%2C%20saya%20tertarik%20dengan%20paket%20Kanyaah%20Piknik%20Kamojang.");
+                    Linking.openURL("https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20tertarik%20dengan%20paket%20Kanyaah%20Piknik%20Kamojang.");
                   }}
                   activeOpacity={0.85}
                 >
@@ -2724,12 +2756,12 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               <TouchableOpacity
                 style={styles.helpWhatsAppBtn}
                 onPress={() => {
-                  Linking.openURL("https://wa.me/6281234567890?text=Halo%20Admin%20GEOVERSE%2C%20saya%20butuh%20bantuan%20layanan.");
+                  Linking.openURL("https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20butuh%20bantuan%20layanan.");
                 }}
                 activeOpacity={0.85}
               >
                 <MessageCircle size={16} color="#FFFFFF" />
-                <Text style={styles.helpWhatsAppBtnText}>Hubungi CS WhatsApp Kamojang</Text>
+                <Text style={styles.helpWhatsAppBtnText}>Hubungi CS WhatsApp (+62 815-1122-6089)</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -3049,7 +3081,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     flex: 1,
-    minWidth: 0,
+    minWidth: 115,
     paddingRight: 4,
   },
   walletBarIconBox: {
@@ -3207,6 +3239,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 6,
     lineHeight: 13,
+    minHeight: 26,
   },
 
   // 5. GREEN VALUE SUBSCRIPTION STRIP
@@ -3650,20 +3683,20 @@ const styles = StyleSheet.create({
 
   // 9. FIXED BOTTOM NAVIGATION BAR
   bottomNavBar: {
-    height: 60,
+    minHeight: 56,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    paddingBottom: Platform.OS === "ios" ? 12 : 2,
+    paddingTop: 4,
   },
   bottomNavItem: {
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
-    height: "100%",
+    paddingVertical: 2,
     position: "relative",
   },
   bottomNavActiveBar: {
@@ -3716,6 +3749,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginTop: 2,
     fontWeight: "600",
+    textAlign: "center",
   },
   bottomNavLabelActive: {
     color: "#0D7A53",
@@ -4037,13 +4071,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#4B5563",
     lineHeight: 16,
+    textAlign: "justify",
   },
   helpWhatsAppBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#0D7A53",
+    backgroundColor: "#25D366",
     height: 44,
     borderRadius: 14,
   },
@@ -4384,5 +4419,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
   },
-
 });

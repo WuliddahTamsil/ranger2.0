@@ -94,9 +94,15 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
   const [promoApplied, setPromoApplied] = useState(false);
   const [driverTip, setDriverTip] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>("cod");
+  const [tempSelectedPayment, setTempSelectedPayment] = useState<PaymentMethod>("cod");
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [digitalPaymentModalVisible, setDigitalPaymentModalVisible] = useState(false);
   const [digitalPaymentOrder, setDigitalPaymentOrder] = useState<any | null>(null);
+
+  const handleOpenPaymentMethodPicker = () => {
+    setTempSelectedPayment(selectedPayment);
+    setPaymentModalVisible(true);
+  };
   const [chatVisible, setChatVisible] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -332,7 +338,21 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
   const completeMarketplaceOrder = async () => {
     if (submitting) return;
     if (!authAccount?.id || !authAccount.name) {
-      alert("Silakan masuk dengan akun customer terlebih dahulu sebelum melakukan pemesanan.");
+      Alert.alert(
+        "Login Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk memproses pesanan Marketplace ini.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk Sekarang",
+            onPress: () =>
+              navigate("login", {
+                targetScreen: "c_marketplace",
+                reason: "Masuk ke akun GEOVERSE untuk menyelesaikan pesanan Marketplace Anda.",
+              }),
+          },
+        ]
+      );
       return;
     }
     const ownerGroups = new Map<string, CartLine[]>();
@@ -673,7 +693,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
           <View style={styles.sectionNumber}><Text style={styles.sectionNumberText}>4</Text></View>
           <View><Text style={styles.checkoutSectionTitle}>Metode Pembayaran</Text><Text style={styles.checkoutSectionHint}>Pilih metode pembayaran yang tersedia</Text></View>
         </View>
-        <TouchableOpacity style={styles.paymentSelectedCard} onPress={() => setPaymentModalVisible(true)}><View style={styles.paymentIcon}><WalletCards size={20} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{selectedPaymentLabel}</Text><Text style={styles.paymentSub}>Ketuk untuk mengganti metode pembayaran</Text></View><ChevronRight size={18} color="#6B7280" /></TouchableOpacity>
+        <TouchableOpacity style={styles.paymentSelectedCard} onPress={handleOpenPaymentMethodPicker}><View style={styles.paymentIcon}><WalletCards size={20} color="#1B7A4E" /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{selectedPaymentLabel}</Text><Text style={styles.paymentSub}>Ketuk untuk mengganti metode pembayaran</Text></View><ChevronRight size={18} color="#6B7280" /></TouchableOpacity>
 
         {/* Section: Tukar GEOVERSE Point */}
         <View style={{ backgroundColor: "#FFFFFF", borderRadius: 14, padding: 14, marginVertical: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
@@ -740,8 +760,8 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
             {submitting
               ? "Memproses…"
               : selectedPayment === "cod"
-              ? `Buat Pesanan COD · ${rp(total)}`
-              : `Lanjut Pembayaran · ${rp(total)}`}
+              ? `Lakukan Pesanan COD · ${rp(total)}`
+              : `Lakukan Pembayaran · ${rp(total)}`}
           </Text>
           <ChevronRight size={18} color="#FFFFFF" />
         </TouchableOpacity>
@@ -917,7 +937,77 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
       </Modal>
 
       <Modal visible={paymentModalVisible} transparent animationType="slide" onRequestClose={() => setPaymentModalVisible(false)}>
-        <View style={styles.modalOverlay}><View style={styles.paymentSheet}><View style={styles.sheetHandle} /><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Pilih Pembayaran</Text><TouchableOpacity onPress={() => setPaymentModalVisible(false)}><X size={20} color="#111827" /></TouchableOpacity></View>{paymentMethods.map((method) => { const selected = selectedPayment === method.id; return <TouchableOpacity key={method.id} disabled={!method.available || submitting} style={[styles.paymentOption, selected && styles.paymentOptionSelected, !method.available && { opacity: 0.48 }]} onPress={() => setSelectedPayment(method.id)}><View style={[styles.paymentIcon, { backgroundColor: `${method.color}15` }]}><WalletCards size={20} color={method.color} /></View><View style={{ flex: 1 }}><Text style={styles.paymentName}>{method.name}</Text><Text style={styles.paymentSub}>{method.subtitle}</Text></View><View style={[styles.radio, selected && styles.radioSelected]}>{selected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}</View></TouchableOpacity>; })}<TouchableOpacity style={[styles.primaryButton, submitting && { opacity: 0.65 }]} disabled={submitting} onPress={completeMarketplaceOrder}><Text style={styles.primaryButtonText}>{submitting ? "Membuat pesanan…" : "Buat Pesanan"}</Text><ChevronRight size={18} color="#FFFFFF" /></TouchableOpacity></View></View>
+        <View style={styles.modalOverlay}>
+          <View style={styles.paymentSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Ubah Metode Pembayaran</Text>
+                <Text style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                  Pilih metode pembayaran yang akan digunakan untuk pesanan ini.
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setPaymentModalVisible(false)}>
+                <X size={20} color="#111827" />
+              </TouchableOpacity>
+            </View>
+            {paymentMethods.map((method) => {
+              const selected = tempSelectedPayment === method.id;
+              return (
+                <TouchableOpacity
+                  key={method.id}
+                  disabled={!method.available}
+                  style={[styles.paymentOption, selected && styles.paymentOptionSelected, !method.available && { opacity: 0.48 }]}
+                  onPress={() => setTempSelectedPayment(method.id)}
+                >
+                  <View style={[styles.paymentIcon, { backgroundColor: `${method.color}15` }]}>
+                    <WalletCards size={20} color={method.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.paymentName}>{method.name}</Text>
+                    <Text style={styles.paymentSub}>{method.subtitle}</Text>
+                  </View>
+                  <View style={[styles.radio, selected && styles.radioSelected]}>
+                    {selected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                onPress={() => setPaymentModalVisible(false)}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#64748B" }}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 2,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: "#0D7A53",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                onPress={() => {
+                  setSelectedPayment(tempSelectedPayment);
+                  setPaymentModalVisible(false);
+                }}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: "700", color: "#FFFFFF" }}>
+                  Lanjutkan Ubah Metode Pembayaran
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       <MarketplaceDigitalPaymentModal

@@ -41,6 +41,7 @@ import { DeliverySlotSelector, DeliverySlotState } from "../../../components/sho
 import { PrescriptionUploadCard } from "../../../components/shop/PrescriptionUploadCard";
 import { MarketplaceDigitalPaymentModal } from "../../../components/MarketplaceDigitalPaymentModal";
 import { rp } from "../../../utils/formatters";
+import { SafeAreaBottomBar } from "../../../components/SafeAreaBottomBar";
 import { validateVoucherForCheckout, fetchMerchantVouchers } from "../../../services/merchantVoucherService";
 import { fetchAvailableVouchers } from "../../../features/geoversePoint/services/geoversePointService";
 
@@ -263,6 +264,21 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
   };
 
   const handlePlaceOrder = async () => {
+    if (!authAccount?.id) {
+      Alert.alert(
+        "Login Diperlukan",
+        "Silakan masuk ke akun GEOVERSE Anda untuk memproses pesanan ini.",
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Masuk / Daftar",
+            onPress: () => (navigate as any)("login", { targetScreen: "c_shop_checkout" }),
+          },
+        ]
+      );
+      return;
+    }
+
     if (!activeStore || items.length === 0) {
       Alert.alert("Perhatian", "Keranjang belanja kosong.");
       return;
@@ -571,7 +587,7 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
       </ScrollView>
 
       {/* Sticky Bottom CTA */}
-      <View style={styles.bottomBar}>
+      <SafeAreaBottomBar absolute style={styles.bottomBar}>
         <View style={styles.bottomTotalCol}>
           <Text style={styles.bottomTotalLabel}>Total Bayar</Text>
           <Text style={styles.bottomTotalVal}>{rp(finalTotalAmount)}</Text>
@@ -588,11 +604,13 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
           ) : (
             <>
               <ShieldCheck size={18} color="#FFFFFF" />
-              <Text style={styles.payButtonText}>Bayar & Pesan Sekarang</Text>
+              <Text style={styles.payButtonText}>
+                {selectedPayment === "CASH" ? "Lakukan Pesanan COD" : `Lakukan Pembayaran • ${rp(finalTotalAmount)}`}
+              </Text>
             </>
           )}
         </TouchableOpacity>
-      </View>
+      </SafeAreaBottomBar>
 
       {/* Voucher Selector Modal */}
       <Modal
@@ -930,7 +948,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 110,
+    paddingBottom: 140,
     gap: 12,
   },
   sectionCard: {
@@ -1191,6 +1209,7 @@ const styles = StyleSheet.create({
   },
   bottomTotalCol: {
     flex: 1,
+    marginRight: 12,
   },
   bottomTotalLabel: {
     fontSize: 11,
@@ -1206,9 +1225,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#15803D",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
+    minHeight: 48,
     borderRadius: 12,
   },
   payButtonDisabled: {

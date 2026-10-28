@@ -26,6 +26,8 @@ import {
   Flame,
   ShoppingBag,
   Bike,
+  Headphones,
+  MessageSquare,
 } from "lucide-react-native";
 import { Product } from "../../types";
 import { rp } from "../../utils/formatters";
@@ -75,6 +77,16 @@ export const Jelajah: React.FC<JelajahProps> = ({
     "Batik Kamojang",
     "Kopi Lokal",
   ];
+
+  const handleOpenWhatsAppCS = () => {
+    const waUrl = "https://wa.me/6281511226089?text=Halo%20Admin%20GEOVERSE%2C%20saya%20butuh%20bantuan%20layanan.";
+    Linking.openURL(waUrl).catch(() => {
+      Alert.alert(
+        "Pusat Bantuan CS",
+        "Silakan hubungi WhatsApp Customer Service resmi kami di nomor +62 815-1122-6089."
+      );
+    });
+  };
 
   const allServices = [
     {
@@ -159,11 +171,10 @@ export const Jelajah: React.FC<JelajahProps> = ({
     {
       id: "bantuan",
       name: "Bantuan & CS",
-      img: require("../../../assets/kanyaah-more.png"),
-      bg: "#F1F5F9",
-      onPress: () => {
-        Linking.openURL("https://wa.me/6287805987309?text=Halo%20Admin%20GEOVERSE%2C%20saya%20butuh%20bantuan%20layanan.").catch(() => {});
-      },
+      icon: Headphones,
+      iconColor: "#0D7A53",
+      bg: "#DCFCE7",
+      onPress: handleOpenWhatsAppCS,
     },
   ];
 
@@ -235,6 +246,36 @@ export const Jelajah: React.FC<JelajahProps> = ({
               </Text>
             </TouchableOpacity>
           ))}
+        </View>
+
+        {/* Fitur Bantuan & Layanan CS Card */}
+        <View style={styles.helpCsCard}>
+          <View style={styles.helpCsHeader}>
+            <View style={styles.helpCsIconWrapper}>
+              <Headphones size={22} color="#FFFFFF" />
+            </View>
+            <View style={styles.helpCsHeaderText}>
+              <View style={styles.helpCsBadgeRow}>
+                <View style={styles.helpCsBadge}>
+                  <View style={styles.onlineDot} />
+                  <Text style={styles.helpCsBadgeText}>Admin Online 24 Jam</Text>
+                </View>
+              </View>
+              <Text style={styles.helpCsTitle}>Pusat Bantuan & Layanan CS</Text>
+              <Text style={styles.helpCsSubtitle}>
+                Butuh bantuan pesanan, panduan layanan, atau kendala aplikasi? Hubungi admin resmi GEOVERSE via WhatsApp (+62 815-1122-6089).
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.helpCsButton}
+            onPress={handleOpenWhatsAppCS}
+            activeOpacity={0.85}
+          >
+            <MessageSquare size={16} color="#FFFFFF" />
+            <Text style={styles.helpCsButtonText}>Chat WhatsApp Admin (+62 815-1122-6089)</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Popular Searches */}
@@ -626,6 +667,95 @@ const styles = StyleSheet.create({
   addToCartBtnText: {
     color: "#FFFFFF",
     fontSize: 12,
+    fontWeight: "800",
+  },
+  helpCsCard: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "#BBF7D0",
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: "#059669",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  helpCsHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 14,
+  },
+  helpCsIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#0D7A53",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  helpCsHeaderText: {
+    flex: 1,
+  },
+  helpCsBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  helpCsBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    gap: 5,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#16A34A",
+  },
+  helpCsBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#15803D",
+  },
+  helpCsTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#064E3B",
+    marginBottom: 4,
+  },
+  helpCsSubtitle: {
+    fontSize: 11.5,
+    color: "#047857",
+    lineHeight: 16,
+    textAlign: "justify",
+  },
+  helpCsButton: {
+    backgroundColor: "#25D366",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: "#25D366",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  helpCsButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
     fontWeight: "800",
   },
 });

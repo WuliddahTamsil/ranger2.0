@@ -1056,7 +1056,6 @@ const cancelRideOrder = async (req, res) => {
     if (pointsToRefund > 0 && order.customerId && !order.pointRefunded) {
       order.pointRefunded = true;
       order.reversalIdempotencyKey = `REV-RIDE-${order.orderCode}`;
-      await order.save();
 
       await pointWalletService.reversePoints({
         userId: order.customerId,
@@ -1068,6 +1067,8 @@ const cancelRideOrder = async (req, res) => {
         actorId: String(authUser?._id || ""),
       }).catch((err) => console.error("Error reversing ride points:", err));
     }
+
+    await order.save();
 
     // Release driver if assigned
     if (order.driverId && isValidUserId(order.driverId)) {
