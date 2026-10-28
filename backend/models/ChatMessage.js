@@ -1,5 +1,23 @@
 const mongoose = require("mongoose");
 
+const attachmentSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ["image", "video", "file"],
+      default: "image",
+    },
+    uri: { type: String, default: "" },
+    url: { type: String, default: "" },
+    name: { type: String, default: "" },
+    size: { type: String, default: "" },
+    duration: { type: Number },
+    thumbnailUrl: { type: String, default: "" },
+    mimeType: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const chatMessageSchema = new mongoose.Schema(
   {
     conversationId: {
@@ -15,8 +33,10 @@ const chatMessageSchema = new mongoose.Schema(
     customerId: { type: String, default: "", index: true },
     ownerId: { type: String, default: "", index: true },
     storeId: { type: String, default: "" },
-    senderId: { type: String, required: true },
-    receiverId: { type: String, required: true },
+    senderId: { type: String, required: true, index: true },
+    senderName: { type: String, default: "" },
+    senderPhoto: { type: String, default: "" },
+    receiverId: { type: String, required: true, index: true },
     channel: {
       type: String,
       enum: ["customer_driver", "driver_owner", "customer_owner", "general"],
@@ -39,16 +59,8 @@ const chatMessageSchema = new mongoose.Schema(
       default: "",
     },
     attachment: {
-      type: {
-        type: String,
-        enum: ["image", "video", "file"],
-      },
-      uri: String,
-      name: String,
-      size: String,
-      duration: Number,
-      thumbnailUrl: String,
-      mimeType: String,
+      type: attachmentSchema,
+      default: null,
     },
     isRead: {
       type: Boolean,
@@ -64,5 +76,12 @@ const chatMessageSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// High-speed compound indexes for instant chat history querying and zero-lag sorting
+chatMessageSchema.index({ orderId: 1, createdAt: 1 });
+chatMessageSchema.index({ conversationId: 1, createdAt: 1 });
+chatMessageSchema.index({ orderId: 1, channel: 1, createdAt: 1 });
+chatMessageSchema.index({ receiverId: 1, isRead: 1 });
+chatMessageSchema.index({ senderId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("ChatMessage", chatMessageSchema);

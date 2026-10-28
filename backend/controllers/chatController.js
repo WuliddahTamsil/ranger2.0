@@ -3,6 +3,7 @@ const ChatMessage = require("../models/ChatMessage");
 const Conversation = require("../models/Conversation");
 const Notification = require("../models/Notification");
 const User = require("../models/User");
+const { uploadToCloudinary } = require("../config/cloudinary");
 const {
   findOrderByIdentifier,
   getOrderParticipants,
@@ -12,17 +13,32 @@ const {
   normalizeRole,
   isArchivedStatus,
   ownerRoles,
+  clearCachedOrder,
 } = require("../utils/chatAccess");
 
 const roomForOrder = (orderId) => `conversation:${String(orderId)}`;
 
-const getAuthorizedConversation = async (req, orderId) => {
+const getAuthorizedConversation = async (req, orderId, { forWrite = false } = {}) => {
   const record = await findOrderByIdentifier(orderId);
   if (!record) return { error: "Order chat tidak ditemukan", status: 404 };
-  const participant = await resolveParticipant(req.authUser._id, record);
+  const participant = await resolveParticipant(req.authUser, record);
   if (!participant) return { error: "Akun tidak terhubung dengan order ini", status: 403 };
 
+  // For read operations, if a conversation document already exists, return it immediately without a slow DB write!
+  if (!forWrite && record.conversation) {
+    return { record, participant, conversation: record.conversation };
+  }
+
   const participants = getOrderParticipants(record);
+
+  // If already in DB and not a forced write, check if Conversation is already saved
+  if (!forWrite) {
+    const existing = await Conversation.findOne({ orderId: String(record.order._id) }).lean();
+    if (existing) {
+      return { record, participant, conversation: existing };
+    }
+  }
+
   const conversation = await Conversation.findOneAndUpdate(
     { orderId: String(record.order._id) },
     {
@@ -46,14 +62,59 @@ const getAuthorizedConversation = async (req, orderId) => {
 
 const getConversation = async (req, res) => {
   try {
-    const result = await getAuthorizedConversation(req, req.params.orderId);
+    const result = await getAuthorizedConversation(req, req.params.orderId, { forWrite: false });
     if (result.error) return res.status(result.status).json({ success: false, message: result.error });
+
+    const convObj = typeof result.conversation.toObject === "function"
+      ? result.conversation.toObject()
+      : result.conversation;
+
+    // Resolve profile photos and names for all participants
+    const userIds = [convObj.customerId, convObj.driverId, convObj.ownerId].filter(
+      (id) => id && mongoose.Types.ObjectId.isValid(id)
+    );
+    const users = await User.find({ _id: { $in: userIds } }).select("name profilePhoto phone role").lean();
+    const userMap = new Map(users.map((u) => [String(u._id), u]));
+
+    const custUser = userMap.get(String(convObj.customerId));
+    const drvUser = userMap.get(String(convObj.driverId));
+    const ownerUser = userMap.get(String(convObj.ownerId));
+
+    const callerRole = result.participant.role;
+    let participantName = "Mitra GEOVERSE";
+    let participantPhoto = "";
+
+    if (callerRole === "customer") {
+      if (convObj.driverId && drvUser) {
+        participantName = drvUser.name || "Driver GEOVERSE";
+        participantPhoto = drvUser.profilePhoto || "";
+      } else if (ownerUser) {
+        participantName = ownerUser.name || "Pemilik Toko";
+        participantPhoto = ownerUser.profilePhoto || "";
+      }
+    } else if (callerRole === "driver") {
+      participantName = custUser?.name || "Pelanggan";
+      participantPhoto = custUser?.profilePhoto || "";
+    } else {
+      // owner
+      participantName = custUser?.name || "Pelanggan";
+      participantPhoto = custUser?.profilePhoto || "";
+    }
+
     return res.json({
       success: true,
       data: {
-        ...result.conversation.toObject(),
+        ...convObj,
         participantRole: result.participant.role,
-        canSend: !isArchivedStatus(result.conversation.status),
+        canSend: !isArchivedStatus(convObj.status),
+        customerName: custUser?.name || "Pelanggan",
+        customerPhoto: custUser?.profilePhoto || "",
+        driverName: drvUser?.name || "Driver GEOVERSE",
+        driverPhoto: drvUser?.profilePhoto || "",
+        ownerName: ownerUser?.name || "Pemilik",
+        ownerPhoto: ownerUser?.profilePhoto || "",
+        participantName,
+        participantPhoto,
       },
     });
   } catch (error) {
@@ -67,7 +128,7 @@ const sendChatMessage = async (req, res) => {
     const { orderId, text, attachment, target, conversationId } = req.body;
     if (!orderId) return res.status(400).json({ success: false, message: "orderId wajib diisi" });
 
-    const result = await getAuthorizedConversation(req, orderId);
+    const result = await getAuthorizedConversation(req, orderId, { forWrite: true });
     if (result.error) return res.status(result.status).json({ success: false, message: result.error });
     const { record, participant, conversation } = result;
 
@@ -89,52 +150,100 @@ const sendChatMessage = async (req, res) => {
       ? "customer_driver"
       : resolveChatChannel(participant.role, normalizedTarget);
 
+    // Process attachment: If image is base64 or local URI, auto-upload to Cloudinary permanently!
+    let processedAttachment = attachment ? { ...attachment } : null;
+    if (processedAttachment) {
+      const rawUri = String(processedAttachment.uri || "");
+      const isBase64 = rawUri.startsWith("data:") || Boolean(processedAttachment.base64);
+
+      if (isBase64) {
+        try {
+          const rawPayload = processedAttachment.base64 || rawUri;
+          const match = rawPayload.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+          const mimeType = match ? match[1] : (processedAttachment.mimeType || "image/jpeg");
+          const base64Data = match ? match[2] : rawPayload;
+          const fileBuffer = Buffer.from(base64Data, "base64");
+          const hostUrl = req.hostUrl || `http://localhost:${process.env.PORT || 5000}`;
+          const uploadRes = await uploadToCloudinary(
+            fileBuffer,
+            processedAttachment.name || `chat_${Date.now()}.jpg`,
+            mimeType,
+            hostUrl
+          );
+          if (uploadRes && uploadRes.viewUrl) {
+            processedAttachment.uri = uploadRes.viewUrl;
+            processedAttachment.thumbnailUrl = uploadRes.viewUrl;
+            delete processedAttachment.base64; // Don't store multi-megabyte base64 in MongoDB
+          }
+        } catch (uploadErr) {
+          console.warn("Auto-upload chat attachment to Cloudinary fallback:", uploadErr.message);
+        }
+      }
+    }
+
+    const senderPhoto = req.authUser?.profilePhoto || "";
+    const senderName = req.authUser?.name || (participant.role === "driver" ? "Driver GEOVERSE" : participant.role === "customer" ? "Pelanggan" : "Toko");
+
     const message = await ChatMessage.create({
       conversationId: conversation._id,
       orderId: String(record.order._id),
       channel,
       sender: participant.role,
       senderId: String(req.authUser._id),
+      senderName,
+      senderPhoto,
       receiverId,
       customerId: participant.customerId,
       ownerId: participant.ownerId,
       storeId: participant.storeId,
       target: normalizedTarget,
       text: String(text || "").trim(),
-      attachment: attachment || undefined,
+      attachment: processedAttachment || undefined,
     });
 
-    conversation.lastMessageAt = new Date();
-    await conversation.save();
+    const lastText = text || (processedAttachment ? "📷 Lampiran foto" : "Pesan baru");
+    // Update conversation metadata
+    Conversation.findByIdAndUpdate(conversation._id, {
+      $set: {
+        lastMessageAt: new Date(),
+        lastMessageText: lastText,
+      },
+    }).catch((err) => console.warn("Update conversation lastMessage error:", err.message));
+
+    // Non-blocking notification creation
     if (mongoose.Types.ObjectId.isValid(receiverId)) {
-      await Notification.create({
+      Notification.create({
         userId: receiverId,
-        title: "Pesan baru",
-        message: `Ada pesan baru terkait pesanan ${participant.orderCode || record.order._id}.`,
+        title: `Pesan baru dari ${senderName}`,
+        message: text ? (text.length > 60 ? `${text.slice(0, 57)}...` : text) : (processedAttachment ? "📷 Mengirim lampiran foto" : "Ada pesan baru terkait pesanan."),
         type: "general",
         relatedId: mongoose.Types.ObjectId.isValid(String(record.order._id)) ? record.order._id : undefined,
-      });
+      }).catch((err) => console.warn("Chat notification error:", err.message));
     }
+
+    // Realtime broadcast via Socket.io
     if (req.io) {
-      req.io.to(roomForOrder(record.order._id)).emit("chat:message", message);
-      req.io.to(`${roomForOrder(record.order._id)}:${channel}`).emit("chat:message", message);
-      if (orderId && String(orderId) !== String(record.order._id)) {
+      const orderRoomId = String(record.order._id);
+      req.io.to(roomForOrder(orderRoomId)).emit("chat:message", message);
+      req.io.to(`${roomForOrder(orderRoomId)}:${channel}`).emit("chat:message", message);
+      if (orderId && String(orderId) !== orderRoomId) {
         req.io.to(roomForOrder(orderId)).emit("chat:message", message);
         req.io.to(`${roomForOrder(orderId)}:${channel}`).emit("chat:message", message);
       }
-      if (participant.orderCode && participant.orderCode !== String(record.order._id)) {
+      if (participant.orderCode && participant.orderCode !== orderRoomId) {
         req.io.to(roomForOrder(participant.orderCode)).emit("chat:message", message);
         req.io.to(`${roomForOrder(participant.orderCode)}:${channel}`).emit("chat:message", message);
       }
       if (receiverId) {
         req.io.to(`user:${String(receiverId)}`).emit("chat:message", message);
         req.io.to(`user:${String(receiverId)}`).emit("chat:notification", {
-          orderId: String(record.order._id),
+          orderId: orderRoomId,
           orderCode: participant.orderCode,
           message,
         });
       }
     }
+
     return res.status(201).json({ success: true, data: message, conversationId: conversation._id });
   } catch (error) {
     console.error("Send chat message error:", error);
@@ -144,7 +253,7 @@ const sendChatMessage = async (req, res) => {
 
 const getChatMessages = async (req, res) => {
   try {
-    const result = await getAuthorizedConversation(req, req.params.orderId);
+    const result = await getAuthorizedConversation(req, req.params.orderId, { forWrite: false });
     if (result.error) return res.status(result.status).json({ success: false, message: result.error });
 
     const callerRole = normalizeRole(req.query.role || result.participant.role);
@@ -176,7 +285,6 @@ const getChatMessages = async (req, res) => {
           {
             $or: [
               { channel: requestedChannel },
-              // Backward compatibility for legacy or unmigrated messages
               ...(requestedChannel === "customer_driver"
                 ? [
                     { channel: { $in: [null, "general", "driver_owner"] }, sender: "customer", target: "driver" },
@@ -210,13 +318,39 @@ const getChatMessages = async (req, res) => {
       };
     }
 
-    const messages = await ChatMessage.find(query).sort({ createdAt: 1 });
+    // Fast indexed query with lean()
+    const messages = await ChatMessage.find(query).sort({ createdAt: 1 }).lean();
+
+    // Batch resolve sender profile photos for any messages that don't have senderPhoto stored
+    const missingSenderIds = Array.from(
+      new Set(
+        messages
+          .filter((m) => !m.senderPhoto && m.senderId && mongoose.Types.ObjectId.isValid(m.senderId))
+          .map((m) => String(m.senderId))
+      )
+    );
+
+    let senderMap = new Map();
+    if (missingSenderIds.length > 0) {
+      const senders = await User.find({ _id: { $in: missingSenderIds } }).select("name profilePhoto role").lean();
+      senderMap = new Map(senders.map((u) => [String(u._id), u]));
+    }
+
+    const enrichedMessages = messages.map((m) => {
+      const user = senderMap.get(String(m.senderId));
+      return {
+        ...m,
+        senderName: m.senderName || user?.name || (m.sender === "driver" ? "Driver GEOVERSE" : m.sender === "customer" ? "Pelanggan" : "Toko"),
+        senderPhoto: m.senderPhoto || user?.profilePhoto || "",
+      };
+    });
+
     return res.json({
       success: true,
-      count: messages.length,
+      count: enrichedMessages.length,
       channel: requestedChannel || "all",
       conversationId: result.conversation._id,
-      data: messages,
+      data: enrichedMessages,
     });
   } catch (error) {
     console.error("Get chat messages error:", error);
@@ -274,6 +408,17 @@ const getConversations = async (req, res) => {
       }
     }
 
+    // High performance batch user lookup (1 query instead of 120 sequential User.findById queries!)
+    const allUserIds = new Set();
+    conversations.forEach((conv) => {
+      if (conv.customerId && mongoose.Types.ObjectId.isValid(conv.customerId)) allUserIds.add(String(conv.customerId));
+      if (conv.driverId && mongoose.Types.ObjectId.isValid(conv.driverId)) allUserIds.add(String(conv.driverId));
+      if (conv.ownerId && mongoose.Types.ObjectId.isValid(conv.ownerId)) allUserIds.add(String(conv.ownerId));
+    });
+
+    const userList = await User.find({ _id: { $in: Array.from(allUserIds) } }).select("name email phone profilePhoto role").lean();
+    const userMap = new Map(userList.map((u) => [String(u._id), u]));
+
     const result = await Promise.all(
       conversations.map(async (conv) => {
         const lastMsg = await ChatMessage.findOne({
@@ -281,9 +426,6 @@ const getConversations = async (req, res) => {
         })
           .sort({ createdAt: -1 })
           .lean();
-
-        let customerName = "Pelanggan";
-        let driverName = "Driver GEOVERSE";
 
         let effectiveCustId = conv.customerId;
         if (!effectiveCustId && lastMsg?.customerId) {
@@ -293,14 +435,28 @@ const getConversations = async (req, res) => {
           effectiveCustId = String(lastMsg.senderId);
         }
 
-        if (effectiveCustId && mongoose.Types.ObjectId.isValid(effectiveCustId)) {
-          const custUser = await User.findById(effectiveCustId).select("name email phone").lean();
-          if (custUser?.name) customerName = custUser.name;
-        }
+        const custUser = userMap.get(String(effectiveCustId));
+        const drvUser = userMap.get(String(conv.driverId));
+        const ownerUser = userMap.get(String(conv.ownerId));
 
-        if (conv.driverId && mongoose.Types.ObjectId.isValid(conv.driverId)) {
-          const drvUser = await User.findById(conv.driverId).select("name email phone").lean();
-          if (drvUser?.name) driverName = drvUser.name;
+        const customerName = custUser?.name || "Pelanggan";
+        const customerPhoto = custUser?.profilePhoto || "";
+        const driverName = drvUser?.name || "Driver GEOVERSE";
+        const driverPhoto = drvUser?.profilePhoto || "";
+        const ownerName = ownerUser?.name || "Pemilik Toko";
+        const ownerPhoto = ownerUser?.profilePhoto || "";
+
+        let participantName = customerName;
+        let participantPhoto = customerPhoto;
+
+        if (userRole === "customer") {
+          if (conv.driverId && drvUser) {
+            participantName = driverName;
+            participantPhoto = driverPhoto;
+          } else if (ownerUser) {
+            participantName = ownerName;
+            participantPhoto = ownerPhoto;
+          }
         }
 
         return {
@@ -310,15 +466,21 @@ const getConversations = async (req, res) => {
           orderType: conv.orderType || "general",
           customerId: conv.customerId || effectiveCustId,
           customerName,
+          customerPhoto,
           driverId: conv.driverId,
           driverName,
+          driverPhoto,
           ownerId: conv.ownerId,
+          ownerName,
+          ownerPhoto,
+          participantName,
+          participantPhoto,
           status: conv.status || "active",
-          lastMessage: lastMsg?.text || (lastMsg?.attachment ? "📷 Lampiran dikirim" : "Mulai percakapan"),
+          lastMessage: lastMsg?.text || (lastMsg?.attachment ? "📷 Lampiran foto" : conv.lastMessageText || "Mulai percakapan"),
           lastMessageTime: lastMsg?.createdAt
             ? new Date(lastMsg.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
             : "",
-          lastMessageDate: lastMsg?.createdAt || conv.updatedAt || new Date(),
+          lastMessageDate: lastMsg?.createdAt || conv.lastMessageAt || conv.updatedAt || new Date(),
           unreadCount: 0,
         };
       })
@@ -333,4 +495,60 @@ const getConversations = async (req, res) => {
   }
 };
 
-module.exports = { getConversation, sendChatMessage, getChatMessages, getConversations, roomForOrder };
+const uploadChatAttachment = async (req, res) => {
+  try {
+    let fileBuffer = null;
+    let originalName = "chat_attachment.jpg";
+    let mimeType = "image/jpeg";
+
+    if (req.file) {
+      fileBuffer = req.file.buffer;
+      originalName = req.file.originalname || "chat_attachment.jpg";
+      mimeType = req.file.mimetype || "image/jpeg";
+    } else if (req.files && req.files.length > 0) {
+      fileBuffer = req.files[0].buffer;
+      originalName = req.files[0].originalname || "chat_attachment.jpg";
+      mimeType = req.files[0].mimetype || "image/jpeg";
+    } else if (req.body && (req.body.base64 || req.body.image || req.body.dataUrl)) {
+      const rawBase64 = String(req.body.base64 || req.body.image || req.body.dataUrl);
+      const match = rawBase64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (match) {
+        mimeType = match[1];
+        fileBuffer = Buffer.from(match[2], "base64");
+      } else {
+        mimeType = req.body.mimeType || "image/jpeg";
+        fileBuffer = Buffer.from(rawBase64, "base64");
+      }
+      originalName = req.body.name || req.body.fileName || `chat_${Date.now()}.jpg`;
+    } else {
+      return res.status(400).json({ success: false, message: "Tidak ada file atau foto yang diunggah" });
+    }
+
+    const hostUrl = req.hostUrl || `http://localhost:${process.env.PORT || 5000}`;
+    const result = await uploadToCloudinary(fileBuffer, originalName, mimeType, hostUrl);
+
+    return res.status(200).json({
+      success: true,
+      message: "Lampiran berhasil diunggah",
+      data: {
+        fileId: result.fileId,
+        fileName: result.name,
+        url: result.viewUrl,
+        viewUrl: result.viewUrl,
+        storage: result.storage,
+      },
+    });
+  } catch (error) {
+    console.error("Upload chat attachment error:", error);
+    return res.status(500).json({ success: false, message: "Gagal mengunggah lampiran chat", error: error.message });
+  }
+};
+
+module.exports = {
+  getConversation,
+  sendChatMessage,
+  getChatMessages,
+  getConversations,
+  uploadChatAttachment,
+  roomForOrder,
+};

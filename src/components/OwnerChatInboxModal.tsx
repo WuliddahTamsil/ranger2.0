@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Image,
 } from "react-native";
 import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
 import {
@@ -33,9 +34,13 @@ export interface OwnerConversationItem {
   orderType: string;
   customerId?: string;
   customerName: string;
+  customerPhoto?: string;
   driverId?: string;
   driverName?: string;
+  driverPhoto?: string;
   ownerId?: string;
+  ownerPhoto?: string;
+  participantPhoto?: string;
   status: string;
   lastMessage: string;
   lastMessageTime: string;
@@ -154,6 +159,7 @@ export const OwnerChatInboxModal: React.FC<OwnerChatInboxModalProps> = ({
         }}
         orderId={selectedChat.orderId}
         participantName={selectedChat.customerName || "Pelanggan"}
+        participantPhoto={selectedChat.customerPhoto || selectedChat.participantPhoto}
         participantType="customer"
         orderType={selectedChat.orderType}
         currentUserRole="owner"
@@ -265,9 +271,16 @@ export const OwnerChatInboxModal: React.FC<OwnerChatInboxModalProps> = ({
                   activeOpacity={0.85}
                 >
                   {/* Left Avatar */}
-                  <View style={styles.avatarCircle}>
-                    <User size={22} color="#0D7A53" />
-                  </View>
+                  {item.customerPhoto || item.participantPhoto ? (
+                    <Image
+                      source={{ uri: item.customerPhoto || item.participantPhoto }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <View style={styles.avatarCircle}>
+                      <User size={22} color="#0D7A53" />
+                    </View>
+                  )}
 
                   {/* Center Details */}
                   <View style={styles.cardBody}>
@@ -447,6 +460,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#DCFCE7",
     alignItems: "center",
     justifyContent: "center",
+  },
+  avatarImage: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
   },
   cardBody: {
     flex: 1,

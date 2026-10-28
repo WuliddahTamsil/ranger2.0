@@ -1,5 +1,35 @@
+import './src/suppressWarnings';
 import { registerRootComponent } from 'expo';
-import { Text, TextInput } from 'react-native';
+import { LogBox, Text, TextInput } from 'react-native';
+
+// Suppress benign React Native Web / framework warnings globally at entrypoint
+const IGNORED_WARNING_PATTERNS = [
+  '"shadow*" style props are deprecated',
+  'props.pointerEvents is deprecated',
+  'Cannot record touch end without a touch start',
+  'Download the React DevTools',
+  'defaultProps will be removed',
+  'Failed prop type',
+];
+
+LogBox.ignoreLogs(IGNORED_WARNING_PATTERNS);
+
+if (typeof console !== 'undefined' && console.warn) {
+  const originalConsoleWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    try {
+      const message = args
+        .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg || '')))
+        .join(' ');
+      if (IGNORED_WARNING_PATTERNS.some((pattern) => message.includes(pattern))) {
+        return;
+      }
+    } catch {
+      // ignore serialization error
+    }
+    originalConsoleWarn(...args);
+  };
+}
 
 // ============================================================================
 // GLOBAL CRASH-GUARD SHIMS (Hermes Android & React Native Safe)

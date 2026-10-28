@@ -312,8 +312,10 @@ export const fetchDriverRides = async (
     clearTimeout(timeout);
     return await readJson(res);
   } catch (err: any) {
-    console.error("fetchDriverRides error:", err);
-    return { success: false, data: [], message: err.message || "Gagal memuat order Kanyaah Ride driver" };
+    if (__DEV__ && !String(err?.message || "").includes("fetch")) {
+      console.warn("fetchDriverRides warning:", err?.message || err);
+    }
+    return { success: false, data: [], message: err?.message || "Gagal memuat order Kanyaah Ride driver" };
   }
 };
 

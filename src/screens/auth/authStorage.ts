@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthAccount, AuthSession } from "./authTypes";
+import { invalidateAuthCache } from "../../services/api";
 
 const ACCOUNTS_KEY = "rangers.auth.accounts.v1";
 const SESSION_KEY = "rangers.auth.session.v1";
@@ -488,6 +489,7 @@ export const loadAccounts = async (): Promise<AuthAccount[]> => {
 };
 
 export const saveAccounts = async (accounts: AuthAccount[]) => {
+  invalidateAuthCache();
   await AsyncStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 };
 
@@ -502,9 +504,11 @@ export const loadSession = async (): Promise<AuthSession | null> => {
 };
 
 export const saveSession = async (session: AuthSession) => {
+  invalidateAuthCache();
   await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
 };
 
 export const clearSession = async () => {
+  invalidateAuthCache();
   await AsyncStorage.removeItem(SESSION_KEY);
 };

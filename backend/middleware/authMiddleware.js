@@ -17,6 +17,11 @@ const SEED_EMAIL_MAP = {
   marketplace_seed_002: "dyva123@gmail.com",
   bank_sampah_seed_001: "banksampah@geoverse.com",
   bank_sampah_seed_pakuan: "agalagan@gmail.com",
+  laundry_seed_001: "aisl@gmail.com",
+  kos_seed_001: "kosan@gmail.com",
+  admin_seed_001: "ranger@gmail.com",
+  admin_geoverse_001: "admin@geoverse.com",
+  admin_generic_002: "admin@gmail.com",
 };
 
 const resolveSeedUser = async (seedId) => {
@@ -36,6 +41,24 @@ const resolveSeedUser = async (seedId) => {
   }
   if (cleanId === "customer_seed_001") {
     return await User.findOne({ role: "customer" }).lean();
+  }
+  if (cleanId === "laundry_seed_001") {
+    return await User.findOne({ role: "pemilik_laundry" }).lean();
+  }
+  if (cleanId === "kos_seed_001") {
+    return await User.findOne({ role: "pemilik_kos" }).lean();
+  }
+  if (cleanId === "admin_seed_001" || cleanId.startsWith("admin_")) {
+    return await User.findOne({ role: "admin" }).lean();
+  }
+  if (cleanId === "driver_seed_001") {
+    return await User.findOne({ role: "driver" }).lean();
+  }
+  if (cleanId === "bank_sampah_seed_001" || cleanId === "bank_sampah_seed_pakuan") {
+    return await User.findOne({ role: "bank_sampah" }).lean();
+  }
+  if (cleanId.startsWith("marketplace_seed_")) {
+    return await User.findOne({ role: { $in: ["pemilik_marketplace", "pemilik_shop"] } }).lean();
   }
   return null;
 };

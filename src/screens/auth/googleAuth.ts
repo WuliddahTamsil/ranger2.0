@@ -1,20 +1,29 @@
 import { GoogleProfile } from "./authTypes";
 import { Platform } from "react-native";
 
-const readClientId = (value: unknown) => typeof value === "string" ? value.trim() : "";
+const DEFAULT_WEB_CLIENT_ID = "409515412776-oa8u9l8hvlr9ahgj7u69nhvlgepm006u.apps.googleusercontent.com";
+const DEFAULT_ANDROID_CLIENT_ID = "409515412776-85khlnbqile0gohn5ff7f1o0c8tcs9sp.apps.googleusercontent.com";
+
+const readClientId = (value: unknown, fallback = "") => {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  return fallback;
+};
 
 export const googleClientIds = {
+  clientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, DEFAULT_WEB_CLIENT_ID),
   expoClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID),
   iosClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID),
-  androidClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID),
-  webClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID),
+  androidClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID, DEFAULT_ANDROID_CLIENT_ID),
+  webClientId: readClientId(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, DEFAULT_WEB_CLIENT_ID),
 };
 
 const activeClientId = Platform.OS === "web"
   ? googleClientIds.webClientId
   : Platform.OS === "ios"
-    ? googleClientIds.iosClientId
-    : googleClientIds.androidClientId;
+    ? (googleClientIds.iosClientId || googleClientIds.webClientId)
+    : (googleClientIds.androidClientId || googleClientIds.webClientId);
 
 import { makeRedirectUri } from "expo-auth-session";
 
@@ -22,7 +31,10 @@ export const getGoogleRedirectUri = () => {
   if (Platform.OS === "web") {
     return makeRedirectUri();
   }
-  return makeRedirectUri({ scheme: "geoverse" });
+  return makeRedirectUri({
+    native: "com.wuliddah_tamsil.the_ranger_react_native:/oauthredirect",
+    scheme: "geoverse",
+  });
 };
 
 export const hasGoogleClientId = Boolean(activeClientId);

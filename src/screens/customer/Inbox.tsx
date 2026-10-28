@@ -10,6 +10,7 @@ import {
   FlatList,
   Modal,
   TextInput,
+  Image,
 } from "react-native";
 import {
   Bell,
@@ -331,9 +332,13 @@ export const Inbox: React.FC<InboxProps> = ({
                 onPress={() => openChatThread(item)}
                 activeOpacity={0.8}
               >
-                <View style={[styles.chatAvatar, { backgroundColor: isDriver ? "#E8F5EE" : "#FFF3E0" }]}>
-                  <IconComp size={20} color={isDriver ? "#1B7A4E" : "#D97706"} />
-                </View>
+                {item.participantPhoto ? (
+                  <Image source={{ uri: item.participantPhoto }} style={styles.chatAvatarImage} />
+                ) : (
+                  <View style={[styles.chatAvatar, { backgroundColor: isDriver ? "#E8F5EE" : "#FFF3E0" }]}>
+                    <IconComp size={20} color={isDriver ? "#1B7A4E" : "#D97706"} />
+                  </View>
+                )}
 
                 <View style={styles.chatBody}>
                   <View style={styles.chatHeaderRow}>
@@ -375,6 +380,7 @@ export const Inbox: React.FC<InboxProps> = ({
           onClose={() => setChatModalVisible(false)}
           orderId={selectedThread.orderId}
           participantName={selectedThread.participantName}
+          participantPhoto={selectedThread.participantPhoto}
           participantType={selectedThread.participantType}
           currentUserRole="customer"
         />
@@ -504,6 +510,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+  },
+  chatAvatarImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 12,
+    backgroundColor: "#E5E7EB",
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
   },
   chatBody: {
     flex: 1,

@@ -568,7 +568,7 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
           orderStatus === "Dikirim" ||
           orderStatus === "Sampai Pickup" ||
           effectiveNavigating) && (
-          <View style={[styles.mapLiveBadge, effectiveNavigating && styles.mapLiveBadgeNavigating]} pointerEvents="none">
+          <View style={[styles.mapLiveBadge, effectiveNavigating && styles.mapLiveBadgeNavigating, { pointerEvents: "none" }]}>
             <View style={[styles.mapLiveDot, effectiveNavigating && styles.mapLiveDotNavigating]} />
             <Text style={styles.mapLiveText}>
               {effectiveNavigating ? `NAVIGASI AKTIF • ${simulatedSpeed} KM/J` : "LIVE TRACKING AKTIF"}
@@ -579,10 +579,10 @@ const InteractiveLiveOrderTrackingMap: React.FC<LiveOrderTrackingMapProps> = ({
         {/* Driver Motorcycle Indicator Overlay - only shown when navigation is active */}
         {effectiveNavigating && (
           <View
-            pointerEvents="none"
             style={[
               styles.motorcycleMarkerOverlay,
               {
+                pointerEvents: "none",
                 left: `${Math.round(markerPos.x)}%`,
                 top: `${Math.round(markerPos.y)}%`,
               },

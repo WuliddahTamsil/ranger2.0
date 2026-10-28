@@ -237,8 +237,10 @@ export const fetchAvailableSendOrders = async (
     });
     return await parseJsonResponse(res, "Gagal memuat order pengiriman");
   } catch (error: any) {
-    console.error("fetchAvailableSendOrders error:", error);
-    return { success: false, message: error.message || "Gagal memuat order pengiriman yang tersedia." };
+    if (__DEV__ && !String(error?.message || "").includes("fetch")) {
+      console.warn("fetchAvailableSendOrders warning:", error?.message || error);
+    }
+    return { success: false, data: [], message: error?.message || "Gagal memuat order pengiriman yang tersedia." };
   }
 };
 
@@ -430,8 +432,10 @@ export const fetchDriverSendOrders = async (
     });
     return await parseJsonResponse(res, "Gagal memuat daftar pesanan driver");
   } catch (error: any) {
-    console.error("fetchDriverSendOrders error:", error);
-    return { success: false, message: error.message || "Gagal memuat riwayat order pengiriman." };
+    if (__DEV__ && !String(error?.message || "").includes("fetch")) {
+      console.warn("fetchDriverSendOrders warning:", error?.message || error);
+    }
+    return { success: false, data: [], message: error?.message || "Gagal memuat riwayat order pengiriman." };
   }
 };
 

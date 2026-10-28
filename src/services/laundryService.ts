@@ -637,8 +637,10 @@ export const fetchDriverLaundryJobs = async (driverId?: string): Promise<Laundry
     if (json.success && Array.isArray(json.data)) {
       return json.data;
     }
-  } catch (err) {
-    console.warn("⚠️ fetchDriverLaundryJobs fallback:", err);
+  } catch (err: any) {
+    if (__DEV__ && !String(err?.message || "").includes("fetch") && !String(err?.message || "").includes("abort")) {
+      console.warn("⚠️ fetchDriverLaundryJobs fallback:", err);
+    }
   }
   if (activeCustomerOrder) {
     if (

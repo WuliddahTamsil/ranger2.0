@@ -2525,6 +2525,7 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
           currentUserRole="driver"
           participantType="customer"
           participantName={chatTargetOrder.customer}
+          participantPhoto={(chatTargetOrder as any).customerPhoto || (chatTargetOrder as any).photo}
           customerId={authAccount?.id}
           orderType={chatTargetOrder.serviceType || "RIDE"}
           serviceType={chatTargetOrder.serviceType || "KANYAAH_RIDE"}

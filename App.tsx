@@ -1,9 +1,33 @@
 import React, { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, View, LogBox } from "react-native";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { Screen } from "./src/types";
+
+// Suppress known benign React Native Web deprecation warnings in terminal & console
+LogBox.ignoreLogs([
+  '"shadow*" style props are deprecated',
+  'props.pointerEvents is deprecated',
+  'Cannot record touch end without a touch start',
+  'Download the React DevTools',
+]);
+
+if (typeof console !== "undefined") {
+  const originalWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    const firstArg = typeof args[0] === "string" ? args[0] : "";
+    if (
+      firstArg.includes('"shadow*" style props are deprecated') ||
+      firstArg.includes('props.pointerEvents is deprecated') ||
+      firstArg.includes('Cannot record touch end without a touch start') ||
+      firstArg.includes('Download the React DevTools')
+    ) {
+      return;
+    }
+    originalWarn(...args);
+  };
+}
 
 // Auth Screens
 import { SplashScreen } from "./src/screens/auth/SplashScreen";
@@ -101,6 +125,8 @@ import {
   loginWithGoogle,
   loginWithPassword,
   registerAccount,
+  requestPasswordResetOtp,
+  verifyPasswordResetOtp,
   resetPassword,
 } from "./src/screens/auth/authService";
 import { roleToScreen } from "./src/screens/auth/authNavigation";
@@ -535,7 +561,8 @@ export default function App() {
     return { ok: true };
   };
 
-  const handleResetPassword = async (email: string, password: string) => resetPassword(email, password);
+  const handleResetPassword = async (email: string, password: string, resetToken?: string) =>
+    resetPassword(email, password, resetToken);
 
   const handleUpdateAccount = async (account: AuthAccount) => {
     setCurrentAuthAccount(account);
@@ -633,7 +660,14 @@ export default function App() {
           />
         );
       case "auth_forgot_password":
-        return <ForgotPasswordScreen navigate={navigate} onResetPassword={handleResetPassword} />;
+        return (
+          <ForgotPasswordScreen
+            navigate={navigate}
+            onRequestOtp={requestPasswordResetOtp}
+            onVerifyOtp={verifyPasswordResetOtp}
+            onResetPassword={handleResetPassword}
+          />
+        );
       case "auth_register_success":
         return registrationResult ? (
           <RegisterSuccessScreen navigate={navigate} account={registrationResult} onContinue={() => void startSession(registrationResult)} />

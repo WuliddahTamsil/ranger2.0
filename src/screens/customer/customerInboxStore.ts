@@ -5,6 +5,8 @@ export type CustomerChatParticipantType = "driver" | "merchant" | "pemilik_kos" 
 export interface CustomerChatMessage {
   id: string;
   sender: "customer" | "other";
+  senderName?: string;
+  senderPhoto?: string;
   text: string;
   time: string;
   createdAt?: string;
@@ -14,6 +16,7 @@ export interface CustomerChatMessage {
     name: string;
     size?: string;
     duration?: number;
+    thumbnailUrl?: string;
   };
 }
 
@@ -22,6 +25,7 @@ export interface CustomerChatThread {
   orderId: string;
   participantType: CustomerChatParticipantType;
   participantName: string;
+  participantPhoto?: string;
   lastMessage: string;
   updatedAt: string;
   unreadCount: number;

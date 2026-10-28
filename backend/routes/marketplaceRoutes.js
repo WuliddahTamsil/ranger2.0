@@ -17,6 +17,7 @@ router.get("/withdrawals", requireAuth, requireRole("pemilik_marketplace"), getW
 router.post("/withdrawals", requireAuth, requireRole("pemilik_marketplace"), createWithdrawal);
 
 router.get("/", getAllProducts);
+router.get("/products", getAllProducts);
 router.get("/owner/:ownerId", getProductsByOwner);
 router.post("/", requireAuth, requireRole("pemilik_marketplace"), createProduct);
 router.put("/:id", requireAuth, requireRole("pemilik_marketplace"), updateProduct);

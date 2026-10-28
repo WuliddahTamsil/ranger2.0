@@ -59,6 +59,7 @@ interface CustomerChatModalProps {
   orderId: string;
   customerId?: string;
   participantName: string;
+  participantPhoto?: string;
   participantType: CustomerChatParticipantType;
   initialMessage?: string;
   orderType?: string;
@@ -72,6 +73,8 @@ interface AttachmentItem {
   uri: string;
   name: string;
   size?: string;
+  base64?: string;
+  thumbnailUrl?: string;
 }
 
 const getChatDateKey = (dateInput?: string | Date): string => {
@@ -142,6 +145,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   orderId,
   customerId,
   participantName,
+  participantPhoto,
   participantType,
   initialMessage,
   orderType,
@@ -203,7 +207,18 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [canSend, setCanSend] = useState(true);
+  const [resolvedPhoto, setResolvedPhoto] = useState<string | null>(participantPhoto || null);
+  const [avatarImgError, setAvatarImgError] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  const displayPhoto = participantPhoto || resolvedPhoto;
+
+  useEffect(() => {
+    if (participantPhoto) {
+      setResolvedPhoto(participantPhoto);
+      setAvatarImgError(false);
+    }
+  }, [participantPhoto]);
 
   useEffect(() => {
     if (visible && thread?.messages && thread.messages.length > 0) {
@@ -228,15 +243,25 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
   const loadMessages = useCallback(async () => {
     try {
       const conversation = await getChatConversation(orderId);
+      let convPhoto = "";
       if (conversation.success && conversation.data) {
         setConversationId(String(conversation.data._id || conversation.data.id));
         setCanSend(conversation.data.canSend !== false);
+        convPhoto = conversation.data.participantPhoto ||
+          (currentUserEffectiveRole === "customer"
+            ? (conversation.data.driverPhoto || conversation.data.ownerPhoto)
+            : conversation.data.customerPhoto) || "";
+        if (convPhoto && !participantPhoto) {
+          setResolvedPhoto(convPhoto);
+        }
       }
       const res = await getChatMessages(orderId, chatTargetRole, currentUserEffectiveRole);
       if (res.success && Array.isArray(res.data)) {
         const mapped: CustomerChatMessage[] = res.data.map((m: any) => ({
           id: m._id,
           sender: m.sender === currentUserEffectiveRole ? "customer" : "other",
+          senderName: m.senderName,
+          senderPhoto: m.senderPhoto,
           text: m.text,
           time: new Date(m.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
           createdAt: m.createdAt,
@@ -248,6 +273,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
           orderId,
           participantType,
           participantName,
+          participantPhoto: participantPhoto || convPhoto || resolvedPhoto || undefined,
           lastMessage: mapped.length > 0 ? mapped[mapped.length - 1].text : activeInitialMsg,
           updatedAt: mapped.length > 0 ? mapped[mapped.length - 1].time : "Baru saja",
           unreadCount: 0,
@@ -257,7 +283,7 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     } catch (e) {
       // Handled silently
     }
-  }, [activeInitialMsg, chatTargetRole, currentUserEffectiveRole, orderId, participantName, participantType, threadId]);
+  }, [activeInitialMsg, chatTargetRole, currentUserEffectiveRole, orderId, participantName, participantPhoto, participantType, resolvedPhoto, threadId]);
 
   useEffect(() => {
     if (!visible) return;
@@ -315,10 +341,12 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         const fileSizeMb = asset.fileSize ? `${(asset.fileSize / (1024 * 1024)).toFixed(1)} MB` : "Foto";
-        const finalUri = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+        const rawBase64 = asset.base64 ? (asset.base64.startsWith("data:") ? asset.base64 : `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`) : undefined;
+        const finalUri = rawBase64 || asset.uri;
         setSelectedAttachment({
           type: "image",
           uri: finalUri,
+          base64: rawBase64,
           name: asset.fileName || `foto_${Date.now()}.jpg`,
           size: fileSizeMb,
         });
@@ -371,10 +399,12 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
-        const finalUri = asset.base64 ? `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}` : asset.uri;
+        const rawBase64 = asset.base64 ? (asset.base64.startsWith("data:") ? asset.base64 : `data:${asset.mimeType || "image/jpeg"};base64,${asset.base64}`) : undefined;
+        const finalUri = rawBase64 || asset.uri;
         setSelectedAttachment({
           type: "image",
           uri: finalUri,
+          base64: rawBase64,
           name: `camera_${Date.now()}.jpg`,
           size: "Foto Kamera",
         });
@@ -422,8 +452,9 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
     let attachmentToSend = selectedAttachment;
     const now = new Date();
     const nowTime = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    const localId = `local_${Date.now()}`;
     const message: CustomerChatMessage = {
-      id: `${threadId}_${Date.now()}`,
+      id: localId,
       sender: "customer",
       text: text || (selectedAttachment?.type === "image" ? "📷 Foto terkirim" : selectedAttachment?.type === "video" ? "🎥 Video terkirim" : "📎 File terlampir"),
       time: nowTime,
@@ -431,29 +462,30 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
       attachment: attachmentToSend ? { ...attachmentToSend } : undefined,
     };
 
-    // 1. Instant Optimistic UI Update (Immediate UI response!)
+    // 1. Instant Optimistic UI Update (Immediate response, zero delay!)
     appendCustomerChatMessage(threadId, message);
     setTypedMessage("");
     setSelectedAttachment(null);
 
-    // 2. Upload attachment if present and local
+    // 2. Fast background upload of attachment if present and local
     if (attachmentToSend && !/^https?:/i.test(attachmentToSend.uri)) {
       try {
         const uploaded = await uploadFileToBackend(
           attachmentToSend.uri,
           attachmentToSend.name,
-          attachmentToSend.type === "image" ? "image/jpeg" : attachmentToSend.type === "video" ? "video/mp4" : "application/octet-stream"
+          attachmentToSend.type === "image" ? "image/jpeg" : attachmentToSend.type === "video" ? "video/mp4" : "application/octet-stream",
+          attachmentToSend.base64
         );
         const cloudUrl = uploaded?.data?.url || uploaded?.url;
         if (cloudUrl) {
-          attachmentToSend = { ...attachmentToSend, uri: cloudUrl };
+          attachmentToSend = { ...attachmentToSend, uri: cloudUrl, thumbnailUrl: cloudUrl };
         }
       } catch (err) {
-        console.warn("Upload attachment fallback:", err);
+        console.warn("Upload attachment fallback to server auto-upload:", err);
       }
     }
 
-    // 3. Send to backend & Socket.io asynchronously
+    // 3. Send to backend & Socket.io asynchronously without blocking UI
     sendChatMessage(
       orderId,
       currentUserEffectiveRole,
@@ -520,14 +552,22 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
             </TouchableOpacity>
 
             <View style={styles.avatarContainer}>
-              <View style={[
-                styles.avatar,
-                (isOwnerView || isDriverChat || isKost)
-                  ? { backgroundColor: "#DCFCE7" }
-                  : { backgroundColor: "#FFEDD5" }
-              ]}>
-                <Icon size={20} color={(isOwnerView || isDriverChat || isKost) ? "#0D7A53" : "#C2410C"} />
-              </View>
+              {displayPhoto && !avatarImgError ? (
+                <Image
+                  source={{ uri: displayPhoto }}
+                  style={styles.avatarImage}
+                  onError={() => setAvatarImgError(true)}
+                />
+              ) : (
+                <View style={[
+                  styles.avatar,
+                  (isOwnerView || isDriverChat || isKost)
+                    ? { backgroundColor: "#DCFCE7" }
+                    : { backgroundColor: "#FFEDD5" }
+                ]}>
+                  <Icon size={20} color={(isOwnerView || isDriverChat || isKost) ? "#0D7A53" : "#C2410C"} />
+                </View>
+              )}
               <View style={styles.onlineBadgeDot} />
             </View>
 
@@ -693,13 +733,25 @@ export const CustomerChatModal: React.FC<CustomerChatModalProps> = ({
                   )}
                   <View style={[styles.messageWrap, isMe ? styles.messageRight : styles.messageLeft]}>
                     {!isMe && (
-                      <Text style={styles.senderNameLabel}>
-                        {chatTargetRole === "driver"
-                          ? (isRide ? "🛵 Driver GEOVERSE" : "🛵 Kurir Pengantar")
-                          : chatTargetRole === "owner"
-                          ? (isKost ? "🏠 Pemilik Kos" : "📦 Toko / Penjual")
-                          : "👤 Pelanggan"}
-                      </Text>
+                      <View style={styles.senderHeaderRow}>
+                        {(item.senderPhoto || displayPhoto) ? (
+                          <Image
+                            source={{ uri: item.senderPhoto || displayPhoto || "" }}
+                            style={styles.senderAvatarMini}
+                          />
+                        ) : (
+                          <View style={styles.senderAvatarMiniFallback}>
+                            <User size={10} color="#0D7A53" />
+                          </View>
+                        )}
+                        <Text style={styles.senderNameLabel}>
+                          {item.senderName || (chatTargetRole === "driver"
+                            ? (isRide ? "🛵 Driver GEOVERSE" : "🛵 Kurir Pengantar")
+                            : chatTargetRole === "owner"
+                            ? (isKost ? "🏠 Pemilik Kos" : "📦 Toko / Penjual")
+                            : "👤 Pelanggan")}
+                        </Text>
+                      </View>
                     )}
                     <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
                       {/* Attachment Render */}
@@ -948,6 +1000,14 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#E2E8F0",
   },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+  },
   onlineBadgeDot: {
     position: "absolute",
     bottom: 0,
@@ -1163,12 +1223,31 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
     alignItems: "flex-end",
   },
+  senderHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+    marginLeft: 4,
+  },
+  senderAvatarMini: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#CBD5E1",
+  },
+  senderAvatarMiniFallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   senderNameLabel: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "800",
     color: "#0D7A53",
-    marginBottom: 3,
-    marginLeft: 4,
   },
   bubble: {
     borderRadius: 18,

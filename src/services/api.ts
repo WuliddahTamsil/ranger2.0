@@ -5,7 +5,19 @@ import type { AuthAccount } from "../screens/auth/authTypes";
 const AUTH_ACCOUNTS_KEY = "rangers.auth.accounts.v1";
 const AUTH_SESSION_KEY = "rangers.auth.session.v1";
 
+let cachedAuthHeaders: Record<string, { headers: Record<string, string>; expiresAt: number }> = {};
+
+export const invalidateAuthCache = () => {
+  cachedAuthHeaders = {};
+};
+
 const getAuthHeaders = async (accountId?: string): Promise<Record<string, string>> => {
+  const cacheKey = accountId || "__current__";
+  const now = Date.now();
+  if (cachedAuthHeaders[cacheKey] && cachedAuthHeaders[cacheKey].expiresAt > now) {
+    return cachedAuthHeaders[cacheKey].headers;
+  }
+
   try {
     const [accountsRaw, sessionRaw] = await Promise.all([
       AsyncStorage.getItem(AUTH_ACCOUNTS_KEY),
@@ -28,6 +40,10 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
       headers["x-driver-id"] = String(resolvedId);
       headers["x-user-id"] = String(resolvedId);
     }
+    cachedAuthHeaders[cacheKey] = {
+      headers,
+      expiresAt: now + 3000,
+    };
     return headers;
   } catch {
     return {};
@@ -57,12 +73,20 @@ const getDevHost = (): string | null => {
 };
 
 const resolveApiBaseUrl = (): string => {
-  if (
-    Platform.OS === "web" &&
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-  ) {
-    return "http://localhost:5000/api";
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const isLocalHost =
+      !host ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host.startsWith("192.168.") ||
+      host.startsWith("10.") ||
+      host.startsWith("172.") ||
+      host.endsWith(".local");
+    if (isLocalHost) {
+      return `http://${host || "localhost"}:5000/api`;
+    }
   }
 
   const configured = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
@@ -411,8 +435,10 @@ export const getMarketplaceProducts = async () => {
   try {
     const res = await fetch(getApiUrl("/marketplace"));
     return await res.json();
-  } catch (err) {
-    console.error("getMarketplaceProducts error:", err);
+  } catch (err: any) {
+    if (__DEV__ && !String(err?.message || "").includes("fetch")) {
+      console.warn("getMarketplaceProducts warning:", err?.message || err);
+    }
     return { success: false, data: [], message: "Gagal menyambung ke server" };
   }
 };
@@ -616,8 +642,10 @@ export const getMarketplaceOrdersForDriver = async (driverId: string) => {
     const authHeaders = await getAuthHeaders(driverId);
     const res = await fetch(getApiUrl(`/marketplace/orders/driver?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
-  } catch (err) {
-    console.error("getMarketplaceOrdersForDriver error:", err);
+  } catch (err: any) {
+    if (__DEV__ && !String(err?.message || "").includes("fetch")) {
+      console.warn("getMarketplaceOrdersForDriver warning:", err?.message || err);
+    }
     return { success: false, data: [], message: "Gagal mengambil order driver" };
   }
 };
@@ -768,8 +796,10 @@ export const getNotifications = async (userId: string) => {
     const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/notifications/${userId}`), { headers: authHeaders });
     return await readApiJson(res);
-  } catch (err) {
-    console.error("getNotifications error:", err);
+  } catch (err: any) {
+    if (__DEV__ && !String(err?.message || "").includes("fetch")) {
+      console.warn("getNotifications warning:", err?.message || err);
+    }
     return { success: false, data: [], message: "Gagal menyambung ke server" };
   }
 };
@@ -879,8 +909,10 @@ export const getCateringOrdersForDriver = async (driverId: string) => {
     const authHeaders = await getAuthHeaders(driverId);
     const res = await fetch(getApiUrl(`/catering/orders/driver/${driverId}?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
     return await readApiJson(res);
-  } catch (err) {
-    console.error("getCateringOrdersForDriver error:", err);
+  } catch (err: any) {
+    if (__DEV__ && !String(err?.message || "").includes("fetch")) {
+      console.warn("getCateringOrdersForDriver warning:", err?.message || err);
+    }
     return { success: false, data: [], message: "Gagal mengambil order driver catering" };
   }
 };
@@ -922,21 +954,37 @@ export const sendChatMessage = async (
 ) => {
   try {
     const authHeaders = await getAuthHeaders();
-    const resolvedConversationId = conversationId || (await getChatConversation(orderId)).data?._id;
-    let persistedAttachment = attachment;
+    let persistedAttachment = attachment ? { ...attachment } : undefined;
+
+    // Fast attachment upload: try client upload first, fallback to server auto-upload
     if (persistedAttachment?.uri && !/^https?:/i.test(String(persistedAttachment.uri))) {
-      const uploaded = await uploadFileToBackend(
-        persistedAttachment.uri,
-        persistedAttachment.name || `chat_${Date.now()}`,
-        persistedAttachment.type === "image" ? "image/jpeg" : "application/octet-stream"
-      );
-      if (!uploaded?.success || !uploaded.data?.url) throw new Error("Lampiran gagal diunggah");
-      persistedAttachment = { ...persistedAttachment, uri: uploaded.data.url };
+      try {
+        const uploaded = await uploadFileToBackend(
+          persistedAttachment.uri,
+          persistedAttachment.name || `chat_${Date.now()}.jpg`,
+          persistedAttachment.type === "image" ? "image/jpeg" : "application/octet-stream",
+          persistedAttachment.base64
+        );
+        const cloudUrl = uploaded?.data?.url || uploaded?.url;
+        if (cloudUrl) {
+          persistedAttachment.uri = cloudUrl;
+          persistedAttachment.thumbnailUrl = cloudUrl;
+        }
+      } catch (uploadErr) {
+        // Handled silently: server-side auto-upload in POST /chat/send will take over
+      }
     }
+
     const res = await fetch(getApiUrl("/chat/send"), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify({ orderId, text, attachment: persistedAttachment, target, conversationId: resolvedConversationId }),
+      body: JSON.stringify({
+        orderId,
+        text,
+        attachment: persistedAttachment,
+        target,
+        conversationId,
+      }),
     });
     return await readApiJson(res);
   } catch (err) {

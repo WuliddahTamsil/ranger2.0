@@ -251,4 +251,11 @@ const laundryOrderSchema = new mongoose.Schema(
   }
 );
 
+laundryOrderSchema.index({ customerId: 1, createdAt: -1 });
+laundryOrderSchema.index({ customerPhone: 1, createdAt: -1 });
+laundryOrderSchema.index({ ownerId: 1, createdAt: -1 });
+laundryOrderSchema.index({ storeId: 1, createdAt: -1 });
+laundryOrderSchema.index({ status: 1, createdAt: -1 });
+laundryOrderSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model("LaundryOrder", laundryOrderSchema);

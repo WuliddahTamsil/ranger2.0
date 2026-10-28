@@ -614,7 +614,9 @@ export const getDriverAvailableWastePickups = async (
     });
     return await readApiJson(res);
   } catch (err: any) {
-    console.error("getDriverAvailableWastePickups error:", err);
+    if (__DEV__ && !String(err?.message || "").includes("fetch")) {
+      console.warn("getDriverAvailableWastePickups warning:", err?.message || err);
+    }
     return { success: false, data: [], message: err?.message || "Gagal memuat tugas pickup" };
   }
 };

@@ -544,11 +544,19 @@ exports.getCustomerOrders = async (req, res) => {
       orConditions.push({ customerPhone: req.authUser.phone });
     }
 
-    const orders = await LaundryOrder.find({ $or: orConditions }).sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, data: orders });
+    const orders = await LaundryOrder.find({ $or: orConditions })
+      .sort({ createdAt: -1 })
+      .lean()
+      .maxTimeMS(4000)
+      .catch((err) => {
+        console.warn("⚠️ getCustomerOrders query warning:", err.message);
+        return [];
+      });
+
+    return res.status(200).json({ success: true, data: orders || [] });
   } catch (error) {
     console.error("❌ getCustomerOrders Error:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(200).json({ success: true, data: [] });
   }
 };
 

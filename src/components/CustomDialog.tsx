@@ -99,9 +99,8 @@ export const ToastBanner: React.FC<ToastBannerProps> = ({
 
   const theme = getTheme();
   const IconComp = theme.Icon;
-
   return (
-    <View style={toastStyles.wrapper} pointerEvents="box-none">
+    <View style={[toastStyles.wrapper, { pointerEvents: "box-none" }]}>
       <View
         style={[
           toastStyles.container,

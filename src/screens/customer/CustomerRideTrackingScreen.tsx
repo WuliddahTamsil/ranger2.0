@@ -1281,6 +1281,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
           orderId={currentRide._id}
           participantType="driver"
           participantName={currentRide.driverName || "Driver GEOVERSE"}
+          participantPhoto={currentRide.driverPhoto}
           customerId={authAccount?.id}
           orderType="RIDE"
           serviceType="KANYAAH_RIDE"

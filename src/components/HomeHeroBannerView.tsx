@@ -189,8 +189,8 @@ export const HomeHeroBannerView: React.FC<HomeHeroHeaderProps> = ({
       {/* ============================================================ */}
       <View style={styles.greenHeader}>
         {/* Subtle decorative circles for modern premium finish */}
-        <View style={styles.headerDecoCircle1} pointerEvents="none" />
-        <View style={styles.headerDecoCircle2} pointerEvents="none" />
+        <View style={[styles.headerDecoCircle1, { pointerEvents: "none" }]} />
+        <View style={[styles.headerDecoCircle2, { pointerEvents: "none" }]} />
 
         {/* ROW 1: Official Branding & PGE Info Hub Button */}
         <View style={styles.headerBrandRow}>

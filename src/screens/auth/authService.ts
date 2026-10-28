@@ -334,7 +334,46 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
   return { account, error: undefined };
 };
 
-export const resetPassword = async (email: string, password: string) => {
+export const requestPasswordResetOtp = async (email: string): Promise<{ ok: boolean; error?: string; devOtp?: string }> => {
+  const normalizedEmail = normalizeEmail(email);
+  try {
+    const res = await fetch(getApiUrl("/auth/forgot-password/request-otp"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail }),
+    });
+    const result = await res.json();
+    if (result.success) {
+      return { ok: true, devOtp: result.data?.devOtp };
+    }
+    return { ok: false, error: result.message || "Gagal mengirimkan kode OTP." };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Koneksi terputus. Pastikan server aktif." };
+  }
+};
+
+export const verifyPasswordResetOtp = async (
+  email: string,
+  otp: string
+): Promise<{ ok: boolean; resetToken?: string; error?: string }> => {
+  const normalizedEmail = normalizeEmail(email);
+  try {
+    const res = await fetch(getApiUrl("/auth/forgot-password/verify-otp"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail, otp: otp.trim() }),
+    });
+    const result = await res.json();
+    if (result.success && result.data?.resetToken) {
+      return { ok: true, resetToken: result.data.resetToken };
+    }
+    return { ok: false, error: result.message || "Kode OTP tidak cocok atau sudah kadaluarsa." };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || "Gagal memverifikasi kode OTP." };
+  }
+};
+
+export const resetPassword = async (email: string, password: string, resetToken?: string) => {
   const normalizedEmail = normalizeEmail(email);
   let backendUpdated = false;
 
@@ -343,12 +382,12 @@ export const resetPassword = async (email: string, password: string) => {
     const res = await fetch(getApiUrl("/auth/reset-password"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: normalizedEmail, password }),
+      body: JSON.stringify({ email: normalizedEmail, password, resetToken }),
     });
     const result = await res.json();
     if (result.success) {
       backendUpdated = true;
-    } else if (res.status === 400 || res.status === 404) {
+    } else if (res.status === 400 || res.status === 403 || res.status === 404) {
       return { ok: false, error: result.message || "Gagal memperbarui kata sandi." };
     }
   } catch (apiErr) {

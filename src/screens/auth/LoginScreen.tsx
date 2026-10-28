@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
+import { exchangeCodeAsync } from "expo-auth-session";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, UserPlus } from "lucide-react-native";
 import { Nav } from "../../types";
 import { GoogleCredential } from "./authTypes";
@@ -276,12 +277,36 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
   onLogin,
   onError,
 }) => {
-  const [request, , promptAsync] = Google.useAuthRequest({
+  const [request, response, promptAsync] = Google.useAuthRequest({
     ...googleClientIds,
     scopes: ["openid", "profile", "email"],
     selectAccount: true,
     redirectUri: getGoogleRedirectUri(),
   });
+
+  const handledTokenRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (response?.type === "success") {
+      const accessToken = response.authentication?.accessToken || response.params?.access_token;
+      const idToken = response.authentication?.idToken || response.params?.id_token;
+      const tokenKey = `${accessToken || ""}_${idToken || ""}`;
+      if ((accessToken || idToken) && handledTokenRef.current !== tokenKey) {
+        handledTokenRef.current = tokenKey;
+        void onLogin({ accessToken, idToken });
+      }
+    } else if (response?.type === "error") {
+      const errorCode = response.params?.error || "";
+      const desc = response.params?.error_description || "";
+      const userMsg =
+        errorCode === "redirect_uri_mismatch"
+          ? "Redirect URI sedang dalam penyesuaian di Google Cloud Console."
+          : errorCode === "disabled_client"
+          ? "Klien Google OAuth dinonaktifkan di Google Cloud Console."
+          : `Login Google dibatalkan (${errorCode || "error"}).`;
+      onError(desc ? `${userMsg} (${desc})` : userMsg);
+    }
+  }, [response, onLogin, onError]);
 
   const handlePress = async () => {
     onError("");
@@ -293,14 +318,43 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
       }
       const result = await promptAsync();
       if (result.type === "success") {
-        const credential: GoogleCredential = {
-          accessToken: result.authentication?.accessToken || result.params?.access_token,
-          idToken: result.authentication?.idToken || result.params?.id_token,
-        };
-        if (!credential.accessToken && !credential.idToken) {
+        let accessToken: string | undefined = result.authentication?.accessToken || result.params?.access_token;
+        let idToken: string | undefined = result.authentication?.idToken || result.params?.id_token;
+
+        if (!accessToken && !idToken && result.params?.code) {
+          try {
+            const activeId = Platform.OS === "android"
+              ? (googleClientIds.androidClientId || googleClientIds.webClientId)
+              : Platform.OS === "ios"
+                ? (googleClientIds.iosClientId || googleClientIds.webClientId)
+                : googleClientIds.webClientId;
+            const tokenResult = await exchangeCodeAsync(
+              {
+                clientId: activeId,
+                code: result.params.code,
+                redirectUri: getGoogleRedirectUri(),
+                extraParams: {
+                  code_verifier: request?.codeVerifier || "",
+                },
+              },
+              Google.discovery
+            );
+            accessToken = tokenResult.accessToken;
+            idToken = tokenResult.idToken;
+          } catch (exchangeErr) {
+            console.warn("Direct code exchange fallback error:", exchangeErr);
+          }
+        }
+
+        const tokenKey = `${accessToken || ""}_${idToken || ""}`;
+        if (accessToken || idToken) {
+          if (handledTokenRef.current !== tokenKey) {
+            handledTokenRef.current = tokenKey;
+            await onLogin({ accessToken, idToken });
+          }
+        } else if (!result.params?.code) {
           throw new Error("Token autentikasi Google tidak ditemukan.");
         }
-        await onLogin(credential);
       } else if (result.type === "error") {
         const errorCode = result.params?.error || "";
         const desc = result.params?.error_description || "";

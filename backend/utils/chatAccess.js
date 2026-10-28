@@ -20,56 +20,53 @@ const ownerRoles = new Set([
   "bank_sampah",
 ]);
 
+// Ultra-fast memory cache for order identifier resolution (eliminates redundant DB queries on 2.5s poll loops)
+const orderLookupCache = new Map();
+const CACHE_TTL_MS = 25000;
+
+const getCachedOrder = (key) => {
+  if (!key) return null;
+  const item = orderLookupCache.get(String(key));
+  if (item && Date.now() - item.time < CACHE_TTL_MS) {
+    return item.data;
+  }
+  return null;
+};
+
+const setCachedOrder = (key, data) => {
+  if (!key || !data) return;
+  if (orderLookupCache.size > 300) {
+    const firstKey = orderLookupCache.keys().next().value;
+    orderLookupCache.delete(firstKey);
+  }
+  orderLookupCache.set(String(key), { data, time: Date.now() });
+};
+
+const clearCachedOrder = (key) => {
+  if (key) orderLookupCache.delete(String(key));
+};
+
 const findOrderByIdentifier = async (identifier) => {
   if (!identifier) return null;
   const value = String(identifier).trim();
   const cleanValue = value.replace(/^#/, "").trim();
 
-  const models = [
-    [ShopOrder, "shop", "orderCode"],
-    [MarketplaceOrder, "marketplace", "orderCode"],
-    [CateringOrder, "catering", "orderCode"],
-    [LaundryOrder, "laundry", "orderCode"],
-    [Booking, "kos", "bookingCode"],
-    [RideOrder, "ride", "orderCode"],
-    [SendOrder, "send", "orderCode"],
-    [WasteDeposit, "waste", "depositCode"],
-  ];
+  // 1. Check in-memory cache (0.001 ms)
+  const cached = getCachedOrder(value) || getCachedOrder(cleanValue);
+  if (cached) return cached;
 
-  for (const [Model, orderType, codeField] of models) {
-    let order = null;
-    if (mongoose.Types.ObjectId.isValid(value)) {
-      order = await Model.findById(value).lean().catch(() => null);
-    }
-    if (!order && mongoose.Types.ObjectId.isValid(cleanValue)) {
-      order = await Model.findById(cleanValue).lean().catch(() => null);
-    }
-    if (!order) order = await Model.findOne({ [codeField]: value }).lean().catch(() => null);
-    if (!order) order = await Model.findOne({ [codeField]: cleanValue }).lean().catch(() => null);
-    if (!order && cleanValue.length >= 6) {
-      const escaped = cleanValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      order = await Model.findOne({ [codeField]: new RegExp(escaped + "$", "i") }).lean().catch(() => null);
-      if (!order && /^[0-9a-fA-F]+$/.test(cleanValue)) {
-        order = await Model.findOne({
-          $expr: {
-            $regexMatch: {
-              input: { $toString: "$_id" },
-              regex: `${cleanValue}$`,
-              options: "i",
-            },
-          },
-        }).lean().catch(() => null);
-      }
-    }
-    if (order) return { order, orderType, codeField };
-  }
-
-  // Fallback 1: Existing Conversation check
+  // 2. High-speed Conversation-first indexed lookup (Indexed on orderId, ~1 ms)
   const existingConv = await Conversation.findOne({
-    $or: [{ orderId: value }, { orderId: cleanValue }, { orderCode: value }, { orderCode: cleanValue }],
+    $or: [
+      { orderId: value },
+      { orderId: cleanValue },
+      { orderCode: value },
+      { orderCode: cleanValue },
+    ],
   }).lean().catch(() => null);
+
   if (existingConv) {
-    return {
+    const result = {
       order: {
         _id: existingConv.orderId,
         orderCode: existingConv.orderCode || existingConv.orderId,
@@ -82,15 +79,80 @@ const findOrderByIdentifier = async (identifier) => {
       },
       orderType: existingConv.orderType || "general",
       codeField: "orderCode",
+      conversation: existingConv,
       isInquiry:
         existingConv.status === "inquiry" ||
         !existingConv.customerId ||
         !existingConv.ownerId ||
         String(existingConv.orderId).includes("_chat"),
     };
+    setCachedOrder(value, result);
+    if (cleanValue !== value) setCachedOrder(cleanValue, result);
+    return result;
   }
 
-  // Fallback 2: Check Kost / Lodging inquiry by Kost ID, name, or inquiry token
+  // 3. Parallel Order Models check (Executed concurrently across all 8 models)
+  const models = [
+    [ShopOrder, "shop", "orderCode"],
+    [MarketplaceOrder, "marketplace", "orderCode"],
+    [CateringOrder, "catering", "orderCode"],
+    [LaundryOrder, "laundry", "orderCode"],
+    [Booking, "kos", "bookingCode"],
+    [RideOrder, "ride", "orderCode"],
+    [SendOrder, "send", "orderCode"],
+    [WasteDeposit, "waste", "depositCode"],
+  ];
+
+  const isObjId = mongoose.Types.ObjectId.isValid(value) || mongoose.Types.ObjectId.isValid(cleanValue);
+  const targetId = mongoose.Types.ObjectId.isValid(value) ? value : cleanValue;
+
+  if (isObjId) {
+    const directResults = await Promise.all(
+      models.map(async ([Model, orderType, codeField]) => {
+        const order = await Model.findById(targetId).lean().catch(() => null);
+        return order ? { order, orderType, codeField } : null;
+      })
+    );
+    const directMatch = directResults.find(Boolean);
+    if (directMatch) {
+      setCachedOrder(value, directMatch);
+      return directMatch;
+    }
+  }
+
+  // Concurrent codeField search
+  const codeResults = await Promise.all(
+    models.map(async ([Model, orderType, codeField]) => {
+      let order = await Model.findOne({ [codeField]: value }).lean().catch(() => null);
+      if (!order && cleanValue !== value) {
+        order = await Model.findOne({ [codeField]: cleanValue }).lean().catch(() => null);
+      }
+      return order ? { order, orderType, codeField } : null;
+    })
+  );
+  const codeMatch = codeResults.find(Boolean);
+  if (codeMatch) {
+    setCachedOrder(value, codeMatch);
+    return codeMatch;
+  }
+
+  // Suffix regex search if cleanValue length >= 6
+  if (cleanValue.length >= 6) {
+    const escaped = cleanValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regexResults = await Promise.all(
+      models.map(async ([Model, orderType, codeField]) => {
+        const order = await Model.findOne({ [codeField]: new RegExp(escaped + "$", "i") }).lean().catch(() => null);
+        return order ? { order, orderType, codeField } : null;
+      })
+    );
+    const regexMatch = regexResults.find(Boolean);
+    if (regexMatch) {
+      setCachedOrder(value, regexMatch);
+      return regexMatch;
+    }
+  }
+
+  // 4. Check Kost / Lodging inquiry by Kost ID, name, or inquiry token
   let kost = null;
   if (mongoose.Types.ObjectId.isValid(value)) {
     kost = await Kost.findById(value).lean().catch(() => null);
@@ -100,10 +162,12 @@ const findOrderByIdentifier = async (identifier) => {
     kost = await Kost.findOne().lean().catch(() => null);
   }
   if (kost) {
-    return { order: kost, orderType: "kos", codeField: "name", isPropertyInquiry: true };
+    const match = { order: kost, orderType: "kos", codeField: "name", isPropertyInquiry: true };
+    setCachedOrder(value, match);
+    return match;
   }
 
-  // Fallback 3: Generic inquiry or direct chat room token
+  // 5. Generic inquiry or direct chat room token
   const knownPrefixes = [
     "laundry",
     "send",
@@ -133,7 +197,7 @@ const findOrderByIdentifier = async (identifier) => {
         : matchedPrefix === "homestay"
         ? "kos"
         : matchedPrefix || "general";
-    return {
+    const match = {
       order: {
         _id: value,
         orderCode: value,
@@ -143,6 +207,8 @@ const findOrderByIdentifier = async (identifier) => {
       codeField: "orderCode",
       isInquiry: true,
     };
+    setCachedOrder(value, match);
+    return match;
   }
 
   return null;
@@ -233,8 +299,11 @@ const getOrderParticipants = (record) => {
   };
 };
 
-const resolveParticipant = async (userId, record) => {
-  const user = await User.findById(userId).lean().catch(() => null);
+const resolveParticipant = async (userIdOrUser, record) => {
+  const user = (userIdOrUser && typeof userIdOrUser === "object" && userIdOrUser._id)
+    ? userIdOrUser
+    : await User.findById(userIdOrUser).lean().catch(() => null);
+
   if (!user) return null;
   const participants = getOrderParticipants(record);
   const id = String(user._id);
@@ -467,4 +536,6 @@ module.exports = {
   normalizeRole,
   isArchivedStatus,
   ownerRoles,
+  orderLookupCache,
+  clearCachedOrder,
 };

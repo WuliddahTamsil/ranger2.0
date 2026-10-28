@@ -127,7 +127,7 @@ export const Pesanan: React.FC<PesananProps> = ({
   const [trackModalVisible, setTrackModalVisible] = useState(false);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null);
-  const [chatTarget, setChatTarget] = useState<{ orderId: string; participantName: string; participantType: "driver" | "merchant" } | null>(null);
+  const [chatTarget, setChatTarget] = useState<{ orderId: string; participantName: string; participantType: "driver" | "merchant"; participantPhoto?: string } | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(null);
   const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
 
@@ -603,10 +603,16 @@ export const Pesanan: React.FC<PesananProps> = ({
         : (order as any).storeName || order.detail.split(" • ")[0] || order.item || order.type;
     }
 
+    const rawOrder = order as any;
+    const participantPhoto = resolvedType === "driver"
+      ? (rawOrder.driverPhoto || rawOrder.driver?.profilePhoto || rawOrder.driver?.photo)
+      : (rawOrder.storePhoto || rawOrder.merchantPhoto || rawOrder.ownerPhoto || rawOrder.storeImage);
+
     setChatTarget({
       orderId: order.id,
       participantName,
       participantType: resolvedType,
+      participantPhoto,
     });
   };
 
@@ -1956,6 +1962,7 @@ export const Pesanan: React.FC<PesananProps> = ({
           orderId={chatTarget.orderId}
           customerId={authAccount?.id}
           participantName={chatTarget.participantName}
+          participantPhoto={chatTarget.participantPhoto}
           participantType={chatTarget.participantType}
           initialMessage={
             chatTarget.participantType === "driver"
