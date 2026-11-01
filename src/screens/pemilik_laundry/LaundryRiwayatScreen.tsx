@@ -8,6 +8,7 @@ import {
   TextInput,
   StyleSheet,
   StatusBar,
+  Platform,
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -67,7 +68,7 @@ export const LaundryRiwayatScreen: React.FC<LaundryRiwayatProps> = ({ navigate, 
   );
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -148,7 +149,7 @@ export const LaundryRiwayatScreen: React.FC<LaundryRiwayatProps> = ({ navigate, 
       </ScrollView>
 
       {/* Bottom Nav */}
-      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_laundry_home")}>
           <Home size={22} color="#9CA3AF" />
           <Text style={styles.navText}>Beranda</Text>

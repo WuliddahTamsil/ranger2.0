@@ -66,76 +66,28 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
       ? accounts.find((item: any) => String(item.id) === String(requestedAccountId) || String(item._id) === String(requestedAccountId))
       : null;
     const target = account || session?.currentAccount;
-    const resolvedId = requestedAccountId || target?.id || target?._id || "6a85892d8d27c7d42a0d8ba8";
-    const token = target?.token || (typeof resolvedId === "string" && resolvedId.length === 24 ? resolvedId : `seed_token_${resolvedId}`);
+    const resolvedId = requestedAccountId || target?.id || target?._id;
+    if (!resolvedId) {
+      return {
+        "Content-Type": "application/json",
+      };
+    }
+    const token = target?.token;
+    if (!token) {
+      return {
+        "Content-Type": "application/json",
+      };
+    }
     return {
       Authorization: `Bearer ${token}`,
-      "x-user-id": String(resolvedId),
       "Content-Type": "application/json",
     };
   } catch {
     return {
-      Authorization: "Bearer 6a85892d8d27c7d42a0d8ba8",
-      "x-user-id": "6a85892d8d27c7d42a0d8ba8",
       "Content-Type": "application/json",
     };
   }
 };
-
-const DEFAULT_MOCK_MERCHANT_VOUCHERS: MerchantVoucher[] = [
-  {
-    _id: "mvchr_001",
-    voucherCode: "ONGKIRFREE",
-    title: "Voucher Gratis Ongkir Kamojang",
-    description: "Subsidi ongkos kirim s/d Rp 10.000 untuk pengiriman area Kamojang & sekitarnya.",
-    service: "SHOP",
-    merchantName: "Toko Berkah Kamojang",
-    discountType: "FREE_SHIPPING",
-    discountValue: 10000,
-    minTransaction: 25000,
-    pointsCost: 0,
-    validUntil: new Date(Date.now() + 30 * 86400000).toISOString(),
-    usageLimit: 50,
-    usedCount: 12,
-    claimedCount: 28,
-    status: "ACTIVE",
-  },
-  {
-    _id: "mvchr_002",
-    voucherCode: "HEMAT5RB",
-    title: "Potongan Belanja Rp 5.000",
-    description: "Diskon belanja langsung Rp 5.000 untuk semua produk toko.",
-    service: "SHOP",
-    merchantName: "Toko Berkah Kamojang",
-    discountType: "FIXED",
-    discountValue: 5000,
-    minTransaction: 30000,
-    pointsCost: 0,
-    validUntil: new Date(Date.now() + 20 * 86400000).toISOString(),
-    usageLimit: 100,
-    usedCount: 45,
-    claimedCount: 60,
-    status: "ACTIVE",
-  },
-  {
-    _id: "mvchr_003",
-    voucherCode: "POINREWARD",
-    title: "Diskon 15% Tukar Poin GEOVERSE",
-    description: "Tukar 3.000 Poin Bank Sampah untuk diskon 15% maksimal Rp 15.000.",
-    service: "MARKETPLACE",
-    merchantName: "Toko Berkah Kamojang",
-    discountType: "PERCENTAGE",
-    discountValue: 15,
-    minTransaction: 40000,
-    maxDiscount: 15000,
-    pointsCost: 3000,
-    validUntil: new Date(Date.now() + 45 * 86400000).toISOString(),
-    usageLimit: 30,
-    usedCount: 8,
-    claimedCount: 15,
-    status: "ACTIVE",
-  },
-];
 
 export const fetchMerchantVouchers = async (): Promise<{
   success: boolean;
@@ -145,7 +97,7 @@ export const fetchMerchantVouchers = async (): Promise<{
   try {
     const headers = await getAuthHeaders();
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const res = await fetch(getApiUrl("/vouchers/merchant/my-vouchers"), {
       headers,
       signal: controller.signal,
@@ -159,7 +111,7 @@ export const fetchMerchantVouchers = async (): Promise<{
       }
     }
   } catch (e) {
-    // fallback to storage
+    // fallback to cached data if previously fetched
   }
 
   try {
@@ -169,7 +121,7 @@ export const fetchMerchantVouchers = async (): Promise<{
     }
   } catch {}
 
-  return { success: true, data: DEFAULT_MOCK_MERCHANT_VOUCHERS };
+  return { success: true, data: [] };
 };
 
 export const createMerchantVoucher = async (
@@ -182,7 +134,7 @@ export const createMerchantVoucher = async (
   try {
     const headers = await getAuthHeaders();
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(getApiUrl("/vouchers/merchant/create"), {
       method: "POST",
       headers,
@@ -193,46 +145,19 @@ export const createMerchantVoucher = async (
     if (res.ok) {
       const json = await res.json();
       if (json.success) {
-        // update local cache
+        // update local cache with server data
         const current = await fetchMerchantVouchers();
         const updated = [json.data, ...(current.data || [])];
         await AsyncStorage.setItem(LOCAL_MERCHANT_VOUCHERS_KEY, JSON.stringify(updated));
         return json;
       }
+      return { success: false, message: json.message || "Gagal membuat voucher" };
     }
-  } catch (e) {}
-
-  // Local simulated fallback so seller testing works smoothly
-  const newMockVoucher: MerchantVoucher = {
-    _id: `mvchr_${Date.now()}`,
-    voucherCode: payload.voucherCode.trim().toUpperCase(),
-    title: payload.title.trim(),
-    description: payload.description || "",
-    service: payload.service || "ALL",
-    discountType: payload.discountType,
-    discountValue: Number(payload.discountValue),
-    minTransaction: Number(payload.minTransaction || 0),
-    maxDiscount: payload.maxDiscount,
-    pointsCost: Number(payload.pointsCost || 0),
-    validUntil: payload.validUntil,
-    usageLimit: Number(payload.usageLimit || 100),
-    usedCount: 0,
-    claimedCount: 0,
-    status: "ACTIVE",
-    createdAt: new Date().toISOString(),
-  };
-
-  try {
-    const current = await fetchMerchantVouchers();
-    const updated = [newMockVoucher, ...(current.data || [])];
-    await AsyncStorage.setItem(LOCAL_MERCHANT_VOUCHERS_KEY, JSON.stringify(updated));
-  } catch {}
-
-  return {
-    success: true,
-    message: `Voucher ${newMockVoucher.voucherCode} berhasil dibuat!`,
-    data: newMockVoucher,
-  };
+    const errJson = await res.json().catch(() => ({}));
+    return { success: false, message: errJson.message || "Gagal membuat voucher di server" };
+  } catch (e: any) {
+    return { success: false, message: e?.message || "Koneksi ke server gagal" };
+  }
 };
 
 export const toggleMerchantVoucherStatus = async (
@@ -250,28 +175,20 @@ export const toggleMerchantVoucherStatus = async (
     });
     if (res.ok) {
       const json = await res.json();
-      if (json.success) return json;
+      if (json.success) {
+        // update cache
+        try {
+          const current = await fetchMerchantVouchers();
+          const updated = (current.data || []).map((v) => (v._id === id ? json.data : v));
+          await AsyncStorage.setItem(LOCAL_MERCHANT_VOUCHERS_KEY, JSON.stringify(updated));
+        } catch {}
+        return json;
+      }
+      return { success: false, message: json.message || "Gagal memperbarui status voucher" };
     }
   } catch {}
 
-  // Local toggle
-  try {
-    const current = await fetchMerchantVouchers();
-    const updated = (current.data || []).map((v) =>
-      v._id === id
-        ? { ...v, status: (v.status === "ACTIVE" ? "INACTIVE" : "ACTIVE") as any }
-        : v
-    );
-    await AsyncStorage.setItem(LOCAL_MERCHANT_VOUCHERS_KEY, JSON.stringify(updated));
-    const target = updated.find((v) => v._id === id);
-    return {
-      success: true,
-      message: `Status voucher berhasil diubah menjadi ${target?.status}`,
-      data: target,
-    };
-  } catch {}
-
-  return { success: false, message: "Gagal memperbarui status voucher" };
+  return { success: false, message: "Gagal memperbarui status voucher di server" };
 };
 
 export const deleteMerchantVoucher = async (
@@ -286,17 +203,21 @@ export const deleteMerchantVoucher = async (
       method: "DELETE",
       headers,
     });
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success) {
+        try {
+          const current = await fetchMerchantVouchers();
+          const updated = (current.data || []).filter((v) => v._id !== id);
+          await AsyncStorage.setItem(LOCAL_MERCHANT_VOUCHERS_KEY, JSON.stringify(updated));
+        } catch {}
+        return json;
+      }
+      return { success: false, message: json.message || "Gagal menghapus voucher" };
+    }
   } catch {}
 
-  try {
-    const current = await fetchMerchantVouchers();
-    const updated = (current.data || []).filter((v) => v._id !== id);
-    await AsyncStorage.setItem(LOCAL_MERCHANT_VOUCHERS_KEY, JSON.stringify(updated));
-    return { success: true, message: "Voucher berhasil dihapus" };
-  } catch {}
-
-  return { success: false, message: "Gagal menghapus voucher" };
+  return { success: false, message: "Gagal menghapus voucher di server" };
 };
 
 export const validateVoucherForCheckout = async (params: {
@@ -324,48 +245,9 @@ export const validateVoucherForCheckout = async (params: {
       return await res.json();
     } else {
       const errJson = await res.json().catch(() => ({}));
-      return { success: false, message: errJson.message || "Voucher tidak valid" };
+      return { success: false, message: errJson.message || "Voucher tidak valid atau kadaluarsa" };
     }
-  } catch {}
-
-  // Fallback local validation
-  const code = (params.voucherCode || "").trim().toUpperCase();
-  const txAmount = params.transactionAmount || 0;
-  const delFee = params.deliveryFee || 10000;
-
-  if (code === "ONGKIRFREE") {
-    if (txAmount < 25000) {
-      return { success: false, message: "Minimal belanja Rp25.000 untuk Gratis Ongkir." };
-    }
-    return {
-      success: true,
-      message: "Voucher Gratis Ongkir berhasil diterapkan!",
-      data: {
-        voucherCode: "ONGKIRFREE",
-        title: "Voucher Gratis Ongkir Kamojang",
-        discountType: "FREE_SHIPPING",
-        discountAmount: Math.min(delFee, 10000),
-        discountValue: 10000,
-        minTransaction: 25000,
-      },
-    };
+  } catch {
+    return { success: false, message: "Gagal memverifikasi voucher ke server. Periksa koneksi internet Anda." };
   }
-
-  if (code === "HEMAT5RB" || code === "VOUCHER10K") {
-    const val = code === "HEMAT5RB" ? 5000 : 10000;
-    return {
-      success: true,
-      message: `Potongan diskon Rp ${val.toLocaleString("id-ID")} berhasil diterapkan!`,
-      data: {
-        voucherCode: code,
-        title: `Voucher Potongan Rp ${val.toLocaleString("id-ID")}`,
-        discountType: "FIXED",
-        discountAmount: val,
-        discountValue: val,
-        minTransaction: 20000,
-      },
-    };
-  }
-
-  return { success: false, message: "Kode voucher tidak ditemukan atau sudah kadaluarsa." };
 };

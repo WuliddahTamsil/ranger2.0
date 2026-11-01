@@ -458,6 +458,14 @@ const handlePaymentWebhook = async (req, res) => {
       });
     }
 
+    if (payment.status === "PAID" && verified.status === "PAID") {
+      return res.status(200).json({
+        success: true,
+        message: "Webhook acknowledged (already marked as PAID)",
+        status: payment.status,
+      });
+    }
+
     payment.status = verified.status;
     if (verified.status === "PAID") {
       payment.paidAt = verified.paidAt || new Date();

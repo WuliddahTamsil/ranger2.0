@@ -204,7 +204,7 @@ console.log("\n▶ [FLOW 6, 7 & 8] Kanyaah Recycle: Deposit, Timbang Pengepul & 
   );
 
   assert.strictEqual(pointConversion.totalRupiah, 43750, "12.5 kg * Rp3.500 = Rp43.750");
-  assert.strictEqual(pointConversion.totalPoint, 43750, "Konversi 1.0 = 43.750 Poin");
+  assert.strictEqual(pointConversion.totalPoint, 4375000, "Konversi 100 Point = Rp 1 -> 4.375.000 Poin");
 
   console.log(`  ✔ Hasil Timbang: ${actualWeightKg} kg @ Rp${priceSnapshot.pricePerKg}/kg = Rp${pointConversion.totalRupiah.toLocaleString("id-ID")} (${pointConversion.totalPoint.toLocaleString("id-ID")} Poin)`);
   passedWorkflowSteps++;

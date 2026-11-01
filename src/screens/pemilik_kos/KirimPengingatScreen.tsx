@@ -1,5 +1,6 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../utils/responsive";
 import React, { useState } from "react";
 import {
   View,
@@ -30,6 +31,7 @@ interface KirimPengingatScreenProps extends Nav {
 }
 
 export const KirimPengingatScreen: React.FC<KirimPengingatScreenProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [method, setMethod] = useState<"whatsapp" | "sms">("whatsapp");
   const [recipientName, setRecipientName] = useState("Budi Santoso");
   const [recipientPhone, setRecipientPhone] = useState("081298765432");
@@ -150,7 +152,7 @@ export const KirimPengingatScreen: React.FC<KirimPengingatScreenProps> = ({ navi
           </Text>
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: getBottomSpace(insets.bottom, 64, 16) }} />
       </ScrollView>
 
       {/* Fixed Bottom Action Bar */}

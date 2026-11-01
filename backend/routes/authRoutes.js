@@ -16,25 +16,29 @@ const {
   adminVerifyDocument,
   deleteAccount,
 } = require("../controllers/authController");
-const { requireAuth } = require("../middleware/authMiddleware");
+const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+// Public auth routes
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/forgot-password/request-otp", requestPasswordResetOtp);
 router.post("/forgot-password/verify-otp", verifyPasswordResetOtp);
 router.post("/reset-password", resetPassword);
-router.delete("/delete-account", requireAuth, deleteAccount);
-router.get("/mitra", getMitraAccounts);
-router.get("/users", getAllUsers);
-router.put("/mitra/:id/status", updateMitraStatus);
-router.get("/profile/:id", getUserProfile);
-router.put("/profile/:id", updateUserProfile);
-router.get("/admin/stats", getSystemStats);
-router.get("/admin/transactions", getAllPlatformTransactions);
 router.get("/document-requirements", getDocumentRequirements);
-router.put("/admin/verify-document", adminVerifyDocument);
+
+// Authenticated user routes
+router.delete("/delete-account", requireAuth, deleteAccount);
+router.get("/profile/:id", requireAuth, getUserProfile);
+router.put("/profile/:id", requireAuth, updateUserProfile);
+
+// Strictly Protected Admin routes
+router.get("/mitra", requireAuth, requireRole("admin"), getMitraAccounts);
+router.get("/users", requireAuth, requireRole("admin"), getAllUsers);
+router.put("/mitra/:id/status", requireAuth, requireRole("admin"), updateMitraStatus);
+router.get("/admin/stats", requireAuth, requireRole("admin"), getSystemStats);
+router.get("/admin/transactions", requireAuth, requireRole("admin"), getAllPlatformTransactions);
+router.put("/admin/verify-document", requireAuth, requireRole("admin"), adminVerifyDocument);
 
 module.exports = router;
-

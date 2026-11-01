@@ -530,7 +530,7 @@ export const FormalInvoiceModal: React.FC<FormalInvoiceModalProps> = ({
           <View style={styles.topActionsBar}>
             <View style={styles.topActionsLeft}>
               <FileText size={18} color="#0D7A53" />
-              <Text style={styles.topActionsTitle}>Faktur Transaksi Resmi</Text>
+              <Text style={styles.topActionsTitle} numberOfLines={1}>Faktur Transaksi Resmi</Text>
             </View>
             <View style={styles.topActionsRight}>
               <TouchableOpacity
@@ -814,6 +814,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E5EEE8",
   },
   topActionsLeft: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -822,11 +824,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900",
     color: "#10251B",
+    flexShrink: 1,
   },
   topActionsRight: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexShrink: 0,
   },
   actionIconBtn: {
     width: 32,
@@ -890,6 +894,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: "#176B49",
     letterSpacing: 0.5,
+    flexShrink: 1,
   },
   brandSubtitle: {
     fontSize: 10,

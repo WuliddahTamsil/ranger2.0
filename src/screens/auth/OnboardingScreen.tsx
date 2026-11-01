@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
-import { Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ArrowRight } from "lucide-react-native";
-import { Nav } from "../../types";
+import { ArrowRight, Users } from "lucide-react-native";
+import { Nav, Screen } from "../../types";
 import { OnboardingVisual, OnboardingVisualKind } from "./components/OnboardingVisual";
 import { authColors } from "./authStyles";
+import { clamp } from "../../utils/responsive";
 
 const SLIDES: Array<{ title: string; desc: string; visual: OnboardingVisualKind }> = [
   {
@@ -29,17 +30,30 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
   const [slide, setSlide] = useState(0);
   const currentSlide = SLIDES[slide];
   const isLast = slide === SLIDES.length - 1;
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
 
-  const finishOnboarding = async () => {
+  const isShort = height < 680;
+  const isVeryShort = height < 600;
+  const isNarrow = width < 360;
+
+  // Responsive visual sizing
+  const visualHeight = clamp(Math.round(height * (isVeryShort ? 0.20 : (isShort ? 0.23 : 0.27))), 120, 220);
+  const titleFontSize = isVeryShort ? 19 : (isShort ? 22 : 26);
+  const titleLineHeight = isVeryShort ? 25 : (isShort ? 28 : 33);
+  const descFontSize = isVeryShort ? 12.5 : 14;
+  const descLineHeight = isVeryShort ? 18 : 22;
+
+  const finishOnboarding = async (targetScreen: Screen = "c_home", params?: Record<string, any>) => {
     try {
       await AsyncStorage.setItem("@geoverse_onboarding_completed", "true");
     } catch {}
-    navigate("c_home");
+    navigate(targetScreen, params);
   };
 
   const next = () => {
     if (isLast) {
-      void finishOnboarding();
+      void finishOnboarding("c_home");
     } else {
       setSlide((current) => current + 1);
     }
@@ -52,54 +66,103 @@ export const OnboardingScreen: React.FC<Nav> = ({ navigate }) => {
         <View style={styles.pgeBadge}>
           <Text style={styles.pgeBadgeText}>GEOVERSE 2.0 • PGE KAMOJANG</Text>
         </View>
-        <TouchableOpacity onPress={() => void finishOnboarding()} activeOpacity={0.7} style={styles.skipBtn}>
+        <TouchableOpacity onPress={() => void finishOnboarding("c_home")} activeOpacity={0.7} style={styles.skipBtn}>
           <Text style={styles.skipText}>Lewati</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Main Content */}
-      <View style={styles.content}>
-        <View style={styles.visualFrame}>
-          <OnboardingVisual kind={currentSlide.visual} />
-        </View>
-        <View style={styles.copy}>
-          <Text style={styles.title}>{currentSlide.title}</Text>
-          <Text style={styles.desc}>{currentSlide.desc}</Text>
-        </View>
-      </View>
-
-      {/* Bottom Footer */}
-      <View style={styles.footer}>
-        <View style={styles.pagination} accessibilityLabel={`Halaman ${slide + 1} dari ${SLIDES.length}`}>
-          {SLIDES.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.indicator,
-                index === slide ? styles.indicatorActive : styles.indicatorInactive,
-              ]}
-            />
-          ))}
-        </View>
-        <Pressable
-          onPress={next}
-          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-        >
-          <Text style={styles.buttonText}>{isLast ? "Mulai Jelajahi" : "Lanjutkan"}</Text>
-          <ArrowRight size={17} color="#FFFFFF" />
-        </Pressable>
-        {isLast && (
-          <TouchableOpacity
-            onPress={() => navigate("login")}
-            activeOpacity={0.7}
-            style={styles.loginLinkWrap}
-          >
-            <Text style={styles.loginLinkText}>
-              Sudah memiliki akun? <Text style={styles.loginLinkBold}>Masuk di sini</Text>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { minHeight: Math.max(height - (insets.top + (isShort ? 45 : 60)), 380) },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* Main Content */}
+        <View style={[styles.content, isShort && { paddingVertical: 8 }]}>
+          <View style={[styles.visualFrame, { height: visualHeight, marginBottom: isShort ? 14 : 28 }]}>
+            <OnboardingVisual kind={currentSlide.visual} />
+          </View>
+          <View style={styles.copy}>
+            <Text style={[styles.title, { fontSize: titleFontSize, lineHeight: titleLineHeight }]}>
+              {currentSlide.title}
             </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+            <Text style={[styles.desc, { fontSize: descFontSize, lineHeight: descLineHeight }]}>
+              {currentSlide.desc}
+            </Text>
+          </View>
+        </View>
+
+        {/* Bottom Footer */}
+        <View
+          style={[
+            styles.footer,
+            {
+              paddingBottom: Math.max(insets.bottom, isShort ? 14 : 28),
+              paddingTop: isShort ? 8 : 12,
+            },
+          ]}
+        >
+          <View
+            style={[styles.pagination, isShort && { marginBottom: 12 }]}
+            accessibilityLabel={`Halaman ${slide + 1} dari ${SLIDES.length}`}
+          >
+            {SLIDES.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.indicator,
+                  index === slide ? styles.indicatorActive : styles.indicatorInactive,
+                ]}
+              />
+            ))}
+          </View>
+
+          {isLast ? (
+            <View style={styles.lastSlideActions}>
+              <Pressable
+                onPress={() => void finishOnboarding("c_home")}
+                style={({ pressed }) => [styles.button, isShort && styles.buttonCompact, pressed && styles.buttonPressed]}
+              >
+                <Text style={[styles.buttonText, isNarrow && { fontSize: 13.5 }]} numberOfLines={1}>
+                  Mulai Jelajahi Aplikasi
+                </Text>
+                <ArrowRight size={17} color="#FFFFFF" />
+              </Pressable>
+
+              <TouchableOpacity
+                onPress={() => void finishOnboarding("auth_register_role", { roleTab: "partner" })}
+                activeOpacity={0.8}
+                style={[styles.partnerOutlineBtn, isShort && styles.partnerOutlineBtnCompact]}
+              >
+                <Users size={16} color={authColors.primary} />
+                <Text style={[styles.partnerOutlineBtnText, isNarrow && { fontSize: 13 }]} numberOfLines={1}>
+                  Daftar Mitra Usaha / Driver
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => navigate("login")}
+                activeOpacity={0.7}
+                style={[styles.loginLinkWrap, isShort && { marginTop: 2 }]}
+              >
+                <Text style={styles.loginLinkText}>
+                  Sudah memiliki akun? <Text style={styles.loginLinkBold}>Masuk di sini</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Pressable
+              onPress={next}
+              style={({ pressed }) => [styles.button, isShort && styles.buttonCompact, pressed && styles.buttonPressed]}
+            >
+              <Text style={styles.buttonText}>Lanjutkan</Text>
+              <ArrowRight size={17} color="#FFFFFF" />
+            </Pressable>
+          )}
+        </View>
+      </ScrollView>
     </ResponsiveSafeAreaView>
   );
 };
@@ -108,6 +171,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: authColors.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "space-between",
   },
   topBar: {
     flexDirection: "row",
@@ -147,11 +214,9 @@ const styles = StyleSheet.create({
   },
   visualFrame: {
     width: "100%",
-    height: 220,
     maxWidth: 360,
     alignSelf: "center",
     justifyContent: "center",
-    marginBottom: 28,
   },
   copy: {
     width: "100%",
@@ -230,14 +295,42 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     transform: [{ scale: 0.995 }],
   },
+  buttonCompact: {
+    minHeight: 44,
+  },
   buttonText: {
     color: "#FFFFFF",
     fontSize: 14.5,
     fontWeight: "700",
     letterSpacing: 0.1,
   },
+  lastSlideActions: {
+    width: "100%",
+    gap: 8,
+    alignItems: "center",
+  },
+  partnerOutlineBtn: {
+    width: "100%",
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: authColors.primary,
+    backgroundColor: "#F0FDF4",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  partnerOutlineBtnCompact: {
+    minHeight: 42,
+  },
+  partnerOutlineBtnText: {
+    color: authColors.primary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   loginLinkWrap: {
-    marginTop: 14,
+    marginTop: 6,
     paddingVertical: 6,
     alignItems: "center",
     justifyContent: "center",

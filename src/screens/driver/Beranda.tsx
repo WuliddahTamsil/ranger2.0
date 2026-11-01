@@ -2429,12 +2429,12 @@ export const Beranda: React.FC<DriverHomeProps> = ({ navigate, authAccount }) =>
   };
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {/* Tab content view */}
       <View style={styles.tabContainer}>{renderTabContent()}</View>
 
       {/* Bottom Nav Bar */}
-      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         {navItems.map((item, index) => {
           const active = currentTab === index;
           const IconComp = item.icon;
@@ -2651,7 +2651,7 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     padding: 12,
     width: "48%",
-    aspectRatio: 1.5,
+    minHeight: 84,
     justifyContent: "center",
     gap: 4,
   },
@@ -2667,10 +2667,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   summaryLabel: {
     fontSize: 11,
     color: "#6B7280",
+    flexShrink: 1,
   },
   // Incoming Ride Card
   incomingRideCard: {

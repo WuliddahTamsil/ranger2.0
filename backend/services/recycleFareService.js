@@ -18,15 +18,13 @@ const CATEGORY_CO2_FACTORS = {
   Lainnya: 1.0,
 };
 
-// Nilai default konversi poin terhadap rupiah (dapat dikonfigurasi per transaksi / setting bisnis)
-// 1.0 = Rp 1 menghasilkan 1 Poin GEOVERSE.
-// Jika client menyepakati Rp 1.000 = 10 Poin, rate menjadi 0.01 (10 / 1000).
+// Nilai standar produksi konversi poin terhadap rupiah:
+// 100 Point = Rp 1 (1 Point = Rp 0.01)
 const RECYCLE_POINT_CONFIG = {
-  pointToRupiahRate: 1.0, // Default 1 Poin = Rp 1 (Dapat dikonfigurasi tanpa hardcode)
+  pointToRupiahRate: 0.01,
   defaultPriceSource: "Pengepul Rekanan Kamojang",
-  isPendingClientFinalRatioConfirmation: true,
-  description:
-    "Rasio konversi fleksibel: 1 Point = Rp 1 (acuan awal), menunggu persetujuan rasio final dari client.",
+  isPendingClientFinalRatioConfirmation: false,
+  description: "Rasio standar produksi: 100 Point = Rp 1 (1 Point = Rp 0.01)",
 };
 
 /**
@@ -85,10 +83,10 @@ function computeEnvironmentalImpact(items) {
 }
 
 /**
- * Calculates points and rupiah for an item based on configurable rate
+ * Calculates points and rupiah for an item based on unified 100 Point = Rp 1 rate
  * @param {number} weightKg - Berat sampah dalam kg
  * @param {number} pricePerKg - Harga pengepul per kg
- * @param {number} pointToRupiahRate - Rasio konversi rupiah ke poin (default 1.0)
+ * @param {number} pointToRupiahRate - Rasio konversi rupiah ke poin (default 0.01)
  */
 function calculateCategoryPointAndRupiah(
   weightKg,
@@ -97,10 +95,10 @@ function calculateCategoryPointAndRupiah(
 ) {
   const safeWeight = Math.max(0, Number(weightKg) || 0);
   const safePrice = Math.max(0, Number(pricePerKg) || 0);
-  const rate = Math.max(0, Number(pointToRupiahRate) || 1.0);
+  const rate = Math.max(0.0001, Number(pointToRupiahRate) || 0.01);
 
   const totalRupiah = Math.round(safeWeight * safePrice);
-  const totalPoint = Math.round(totalRupiah * rate);
+  const totalPoint = Math.round(totalRupiah / rate); // 100 Point = Rp 1
 
   return {
     totalRupiah,
@@ -131,6 +129,8 @@ function createCategoryPriceSnapshot(categoryItem, collectorInfo = {}) {
 module.exports = {
   CATEGORY_CO2_FACTORS,
   RECYCLE_POINT_CONFIG,
+  POINT_TO_RUPIAH_RATE: RECYCLE_POINT_CONFIG.pointToRupiahRate,
+  getPointToRupiahRate: () => RECYCLE_POINT_CONFIG.pointToRupiahRate,
   calculateDistanceKm,
   computeEnvironmentalImpact,
   calculateCategoryPointAndRupiah,

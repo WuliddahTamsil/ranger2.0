@@ -17,6 +17,7 @@ const {
   deleteHero,
   uploadHeroMedia,
 } = require("../controllers/homeHeroController");
+const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -30,27 +31,29 @@ const heroUpload = multer({
     },
   }),
   limits: {
-    fileSize: 600 * 1024 * 1024,
+    fileSize: 100 * 1024 * 1024, // 100MB
   },
 });
+
+const adminGuard = [requireAuth, requireRole("admin")];
 
 // Customer Public Route
 router.get("/active", getActiveHeroes);
 
 // Admin Routes (When mounted under /api/admin/home-hero or /api/home-hero/admin)
-router.get("/", getAdminHeroes);
-router.post("/", createHero);
-router.put("/:id", updateHero);
-router.patch("/:id/status", updateHeroStatus);
-router.delete("/:id", deleteHero);
-router.post("/upload", heroUpload.single("file"), uploadHeroMedia);
+router.get("/", ...adminGuard, getAdminHeroes);
+router.post("/", ...adminGuard, createHero);
+router.put("/:id", ...adminGuard, updateHero);
+router.patch("/:id/status", ...adminGuard, updateHeroStatus);
+router.delete("/:id", ...adminGuard, deleteHero);
+router.post("/upload", ...adminGuard, heroUpload.single("file"), uploadHeroMedia);
 
 // Also support sub-paths under /admin if router is mounted at /api/home-hero
-router.get("/admin", getAdminHeroes);
-router.post("/admin", createHero);
-router.put("/admin/:id", updateHero);
-router.patch("/admin/:id/status", updateHeroStatus);
-router.delete("/admin/:id", deleteHero);
-router.post("/admin/upload", heroUpload.single("file"), uploadHeroMedia);
+router.get("/admin", ...adminGuard, getAdminHeroes);
+router.post("/admin", ...adminGuard, createHero);
+router.put("/admin/:id", ...adminGuard, updateHero);
+router.patch("/admin/:id/status", ...adminGuard, updateHeroStatus);
+router.delete("/admin/:id", ...adminGuard, deleteHero);
+router.post("/admin/upload", ...adminGuard, heroUpload.single("file"), uploadHeroMedia);
 
 module.exports = router;

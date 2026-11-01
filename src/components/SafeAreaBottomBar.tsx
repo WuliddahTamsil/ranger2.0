@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleProp, StyleSheet, View, ViewProps, ViewStyle } from "react-native";
+import { Platform, StyleProp, StyleSheet, View, ViewProps, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface SafeAreaBottomBarProps extends ViewProps {
@@ -13,7 +13,7 @@ export const SafeAreaBottomBar: React.FC<SafeAreaBottomBarProps> = ({ style, abs
   const basePadding = typeof flatStyle.paddingBottom === "number"
     ? flatStyle.paddingBottom
     : (typeof flatStyle.paddingVertical === "number" ? flatStyle.paddingVertical : 10);
-  const effectivePaddingBottom = bottom > 0 ? Math.max(bottom + 4, basePadding) : basePadding;
+  const effectivePaddingBottom = Math.max(bottom > 0 ? bottom + (Platform.OS === "ios" ? 4 : 2) : 0, basePadding);
 
   return (
     <View

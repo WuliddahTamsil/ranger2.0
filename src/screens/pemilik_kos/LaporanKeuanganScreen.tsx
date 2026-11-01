@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Platform,
 } from "react-native";
 import Svg, { Path, Circle, Rect, Text as SvgText, Defs, LinearGradient, Stop } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
@@ -582,7 +583,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
   }));
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Main Scroll Content */}
@@ -1413,7 +1414,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
       </TouchableOpacity>
 
       {/* Bottom Navigation Bar */}
-      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         <TouchableOpacity
           style={styles.navTab}
           onPress={() => navigate("pemilik_kos_home")}

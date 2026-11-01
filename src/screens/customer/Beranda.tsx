@@ -168,9 +168,10 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
     formatPoint,
     formatRupiah,
   } = useGeoversePoint();
-  const wallet = pointWallet || recycleWallet;
-  const recyclePoints = wallet?.balancePoint || 0;
-  const recycleTotalKg = wallet?.totalKgDeposited || 0;
+  const isGuest = !authAccount || !authAccount.token;
+  const wallet = isGuest ? null : (pointWallet || recycleWallet);
+  const recyclePoints = isGuest ? 0 : (wallet?.balancePoint || 0);
+  const recycleTotalKg = isGuest ? 0 : (wallet?.totalKgDeposited || 0);
 
   // Super-App Home UI states
   const [refreshing, setRefreshing] = useState(false);
@@ -1240,8 +1241,8 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
 
   // Main Beranda layout panel (Clean Gojek-Grade Super-App Design)
   const renderBerandaContent = () => {
-    const pointBalance = wallet?.balancePoint ?? 0;
-    const rupiahEquivalent = Math.floor(pointBalance / 100);
+    const pointBalance = isGuest ? 0 : (wallet?.balancePoint ?? 0);
+    const rupiahEquivalent = isGuest ? 0 : Math.floor(pointBalance / 100);
 
     return (
       <ScrollView
@@ -1280,7 +1281,16 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           {/* Left: Balance Info */}
           <TouchableOpacity
             style={styles.walletBarLeft}
-            onPress={() => navigate("c_point_home")}
+            onPress={() => {
+              if (isGuest) {
+                navigate("login", {
+                  targetScreen: "c_point_home",
+                  reason: "Silakan masuk terlebih dahulu untuk melihat dan mengumpulkan GEOVERSE Point.",
+                });
+                return;
+              }
+              navigate("c_point_home");
+            }}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel="Buka Dompet Point"
@@ -1316,7 +1326,16 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
           <View style={[styles.walletBarActionsRow, { gap: isCompact ? 8 : 12 }]}>
             <TouchableOpacity
               style={styles.walletActionBtn}
-              onPress={() => navigate("c_recycle_home")}
+              onPress={() => {
+                if (isGuest) {
+                  navigate("login", {
+                    targetScreen: "c_recycle_home",
+                    reason: "Silakan masuk terlebih dahulu untuk menyetor sampah dan mendapatkan poin.",
+                  });
+                  return;
+                }
+                navigate("c_recycle_home");
+              }}
               activeOpacity={0.75}
             >
               <View style={styles.walletActionCircle}>
@@ -1327,7 +1346,16 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
 
             <TouchableOpacity
               style={styles.walletActionBtn}
-              onPress={() => navigate("c_point_vouchers")}
+              onPress={() => {
+                if (isGuest) {
+                  navigate("login", {
+                    targetScreen: "c_point_vouchers",
+                    reason: "Silakan masuk terlebih dahulu untuk melihat dan menukarkan voucher.",
+                  });
+                  return;
+                }
+                navigate("c_point_vouchers");
+              }}
               activeOpacity={0.75}
             >
               <View style={styles.walletActionCircle}>
@@ -1338,7 +1366,16 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
 
             <TouchableOpacity
               style={styles.walletActionBtn}
-              onPress={() => navigate("c_point_ledger")}
+              onPress={() => {
+                if (isGuest) {
+                  navigate("login", {
+                    targetScreen: "c_point_ledger",
+                    reason: "Silakan masuk terlebih dahulu untuk melihat riwayat GEOVERSE Point Anda.",
+                  });
+                  return;
+                }
+                navigate("c_point_ledger");
+              }}
               activeOpacity={0.75}
             >
               <View style={styles.walletActionCircle}>
@@ -1475,7 +1512,16 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             {/* 7. GEOVERSE Point */}
             <TouchableOpacity
               style={styles.launcherItem}
-              onPress={() => navigate("c_point_home")}
+              onPress={() => {
+                if (isGuest) {
+                  navigate("login", {
+                    targetScreen: "c_point_home",
+                    reason: "Silakan masuk terlebih dahulu untuk melihat dan mengumpulkan GEOVERSE Point.",
+                  });
+                  return;
+                }
+                navigate("c_point_home");
+              }}
               activeOpacity={0.75}
             >
               <View style={[styles.launcherSquircle, { backgroundColor: "#FEF9C3" }]}>
@@ -2080,7 +2126,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         {/* ============================================================ */}
         {/* FIXED BOTTOM NAVIGATION BAR (Exact Gojek 5-Menu Polish) */}
         {/* ============================================================ */}
-        <View style={[styles.bottomNavBar, { paddingBottom: Math.max(insets.bottom, 4) }]}>
+        <View style={[styles.bottomNavBar, { paddingBottom: Math.max(insets.bottom, 6) }]}>
           {navItems.map((item, index) => {
             const active = currentTab === index;
             const IconComp = item.icon;
@@ -4094,7 +4140,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   productCard: {
-    width: "48%",
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 130,
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
@@ -4119,11 +4167,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#64748B",
     fontWeight: "600",
+    flexShrink: 1,
   },
   productItemName: {
     fontSize: 13,
     fontWeight: "800",
     color: "#1E293B",
+    flexShrink: 1,
   },
   productCardFooter: {
     flexDirection: "row",

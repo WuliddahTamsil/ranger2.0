@@ -31,8 +31,10 @@ import { Nav } from "../../../types";
 import { useSendContext } from "../../../context/SendContext";
 import { SendProgressIndicator } from "../../../components/send/SendProgressIndicator";
 import { estimateSendFare, createSendOrder } from "../../../services/sendService";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { rp } from "../../../utils/formatters";
 import { SafeAreaBottomBar } from "../../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../../utils/responsive";
 import { AuthAccount } from "../../auth/authTypes";
 
 interface SendFareEstimateScreenProps extends Nav {
@@ -57,6 +59,7 @@ export const SendFareEstimateScreen: React.FC<SendFareEstimateScreenProps> = ({
   navigate,
   authAccount,
 }) => {
+  const insets = useSafeAreaInsets();
   const {
     sender,
     recipient,
@@ -176,7 +179,7 @@ export const SendFareEstimateScreen: React.FC<SendFareEstimateScreenProps> = ({
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: getBottomSpace(insets.bottom, 72, 16) }]}
         showsVerticalScrollIndicator={false}
       >
         {/* 1. Route Summary Card */}

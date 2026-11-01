@@ -1,5 +1,6 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../utils/responsive";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -60,6 +61,7 @@ interface PemilikLaundryHomeProps extends Nav {
 }
 
 export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [orders, setOrders] = useState<LaundryOrder[]>([]);
   const [storeInfo, setStoreInfo] = useState<LaundryStore | null>(getSelectedStore());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -209,13 +211,13 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
   const totalActiveTasks = incomingPendingAccCount + needWeighCount + verifyingCount;
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Main Scroll Content */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: getBottomSpace(insets.bottom, 60, 16) }]}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={["#0D7A53"]} />}
       >
         {/* Role Header */}

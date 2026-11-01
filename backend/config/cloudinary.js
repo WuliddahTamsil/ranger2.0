@@ -3,13 +3,25 @@ const { Readable } = require("stream");
 const fs = require("fs");
 const path = require("path");
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "hdlw3v3n",
-  api_key: process.env.CLOUDINARY_API_KEY || "644169682494749",
-  api_secret: process.env.CLOUDINARY_API_SECRET || "IWYyiIt5Ro8CgAbw8BSsyIIo8tk",
-  secure: true,
-});
+const isProduction = process.env.NODE_ENV === "production";
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+const apiKey = process.env.CLOUDINARY_API_KEY;
+const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+const isCloudinaryConfigured = Boolean(cloudName && apiKey && apiSecret);
+
+if (isProduction && !isCloudinaryConfigured) {
+  console.error("FATAL/WARNING: Cloudinary credentials missing in production environment (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET).");
+}
+
+if (isCloudinaryConfigured) {
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+    secure: true,
+  });
+}
 
 // Local fallback uploads directory
 const UPLOADS_DIR = path.join(__dirname, "../uploads");
@@ -29,6 +41,24 @@ const uploadToCloudinary = async (fileBuffer, originalName, mimeType, hostUrl = 
   const cleanBaseName = (originalName || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
   const fileName = `ranger_${Date.now()}_${cleanBaseName}`;
 
+  if (!isCloudinaryConfigured) {
+    if (isProduction) {
+      throw new Error("Layanan penyimpanan awan (Cloudinary) belum dikonfigurasi di server production.");
+    }
+    // In local development without Cloudinary credentials, fallback gracefully to disk
+    const localFilePath = path.join(UPLOADS_DIR, fileName);
+    fs.writeFileSync(localFilePath, fileBuffer);
+    const fileUrl = `${hostUrl}/uploads/${fileName}`;
+    return {
+      fileId: fileName,
+      name: fileName,
+      viewUrl: fileUrl,
+      webViewLink: fileUrl,
+      downloadUrl: fileUrl,
+      storage: "local",
+    };
+  }
+
   try {
     console.log(`📤 Uploading '${fileName}' (${mimeType}) to Cloudinary...`);
 
@@ -37,7 +67,7 @@ const uploadToCloudinary = async (fileBuffer, originalName, mimeType, hostUrl = 
         {
           folder: "ranger_uploads",
           public_id: path.parse(fileName).name,
-          resource_type: "auto", // Automatically detects images, pdf, videos, raw documents
+          resource_type: "auto",
         },
         (error, result) => {
           if (error) {
@@ -55,7 +85,6 @@ const uploadToCloudinary = async (fileBuffer, originalName, mimeType, hostUrl = 
 
     console.log(`✅ File successfully uploaded to Cloudinary: ${uploadResult.secure_url}`);
 
-    // If PDF, convert viewUrl to .jpg so Cloudinary delivers page 1 as high-res preview image without 401
     const viewUrl = uploadResult.secure_url && (mimeType === "application/pdf" || originalName?.toLowerCase().endsWith(".pdf"))
       ? uploadResult.secure_url.replace(/\.pdf(\?.*)?$/i, ".jpg$1")
       : uploadResult.secure_url;
@@ -71,7 +100,11 @@ const uploadToCloudinary = async (fileBuffer, originalName, mimeType, hostUrl = 
   } catch (error) {
     console.error("❌ Cloudinary Upload Error:", error.message);
 
-    // Fallback to local disk storage
+    if (isProduction) {
+      throw new Error(`Gagal mengunggah berkas ke penyimpanan Cloudinary: ${error.message}`);
+    }
+
+    // Fallback to local disk storage in development
     const localFilePath = path.join(UPLOADS_DIR, fileName);
     fs.writeFileSync(localFilePath, fileBuffer);
     const fileUrl = `${hostUrl}/uploads/${fileName}`;
@@ -91,5 +124,6 @@ const uploadToCloudinary = async (fileBuffer, originalName, mimeType, hostUrl = 
 
 module.exports = {
   cloudinary,
+  isCloudinaryConfigured,
   uploadToCloudinary,
 };

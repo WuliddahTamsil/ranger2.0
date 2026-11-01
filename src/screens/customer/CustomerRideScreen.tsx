@@ -43,6 +43,7 @@ import { Nav, OrderItem } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
 import { useRecycle } from "../../context/RecycleContext";
 import { addCustomerOrder } from "./customerOrderStore";
+import { getBottomSpace } from "../../utils/responsive";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
 import {
   createRideBooking,
@@ -1318,7 +1319,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
           </Text>
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: getBottomSpace(insets.bottom, 72, 16) }} />
       </ScrollView>
 
       {/* Sticky Bottom Order Button */}

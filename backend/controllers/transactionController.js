@@ -2,13 +2,15 @@ const Transaction = require("../models/Transaction");
 const User = require("../models/User");
 const Kost = require("../models/Kost");
 
-// Get transactions by owner (ID or Email)
+// Get transactions by owner (Protected)
 const getTransactionsByOwner = async (req, res) => {
   try {
     const { ownerId } = req.params;
     let query = {};
 
-    if (ownerId && ownerId.match(/^[0-9a-fA-F]{24}$/)) {
+    if (req.authUser && req.authUser.role !== "admin") {
+      query = { ownerId: req.authUser._id };
+    } else if (ownerId && ownerId.match(/^[0-9a-fA-F]{24}$/)) {
       query = {
         $or: [
           { ownerId: ownerId },
@@ -52,21 +54,12 @@ const createTransaction = async (req, res) => {
       return res.status(400).json({ success: false, message: "Judul dan nominal transaksi wajib diisi" });
     }
 
-    let finalOwnerId = undefined;
-    let finalOwnerEmail = ownerEmail ? ownerEmail.toLowerCase().trim() : "";
+    let finalOwnerId = req.authUser ? req.authUser._id : undefined;
+    let finalOwnerEmail = req.authUser ? req.authUser.email : (ownerEmail ? ownerEmail.toLowerCase().trim() : "");
 
-    if (ownerId && ownerId.match(/^[0-9a-fA-F]{24}$/)) {
-      finalOwnerId = ownerId;
-      const user = await User.findById(ownerId);
-      if (user && user.email) {
-        finalOwnerEmail = user.email.toLowerCase().trim();
-      }
-    } else if (ownerEmail) {
-      const cleanEmail = ownerEmail.toLowerCase().trim();
-      const user = await User.findOne({ email: { $regex: new RegExp(`^${cleanEmail}$`, "i") } });
-      if (user) {
-        finalOwnerId = user._id;
-        finalOwnerEmail = user.email.toLowerCase().trim();
+    if (!finalOwnerId) {
+      if (ownerId && ownerId.match(/^[0-9a-fA-F]{24}$/)) {
+        finalOwnerId = ownerId;
       }
     }
 
@@ -97,15 +90,21 @@ const createTransaction = async (req, res) => {
 const deleteTransaction = async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = await Transaction.findByIdAndDelete(id);
-    if (!deleted) {
+    const tx = await Transaction.findById(id);
+    if (!tx) {
       return res.status(404).json({ success: false, message: "Transaksi tidak ditemukan" });
     }
+
+    if (req.authUser && req.authUser.role !== "admin" && String(tx.ownerId) !== String(req.authUser._id)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda bukan pemilik transaksi ini." });
+    }
+
+    await Transaction.findByIdAndDelete(id);
 
     return res.status(200).json({
       success: true,
       message: "Transaksi berhasil dihapus",
-      data: deleted,
+      data: tx,
     });
   } catch (error) {
     console.error("❌ deleteTransaction error:", error);

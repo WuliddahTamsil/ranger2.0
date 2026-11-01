@@ -151,14 +151,7 @@ const deleteItem = async (req, res) => {
  */
 const path = require("path");
 const fs = require("fs");
-const cloudinary = require("cloudinary").v2;
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "hdlw3v3n",
-  api_key: process.env.CLOUDINARY_API_KEY || "644169682494749",
-  api_secret: process.env.CLOUDINARY_API_SECRET || "IWYyiIt5Ro8CgAbw8BSsyIIo8tk",
-  secure: true,
-});
+const { cloudinary } = require("../../config/cloudinary");
 
 const uploadMedia = async (req, res) => {
   try {

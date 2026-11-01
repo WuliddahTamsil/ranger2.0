@@ -10,6 +10,7 @@ const {
   deleteItem,
   uploadMedia,
 } = require("./pgeInfoHubController");
+const { requireAuth, requireRole } = require("../../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -26,16 +27,18 @@ const pgeUpload = multer({
   },
 });
 
+const adminGuard = [requireAuth, requireRole("admin")];
+
 // Public routes for Customer App
 router.get("/", getPublished);
 
-// Admin CMS routes
-router.get("/admin", getAdminAll);
-router.post("/", createItem);
-router.put("/:id", updateItem);
-router.put("/:id/status", updateStatus);
-router.patch("/:id/status", updateStatus);
-router.delete("/:id", deleteItem);
-router.post("/upload", pgeUpload.single("file"), uploadMedia);
+// Strictly Protected Admin CMS routes
+router.get("/admin", ...adminGuard, getAdminAll);
+router.post("/", ...adminGuard, createItem);
+router.put("/:id", ...adminGuard, updateItem);
+router.put("/:id/status", ...adminGuard, updateStatus);
+router.patch("/:id/status", ...adminGuard, updateStatus);
+router.delete("/:id", ...adminGuard, deleteItem);
+router.post("/upload", ...adminGuard, pgeUpload.single("file"), uploadMedia);
 
 module.exports = router;

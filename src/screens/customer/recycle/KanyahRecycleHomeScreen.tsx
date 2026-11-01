@@ -296,10 +296,11 @@ export const KanyahRecycleHomeScreen: React.FC<Props> = ({ navigate, authAccount
     navigate("c_recycle_deposit_form");
   };
 
-  const balance = Number(wallet?.balancePoint) || 0;
-  const totalKg = Number(wallet?.totalKgDeposited) || 0;
-  const co2Kg = Number(wallet?.totalCo2ReductionKg) || totalKg * 1.85;
-  const treesCount = Math.floor(co2Kg / 22);
+  const isGuest = !authAccount || !authAccount.token;
+  const balance = isGuest ? 0 : (Number(wallet?.balancePoint) || 0);
+  const totalKg = isGuest ? 0 : (Number(wallet?.totalKgDeposited) || 0);
+  const co2Kg = isGuest ? 0 : (Number(wallet?.totalCo2ReductionKg) || totalKg * 1.85);
+  const treesCount = isGuest ? 0 : Math.floor(co2Kg / 22);
 
   const activeDeposit = recentDeposits.find(
     (d) => !["COMPLETED", "CANCELLED", "REJECTED"].includes(d.status)

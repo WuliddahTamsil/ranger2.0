@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -39,6 +40,7 @@ interface Props extends Nav {
   googleDraft?: GoogleProfile | null;
   onGoogleConnect?: (credential: GoogleCredential) => Promise<void>;
   onSelect: (role: AuthRegistrationRole) => void;
+  initialTab?: "customer" | "partner";
 }
 
 interface PartnerOption {
@@ -114,16 +116,25 @@ export const RegisterRoleScreen: React.FC<Props> = ({
   googleDraft,
   onGoogleConnect,
   onSelect,
+  initialTab = "customer",
 }) => {
-  const [activeTab, setActiveTab] = useState<"customer" | "partner">("customer");
+  const [activeTab, setActiveTab] = useState<"customer" | "partner">(initialTab);
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 360;
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   return (
     <ResponsiveSafeAreaView style={authStyles.container}>
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, isNarrow && { paddingHorizontal: 10 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.card}>
+        <View style={[styles.card, isNarrow && { paddingHorizontal: 12, paddingVertical: 18 }]}>
           {/* Top Bar with Back Button */}
           <TouchableOpacity
             onPress={() => navigate("login")}
@@ -169,18 +180,25 @@ export const RegisterRoleScreen: React.FC<Props> = ({
           <View style={styles.tabContainer}>
             <TouchableOpacity
               onPress={() => setActiveTab("customer")}
-              style={[styles.tabBtn, activeTab === "customer" && styles.tabBtnActive]}
+              style={[
+                styles.tabBtn,
+                activeTab === "customer" && styles.tabBtnActive,
+                isNarrow && styles.tabBtnNarrow,
+              ]}
               activeOpacity={0.8}
             >
               <UserRound
-                size={16}
+                size={isNarrow ? 14 : 16}
                 color={activeTab === "customer" ? authColors.primaryDark : authColors.muted}
               />
               <Text
                 style={[
                   styles.tabBtnText,
                   activeTab === "customer" && styles.tabBtnTextActive,
+                  isNarrow && styles.tabBtnTextNarrow,
                 ]}
+                numberOfLines={isNarrow ? 2 : 1}
+                ellipsizeMode="tail"
               >
                 Akun Pelanggan
               </Text>
@@ -188,18 +206,25 @@ export const RegisterRoleScreen: React.FC<Props> = ({
 
             <TouchableOpacity
               onPress={() => setActiveTab("partner")}
-              style={[styles.tabBtn, activeTab === "partner" && styles.tabBtnActive]}
+              style={[
+                styles.tabBtn,
+                activeTab === "partner" && styles.tabBtnActive,
+                isNarrow && styles.tabBtnNarrow,
+              ]}
               activeOpacity={0.8}
             >
               <Users
-                size={16}
+                size={isNarrow ? 14 : 16}
                 color={activeTab === "partner" ? authColors.primaryDark : authColors.muted}
               />
               <Text
                 style={[
                   styles.tabBtnText,
                   activeTab === "partner" && styles.tabBtnTextActive,
+                  isNarrow && styles.tabBtnTextNarrow,
                 ]}
+                numberOfLines={isNarrow ? 2 : 1}
+                ellipsizeMode="tail"
               >
                 Mitra Usaha & Driver
               </Text>
@@ -552,12 +577,20 @@ const styles = StyleSheet.create({
   },
   tabBtn: {
     flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 10,
+    paddingHorizontal: 6,
     borderRadius: 9,
     gap: 6,
+  },
+  tabBtnNarrow: {
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    gap: 4,
+    minHeight: 44,
   },
   tabBtnActive: {
     backgroundColor: "#FFFFFF",
@@ -578,6 +611,12 @@ const styles = StyleSheet.create({
     color: authColors.muted,
     fontSize: 12.5,
     fontWeight: "600",
+    flexShrink: 1,
+    textAlign: "center",
+  },
+  tabBtnTextNarrow: {
+    fontSize: 11,
+    lineHeight: 14,
   },
   tabBtnTextActive: {
     color: authColors.primaryDark,
@@ -697,12 +736,14 @@ const styles = StyleSheet.create({
     color: authColors.ink,
     fontSize: 13,
     fontWeight: "700",
+    flexShrink: 1,
   },
   partnerBadge: {
     backgroundColor: authColors.lineLight,
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: 5,
+    flexShrink: 0,
   },
   partnerBadgeText: {
     color: authColors.inkSecondary,

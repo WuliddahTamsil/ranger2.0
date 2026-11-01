@@ -1,5 +1,6 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../utils/responsive";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -68,6 +69,7 @@ interface LaundryProfilProps extends Nav {
 }
 
 export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [store, setStore] = useState<LaundryStore>({
     id: authAccount?.id || "my_store",
@@ -437,7 +439,7 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
   };
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="light-content" backgroundColor="#1B7A4E" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -612,7 +614,7 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
         </View>
 
         <Text style={styles.versionText}>GEOVERSE 2.0 • Mitra Pemilik Laundry</Text>
-        <View style={{ height: 80 }} />
+        <View style={{ height: getBottomSpace(insets.bottom, 60, 16) }} />
       </ScrollView>
 
       {/* Bottom Nav */}

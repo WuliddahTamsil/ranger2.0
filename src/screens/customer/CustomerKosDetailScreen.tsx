@@ -1,5 +1,6 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../utils/responsive";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -95,6 +96,7 @@ interface CustomerKosDetailProps extends Nav {
 }
 
 export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [kostData, setKostData] = useState<SelectedKost | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [selectedHotelRoom, setSelectedHotelRoom] = useState<HotelRoomOption | null>(null);
@@ -1426,7 +1428,7 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
           </View>
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: getBottomSpace(insets.bottom, 72, 16) }} />
       </ScrollView>
 
       {/* Fixed Bottom Action Bar */}
@@ -2815,7 +2817,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   facilityCard: {
-    width: "48%",
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 125,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F8FAFC",

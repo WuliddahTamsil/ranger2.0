@@ -663,7 +663,10 @@ const getMitraAccounts = async (req, res) => {
 
     if (status && status !== "semua") filter.status = status;
 
-    const mitras = await User.find(filter).sort({ createdAt: -1 }).lean();
+    const mitras = await User.find(filter)
+      .select("-passwordHash -resetPasswordOtp -resetPasswordToken -resetPasswordExpires")
+      .sort({ createdAt: -1 })
+      .lean();
     return res.status(200).json({ success: true, count: mitras.length, data: mitras });
   } catch (error) {
     console.error("❌ Get mitra error:", error);
@@ -677,7 +680,10 @@ const getAllUsers = async (req, res) => {
     const { role } = req.query;
     const filter = { role: { $ne: "admin" } };
     if (role && role !== "semua") filter.role = role;
-    const users = await User.find(filter).sort({ createdAt: -1 }).lean();
+    const users = await User.find(filter)
+      .select("-passwordHash -resetPasswordOtp -resetPasswordToken -resetPasswordExpires")
+      .sort({ createdAt: -1 })
+      .lean();
     return res.status(200).json({ success: true, count: users.length, data: users });
   } catch (error) {
     console.error("❌ Get all users error:", error);
@@ -797,10 +803,16 @@ const updateMitraStatus = async (req, res) => {
       });
     }
 
+    const sanitizedUser = user.toObject ? user.toObject() : { ...user };
+    delete sanitizedUser.passwordHash;
+    delete sanitizedUser.resetPasswordOtp;
+    delete sanitizedUser.resetPasswordToken;
+    delete sanitizedUser.resetPasswordExpires;
+
     return res.status(200).json({
       success: true,
       message: `Status mitra berhasil diubah menjadi ${status}. Notifikasi email telah dikirimkan ke ${user.email}.`,
-      data: user,
+      data: sanitizedUser,
     });
   } catch (error) {
     console.error("❌ Update mitra status error:", error);
@@ -812,9 +824,14 @@ const updateMitraStatus = async (req, res) => {
 const getUserProfile = async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(404).json({ success: false, message: "User tidak ditemukan (Format ID tidak valid / Akun lokal)" });
+      return res.status(404).json({ success: false, message: "User tidak ditemukan (Format ID tidak valid)" });
     }
-    const user = await User.findById(req.params.id);
+    // Authorization check: only admin or the user themselves can view profile
+    if (req.authUser && req.authUser.role !== "admin" && String(req.authUser._id) !== String(req.params.id)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda tidak memiliki akses ke profil pengguna ini." });
+    }
+
+    const user = await User.findById(req.params.id).select("-passwordHash -resetPasswordOtp -resetPasswordToken -resetPasswordExpires");
     if (!user) {
       return res.status(404).json({ success: false, message: "User tidak ditemukan" });
     }
@@ -834,16 +851,17 @@ const updateUserProfile = async (req, res) => {
       user = await User.findById(id);
     }
 
-    if (!user && req.body.email) {
+    if (!user && req.authUser && req.authUser.role === "admin" && req.body.email) {
       user = await User.findOne({ email: req.body.email.toLowerCase().trim() });
-    }
-
-    if (!user && (id === "shop_seed_001" || id === "marketplace_seed_001" || !id || !mongoose.Types.ObjectId.isValid(id))) {
-      user = await User.findOne({ role: "pemilik_shop" });
     }
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User tidak ditemukan" });
+    }
+
+    // Authorization check: only admin or the user themselves can update profile
+    if (req.authUser && req.authUser.role !== "admin" && String(req.authUser._id) !== String(user._id)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda tidak memiliki izin untuk mengubah profil pengguna ini." });
     }
 
     const { name, phone, address, profilePhoto, roleData, isOnline, driverAvailability } = req.body;
@@ -877,10 +895,16 @@ const updateUserProfile = async (req, res) => {
 
     await user.save();
 
+    const sanitizedUser = user.toObject ? user.toObject() : { ...user };
+    delete sanitizedUser.passwordHash;
+    delete sanitizedUser.resetPasswordOtp;
+    delete sanitizedUser.resetPasswordToken;
+    delete sanitizedUser.resetPasswordExpires;
+
     return res.status(200).json({
       success: true,
       message: "Profil berhasil diperbarui",
-      data: user,
+      data: sanitizedUser,
     });
   } catch (error) {
     console.error("❌ Update profile error:", error);
@@ -1401,7 +1425,7 @@ const verifyPasswordResetOtp = async (req, res) => {
     }
 
     const cleanOtp = String(otp).trim();
-    if (user.resetPasswordOtp !== cleanOtp && cleanOtp !== "849201") {
+    if (user.resetPasswordOtp !== cleanOtp) {
       return res.status(400).json({
         success: false,
         message: "Kode OTP tidak cocok. Periksa kembali email Anda.",
@@ -1473,12 +1497,11 @@ const resetPassword = async (req, res) => {
     const isOtpValid =
       otp &&
       user.resetPasswordOtp &&
-      (user.resetPasswordOtp === String(otp).trim() || String(otp).trim() === "849201") &&
+      user.resetPasswordOtp === String(otp).trim() &&
       user.resetPasswordExpires &&
       new Date() <= new Date(user.resetPasswordExpires);
 
-    // Allow backward-compatibility for direct admin/automated test overrides or validated resetToken
-    if (!isTokenValid && !isOtpValid && process.env.NODE_ENV === "production") {
+    if (!isTokenValid && !isOtpValid) {
       return res.status(403).json({
         success: false,
         message: "Sesi pemulihan kata sandi tidak valid atau telah kadaluarsa. Silakan lakukan verifikasi OTP ulang.",

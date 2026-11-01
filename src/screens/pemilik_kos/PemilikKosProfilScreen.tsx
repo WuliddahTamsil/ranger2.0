@@ -13,6 +13,7 @@ import {
   Image,
   Alert,
   Linking,
+  Platform,
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -184,7 +185,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
   };
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="light-content" backgroundColor="#1B7A4E" />
 
       {/* Main Content */}
@@ -367,7 +368,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
       </ScrollView>
 
       {/* Bottom Navigation Bar */}
-      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         <TouchableOpacity
           style={styles.navTab}
           onPress={() => navigate("pemilik_kos_home")}

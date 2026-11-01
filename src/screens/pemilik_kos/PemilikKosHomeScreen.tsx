@@ -11,6 +11,7 @@ import {
   Modal,
   Alert,
   Image,
+  Platform,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { Nav } from "../../types";
@@ -301,7 +302,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
   };
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="light-content" backgroundColor="#0D7A53" />
 
       {/* Main Scroll Content */}
@@ -887,7 +888,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
       </ScrollView>
 
       {/* Bottom Navigation Bar */}
-      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         <TouchableOpacity style={styles.navTab} onPress={() => setActiveTab("beranda")} activeOpacity={0.7}>
           <Home size={22} color={activeTab === "beranda" ? "#0D7A53" : "#9CA3AF"} />
           <Text style={[styles.navText, activeTab === "beranda" && styles.navTextActive]}>Beranda</Text>

@@ -14,12 +14,12 @@ const {
 // Create product (by Pemilik Catering)
 const createProduct = async (req, res) => {
   try {
-    const { ownerId, name, description, cat, price, stock, isActive, img, images } = req.body;
+    const ownerId = req.authUser ? req.authUser._id : req.body.ownerId;
 
     if (!ownerId || !name || price === undefined) {
       return res.status(400).json({
         success: false,
-        message: "Owner ID, nama menu, dan harga wajib diisi",
+        message: "Nama menu dan harga wajib diisi",
       });
     }
 
@@ -27,17 +27,11 @@ const createProduct = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(ownerId)) {
       owner = await User.findById(ownerId).select("role");
     }
-    if (!owner && req.body.ownerEmail) {
-      owner = await User.findOne({ email: req.body.ownerEmail.toLowerCase().trim() }).select("role");
-    }
-    if (!owner) {
-      owner = await User.findOne({ role: "pemilik_catering" }).select("role");
-    }
 
-    if (!owner) {
+    if (!owner || (owner.role !== "pemilik_catering" && req.authUser?.role !== "admin")) {
       return res.status(403).json({
         success: false,
-        message: "Akun pemilik catering tidak ditemukan di database. Pastikan Anda telah terdaftar.",
+        message: "Akun pemilik catering tidak ditemukan atau tidak memiliki izin.",
       });
     }
 
@@ -100,6 +94,10 @@ const updateProduct = async (req, res) => {
       return res.status(404).json({ success: false, message: "Menu tidak ditemukan" });
     }
 
+    if (req.authUser && req.authUser.role !== "admin" && String(product.ownerId) !== String(req.authUser._id)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda bukan pemilik menu ini." });
+    }
+
     const updatePayload = { ...req.body };
     if (Array.isArray(updatePayload.images) && updatePayload.images.length > 0) {
       if (!updatePayload.img) {
@@ -132,6 +130,10 @@ const deleteProduct = async (req, res) => {
     const product = await CateringProduct.findById(id);
     if (!product) {
       return res.status(404).json({ success: false, message: "Menu tidak ditemukan" });
+    }
+
+    if (req.authUser && req.authUser.role !== "admin" && String(product.ownerId) !== String(req.authUser._id)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda bukan pemilik menu ini." });
     }
 
     await CateringProduct.findByIdAndDelete(id);
@@ -741,22 +743,10 @@ const declineDriver = async (req, res) => {
 // Driver accepts catering order
 const assignDriver = async (req, res) => {
   try {
-    const { driverId } = req.body;
-    let effectiveDriverId = driverId;
-    if (driverId === "driver_seed_001") {
-      effectiveDriverId = "6a9c2f97c0998813eb04450c";
+    if (!req.authUser || (req.authUser.role !== "driver" && req.authUser.role !== "admin")) {
+      return res.status(403).json({ success: false, message: "Driver hanya dapat menerima order menggunakan akun Driver terautentikasi." });
     }
-    const authId = String(req.authUser?._id || "");
-    const isMatching =
-      !authId ||
-      authId === String(effectiveDriverId) ||
-      (authId === "6a9c2f97c0998813eb04450c" && driverId === "driver_seed_001") ||
-      (authId === "driver_seed_001" && effectiveDriverId === "6a9c2f97c0998813eb04450c") ||
-      req.authUser?.role === "driver" ||
-      req.authUser?.role === "admin";
-    if (!isMatching) {
-      return res.status(403).json({ success: false, message: "Driver hanya dapat menerima order menggunakan akun sendiri." });
-    }
+    const effectiveDriverId = req.authUser._id;
     let driver = await User.findOne({ _id: effectiveDriverId, role: "driver" }).select("_id name phone");
     if (!driver && driverId === "driver_seed_001") {
       driver = await User.findOne({ email: "wuliddah@gmail.com" }).select("_id name phone");

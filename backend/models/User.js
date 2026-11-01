@@ -136,17 +136,8 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.methods.matchPassword = async function (enteredPassword) {
-  if (!this.passwordHash) return false;
-  const match = await bcrypt.compare(enteredPassword, this.passwordHash);
-  if (match) return true;
-  // Test account & admin convenience fallback:
-  if (
-    enteredPassword === "12345678" &&
-    (this.role === "admin" || this.email === "agalagan@gmail.com" || this.email === "geoverse.pge@gmail.com" || this.email === "ranger@gmail.com" || this.email === "sitinurazizah.laundry@gmail.com" || this.email.includes("banksampah") || this.email.includes("@geoverse.com") || this.email.includes("@ranger.com"))
-  ) {
-    return true;
-  }
-  return false;
+  if (!this.passwordHash || !enteredPassword) return false;
+  return await bcrypt.compare(enteredPassword, this.passwordHash);
 };
 
 module.exports = mongoose.model("User", userSchema);

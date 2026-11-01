@@ -185,12 +185,12 @@ const wasteDepositSchema = new mongoose.Schema(
     },
     pointToRupiahRate: {
       type: Number,
-      default: 1.0,
+      default: 0.01,
     },
     pointConversionPolicy: {
-      rate: { type: Number, default: 1.0 },
-      isPendingClientFinalRatioConfirmation: { type: Boolean, default: true },
-      description: { type: String, default: "" },
+      rate: { type: Number, default: 0.01 },
+      isPendingClientFinalRatioConfirmation: { type: Boolean, default: false },
+      description: { type: String, default: "100 Point = Rp 1 (1 Point = Rp 0.01)" },
     },
     revenueSplitSnapshot: {
       grossDeliveryFare: { type: Number, default: 0 },

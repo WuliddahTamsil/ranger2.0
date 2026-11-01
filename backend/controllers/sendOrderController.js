@@ -24,15 +24,10 @@ const { generateSixDigitCode, hashCode, verifyCode } = require("../utils/sendSec
 const paymentGateway = require("../services/paymentGateway");
 
 const resolveDriverId = (req) => {
-  return String(
-    req.authUser?._id ||
-    req.headers["x-driver-id"] ||
-    req.headers["x-user-id"] ||
-    req.headers["x-account-id"] ||
-    req.body?.driverId ||
-    req.query?.driverId ||
-    ""
-  );
+  if (req.authUser && (req.authUser.role === "driver" || req.authUser.role === "admin")) {
+    return String(req.authUser._id);
+  }
+  return "";
 };
 
 const emitToSendRoom = (io, orderId, event, payload) => {

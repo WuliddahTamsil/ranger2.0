@@ -147,234 +147,55 @@ export default function App() {
   const [loginPromptReason, setLoginPromptReason] = useState<string>("");
   const [lastPublicScreen, setLastPublicScreen] = useState<Screen>("c_home");
   const [customerInitialTab, setCustomerInitialTab] = useState<number | undefined>(undefined);
+  const [registrationInitialTab, setRegistrationInitialTab] = useState<"customer" | "partner">("customer");
 
   useEffect(() => {
     let active = true;
     void restoreStoredAccount().then(async ({ account }) => {
       if (!active) return;
-      if (Platform.OS !== "web") {
-        if (!account) {
-          try {
-            const completed = await AsyncStorage.getItem("@geoverse_onboarding_completed");
-            if (active && completed === "true") {
-              setCurrentScreen("c_home");
+      if (Platform.OS === "web") {
+        try {
+          if (typeof window !== "undefined" && typeof (window as any)?.location?.search === "string") {
+            const locSearch = (window as any).location.search;
+            if (locSearch) {
+              const urlParams = new URLSearchParams(locSearch);
+              const tabParam = urlParams.get("tab");
+              if (tabParam !== null) {
+                setCustomerInitialTab(Number(tabParam));
+              }
+              const roleTabParam = urlParams.get("roleTab");
+              if (roleTabParam === "customer" || roleTabParam === "partner") {
+                setRegistrationInitialTab(roleTabParam);
+              }
+              const screenParam = urlParams.get("screen") as Screen | null;
+              if (screenParam) {
+                setCurrentScreen(screenParam);
+                return;
+              }
             }
-          } catch {}
-          return;
+          }
+        } catch {
+          // Safe fallback for mobile environments
         }
-        setCurrentAuthAccount(account);
-        setCurrentScreen(roleToScreen(account.role, account.status));
+      }
+      if (!account) {
+        try {
+          const completed = await AsyncStorage.getItem("@geoverse_onboarding_completed");
+          if (active) {
+            if (completed === "true") {
+              setCurrentScreen("c_home");
+            } else {
+              setCurrentScreen("onboarding");
+            }
+          }
+        } catch {
+          if (active) setCurrentScreen("onboarding");
+        }
         return;
       }
-      try {
-        if (typeof window !== "undefined" && typeof (window as any)?.location?.search === "string") {
-          const locSearch = (window as any).location.search;
-          if (locSearch) {
-            const urlParams = new URLSearchParams(locSearch);
-            const rawScreen = urlParams.get("screen");
-            let screenParam = rawScreen as Screen | null;
-            if (rawScreen === "c_shop") screenParam = "c_shop_home";
-            if (rawScreen === "bank_sampah_home") screenParam = "bank_sampah_dashboard";
-            if (screenParam) {
-          if (screenParam === "admin_home") {
-            const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge") || true;
-            const adminAcc: any = {
-              id: isPge ? "6adf6714f917e3c54a077d62" : "6aa17978d4b39e0b125becd5",
-              name: isPge ? "Admin PGE GEOVERSE" : "Super Admin Ranger",
-              email: isPge ? "geoverse.pge@gmail.com" : "ranger@gmail.com",
-              role: "admin",
-              status: "verified",
-              token: isPge ? "6adf6714f917e3c54a077d62" : "6aa17978d4b39e0b125becd5",
-            };
-            setCurrentAuthAccount(adminAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: adminAcc, accountId: adminAcc.id }));
-            void AsyncStorage.setItem("rangers.auth.accounts.v1", JSON.stringify([adminAcc]));
-          } else if (screenParam === "d_home" || urlParams.get("role") === "driver") {
-            const driverAcc: any = {
-              id: "6a9c2f97c0998813eb04450c",
-              name: "Wuwu Driver",
-              email: "wuliddah@gmail.com",
-              phone: "081234567894",
-              role: "driver",
-              status: "verified",
-              token: "6a9c2f97c0998813eb04450c",
-            };
-            setCurrentAuthAccount(driverAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: driverAcc, accountId: driverAcc.id }));
-          } else if (screenParam === "pemilik_catering_home" || urlParams.get("role") === "pemilik_catering") {
-            const catAcc: any = {
-              id: "6aa7fc9ba28bf4d6d90dae7f",
-              name: "cateringsehat",
-              email: "cateringsehat@gmail.com",
-              phone: "+6286352354288",
-              role: "pemilik_catering",
-              status: "verified",
-              token: "6aa7fc9ba28bf4d6d90dae7f",
-              roleData: {
-                businessName: "Catering sehat",
-                businessAddress: "Bogor",
-                businessType: "Nasi Box",
-                isDapurOpen: "true",
-                cateringBankAccountHolder: "Wuliddah Tamsil Barokah",
-                cateringBankAccountNumber: "198378687244",
-                cateringBankName: "BCA",
-                cateringQrisImageUrl: "https://res.cloudinary.com/b9soz7ka/image/upload/v1789639345/ranger_uploads/ranger_1789639326093_ChatGPT_Image_Sep_17__2026__05_01_45_PM.png",
-                cateringBankTransferEnabled: "true",
-                cateringQrisEnabled: "true"
-              }
-            };
-            setCurrentAuthAccount(catAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: catAcc, accountId: catAcc.id }));
-          } else if (screenParam === "pemilik_marketplace_home" || urlParams.get("role") === "pemilik_marketplace") {
-            const mktAcc: any = {
-              id: "6ac8bab40244f6bb3bc61bec",
-              name: "Titing Sriyanti",
-              email: "titing06@gmail.com",
-              phone: "081234567891",
-              role: "pemilik_marketplace",
-              status: "verified",
-              token: "6ac8bab40244f6bb3bc61bec",
-            };
-            setCurrentAuthAccount(mktAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: mktAcc, accountId: mktAcc.id }));
-          } else if (screenParam?.startsWith("bank_sampah") || urlParams.get("role") === "bank_sampah") {
-            const bankAcc: any = {
-              id: "6aadbb8c5513afda4c34d999",
-              name: "Bank Sampah Induk Kamojang Asri",
-              email: "banksampah@geoverse.com",
-              phone: "081234567896",
-              role: "bank_sampah",
-              status: "verified",
-              token: "6aadbb8c5513afda4c34d999",
-            };
-            setCurrentAuthAccount(bankAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: bankAcc, accountId: bankAcc.id }));
-          } else if (screenParam?.startsWith("pemilik_laundry") || urlParams.get("role") === "pemilik_laundry") {
-            const laundryAcc: any = {
-              id: "laundry_seed_001",
-              name: "Ais Laundry",
-              email: "aisl@gmail.com",
-              phone: "081234567891",
-              role: "pemilik_laundry",
-              status: "verified",
-              token: "laundry_seed_001",
-              roleData: {
-                businessName: "Ais Laundry",
-                businessAddress: "BGR",
-                serviceType: "express",
-                operatingHours: "24 jam",
-              },
-            };
-            setCurrentAuthAccount(laundryAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: laundryAcc, accountId: laundryAcc.id }));
-          } else if (screenParam?.startsWith("pemilik_kos") || urlParams.get("role") === "pemilik_kos") {
-            const isAdam = urlParams.get("account") === "adam" || urlParams.get("email")?.includes("adam");
-            const kosAcc: any = isAdam
-              ? {
-                  id: "6ac6718770933058bf751c11",
-                  name: "Adam (ADAM HO)",
-                  email: "adamshalishazahra@gmail.com",
-                  phone: "+6287805987309",
-                  role: "pemilik_kos",
-                  status: "verified",
-                  token: "6ac6718770933058bf751c11",
-                  roleData: {
-                    businessName: "ADAM HO",
-                    businessAddress: "GARUT",
-                    propertyType: "Wisata",
-                    businessCategory: "wisata",
-                  },
-                }
-              : {
-                  id: "kos_seed_001",
-                  name: "Aisyah Pemilik Kos & Homestay",
-                  email: "aisk@gmail.com",
-                  phone: "087805987309",
-                  role: "pemilik_kos",
-                  status: "verified",
-                  token: "kos_seed_001",
-                  roleData: {
-                    businessName: "Ais Kos Exclusive & Homestay",
-                    businessAddress: "Tarogong Kaler, Garut",
-                    kostType: "Campur",
-                    roomCount: "10",
-                  },
-                };
-            setCurrentAuthAccount(kosAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: kosAcc, accountId: kosAcc.id }));
-          } else if (screenParam?.startsWith("c_") || urlParams.get("role") === "customer") {
-            const custAcc: any = {
-              id: "6a85892d8d27c7d42a0d8ba8",
-              name: "Wuwu Customer",
-              email: "wuliddahtamsilbarokah19@gmail.com",
-              phone: "081234567895",
-              role: "customer",
-              status: "verified",
-              token: "6a85892d8d27c7d42a0d8ba8",
-              address: "Jl. Raya Kamojang No. 12, Samarang, Garut",
-              roleData: {
-                customerAddresses: JSON.stringify([{
-                  id: "addr_kamojang_1",
-                  label: "Rumah",
-                  receiverName: "Wuwu Customer",
-                  phoneNumber: "081234567895",
-                  street: "Jl. Raya Kamojang No. 12",
-                  district: "Samarang",
-                  city: "Garut",
-                  province: "Jawa Barat",
-                  fullAddress: "Jl. Raya Kamojang No. 12, Samarang, Garut",
-                  isMain: true
-                }])
-              }
-            };
-            setCurrentAuthAccount(custAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: custAcc, accountId: custAcc.id }));
-          } else if (screenParam?.startsWith("admin") || urlParams.get("role") === "admin") {
-            const isPge = urlParams.get("account") === "pge" || urlParams.get("email")?.includes("pge") || true;
-            const adminAcc: any = {
-              id: isPge ? "6adf6714f917e3c54a077d62" : "6aa17978d4b39e0b125becd5",
-              name: isPge ? "Admin PGE GEOVERSE" : "Super Admin Ranger",
-              email: isPge ? "geoverse.pge@gmail.com" : "ranger@gmail.com",
-              phone: "081511226089",
-              role: "admin",
-              status: "verified",
-              token: isPge ? "6adf6714f917e3c54a077d62" : "6aa17978d4b39e0b125becd5",
-              address: isPge ? "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang" : "HQ GEOVERSE Platform, Garut",
-              roleData: {},
-            };
-            setCurrentAuthAccount(adminAcc);
-            void AsyncStorage.setItem("rangers.auth.session.v1", JSON.stringify({ currentAccount: adminAcc, accountId: adminAcc.id }));
-          }
-          const tabParam = urlParams.get("tab");
-          if (tabParam !== null) {
-            setCustomerInitialTab(Number(tabParam));
-          }
-          setCurrentScreen(screenParam);
-          return;
-        }
-      }
-    }
-  } catch {
-    // Safe fallback for mobile environments
-  }
-  if (!account) {
-    try {
-      const completed = await AsyncStorage.getItem("@geoverse_onboarding_completed");
-      if (active) {
-        if (completed === "true") {
-          setCurrentScreen("c_home");
-        } else {
-          setCurrentScreen("onboarding");
-        }
-      }
-    } catch {
-      if (active) setCurrentScreen("onboarding");
-    }
-    return;
-  }
-  setCurrentAuthAccount(account);
-  setCurrentScreen(roleToScreen(account.role, account.status));
-});
+      setCurrentAuthAccount(account);
+      setCurrentScreen(roleToScreen(account.role, account.status));
+    });
 
     if (Platform.OS === "web" && typeof document !== "undefined") {
       const styleId = "rnw-focus-reset";
@@ -458,6 +279,9 @@ export default function App() {
     if (params?.tab !== undefined) {
       setCustomerInitialTab(Number(params.tab));
     }
+    if (params?.roleTab) {
+      setRegistrationInitialTab(params.roleTab);
+    }
     setCurrentScreen(screen);
   };
 
@@ -482,49 +306,6 @@ export default function App() {
   };
 
   const handleLogin = async (email: string, password: string) => {
-    const cleanEmail = (email || "").trim().toLowerCase();
-    const cleanPassword = (password || "").trim();
-
-    // Forced direct entry for Admin PGE GEOVERSE (geoverse.pge@gmail.com / 12345678)
-    if (cleanEmail === "geoverse.pge@gmail.com" && cleanPassword === "12345678") {
-      let adminAccount: AuthAccount | null = null;
-      try {
-        const result = await loginWithPassword(cleanEmail, cleanPassword);
-        if (result.account) {
-          adminAccount = {
-            ...result.account,
-            id: result.account.id || "6adf6714f917e3c54a077d62",
-            role: "admin",
-            status: "verified",
-          };
-        }
-      } catch (err) {
-        console.warn("Backend login attempt failed for PGE admin, forcing admin account:", err);
-      }
-
-      if (!adminAccount) {
-        adminAccount = {
-          id: "6adf6714f917e3c54a077d62",
-          role: "admin",
-          name: "Admin PGE GEOVERSE",
-          email: "geoverse.pge@gmail.com",
-          phone: "081511226089",
-          address: "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang",
-          status: "verified",
-          token: "6adf6714f917e3c54a077d62",
-          roleData: {},
-          documents: {},
-          createdAt: "2026-01-01T00:00:00.000Z",
-          updatedAt: new Date().toISOString(),
-        };
-      }
-
-      setCurrentAuthAccount(adminAccount);
-      await createAuthSession(adminAccount);
-      navigate("admin_home");
-      return { ok: true };
-    }
-
     const result = await loginWithPassword(email, password);
     if (!result.account) return { ok: false, error: result.error };
     setCurrentAuthAccount(result.account);
@@ -576,26 +357,6 @@ export default function App() {
   };
 
   const handleRoleSelection = async (role: AuthAccount["role"]) => {
-    // Direct shortcut to Admin PGE GEOVERSE when selecting admin role
-    if (role === "admin") {
-      const pgeAccount: AuthAccount = {
-        id: "6adf6714f917e3c54a077d62",
-        role: "admin",
-        name: "Admin PGE GEOVERSE",
-        email: "geoverse.pge@gmail.com",
-        phone: "081511226089",
-        address: "PT Pertamina Geothermal Energy Tbk (PGE) Kamojang",
-        status: "verified",
-        token: "6adf6714f917e3c54a077d62",
-        roleData: {},
-        documents: {},
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: new Date().toISOString(),
-      };
-      await startSession(pgeAccount);
-      return;
-    }
-
     if (currentAuthAccount?.role === role && currentAuthAccount.token) {
       navigate(roleToScreen(role, currentAuthAccount.status));
       return;
@@ -611,23 +372,99 @@ export default function App() {
       return;
     }
 
-    // Check if any account or seed account exists for this role
-    const anyAccount = accounts.find((account) => account.role === role && account.status !== "rejected");
-    if (anyAccount) {
-      const activeSeed = {
-        ...anyAccount,
-        token: anyAccount.token || `seed_token_${anyAccount.id}`,
-      };
-      await startSession(activeSeed);
-      return;
-    }
-
     // Direct to registration flow for new role registration
     setRegistrationRole(role as AuthRegistrationRole);
     navigate("auth_register");
   };
 
   const renderScreen = () => {
+    const hasValidToken = Boolean(currentAuthAccount?.token);
+
+    // Route guards: ensure dashboard screens are only rendered when authenticated with correct role
+    if (currentScreen === "admin_home" && (!hasValidToken || currentAuthAccount?.role !== "admin")) {
+      return (
+        <LoginScreen
+          navigate={navigate}
+          onLogin={handleLogin}
+          onGoogleLogin={handleGoogleLogin}
+          loginReason="Akses Administrator memerlukan login dengan kredensial yang valid."
+          onCancel={handleCancelLogin}
+        />
+      );
+    }
+
+    if (currentScreen === "d_home" && (!hasValidToken || currentAuthAccount?.role !== "driver")) {
+      return (
+        <LoginScreen
+          navigate={navigate}
+          onLogin={handleLogin}
+          onGoogleLogin={handleGoogleLogin}
+          loginReason="Akses Driver memerlukan login akun driver yang terverifikasi."
+          onCancel={handleCancelLogin}
+        />
+      );
+    }
+
+    if ((currentScreen === "bank_sampah_dashboard" || currentScreen === "bank_sampah_weighing") && (!hasValidToken || (currentAuthAccount?.role !== "bank_sampah" && currentAuthAccount?.role !== "admin"))) {
+      return (
+        <LoginScreen
+          navigate={navigate}
+          onLogin={handleLogin}
+          onGoogleLogin={handleGoogleLogin}
+          loginReason="Akses Mitra Bank Sampah memerlukan login akun yang terverifikasi."
+          onCancel={handleCancelLogin}
+        />
+      );
+    }
+
+    if (currentScreen === "pemilik_catering_home" && (!hasValidToken || (currentAuthAccount?.role !== "pemilik_catering" && currentAuthAccount?.role !== "admin"))) {
+      return (
+        <LoginScreen
+          navigate={navigate}
+          onLogin={handleLogin}
+          onGoogleLogin={handleGoogleLogin}
+          loginReason="Akses Mitra Catering memerlukan login akun yang terverifikasi."
+          onCancel={handleCancelLogin}
+        />
+      );
+    }
+
+    if ((currentScreen === "pemilik_marketplace_home" || currentScreen === "pemilik_shop_home" || currentScreen === "shop_merchant_orders") && (!hasValidToken || (currentAuthAccount?.role !== "pemilik_marketplace" && currentAuthAccount?.role !== "pemilik_shop" && currentAuthAccount?.role !== "admin"))) {
+      return (
+        <LoginScreen
+          navigate={navigate}
+          onLogin={handleLogin}
+          onGoogleLogin={handleGoogleLogin}
+          loginReason="Akses Mitra Toko/Marketplace memerlukan login akun yang terverifikasi."
+          onCancel={handleCancelLogin}
+        />
+      );
+    }
+
+    if (currentScreen.startsWith("pemilik_laundry") && (!hasValidToken || (currentAuthAccount?.role !== "pemilik_laundry" && currentAuthAccount?.role !== "admin"))) {
+      return (
+        <LoginScreen
+          navigate={navigate}
+          onLogin={handleLogin}
+          onGoogleLogin={handleGoogleLogin}
+          loginReason="Akses Mitra Laundry memerlukan login akun yang terverifikasi."
+          onCancel={handleCancelLogin}
+        />
+      );
+    }
+
+    if (currentScreen.startsWith("pemilik_kos") && (!hasValidToken || (currentAuthAccount?.role !== "pemilik_kos" && currentAuthAccount?.role !== "admin"))) {
+      return (
+        <LoginScreen
+          navigate={navigate}
+          onLogin={handleLogin}
+          onGoogleLogin={handleGoogleLogin}
+          loginReason="Akses Mitra Kos & Wisata memerlukan login akun yang terverifikasi."
+          onCancel={handleCancelLogin}
+        />
+      );
+    }
+
     switch (currentScreen) {
       // Auth
       case "splash":
@@ -647,7 +484,18 @@ export default function App() {
       case "role":
         return <RoleScreen navigate={navigate} onSelectRole={handleRoleSelection} />;
       case "auth_register_role":
-        return <RegisterRoleScreen navigate={navigate} googleDraft={googleDraft} onGoogleConnect={handleGoogleLogin} onSelect={(role) => { setRegistrationRole(role); navigate("auth_register"); }} />;
+        return (
+          <RegisterRoleScreen
+            navigate={navigate}
+            googleDraft={googleDraft}
+            onGoogleConnect={handleGoogleLogin}
+            initialTab={registrationInitialTab}
+            onSelect={(role) => {
+              setRegistrationRole(role);
+              navigate("auth_register");
+            }}
+          />
+        );
       case "auth_register":
         return (
           <RegisterFlowScreen
@@ -873,7 +721,7 @@ export default function App() {
             <ShopCartProvider>
               <KeyboardAvoidingView
                 style={styles.container}
-                behavior={Platform.OS === "ios" ? (currentScreen === "login" || currentScreen === "auth_register" ? undefined : "padding") : "height"}
+                behavior={Platform.OS === "ios" ? (currentScreen === "login" || currentScreen === "auth_register" ? undefined : "padding") : undefined}
                 keyboardVerticalOffset={0}
               >
                 <View style={styles.container}>

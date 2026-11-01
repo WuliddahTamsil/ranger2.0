@@ -64,6 +64,7 @@ import {
   BarChart3,
   PieChart,
   ArrowUpRight,
+  ArrowDownRight,
   Zap,
   Sparkles,
   Cpu,
@@ -1064,6 +1065,11 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           { month: "Sep 26", total: totalRevenue || 9309900, orderCount: stats?.totalOrdersCount || 31 },
         ];
     const maxMonthlyRev = Math.max(...monthlyRevData.map((m: any) => m.total), 1000000);
+    const lastMonthTotal = monthlyRevData[monthlyRevData.length - 1]?.total || 0;
+    const prevMonthTotal = monthlyRevData.length >= 2 ? (monthlyRevData[monthlyRevData.length - 2]?.total || 0) : 0;
+    const momGrowthVal = prevMonthTotal > 0 ? (((lastMonthTotal - prevMonthTotal) / prevMonthTotal) * 100).toFixed(1) : "0.0";
+    const momIsPositive = Number(momGrowthVal) >= 0;
+    const momGrowthText = momIsPositive ? `+${momGrowthVal}% MoM` : `${momGrowthVal}% MoM`;
 
     const kostRev = Number(stats?.breakdown?.kost?.total || 2800000);
     const cateringRev = Number(stats?.breakdown?.catering?.total || 5804000);
@@ -1135,9 +1141,9 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                 <Text style={styles.analyticsCardSub} numberOfLines={1}>Pertumbuhan GMV PGE Kamojang</Text>
               </View>
             </View>
-            <View style={[styles.growthTrendPill, { backgroundColor: "#ECFDF5" }]}>
-              <ArrowUpRight size={12} color="#059669" />
-              <Text style={[styles.growthTrendPillText, { color: "#059669" }]}>+18.4% MoM</Text>
+            <View style={[styles.growthTrendPill, { backgroundColor: momIsPositive ? "#ECFDF5" : "#FEF2F2" }]}>
+              {momIsPositive ? <ArrowUpRight size={12} color="#059669" /> : <ArrowDownRight size={12} color="#DC2626" />}
+              <Text style={[styles.growthTrendPillText, { color: momIsPositive ? "#059669" : "#DC2626" }]}>{momGrowthText}</Text>
             </View>
           </View>
 
@@ -1585,6 +1591,8 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     const totalTxCount = filteredTransactions.length || transactions.length || 0;
     const totalTxVolume = transactions.reduce((acc: number, t: any) => acc + (t.amount || 0), 0) || stats?.totalVolume || 9300000;
     const avgOrderValue = transactions.length > 0 ? Math.round(totalTxVolume / transactions.length) : 0;
+    const successfulTxList = transactions.filter((t: any) => ["success", "completed", "settled", "paid"].includes(String(t.status).toLowerCase()));
+    const dynamicSuccessRate = transactions.length > 0 ? ((successfulTxList.length / transactions.length) * 100).toFixed(1) : "100.0";
 
     const bankTotal = stats?.paymentMethods?.bank || Math.round(totalTxVolume * 0.48);
     const qrisTotal = stats?.paymentMethods?.qris || Math.round(totalTxVolume * 0.35);
@@ -1661,7 +1669,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             </View>
             <View style={styles.txKpiDivider} />
             <View style={styles.txKpiCard}>
-              <Text style={[styles.txKpiVal, { color: "#059669" }]}>99.4%</Text>
+              <Text style={[styles.txKpiVal, { color: "#059669" }]}>{dynamicSuccessRate}%</Text>
               <Text style={styles.txKpiLbl}>Tingkat Sukses</Text>
             </View>
             <View style={styles.txKpiDivider} />
@@ -1823,6 +1831,15 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
     const wastePct = Math.round((wasteCount / grandTotalUsers) * 100);
     const driverPct = Math.max(100 - custPct - kostPct - catPct - laundryPct - marketPct - shopPct - wastePct, 0);
 
+    const mitraWithRatings = (mitraAccounts || []).filter((m: any) => m.roleData?.rating || m.rating);
+    const calculatedCsat = mitraWithRatings.length > 0
+      ? (mitraWithRatings.reduce((sum: number, m: any) => sum + Number(m.roleData?.rating || m.rating || 5), 0) / mitraWithRatings.length).toFixed(2)
+      : (stats?.averageRating ? Number(stats.averageRating).toFixed(2) : "4.90");
+
+    const activeAccountsCount = (customerAccounts || []).filter((c: any) => c.status !== "inactive" && c.status !== "rejected").length;
+    const totalLoadedCust = (customerAccounts || []).length || 1;
+    const dynamicRetentionPct = Math.min(Math.round((activeAccountsCount / totalLoadedCust) * 100), 100);
+
     return (
       <View style={styles.tabContentWrap}>
         {/* Visual Analytics Tab 3: Ecosystem Demographics & Health */}
@@ -1936,7 +1953,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           <View style={styles.csatRow}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, marginRight: 8 }}>
               <View style={[styles.csatBadge, { flexShrink: 0 }]}>
-                <Text style={styles.csatBadgeText}>★ 4.92</Text>
+                <Text style={styles.csatBadgeText}>★ {calculatedCsat}</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.csatTitle} numberOfLines={1}>Kepuasan Pengguna (CSAT)</Text>
@@ -1944,7 +1961,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               </View>
             </View>
             <View style={[styles.retentionPill, { flexShrink: 0 }]}>
-              <Text style={styles.retentionPillText}>98.6% Retensi</Text>
+              <Text style={styles.retentionPillText}>{dynamicRetentionPct}% Retensi</Text>
             </View>
           </View>
         </View>
@@ -2983,7 +3000,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           <View
             style={[
               styles.mobileBottomNavContainer,
-              { paddingBottom: Math.max(insets.bottom, Platform.OS === "ios" ? 14 : 8) },
+              { paddingBottom: Math.max(insets.bottom, 10) },
             ]}
           >
             {navItems.map((item, index) => {
@@ -5325,7 +5342,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   serviceCard: {
-    width: "48%",
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 135,
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
@@ -5348,17 +5367,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#111827",
+    flexShrink: 1,
   },
   serviceCardAmount: {
     fontSize: 15,
     fontWeight: "800",
     color: "#1B7A4E",
     marginTop: 4,
+    flexShrink: 1,
   },
   serviceCardSub: {
     fontSize: 11,
     color: "#6B7280",
     marginTop: 3,
+    flexShrink: 1,
   },
   serviceCardActionHint: {
     marginTop: 8,

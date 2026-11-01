@@ -41,9 +41,12 @@ const {
   rejectPrescription,
 } = require("../controllers/shopOrderController");
 
-const { requireAuth, optionalAuth } = require("../middleware/authMiddleware");
+const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+const shopOwnerGuard = [requireAuth, requireRole("pemilik_shop", "pemilik_marketplace", "admin")];
+const driverGuard = [requireAuth, requireRole("driver", "admin")];
 
 // ==================== STORE & CATALOG (PUBLIC / USER) ====================
 router.get("/stores", getStores);
@@ -54,16 +57,16 @@ router.get("/search", searchGlobal);
 router.get("/products/:id", getProductById);
 
 // Authenticated Kanyaah Shop owner catalog
-router.get("/merchant/store", requireAuth, getMerchantStore);
-router.put("/merchant/store", requireAuth, updateMerchantStore);
-router.get("/merchant/products", requireAuth, getMerchantProducts);
+router.get("/merchant/store", ...shopOwnerGuard, getMerchantStore);
+router.put("/merchant/store", ...shopOwnerGuard, updateMerchantStore);
+router.get("/merchant/products", ...shopOwnerGuard, getMerchantProducts);
 
 // Store owner product management
-router.post("/products", requireAuth, createProduct);
-router.put("/products/:id", requireAuth, updateProduct);
-router.delete("/products/:id", requireAuth, deleteProduct);
-router.put("/products/:id/stock", requireAuth, updateProductStock);
-router.post("/merchant/products/bulk", requireAuth, bulkImportProducts);
+router.post("/products", ...shopOwnerGuard, createProduct);
+router.put("/products/:id", ...shopOwnerGuard, updateProduct);
+router.delete("/products/:id", ...shopOwnerGuard, deleteProduct);
+router.put("/products/:id/stock", ...shopOwnerGuard, updateProductStock);
+router.post("/merchant/products/bulk", ...shopOwnerGuard, bulkImportProducts);
 
 // ==================== CUSTOMER ORDER ====================
 router.post("/orders", requireAuth, createShopOrder);
@@ -76,28 +79,28 @@ router.post("/orders/:id/simulate-payment", requireAuth, simulateShopPayment);
 router.post("/orders/:id/substitution-response", requireAuth, customerRespondSubstitution);
 
 // ==================== MERCHANT / PICKER ====================
-router.get("/merchant/orders", requireAuth, getMerchantOrders);
-router.post("/orders/:id/accept", requireAuth, merchantAcceptOrder);
-router.put("/orders/:id/status", requireAuth, merchantUpdateStatus);
-router.post("/orders/:id/substitution", requireAuth, merchantProposeSubstitution);
-router.post("/orders/:id/reject", requireAuth, cancelOrder);
+router.get("/merchant/orders", ...shopOwnerGuard, getMerchantOrders);
+router.post("/orders/:id/accept", ...shopOwnerGuard, merchantAcceptOrder);
+router.put("/orders/:id/status", ...shopOwnerGuard, merchantUpdateStatus);
+router.post("/orders/:id/substitution", ...shopOwnerGuard, merchantProposeSubstitution);
+router.post("/orders/:id/reject", ...shopOwnerGuard, cancelOrder);
 
-// ==================== DRIVER ====================
-router.get("/driver/orders", optionalAuth, getDriverOrders);
-router.get("/driver/orders/:driverId", optionalAuth, getDriverOrders);
-router.get("/driver", optionalAuth, getDriverOrders);
-router.post("/orders/:id/accept-driver", optionalAuth, acceptDriverOrder);
-router.put("/orders/:id/driver-status", optionalAuth, updateDriverStatus);
-router.put("/orders/:id/status-driver", optionalAuth, updateDriverStatus);
-router.post("/orders/:id/pickup-proof", optionalAuth, uploadPickupProof);
-router.post("/orders/:id/delivery-proof", optionalAuth, uploadDeliveryProof);
-router.put("/orders/:id/location", optionalAuth, updateDriverLocation);
+// ==================== DRIVER (Require authenticated driver) ====================
+router.get("/driver/orders", ...driverGuard, getDriverOrders);
+router.get("/driver/orders/:driverId", ...driverGuard, getDriverOrders);
+router.get("/driver", ...driverGuard, getDriverOrders);
+router.post("/orders/:id/accept-driver", ...driverGuard, acceptDriverOrder);
+router.put("/orders/:id/driver-status", ...driverGuard, updateDriverStatus);
+router.put("/orders/:id/status-driver", ...driverGuard, updateDriverStatus);
+router.post("/orders/:id/pickup-proof", ...driverGuard, uploadPickupProof);
+router.post("/orders/:id/delivery-proof", ...driverGuard, uploadDeliveryProof);
+router.put("/orders/:id/location", ...driverGuard, updateDriverLocation);
 
 // ==================== PHARMACY ====================
 router.post("/orders/:id/prescription", requireAuth, submitPrescription);
 router.post("/prescriptions", requireAuth, submitPrescription);
-router.get("/pharmacy/prescriptions", requireAuth, getPendingPrescriptions);
-router.post("/prescriptions/:id/approve", requireAuth, approvePrescription);
-router.post("/prescriptions/:id/reject", requireAuth, rejectPrescription);
+router.get("/pharmacy/prescriptions", ...shopOwnerGuard, getPendingPrescriptions);
+router.post("/prescriptions/:id/approve", ...shopOwnerGuard, approvePrescription);
+router.post("/prescriptions/:id/reject", ...shopOwnerGuard, rejectPrescription);
 
 module.exports = router;

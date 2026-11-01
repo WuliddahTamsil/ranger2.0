@@ -827,7 +827,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
   const themeBorderLight = categoryType === "hotel" ? "#BAE6FD" : categoryType === "wisata" ? "#FDE68A" : "#BBF7D0";
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Main Scroll Area */}
@@ -1263,7 +1263,7 @@ export const ManajemenKamarScreen: React.FC<ManajemenKamarProps> = ({ navigate, 
       </ScrollView>
 
       {/* Bottom Navigation Bar */}
-      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}>
         <TouchableOpacity style={styles.navTab} onPress={() => navigate("pemilik_kos_home")} activeOpacity={0.7}>
           <Home size={22} color="#9CA3AF" />
           <Text style={styles.navText}>Beranda</Text>

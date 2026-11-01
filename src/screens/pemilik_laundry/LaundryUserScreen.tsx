@@ -1,5 +1,6 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../utils/responsive";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -53,6 +54,7 @@ interface LaundryUserScreenProps extends Nav {
 }
 
 export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<"customer" | "staff">("customer");
   const [searchQuery, setSearchQuery] = useState("");
   const [customers, setCustomers] = useState<LaundryCustomerSummary[]>([]);
@@ -164,7 +166,7 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
   );
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -357,7 +359,7 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
           )
         )}
 
-        <View style={{ height: 90 }} />
+        <View style={{ height: getBottomSpace(insets.bottom, 60, 16) }} />
       </ScrollView>
 
       {/* Modal Detail Riwayat Pesanan Customer */}

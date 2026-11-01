@@ -1,4 +1,6 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../utils/responsive";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -41,6 +43,7 @@ interface VerifikasiDpScreenProps extends Nav {
 }
 
 export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isProofModalOpen, setIsProofModalOpen] = useState(false);
@@ -402,12 +405,12 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
           </>
         )}
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: getBottomSpace(insets.bottom, 64, 16) }} />
       </ScrollView>
 
       {/* Fixed Bottom Action Bar */}
       {currentBooking && (
-        <View style={styles.bottomActionBar}>
+        <SafeAreaBottomBar absolute style={styles.bottomActionBar}>
           <TouchableOpacity
             style={styles.btnTolakDp}
             onPress={handleOpenRejectModal}
@@ -439,7 +442,7 @@ export const VerifikasiDpScreen: React.FC<VerifikasiDpScreenProps> = ({ navigate
               </Text>
             )}
           </TouchableOpacity>
-        </View>
+        </SafeAreaBottomBar>
       )}
 
       {/* Modal 1: Success Modal (Verifikasi Berhasil) */}

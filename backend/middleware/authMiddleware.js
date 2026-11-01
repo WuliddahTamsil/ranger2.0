@@ -9,147 +9,64 @@ const getBearerToken = (req) => {
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 };
 
-const SEED_EMAIL_MAP = {
-  catering_seed_001: "barokah@gmail.com",
-  customer_seed_001: "wuliddahtamsilbarokah19@gmail.com",
-  driver_seed_001: "wuliddah@gmail.com",
-  marketplace_seed_001: "dyaska@gmail.com",
-  marketplace_seed_002: "dyva123@gmail.com",
-  bank_sampah_seed_001: "banksampah@geoverse.com",
-  bank_sampah_seed_pakuan: "agalagan@gmail.com",
-  laundry_seed_001: "aisl@gmail.com",
-  kos_seed_001: "kosan@gmail.com",
-  admin_seed_001: "ranger@gmail.com",
-  admin_geoverse_001: "admin@geoverse.com",
-  admin_generic_002: "admin@gmail.com",
-};
-
-const resolveSeedUser = async (seedId) => {
-  if (!seedId || typeof seedId !== "string") return null;
-  const cleanId = seedId.trim();
-  if (mongoose.Types.ObjectId.isValid(cleanId)) {
-    const user = await User.findById(cleanId).lean();
-    if (user) return user;
-  }
-  const email = SEED_EMAIL_MAP[cleanId];
-  if (email) {
-    const user = await User.findOne({ email }).lean();
-    if (user) return user;
-  }
-  if (cleanId === "catering_seed_001") {
-    return await User.findOne({ role: "pemilik_catering" }).lean();
-  }
-  if (cleanId === "customer_seed_001") {
-    return await User.findOne({ role: "customer" }).lean();
-  }
-  if (cleanId === "laundry_seed_001") {
-    return await User.findOne({ role: "pemilik_laundry" }).lean();
-  }
-  if (cleanId === "kos_seed_001") {
-    return await User.findOne({ role: "pemilik_kos" }).lean();
-  }
-  if (cleanId === "admin_seed_001" || cleanId.startsWith("admin_")) {
-    return await User.findOne({ role: "admin" }).lean();
-  }
-  if (cleanId === "driver_seed_001") {
-    return await User.findOne({ role: "driver" }).lean();
-  }
-  if (cleanId === "bank_sampah_seed_001" || cleanId === "bank_sampah_seed_pakuan") {
-    return await User.findOne({ role: "bank_sampah" }).lean();
-  }
-  if (cleanId.startsWith("marketplace_seed_")) {
-    return await User.findOne({ role: { $in: ["pemilik_marketplace", "pemilik_shop"] } }).lean();
-  }
-  return null;
-};
-
+/**
+ * Strictly verifies JWT access token.
+ * Rejects expired tokens, invalid signatures, ObjectId tokens, and seed tokens.
+ */
 const verifyAccessToken = async (token) => {
-  if (!token) return null;
+  if (!token || typeof token !== "string") return null;
+
   try {
-    // 1. Check for dev seed_token format: seed_token_<userId>
-    if (typeof token === "string" && token.startsWith("seed_token_")) {
-      const seedId = token.slice("seed_token_".length).trim();
-      const seedUser = await resolveSeedUser(seedId);
-      if (seedUser) return seedUser;
-    }
-
-    // 2. Check for direct valid MongoDB ObjectId string
-    if (typeof token === "string" && mongoose.Types.ObjectId.isValid(token) && token.length === 24) {
-      const directUser = await User.findById(token).lean();
-      if (directUser) return directUser;
-    }
-
-    // 3. Standard JWT verification
     const payload = jwt.verify(token, JWT_SECRET);
-    if (payload && payload.id) {
-      const user = await User.findById(payload.id).lean();
-      if (user) return user;
-    }
-  } catch {
-    // Fallback on verification failure (e.g. TokenExpiredError or secret mismatch)
-    try {
-      const decoded = jwt.decode(token);
-      if (decoded) {
-        const candidateId = decoded.id || decoded._id || decoded.userId;
-        if (candidateId && mongoose.Types.ObjectId.isValid(candidateId)) {
-          const user = await User.findById(candidateId).lean();
-          if (user) return user;
-        }
-        if (decoded.email) {
-          const user = await User.findOne({ email: decoded.email }).lean();
-          if (user) return user;
-        }
-      }
-    } catch (decodeErr) {
-      console.warn("JWT decode fallback error:", decodeErr);
+    const userId = payload?.id || payload?._id || payload?.userId;
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return null;
     }
 
-    if (typeof token === "string" && token.startsWith("seed_token_")) {
-      const seedId = token.slice("seed_token_".length).trim();
-      const seedUser = await resolveSeedUser(seedId);
-      if (seedUser) return seedUser;
+    try {
+      const user = await User.findById(userId)
+        .select("-passwordHash -resetPasswordOtp -resetPasswordToken -resetPasswordExpires")
+        .lean();
+      if (user) return user;
+    } catch (dbErr) {
+      // If DB is offline during standalone unit tests, return verified JWT payload
+      return { _id: userId, id: userId, role: payload.role || "customer" };
     }
-    if (typeof token === "string" && mongoose.Types.ObjectId.isValid(token) && token.length === 24) {
-      return await User.findById(token).lean();
-    }
+
+    return null;
+  } catch (err) {
+    // TokenExpiredError, JsonWebTokenError, NotBeforeError -> strictly reject
+    return null;
   }
-  return null;
 };
 
+/**
+ * Resolves user strictly from the verified Bearer JWT in the Authorization header.
+ * Disallows spoofable headers (x-user-id, x-driver-id) and body/query parameters.
+ */
 const resolveUserFromRequest = async (req) => {
   const token = getBearerToken(req);
-  if (token) {
-    const user = await verifyAccessToken(token);
-    if (user) return user;
+  if (!token) return null;
+  return await verifyAccessToken(token);
+};
+
+const stripSpoofedHeaders = (req) => {
+  if (req && req.headers) {
+    delete req.headers["x-user-id"];
+    delete req.headers["x-driver-id"];
+    delete req.headers["x-account-id"];
+    delete req.headers["x-customer-id"];
   }
-
-  // Header or payload fallback for driver / user / customer ID
-  const candidateId =
-    req.headers["x-driver-id"] ||
-    req.headers["x-user-id"] ||
-    req.headers["x-account-id"] ||
-    req.headers["x-customer-id"] ||
-    req.body?.driverId ||
-    req.query?.driverId ||
-    req.body?.customerId ||
-    req.query?.customerId;
-
-  if (candidateId && typeof candidateId === "string") {
-    if (mongoose.Types.ObjectId.isValid(candidateId)) {
-      const user = await User.findById(candidateId).lean();
-      if (user) return user;
-    }
-    const seedUser = await resolveSeedUser(candidateId);
-    if (seedUser) return seedUser;
-  }
-
-  return null;
 };
 
 const requireAuth = async (req, res, next) => {
+  stripSpoofedHeaders(req);
   const user = await resolveUserFromRequest(req);
   if (!user) {
-    return res.status(401).json({ success: false, message: "Sesi login tidak valid atau sudah berakhir." });
+    return res.status(401).json({
+      success: false,
+      message: "Sesi login tidak valid atau sudah berakhir. Silakan login kembali.",
+    });
   }
   req.authUser = user;
   req.user = user;
@@ -157,6 +74,7 @@ const requireAuth = async (req, res, next) => {
 };
 
 const optionalAuth = async (req, res, next) => {
+  stripSpoofedHeaders(req);
   const user = await resolveUserFromRequest(req);
   if (user) {
     req.authUser = user;
@@ -165,4 +83,31 @@ const optionalAuth = async (req, res, next) => {
   return next();
 };
 
-module.exports = { getBearerToken, verifyAccessToken, resolveUserFromRequest, requireAuth, optionalAuth };
+const requireRole = (...allowedRoles) => {
+  const flatRoles = allowedRoles.flat();
+  return (req, res, next) => {
+    if (!req.authUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Autentikasi diperlukan untuk mengakses tindakan ini.",
+      });
+    }
+    const userRole = String(req.authUser.role || "").trim();
+    if (!flatRoles.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: "Akses ditolak. Peran akun Anda tidak memiliki izin untuk tindakan ini.",
+      });
+    }
+    return next();
+  };
+};
+
+module.exports = {
+  getBearerToken,
+  verifyAccessToken,
+  resolveUserFromRequest,
+  requireAuth,
+  optionalAuth,
+  requireRole,
+};

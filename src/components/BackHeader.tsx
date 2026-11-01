@@ -47,6 +47,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
+    minWidth: 0,
     textAlign: "center",
     fontSize: 16,
     fontWeight: "700",

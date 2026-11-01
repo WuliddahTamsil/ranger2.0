@@ -2,6 +2,8 @@ require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const path = require("path");
 const { Server } = require("socket.io");
 const connectDB = require("./config/db");
@@ -12,19 +14,81 @@ const { findOrderByIdentifier, resolveParticipant } = require("./utils/chatAcces
 const app = express();
 const server = http.createServer(app);
 
+const isProduction = process.env.NODE_ENV === "production";
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+  : [
+      "http://localhost:8081",
+      "http://localhost:19006",
+      "http://localhost:3000",
+      "http://127.0.0.1:8081",
+      "http://localhost:5000",
+    ];
+
 // Initialize Socket.io
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: isProduction ? allowedOrigins : "*",
     methods: ["GET", "POST", "PUT", "DELETE"],
   },
 });
 
-// Middleware
+// Middleware & Security Headers
 app.set("trust proxy", 1);
-app.use(cors());
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, native tools, curl)
+    if (!origin || !isProduction) return callback(null, true);
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS error: Origin '${origin}' is not allowed by policy.`));
+  },
+  credentials: true,
+};
+app.use(cors(corsOptions));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Rate Limiters
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { success: false, message: "Terlalu banyak permintaan otentikasi. Silakan coba lagi setelah 15 menit." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { success: false, message: "Batas unggahan tercapai. Silakan coba lagi beberapa saat lagi." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { success: false, message: "Batas permintaan pembayaran tercapai. Silakan coba lagi nanti." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/forgot-password", authLimiter);
+app.use("/api/auth/verify-reset-otp", authLimiter);
+app.use("/api/auth/reset-password", authLimiter);
+app.use("/api/upload", uploadLimiter);
+app.use("/api/payments", paymentLimiter);
 
 // Serve static uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

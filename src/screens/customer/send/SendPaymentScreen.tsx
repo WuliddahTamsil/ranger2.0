@@ -39,7 +39,9 @@ import { fetchSendOrderById, createSendOrder } from "../../../services/sendServi
 import { updateOrderPaymentMethod } from "../../../services/paymentService";
 import { rp } from "../../../utils/formatters";
 import { API_BASE_URL, getApiUrl } from "../../../services/api";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaBottomBar } from "../../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../../utils/responsive";
 import { io } from "socket.io-client";
 
 interface SendPaymentScreenProps extends Nav {
@@ -78,6 +80,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
   navigate,
   authAccount,
 }) => {
+  const insets = useSafeAreaInsets();
   const {
     sender,
     recipient,
@@ -446,7 +449,7 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: getBottomSpace(insets.bottom, 72, 16) }]}
         showsVerticalScrollIndicator={false}
       >
         {/* ========================================================= */}

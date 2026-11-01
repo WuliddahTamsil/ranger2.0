@@ -1,5 +1,6 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../utils/responsive";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -58,6 +59,7 @@ interface CustomerLaundryDetailScreenProps extends Nav {
 }
 
 export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [store, setStore] = useState<LaundryStore>(getSelectedStore());
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
@@ -467,7 +469,7 @@ export const CustomerLaundryDetailScreen: React.FC<CustomerLaundryDetailScreenPr
           </View>
         </View>
 
-        <View style={{ height: 110 }} />
+        <View style={{ height: getBottomSpace(insets.bottom, 72, 16) }} />
       </ScrollView>
 
       {/* Fixed Bottom Action Bar */}

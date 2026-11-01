@@ -32,14 +32,10 @@ const emitToDepositRoom = (io, depositId, event, payload) => {
  */
 const createDeposit = async (req, res) => {
   try {
-    let customerId = req.authUser?._id || req.user?._id || req.body.customerId;
-    if (!customerId) {
-      const fallbackCustomer = await User.findOne({ role: "customer" }).lean();
-      customerId = fallbackCustomer?._id;
-    }
-    if (!customerId) {
+    if (!req.authUser) {
       return res.status(401).json({ success: false, message: "Silakan login terlebih dahulu untuk membuat tiket setor sampah." });
     }
+    const customerId = req.authUser._id;
     const {
       bankSampahId,
       method = "DROP_OFF",
@@ -200,7 +196,7 @@ const createDeposit = async (req, res) => {
       pickupNotes: pickupNotes || "",
       categories: formattedCategories,
       estimatedTotalWeightKg: Math.round(estimatedTotalWeightKg * 10) / 10,
-      estimatedPoint: estimatedTotalRupiah, // 1 Point = Rp 1
+      estimatedPoint: Math.round(estimatedTotalRupiah / RECYCLE_POINT_CONFIG.pointToRupiahRate), // 100 Point = Rp 1
       estimatedRupiah: estimatedTotalRupiah,
       pickupFee,
       driverEarnings,
@@ -363,7 +359,11 @@ const acceptDeposit = async (req, res) => {
       return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
     }
 
-    const actorId = req.authUser?._id || req.user?._id || deposit.bankSampahId;
+    if (req.authUser && req.authUser.role !== "bank_sampah" && req.authUser.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Hanya pengelola Bank Sampah atau Admin yang dapat menerima setoran." });
+    }
+
+    const actorId = req.authUser?._id || deposit.bankSampahId;
     const actorRole = req.authUser?.role || "bank_sampah";
 
     deposit.status = "ACCEPTED";
@@ -403,7 +403,10 @@ const acceptDeposit = async (req, res) => {
  */
 const assignDriver = async (req, res) => {
   try {
-    const driverId = req.authUser?._id || req.user?._id || req.body.driverId;
+    if (req.authUser && req.authUser.role !== "driver" && req.authUser.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Hanya Driver atau Admin yang dapat mengambil tugas penjemputan sampah." });
+    }
+    const driverId = req.authUser?._id || req.body.driverId;
     const deposit = await WasteDeposit.findById(req.params.id);
     if (!deposit) {
       return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
@@ -470,7 +473,10 @@ const driverPickupWaste = async (req, res) => {
     if (!deposit) {
       return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
     }
-    const driverId = req.authUser?._id || req.user?._id || req.body.driverId || deposit.driverId;
+    if (req.authUser && req.authUser.role !== "admin" && String(deposit.driverId) !== String(req.authUser._id)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda bukan driver yang ditugaskan pada penjemputan ini." });
+    }
+    const driverId = req.authUser?._id || deposit.driverId;
 
     deposit.status = "PICKED_UP";
     deposit.statusHistory.push({
@@ -516,7 +522,10 @@ const driverDeliverToBank = async (req, res) => {
     if (!deposit) {
       return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
     }
-    const driverId = req.authUser?._id || req.user?._id || req.body.driverId || deposit.driverId;
+    if (req.authUser && req.authUser.role !== "admin" && String(deposit.driverId) !== String(req.authUser._id)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda bukan driver yang ditugaskan pada penjemputan ini." });
+    }
+    const driverId = req.authUser?._id || deposit.driverId;
 
     deposit.status = "AT_BANK";
     deposit.statusHistory.push({
@@ -612,7 +621,11 @@ const weighDeposit = async (req, res) => {
       return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
     }
 
-    const officerId = req.authUser?._id || req.user?._id || deposit.bankSampahId;
+    if (req.authUser && req.authUser.role !== "bank_sampah" && req.authUser.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Hanya pengelola Bank Sampah atau Admin yang dapat menimbang sampah." });
+    }
+
+    const officerId = req.authUser?._id || deposit.bankSampahId;
     const actorRole = req.authUser?.role || "bank_sampah";
     const rawCats = req.body.actualCategories || req.body.categories || [];
     const actualCategories = Array.isArray(rawCats) ? rawCats : [];
@@ -940,9 +953,14 @@ const cancelDeposit = async (req, res) => {
       });
     }
 
-    const { reason } = req.body;
-    const actorId = req.authUser?._id || req.user?._id || deposit.customerId;
-    const actorRole = req.authUser?.role || "customer";
+    const actorId = req.authUser ? req.authUser._id : deposit.customerId;
+    const actorRole = req.authUser ? req.authUser.role : "customer";
+
+    if (req.authUser && req.authUser.role !== "admin" &&
+        String(req.authUser._id) !== String(deposit.customerId) &&
+        String(req.authUser._id) !== String(deposit.bankSampahId)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda tidak memiliki izin untuk membatalkan setoran ini." });
+    }
 
     deposit.status = "CANCELLED";
     deposit.cancelReason = reason || "Dibatalkan oleh customer.";

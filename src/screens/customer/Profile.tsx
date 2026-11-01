@@ -25,6 +25,7 @@ import {
   Trash2,
   ExternalLink,
   MessageSquare,
+  Store,
 } from "lucide-react-native";
 import { ProfilePhotoEditor } from "../../components/ProfilePhotoEditor";
 import { LogoutConfirmModal } from "../../components/LogoutConfirmModal";
@@ -161,6 +162,16 @@ export const Profile: React.FC<ProfileProps> = ({
               activeOpacity={0.8}
             >
               <Text style={styles.guestRegisterBtnText}>Belum punya akun? Daftar Sekarang</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.guestRegisterBtn, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A", marginTop: 8 }]}
+              onPress={() => navigate("auth_register_role", { roleTab: "partner" })}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.guestRegisterBtnText, { color: "#B45309", fontWeight: "700" }]}>
+                Daftar Sebagai Driver / Mitra Usaha
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -379,6 +390,27 @@ export const Profile: React.FC<ProfileProps> = ({
               <Settings size={16} color="#78909C" />
             </View>
             <Text style={styles.menuLabel}>Pengaturan</Text>
+            <ChevronRight size={16} color="#9CA3AF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Section Label: Kemitraan Komunitas */}
+        <Text style={styles.sectionLabel}>KEMITRAAN KOMUNITAS</Text>
+        <View style={styles.menuGroup}>
+          <TouchableOpacity 
+            style={styles.menuRow}
+            onPress={() => navigate("auth_register_role", { roleTab: "partner" })}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBg, { backgroundColor: "#FEF3C7" }]}>
+              <Store size={16} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuLabel}>Daftar Mitra Usaha / Driver</Text>
+              <Text style={{ fontSize: 11, color: "#6B7280" }}>
+                Driver, UMKM Mart, Shop, Katering, Laundry, Kos, & Bank Sampah
+              </Text>
+            </View>
             <ChevronRight size={16} color="#9CA3AF" />
           </TouchableOpacity>
         </View>

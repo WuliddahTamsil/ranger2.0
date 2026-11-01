@@ -45,10 +45,6 @@ import {
   ActiveCustomerBooking,
   LodgingCategoryType,
 } from "./customerKosStore";
-import {
-  MOCK_HOTELS_AND_VILLAS,
-  MOCK_TOURIST_ATTRACTIONS,
-} from "../../services/lodgingTravelService";
 import { AuthAccount } from "../auth/authTypes";
 import { rp } from "../../utils/formatters";
 
@@ -306,59 +302,7 @@ export const CustomerKosScreen: React.FC<CustomerKosScreenProps> = ({ navigate, 
         };
       });
 
-    if (matchingFromDb.length > 0) {
-      return matchingFromDb;
-    }
-
-    if (mainCategory === "kost") {
-      return (dbKosts || []).filter((k) => !k?.categoryType || k.categoryType === "kost");
-    } else if (mainCategory === "hotel") {
-      return (MOCK_HOTELS_AND_VILLAS || []).map((h) => ({
-        id: h.id || h._id,
-        _id: h._id || h.id,
-        categoryType: "hotel" as LodgingCategoryType,
-        name: h.name || "Homestay & Villa",
-        type: h.type || "Homestay",
-        status: "Tersedia",
-        location: h.address || h.city || "Garut",
-        city: h.city || "Garut",
-        areaTag: h.areaTag || "Garut Kota",
-        badgeTag: h.badgeTag,
-        rating: h.rating || 4.85,
-        reviews: h.reviewCount || 120,
-        price: h.price || 650000,
-        cashbackPoints: h.cashbackPoints || 25000,
-        facilities: h.facilities || ["WiFi Cepat", "Kolam Air Panas", "Dapur Bersama", "Parkir"],
-        img: (h.images && h.images[0]) ? h.images[0] : "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80",
-        images: h.images || [],
-        photoCount: (h.images && h.images.length) ? h.images.length : 4,
-        stars: typeof h.stars === "number" ? Math.min(5, Math.max(1, Math.round(h.stars))) : 4,
-        raw: h,
-      }));
-    } else {
-      return (MOCK_TOURIST_ATTRACTIONS || []).map((w) => ({
-        id: w.id || w._id,
-        _id: w._id || w.id,
-        categoryType: "wisata" as LodgingCategoryType,
-        name: w.name || "Tiket Wisata Garut",
-        type: w.type || "Wisata Alam",
-        status: "Buka Hari Ini",
-        location: w.address || w.city || "Garut",
-        city: w.city || "Garut",
-        areaTag: w.areaTag || "Garut Kota",
-        badgeTag: w.badgeTag,
-        rating: w.rating || 4.8,
-        reviews: w.reviewCount || 150,
-        price: w.price || 40000,
-        cashbackPoints: w.cashbackPoints || 5000,
-        openHours: w.openHours || "08:00 - 17:00 WIB",
-        facilities: w.facilities || ["Spot Foto Estetik", "Mushola", "Parkir Luas"],
-        img: (w.images && w.images[0]) ? w.images[0] : "https://images.unsplash.com/photo-1582650625119-3a31f8fa2699?auto=format&fit=crop&w=800&q=80",
-        images: w.images || [],
-        photoCount: (w.images && w.images.length) ? w.images.length : 3,
-        raw: w,
-      }));
-    }
+    return matchingFromDb;
   }, [mainCategory, dbKosts]);
 
   const filteredList = useMemo(() => {

@@ -26,32 +26,28 @@ export const getAuthHeaders = async (accountId?: string): Promise<Record<string,
       ? accounts.find((item: any) => String(item.id) === String(requestedAccountId) || String(item._id) === String(requestedAccountId))
       : null;
     const target = account || session?.currentAccount;
-    const resolvedId = requestedAccountId || target?.id || target?._id || "6a85892d8d27c7d42a0d8ba8";
-    const token = target?.token || (typeof resolvedId === "string" && resolvedId.length === 24 ? resolvedId : `seed_token_${resolvedId}`);
+    const resolvedId = requestedAccountId || target?.id || target?._id;
+    const token = target?.token;
+    if (!token) {
+      return {};
+    }
     return {
       Authorization: `Bearer ${token}`,
-      "x-user-id": String(resolvedId),
-      "x-customer-id": String(resolvedId),
-      "x-account-id": String(resolvedId),
     };
   } catch {
-    return {
-      Authorization: "Bearer 6a85892d8d27c7d42a0d8ba8",
-      "x-user-id": "6a85892d8d27c7d42a0d8ba8",
-      "x-customer-id": "6a85892d8d27c7d42a0d8ba8",
-    };
+    return {};
   }
 };
 
 const DEFAULT_FALLBACK_WALLET: PointWalletUI = {
   _id: "wallet_default_001",
-  userId: "6a85892d8d27c7d42a0d8ba8",
-  balancePoint: 25000,
-  totalEarnedPoint: 45000,
-  totalRedeemedPoint: 20000,
-  totalKgDeposited: 18.5,
-  totalCo2ReductionKg: 34.2,
-  depositCount: 5,
+  userId: "",
+  balancePoint: 0,
+  totalEarnedPoint: 0,
+  totalRedeemedPoint: 0,
+  totalKgDeposited: 0,
+  totalCo2ReductionKg: 0,
+  depositCount: 0,
   status: "ACTIVE",
   updatedAt: new Date().toISOString(),
 };
@@ -112,32 +108,7 @@ const DEFAULT_FALLBACK_VOUCHERS: PointVoucherUI[] = [
   },
 ];
 
-const DEFAULT_FALLBACK_LEDGER: PointLedgerUI[] = [
-  {
-    _id: "ledger_default_001",
-    userId: "6a85892d8d27c7d42a0d8ba8",
-    type: "EARN",
-    points: 12500,
-    balanceAfter: 25000,
-    sourceType: "WASTE_DEPOSIT",
-    sourceId: "dep_001",
-    description: "Setor 5.2 kg botol plastik PET ke Bank Sampah",
-    status: "CONFIRMED",
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    _id: "ledger_default_002",
-    userId: "6a85892d8d27c7d42a0d8ba8",
-    type: "EARN",
-    points: 8000,
-    balanceAfter: 12500,
-    sourceType: "WASTE_DEPOSIT",
-    sourceId: "dep_002",
-    description: "Setor 4.0 kg kardus tebal ke Bank Sampah",
-    status: "CONFIRMED",
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-];
+const DEFAULT_FALLBACK_LEDGER: PointLedgerUI[] = [];
 
 const readApiJson = async (response: Response) => {
   const body = await response.text();
@@ -166,6 +137,9 @@ export const fetchPointWallet = async (): Promise<{
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      return { success: true, data: DEFAULT_FALLBACK_WALLET };
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3500);
     const res = await fetch(getApiUrl(`/geoverse-points/wallet?t=${Date.now()}`), {
@@ -224,6 +198,15 @@ export const fetchPointLedger = async (
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization && !authHeaders["x-user-id"]) {
+      return {
+        success: true,
+        data: {
+          ledger: [],
+          pagination: { total: 0, page: 1, pages: 1, limit: 10 },
+        },
+      };
+    }
     const query = new URLSearchParams();
     if (params?.type) query.append("type", params.type);
     if (params?.sourceType) query.append("sourceType", params.sourceType);
@@ -282,9 +265,9 @@ export const fetchAvailableVouchers = async (
     if (resJson.success && Array.isArray(resJson.data)) {
       return resJson;
     }
-    return { success: true, data: DEFAULT_FALLBACK_VOUCHERS };
+    return { success: true, data: [] };
   } catch (err: any) {
-    return { success: true, data: DEFAULT_FALLBACK_VOUCHERS };
+    return { success: true, data: [] };
   }
 };
 
@@ -297,6 +280,9 @@ export const fetchMyRedemptions = async (): Promise<{
 }> => {
   try {
     const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization && !authHeaders["x-user-id"]) {
+      return { success: true, data: [] };
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3500);
     const res = await fetch(getApiUrl(`/geoverse-points/redemptions?t=${Date.now()}`), {

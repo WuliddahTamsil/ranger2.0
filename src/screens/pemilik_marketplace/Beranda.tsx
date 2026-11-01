@@ -1536,7 +1536,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
   }
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {/* Dynamic Tab Body */}
       <View style={styles.tabContentContainer}>{renderTabContent()}</View>
 
@@ -2404,10 +2404,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   summaryLabel: {
     fontSize: 11,
     color: "#6B7280",
+    flexShrink: 1,
   },
   quickActionsRow: {
     flexDirection: "row",

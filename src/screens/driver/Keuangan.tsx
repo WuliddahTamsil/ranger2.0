@@ -591,6 +591,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#111827",
+    flexShrink: 1,
+    textAlign: "center",
   },
   inputLabel: {
     fontSize: 12,

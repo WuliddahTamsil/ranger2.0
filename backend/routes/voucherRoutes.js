@@ -8,19 +8,27 @@ const {
   toggleMerchantVoucherStatus,
   deleteMerchantVoucher,
 } = require("../controllers/voucherController");
-const { requireAuth } = require("../middleware/authMiddleware");
+const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+const merchantRoles = [
+  "pemilik_marketplace",
+  "pemilik_shop",
+  "pemilik_catering",
+  "pemilik_laundry",
+  "admin",
+];
 
 // Customer endpoints
 router.get("/available", getAvailableVouchers);
 router.get("/my-vouchers", requireAuth, getCustomerVouchers);
 router.post("/validate", requireAuth, validateVoucher);
 
-// Merchant / Seller endpoints
-router.get("/merchant/my-vouchers", requireAuth, getMerchantVouchers);
-router.post("/merchant/create", requireAuth, createMerchantVoucher);
-router.patch("/merchant/:id/status", requireAuth, toggleMerchantVoucherStatus);
-router.delete("/merchant/:id", requireAuth, deleteMerchantVoucher);
+// Merchant / Seller endpoints (Protected by auth and role)
+router.get("/merchant/my-vouchers", requireAuth, requireRole(...merchantRoles), getMerchantVouchers);
+router.post("/merchant/create", requireAuth, requireRole(...merchantRoles), createMerchantVoucher);
+router.patch("/merchant/:id/status", requireAuth, requireRole(...merchantRoles), toggleMerchantVoucherStatus);
+router.delete("/merchant/:id", requireAuth, requireRole(...merchantRoles), deleteMerchantVoucher);
 
 module.exports = router;

@@ -19,10 +19,10 @@ const {
   adminGetOrders,
   adminUpdatePricing,
 } = require("../controllers/sendOrderController");
-const { requireAuth, optionalAuth } = require("../middleware/authMiddleware");
-const { requireRole } = require("../middleware/requireRole");
+const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+const driverGuard = [requireAuth, requireRole("driver", "admin")];
 
 // 1. Fare calculation (accessible for preview)
 router.post("/fare-estimate", estimateFare);
@@ -34,41 +34,41 @@ router.post("/", requireAuth, createOrder);
 router.get("/orders/customer/:customerId", requireAuth, getCustomerOrders);
 router.get("/customer/:customerId", requireAuth, getCustomerOrders);
 
-// 3. Driver endpoints (supports optionalAuth with driverId header/body fallback)
-router.get("/orders/available", optionalAuth, getAvailableOrders);
-router.get("/available", optionalAuth, getAvailableOrders);
+// 3. Driver endpoints (strictly protected by driverGuard)
+router.get("/orders/available", ...driverGuard, getAvailableOrders);
+router.get("/available", ...driverGuard, getAvailableOrders);
 
-router.get("/orders/driver", optionalAuth, getDriverOrders);
-router.get("/driver", optionalAuth, getDriverOrders);
-router.get("/driver/:driverId", optionalAuth, getAvailableOrders);
-router.get("/orders/driver/:driverId", optionalAuth, getAvailableOrders);
+router.get("/orders/driver", ...driverGuard, getDriverOrders);
+router.get("/driver", ...driverGuard, getDriverOrders);
+router.get("/driver/:driverId", ...driverGuard, getDriverOrders);
+router.get("/orders/driver/:driverId", ...driverGuard, getDriverOrders);
 
-router.post("/orders/:id/accept", optionalAuth, acceptOrder);
-router.post("/:id/accept", optionalAuth, acceptOrder);
+router.post("/orders/:id/accept", ...driverGuard, acceptOrder);
+router.post("/:id/accept", ...driverGuard, acceptOrder);
 
-router.post("/orders/:id/decline", optionalAuth, declineOrder);
-router.post("/:id/decline", optionalAuth, declineOrder);
+router.post("/orders/:id/decline", ...driverGuard, declineOrder);
+router.post("/:id/decline", ...driverGuard, declineOrder);
 
-// 4. Operational & Status endpoints
-router.get("/orders/:id", optionalAuth, getOrderById);
-router.get("/:id", optionalAuth, getOrderById);
-router.get("/orders/:id/tracking", optionalAuth, getOrderById);
-router.get("/:id/tracking", optionalAuth, getOrderById);
+// 4. Operational & Status endpoints (requireAuth enforced)
+router.get("/orders/:id", requireAuth, getOrderById);
+router.get("/:id", requireAuth, getOrderById);
+router.get("/orders/:id/tracking", requireAuth, getOrderById);
+router.get("/:id/tracking", requireAuth, getOrderById);
 
-router.put("/orders/:id/status", optionalAuth, updateOrderStatus);
-router.put("/:id/status", optionalAuth, updateOrderStatus);
+router.put("/orders/:id/status", requireAuth, updateOrderStatus);
+router.put("/:id/status", requireAuth, updateOrderStatus);
 
-router.put("/orders/:id/location", requireAuth, updateDriverLocation);
-router.put("/:id/location", requireAuth, updateDriverLocation);
+router.put("/orders/:id/location", ...driverGuard, updateDriverLocation);
+router.put("/:id/location", ...driverGuard, updateDriverLocation);
 
-router.post("/orders/:id/verify-pickup", requireAuth, verifyPickup);
-router.post("/:id/verify-pickup", requireAuth, verifyPickup);
+router.post("/orders/:id/verify-pickup", ...driverGuard, verifyPickup);
+router.post("/:id/verify-pickup", ...driverGuard, verifyPickup);
 
-router.post("/orders/:id/verify-delivery", requireAuth, verifyDelivery);
-router.post("/:id/verify-delivery", requireAuth, verifyDelivery);
+router.post("/orders/:id/verify-delivery", ...driverGuard, verifyDelivery);
+router.post("/:id/verify-delivery", ...driverGuard, verifyDelivery);
 
-router.post("/orders/:id/delivery-proof", requireAuth, uploadDeliveryProof);
-router.post("/:id/delivery-proof", requireAuth, uploadDeliveryProof);
+router.post("/orders/:id/delivery-proof", ...driverGuard, uploadDeliveryProof);
+router.post("/:id/delivery-proof", ...driverGuard, uploadDeliveryProof);
 
 router.post("/orders/:id/cancel", requireAuth, cancelOrder);
 router.post("/:id/cancel", requireAuth, cancelOrder);

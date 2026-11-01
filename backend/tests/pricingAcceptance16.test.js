@@ -504,7 +504,7 @@ const kedaiTerpaduDriver = {
   // Verifikasi konversi poin Geoverse Point dan snapshot harga
   const pointCalc = calculateCategoryPointAndRupiah(10, 4000);
   assert.strictEqual(pointCalc.totalRupiah, 40000);
-  assert.strictEqual(pointCalc.totalPoint, 40000);
+  assert.strictEqual(pointCalc.totalPoint, 4000000, "100 Point = Rp 1 -> 4.000.000 Points");
 
   const priceItem = { category: "Plastik", subCategory: "PET Bening", pricePerKg: 4000 };
   const snapshot = createCategoryPriceSnapshot(priceItem, { collectorName: "Pengepul Berkah Kamojang" });

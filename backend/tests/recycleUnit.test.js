@@ -10,17 +10,17 @@ async function runRecycleUnitTests() {
   console.log("🚀 RUNNING KANYAAH RECYCLE UNIT TESTS");
   console.log("==================================================");
 
-  // 1. Point Formula: 1 Point = Rp 1
+  // 1. Point Formula: 100 Point = Rp 1 (1 Point = Rp 0.01)
   const botolPlastik = calculateCategoryPointAndRupiah(2.5, 4000);
   assert.strictEqual(botolPlastik.totalRupiah, 10000, "2.5kg @ 4000 must equal Rp 10.000");
-  assert.strictEqual(botolPlastik.totalPoint, 10000, "1 Point = Rp 1 -> 10.000 Points");
-  console.log("✔ Test 1 Passed: 1 Point = Rp 1 exact formula verified (2.5kg @ Rp4.000 = 10.000 Pts)");
+  assert.strictEqual(botolPlastik.totalPoint, 1000000, "100 Point = Rp 1 -> 1.000.000 Points");
+  console.log("✔ Test 1 Passed: 100 Point = Rp 1 unified formula verified (2.5kg @ Rp4.000 = 1.000.000 Pts)");
 
-  // 2. High Value Item Point Formula
+  // 2. High Value Item Point Formula: 100 Point = Rp 1
   const tembaga = calculateCategoryPointAndRupiah(1.8, 45000);
   assert.strictEqual(tembaga.totalRupiah, 81000, "1.8kg @ 45000 = Rp 81.000");
-  assert.strictEqual(tembaga.totalPoint, 81000, "Must yield 81.000 Points");
-  console.log("✔ Test 2 Passed: High-value metals point conversion verified (1.8kg @ Rp45.000 = 81.000 Pts)");
+  assert.strictEqual(tembaga.totalPoint, 8100000, "Must yield 8.100.000 Points");
+  console.log("✔ Test 2 Passed: High-value metals point conversion verified (1.8kg @ Rp45.000 = 8.100.000 Pts)");
 
   // 3. Negative & Zero Weight Safety
   const zeroWeight = calculateCategoryPointAndRupiah(-5, 3000);

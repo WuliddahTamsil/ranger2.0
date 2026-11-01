@@ -13,6 +13,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 import { Nav } from "../../types";
 import { AuthAccount } from "../auth/authTypes";
@@ -716,7 +717,7 @@ export const ManajemenPenghuniScreen: React.FC<ManajemenPenghuniProps> = ({ navi
   });
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Main Scroll Content */}

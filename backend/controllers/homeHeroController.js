@@ -6,7 +6,7 @@
 const mongoose = require("mongoose");
 const path = require("path");
 const fs = require("fs");
-const cloudinary = require("cloudinary").v2;
+const { cloudinary } = require("../config/cloudinary");
 const HomeHeroBanner = require("../models/HomeHeroBanner");
 const { getBearerToken, verifyAccessToken } = require("../middleware/authMiddleware");
 
@@ -17,14 +17,6 @@ const uploadLargeVideo = (filePath, options) =>
       return resolve(result);
     });
   });
-
-// Ensure Cloudinary is configured
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "hdlw3v3n",
-  api_key: process.env.CLOUDINARY_API_KEY || "644169682494749",
-  api_secret: process.env.CLOUDINARY_API_SECRET || "IWYyiIt5Ro8CgAbw8BSsyIIo8tk",
-  secure: true,
-});
 
 /**
  * Strict Admin Auth Guard (Does not allow x-user-id fallback for security)

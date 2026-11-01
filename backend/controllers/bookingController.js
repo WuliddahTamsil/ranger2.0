@@ -50,21 +50,13 @@ const createBooking = async (req, res) => {
       calculatedCheckOutDate = new Date(new Date(entryDate).getTime() + Number(durationNights) * 24 * 60 * 60 * 1000);
     }
 
-    // Resolve customerId if it is an email or empty
-    let resolvedCustomerId = customerId;
-    if (!resolvedCustomerId || !resolvedCustomerId.match(/^[0-9a-fA-F]{24}$/)) {
-      let custUser = await User.findOne({
-        $or: [
-          { email: customerEmail || "aisyahphr@gmail.com" },
-          { email: "aisyahphr@gmail.com" },
-          { name: customerName },
-        ],
-      });
-      if (custUser) {
-        resolvedCustomerId = custUser._id;
+    // Strictly enforce customerId from authenticated session
+    let resolvedCustomerId = req.authUser ? req.authUser._id : customerId;
+    if (!resolvedCustomerId || !String(resolvedCustomerId).match(/^[0-9a-fA-F]{24}$/)) {
+      if (req.authUser) {
+        resolvedCustomerId = req.authUser._id;
       } else {
-        // Fallback to a placeholder user or create one
-        resolvedCustomerId = kost.ownerId; // fallback
+        return res.status(401).json({ success: false, message: "Autentikasi pelanggan diperlukan untuk membuat pemesanan." });
       }
     }
 
@@ -189,23 +181,17 @@ const getBookingsByOwner = async (req, res) => {
     const { status } = req.query;
 
     let filter = {};
-    if (ownerId && ownerId !== "all") {
+    if (req.authUser && req.authUser.role !== "admin") {
+      filter.ownerId = req.authUser._id;
+    } else if (ownerId && ownerId !== "all") {
       if (ownerId.match(/^[0-9a-fA-F]{24}$/)) {
         filter.ownerId = ownerId;
       } else {
-        // Find owner user by exact email or seed ID
         const cleanEmail = ownerId.toLowerCase().trim();
-        const ownerUser = await User.findOne({
-          $or: [
-            { email: cleanEmail },
-            ...(cleanEmail.includes("kos_seed_001") || cleanEmail.includes("aisk") ? [{ email: "aisk@gmail.com" }] : []),
-            ...(cleanEmail.includes("adam") ? [{ email: "adamshalishazahra@gmail.com" }] : []),
-          ],
-        });
+        const ownerUser = await User.findOne({ email: cleanEmail });
         if (ownerUser) {
           filter.ownerId = ownerUser._id;
         } else {
-          // Owner not found, return empty
           return res.status(200).json({ success: true, count: 0, data: [] });
         }
       }
@@ -238,6 +224,11 @@ const verifyDpBooking = async (req, res) => {
     const booking = await Booking.findById(id).populate("kostId");
     if (!booking) {
       return res.status(404).json({ success: false, message: "Pemesanan tidak ditemukan" });
+    }
+
+    // Ownership check: only owner of this properti or admin can verify DP
+    if (req.authUser && req.authUser.role !== "admin" && String(req.authUser._id) !== String(booking.ownerId)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda bukan pemilik properti untuk pemesanan ini." });
     }
 
     booking.status = status;
@@ -339,7 +330,9 @@ const getBookingsByCustomer = async (req, res) => {
     await autoCancelExpiredBookings();
     const { customerId } = req.params;
     let query = {};
-    if (customerId && customerId.match(/^[0-9a-fA-F]{24}$/)) {
+    if (req.authUser && req.authUser.role !== "admin") {
+      query = { customerId: req.authUser._id };
+    } else if (customerId && customerId.match(/^[0-9a-fA-F]{24}$/)) {
       query = {
         $or: [
           { customerId },
@@ -398,6 +391,11 @@ const settleBookingPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: "Pemesanan tidak ditemukan" });
     }
 
+    // Ownership check: only owner or admin can settle payment
+    if (req.authUser && req.authUser.role !== "admin" && String(req.authUser._id) !== String(booking.ownerId)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda bukan pemilik properti untuk pemesanan ini." });
+    }
+
     const remaining = Math.max(0, booking.totalAmount - booking.dpAmount);
     booking.settlementStatus = "settled";
     booking.settledAmount = Number(settledAmount) || remaining;
@@ -438,6 +436,13 @@ const cancelBooking = async (req, res) => {
     const booking = await Booking.findById(id).populate("kostId");
     if (!booking) {
       return res.status(404).json({ success: false, message: "Pemesanan tidak ditemukan" });
+    }
+
+    // Authorization check: only customer, owner, or admin can cancel
+    if (req.authUser && req.authUser.role !== "admin" &&
+        String(req.authUser._id) !== String(booking.customerId) &&
+        String(req.authUser._id) !== String(booking.ownerId)) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Anda tidak memiliki izin untuk membatalkan pesanan ini." });
     }
 
     if (booking.status === "cancelled") {

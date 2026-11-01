@@ -330,18 +330,20 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     padding: 12,
     width: "48%",
-    aspectRatio: 1.4,
+    minHeight: 80,
     justifyContent: "center",
     gap: 4,
   },
   gridLabel: {
     fontSize: 11,
     color: "#6B7280",
+    flexShrink: 1,
   },
   gridVal: {
     fontSize: 14,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   gridSubText: {
     fontSize: 10,

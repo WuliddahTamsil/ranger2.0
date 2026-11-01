@@ -161,13 +161,12 @@ const estimateRideFare = async (req, res) => {
 // 2. Create a new Kanyaah Ride Order
 const createRideOrder = async (req, res) => {
   try {
-    const customerId = String(req.authUser?._id || req.body.customerId || "");
-    if (!customerId) {
+    if (!req.authUser) {
       return res.status(401).json({ success: false, message: "Otentikasi pengguna diperlukan untuk memesan ride." });
     }
-
-    const customerName = req.authUser?.name || req.body.customerName || "Pelanggan GEOVERSE";
-    const customerPhone = req.authUser?.phone || req.body.customerPhone || "";
+    const customerId = String(req.authUser._id);
+    const customerName = req.authUser.name || "Pelanggan GEOVERSE";
+    const customerPhone = req.authUser.phone || req.body.customerPhone || "";
 
     const {
       pickup,
@@ -617,15 +616,7 @@ const getRideOrderById = async (req, res) => {
 const acceptRideOrder = async (req, res) => {
   try {
     let driver = req.authUser;
-    const fallbackDriverId = String(req.body?.driverId || req.headers?.["x-driver-id"] || "");
-    if (!driver && fallbackDriverId) {
-      if (fallbackDriverId === "driver_seed_001") {
-        driver = await User.findOne({ email: "wuliddah@gmail.com" }).lean();
-      } else if (mongoose.Types.ObjectId.isValid(fallbackDriverId)) {
-        driver = await User.findById(fallbackDriverId).lean();
-      }
-    }
-    if (!driver || driver.role !== "driver") {
+    if (!driver || (driver.role !== "driver" && driver.role !== "admin")) {
       return res.status(403).json({ success: false, message: "Hanya akun Driver GEOVERSE yang dapat menerima pesanan." });
     }
 
@@ -817,6 +808,14 @@ const updateRideStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
     }
 
+    // Ownership check: only assigned driver or admin can update ongoing ride status
+    if (authUser && authUser.role !== "admin" && String(authUser._id) !== String(current.driverId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Akses ditolak: Hanya driver yang ditugaskan yang dapat memperbarui status perjalanan.",
+      });
+    }
+
     // Cancellation delegate
     if (status === "CANCELLED") {
       return cancelRideOrder(req, res);
@@ -962,6 +961,14 @@ const updateDriverLocation = async (req, res) => {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan" });
     }
 
+    // Ownership check: only assigned driver or admin can update driver location
+    if (req.authUser && req.authUser.role !== "admin" && String(req.authUser._id) !== String(order.driverId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Akses ditolak: Hanya driver yang ditugaskan yang dapat memperbarui lokasi perjalanan.",
+      });
+    }
+
     order.driverLocation = {
       latitude: Number(latitude),
       longitude: Number(longitude),
@@ -1005,6 +1012,16 @@ const cancelRideOrder = async (req, res) => {
 
     if (["COMPLETED", "CANCELLED"].includes(order.status)) {
       return res.status(400).json({ success: false, message: "Perjalanan sudah selesai atau dibatalkan sebelumnya." });
+    }
+
+    // Ownership check: only customer, assigned driver, or admin can cancel
+    if (authUser && authUser.role !== "admin" &&
+        String(authUser._id) !== String(order.customerId) &&
+        String(authUser._id) !== String(order.driverId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Akses ditolak: Anda tidak memiliki izin untuk membatalkan pesanan ini.",
+      });
     }
 
     const cancelledBy = authUser?.role === "driver" ? "driver" : "customer";
@@ -1115,6 +1132,14 @@ const rateRideOrder = async (req, res) => {
     const order = await findRideOrder(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, message: "Pesanan tidak ditemukan." });
+    }
+
+    // Ownership check: only the customer who booked this ride can submit a rating
+    if (req.authUser && req.authUser.role !== "admin" && String(req.authUser._id) !== String(order.customerId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Akses ditolak: Hanya pelanggan yang dapat memberikan penilaian perjalanan ini.",
+      });
     }
 
     order.rating = {

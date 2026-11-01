@@ -14,6 +14,9 @@ import {
   Platform,
   Linking,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../utils/responsive";
 import {
   Package,
   CheckCircle2,
@@ -50,6 +53,7 @@ export const ShopOrderTab: React.FC<ShopOrderTabProps> = ({
   authAccount,
   onNavigateToCatalog,
 }) => {
+  const insets = useSafeAreaInsets();
   const [orders, setOrders] = useState<any[]>([]);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -893,11 +897,11 @@ export const ShopOrderTab: React.FC<ShopOrderTabProps> = ({
           )}
 
           {/* Bottom Spacing */}
-          <View style={{ height: 100 }} />
+          <View style={{ height: getBottomSpace(insets.bottom, 64, 16) }} />
         </ScrollView>
 
         {/* Sticky Action Bar at Bottom */}
-        <View style={styles.fullPageBottomBar}>
+        <SafeAreaBottomBar absolute style={styles.fullPageBottomBar}>
           {selectedOrder.orderStatus === "PAID" ||
           selectedOrder.orderStatus === "PENDING" ||
           selectedOrder.orderStatus === "WAITING_STORE_CONFIRMATION" ||
@@ -982,7 +986,7 @@ export const ShopOrderTab: React.FC<ShopOrderTabProps> = ({
               </Text>
             </View>
           ) : null}
-        </View>
+        </SafeAreaBottomBar>
 
         {/* Modal Substitusi Barang Kosong */}
         <Modal visible={subModalVisible} transparent animationType="slide">

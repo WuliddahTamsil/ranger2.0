@@ -1,5 +1,6 @@
-import { SafeAreaView as ResponsiveSafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaBottomBar } from "../../components/SafeAreaBottomBar";
+import { getBottomSpace } from "../../utils/responsive";
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -60,6 +61,7 @@ interface LaundryOrderScreenProps extends Nav {
 }
 
 export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate, authAccount }) => {
+  const insets = useSafeAreaInsets();
   const [activeFilter, setActiveFilter] = useState<"semua" | "menunggu_acc" | "perlu_timbang" | "verifikasi_bayar" | "diproses" | "selesai">("semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [orders, setOrders] = useState<LaundryOrder[]>([]);
@@ -338,7 +340,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
   });
 
   return (
-    <ResponsiveSafeAreaView style={styles.container}>
+    <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
@@ -676,7 +678,7 @@ export const LaundryOrderScreen: React.FC<LaundryOrderScreenProps> = ({ navigate
           </View>
         )}
 
-        <View style={{ height: 90 }} />
+        <View style={{ height: getBottomSpace(insets.bottom, 60, 16) }} />
       </ScrollView>
 
       {/* Modal: Timbang & Terbitkan Tagihan */}

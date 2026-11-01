@@ -59,6 +59,10 @@ const testSuites = [
     name: "Jangkauan Nasional Seluruh Indonesia & Penyesuaian Tarif Driver",
     file: "backend/tests/nationwideCoverageAndPricing.test.js",
   },
+  {
+    name: "Security, Auth Hardening, Point Rate & Upload Audit",
+    file: "backend/tests/securityAndPointHardeningAudit.test.js",
+  },
 ];
 
 console.log("================================================================================");
