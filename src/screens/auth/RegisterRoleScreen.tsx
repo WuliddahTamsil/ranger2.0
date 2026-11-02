@@ -27,14 +27,18 @@ import {
   Users,
   WashingMachine,
 } from "lucide-react-native";
+import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
+
+WebBrowser.maybeCompleteAuthSession();
 import { exchangeCodeAsync } from "expo-auth-session";
 import { Nav } from "../../types";
 import { AuthRegistrationRole, GoogleCredential, GoogleProfile } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
-import { getGoogleRedirectUri, googleClientIds, hasGoogleClientId } from "./googleAuth";
+import { getGoogleRedirectUri, googleClientIds, hasGoogleClientId, isLikelyGoogleOAuthBlockedError } from "./googleAuth";
 import { AuthBrand } from "./components/AuthBrand";
 import { GoogleLogo } from "./components/GoogleLogo";
+import { GoogleDirectModal } from "./components/GoogleDirectModal";
 
 interface Props extends Nav {
   googleDraft?: GoogleProfile | null;
@@ -345,6 +349,7 @@ const GoogleConnectSection: React.FC<{
 }> = ({ onConnect }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showDirectModal, setShowDirectModal] = useState(false);
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     ...googleClientIds,
@@ -460,7 +465,29 @@ const GoogleConnectSection: React.FC<{
           </>
         )}
       </TouchableOpacity>
+      {/* Tombol alternatif saat browser diblokir Google */}
+      <TouchableOpacity
+        onPress={() => setShowDirectModal(true)}
+        style={styles.directGoogleFallbackBtn}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.directGoogleFallbackText}>
+          {isLikelyGoogleOAuthBlockedError(error)
+            ? "⚠️ Browser HP diblokir Google? Masuk via Verifikasi Email Google"
+            : "Sambungkan via Email Google Langsung"}
+        </Text>
+      </TouchableOpacity>
+
       {error ? <Text style={styles.googleErrorText}>{error}</Text> : null}
+
+      <GoogleDirectModal
+        visible={showDirectModal}
+        onClose={() => setShowDirectModal(false)}
+        onSuccess={async (cred) => {
+          await onConnect(cred);
+        }}
+        errorMessage={error}
+      />
     </View>
   );
 };
@@ -780,6 +807,20 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     marginTop: 4,
+  },
+  directGoogleFallbackBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginTop: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  directGoogleFallbackText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#059669",
+    textAlign: "center",
+    textDecorationLine: "underline",
   },
   footerNoteText: {
     flex: 1,

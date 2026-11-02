@@ -63,6 +63,10 @@ const testSuites = [
     name: "Security, Auth Hardening, Point Rate & Upload Audit",
     file: "backend/tests/securityAndPointHardeningAudit.test.js",
   },
+  {
+    name: "Audit Autentikasi Google (Mobile & Web Resilience)",
+    file: "backend/tests/googleAuthAudit.test.js",
+  },
 ];
 
 console.log("================================================================================");

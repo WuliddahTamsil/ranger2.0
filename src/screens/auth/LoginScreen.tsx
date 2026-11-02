@@ -19,9 +19,10 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Use
 import { Nav } from "../../types";
 import { GoogleCredential } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
-import { getGoogleRedirectUri, googleClientIds } from "./googleAuth";
+import { getGoogleRedirectUri, googleClientIds, isLikelyGoogleOAuthBlockedError } from "./googleAuth";
 import { AuthBrand } from "./components/AuthBrand";
 import { GoogleLogo } from "./components/GoogleLogo";
+import { GoogleDirectModal } from "./components/GoogleDirectModal";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -284,6 +285,8 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
     redirectUri: getGoogleRedirectUri(),
   });
 
+  const [showDirectModal, setShowDirectModal] = useState(false);
+  const [lastError, setLastError] = useState("");
   const handledTokenRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
@@ -304,7 +307,9 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
           : errorCode === "disabled_client"
           ? "Klien Google OAuth dinonaktifkan di Google Cloud Console."
           : `Login Google dibatalkan (${errorCode || "error"}).`;
-      onError(desc ? `${userMsg} (${desc})` : userMsg);
+      const fullMsg = desc ? `${userMsg} (${desc})` : userMsg;
+      setLastError(fullMsg);
+      onError(fullMsg);
     }
   }, [response, onLogin, onError]);
 
@@ -368,6 +373,7 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
       }
     } catch (caught) {
       const msg = caught instanceof Error ? caught.message : "Autentikasi Google belum dapat diproses.";
+      setLastError(msg);
       onError(msg);
     } finally {
       onBusyChange(false);
@@ -375,21 +381,44 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
   };
 
   return (
-    <TouchableOpacity
-      onPress={() => void handlePress()}
-      disabled={disabled || loading}
-      style={[authStyles.secondaryButton, styles.googleBtn]}
-      activeOpacity={0.8}
-    >
-      {loading ? (
-        <ActivityIndicator color={authColors.primary} size="small" />
-      ) : (
-        <>
-          <GoogleLogo size={19} />
-          <Text style={styles.googleBtnText}>Lanjutkan dengan Google</Text>
-        </>
-      )}
-    </TouchableOpacity>
+    <View style={{ width: "100%" }}>
+      <TouchableOpacity
+        onPress={() => void handlePress()}
+        disabled={disabled || loading}
+        style={[authStyles.secondaryButton, styles.googleBtn]}
+        activeOpacity={0.8}
+      >
+        {loading ? (
+          <ActivityIndicator color={authColors.primary} size="small" />
+        ) : (
+          <>
+            <GoogleLogo size={19} />
+            <Text style={styles.googleBtnText}>Lanjutkan dengan Google</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => setShowDirectModal(true)}
+        style={styles.directGoogleFallbackBtn}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.directGoogleFallbackText}>
+          {isLikelyGoogleOAuthBlockedError(lastError)
+            ? "⚠️ Browser HP diblokir Google? Masuk via Email Google"
+            : "Masuk via Email Google Langsung"}
+        </Text>
+      </TouchableOpacity>
+
+      <GoogleDirectModal
+        visible={showDirectModal}
+        onClose={() => setShowDirectModal(false)}
+        onSuccess={async (cred) => {
+          await onLogin(cred);
+        }}
+        errorMessage={lastError}
+      />
+    </View>
   );
 };
 
@@ -541,6 +570,20 @@ const styles = StyleSheet.create({
     color: authColors.muted,
     fontSize: 12,
     fontWeight: "500",
+  },
+  directGoogleFallbackBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginTop: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  directGoogleFallbackText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#059669",
+    textAlign: "center",
+    textDecorationLine: "underline",
   },
   googleBtn: {
     flexDirection: "row",

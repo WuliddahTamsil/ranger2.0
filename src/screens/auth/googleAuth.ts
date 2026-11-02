@@ -41,6 +41,22 @@ export const hasGoogleClientId = Boolean(activeClientId);
 
 export const googleConfigMessage = "Login Google belum siap. Isi EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (web) atau client ID platform di .env, lalu restart Expo.";
 
+export const isLikelyGoogleOAuthBlockedError = (err?: string | null): boolean => {
+  if (!err) return false;
+  const lower = String(err).toLowerCase();
+  return (
+    lower.includes("disallowed_useragent") ||
+    lower.includes("redirect_uri_mismatch") ||
+    lower.includes("disabled_client") ||
+    lower.includes("unauthorized_client") ||
+    lower.includes("access blocked") ||
+    lower.includes("akses diblokir") ||
+    lower.includes("invalid_request") ||
+    lower.includes("403") ||
+    lower.includes("400")
+  );
+};
+
 // Helper to decode JWT ID Token if Google returns id_token
 const parseIdToken = (token: string): Partial<GoogleProfile> | null => {
   try {

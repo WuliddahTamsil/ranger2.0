@@ -142,11 +142,11 @@ export const GoogleDirectModal: React.FC<GoogleDirectModalProps> = ({
 
             {/* Developer Notice */}
             <View style={styles.devNote}>
-              <Text style={styles.devNoteTitle}>Catatan Konfigurasi Google Cloud:</Text>
+              <Text style={styles.devNoteTitle}>Solusi Pemblokiran Google di Ponsel:</Text>
               <Text style={styles.devNoteText}>
-                Untuk login popup otomatis langsung di localhost web, pastikan URL{" "}
-                <Text style={styles.codeText}>http://localhost:8081</Text> telah didaftarkan pada{" "}
-                <Text style={styles.boldText}>Authorized Redirect URIs</Text> di Google Cloud Console.
+                Penyambungan ini memastikan akun Anda langsung terhubung resmi dan aman ke GEOVERSE tanpa terhambat kebijakan browser HP atau status testing Google Cloud.
+
+
               </Text>
             </View>
           </View>

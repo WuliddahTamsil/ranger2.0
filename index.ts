@@ -1,4 +1,9 @@
 import './src/suppressWarnings';
+import * as WebBrowser from 'expo-web-browser';
+
+// Complete any pending authentication sessions when app is resumed via deep link
+WebBrowser.maybeCompleteAuthSession();
+
 import { registerRootComponent } from 'expo';
 import { LogBox, Text, TextInput } from 'react-native';
 

@@ -19,6 +19,8 @@ const getGoogleClientIds = () => [
   process.env.GOOGLE_WEB_CLIENT_ID,
   process.env.GOOGLE_ANDROID_CLIENT_ID,
   process.env.GOOGLE_IOS_CLIENT_ID,
+  "409515412776-oa8u9l8hvlr9ahgj7u69nhvlgepm006u.apps.googleusercontent.com",
+  "409515412776-85khlnbqile0gohn5ff7f1o0c8tcs9sp.apps.googleusercontent.com",
 ].filter(Boolean);
 
 const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
