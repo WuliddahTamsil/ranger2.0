@@ -27,7 +27,12 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.wuliddah_tamsil.the_ranger_react_native"
+      "package": "com.wuliddah_tamsil.the_ranger_react_native",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -68,10 +73,11 @@
       ]
     ],
     "extra": {
+      "EXPO_PUBLIC_USE_RN_FETCH": "1",
       "eas": {
-        "projectId": "775fa982-0579-4002-b518-4c22a6f1d545"
-      },
-      "EXPO_PUBLIC_USE_RN_FETCH": "1"
-    }
+        "projectId": "409168f7-10a9-4ad3-8c79-adc24ec8f1f9"
+      }
+    },
+    "owner": "aisyahphr"
   }
 }
