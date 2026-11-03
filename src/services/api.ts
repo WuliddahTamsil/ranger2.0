@@ -1,6 +1,7 @@
 import { NativeModules, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { AuthAccount } from "../screens/auth/authTypes";
+import { clearAuthToken, loadAuthToken } from "../screens/auth/authTokenStorage";
 
 const AUTH_ACCOUNTS_KEY = "rangers.auth.accounts.v1";
 const AUTH_SESSION_KEY = "rangers.auth.session.v1";
@@ -31,7 +32,8 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
       : null;
     const targetAccount = account || (requestedAccountId && requestedAccountId === session?.currentAccount?.id ? session.currentAccount : null);
     const headers: Record<string, string> = {};
-    const token = targetAccount?.token || (requestedAccountId && requestedAccountId.length === 24 ? requestedAccountId : session?.currentAccount?.token);
+    const secureToken = await loadAuthToken(requestedAccountId || targetAccount?.id);
+    const token = targetAccount?.token || secureToken || session?.currentAccount?.token;
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -56,8 +58,7 @@ export const getStoredAuthToken = async (): Promise<string | null> => {
   if (authorization.startsWith("Bearer ")) {
     return authorization.slice(7).trim();
   }
-  const idFallback = headers["x-user-id"] || headers["x-driver-id"];
-  return idFallback ? String(idFallback).trim() : null;
+  return null;
 };
 
 // Detect developer machine host if running on physical device via Expo Go / dev client
@@ -597,18 +598,10 @@ const getMarketplaceActorHeaders = async (actor: Pick<AuthAccount, "id" | "role"
   let token = actor.token;
   if (!token) {
     try {
-      const accountsRaw = await AsyncStorage.getItem(AUTH_ACCOUNTS_KEY);
-      const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
-      const storedActor = Array.isArray(accounts)
-        ? accounts.find((item: any) => item.id === actor.id)
-        : null;
-      token = storedActor?.token;
+      token = await loadAuthToken(actor.id) || undefined;
     } catch {
       // Return a clear session error below if storage cannot provide a token.
     }
-  }
-  if (!token && typeof actor.id === "string" && actor.id.length === 24) {
-    token = actor.id;
   }
 
   return token
@@ -1226,6 +1219,7 @@ export const deleteUserAccount = async (userId?: string): Promise<{ success: boo
     });
     const data = await readApiJson(res);
     if (data.success) {
+      await clearAuthToken(userId).catch(() => {});
       await AsyncStorage.removeItem(AUTH_SESSION_KEY).catch(() => {});
       try {
         const accountsRaw = await AsyncStorage.getItem(AUTH_ACCOUNTS_KEY);

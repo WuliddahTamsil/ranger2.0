@@ -1,6 +1,6 @@
 import { AuthAccount, AuthRegistrationRole, GoogleCredential, GoogleProfile, RegistrationForm } from "./authTypes";
 import { clearSession, loadAccounts, loadSession, saveAccounts, saveSession } from "./authStorage";
-import { fetchGoogleProfile } from "./googleAuth";
+import { loadAuthToken, saveAuthToken } from "./authTokenStorage";
 import { hashSecret, normalizeEmail, normalizePhone } from "./authValidation";
 import { getApiUrl, updateUserProfile } from "../../services/api";
 
@@ -14,12 +14,15 @@ const isRetryableLoginStatus = (status: number) => status === 408 || status === 
 export const restoreStoredAccount = async () => {
   const [accounts, session] = await Promise.all([loadAccounts(), loadSession()]);
   if (!session) return { accounts, account: null as AuthAccount | null };
-  const account = accounts.find((item) => item.id === session.accountId) || null;
+  const storedAccount = accounts.find((item) => item.id === session.accountId) || null;
+  const token = await loadAuthToken(session.accountId);
+  const account = storedAccount ? { ...storedAccount, token: token || storedAccount.token } : null;
   if (!account) await clearSession();
   return { accounts, account };
 };
 
 export const createAuthSession = async (account: AuthAccount) => {
+  if (account.token) await saveAuthToken(account.id, account.token);
   await saveSession({ accountId: account.id, role: account.role, name: account.name, email: account.email, startedAt: new Date().toISOString() });
 };
 
@@ -160,48 +163,27 @@ export const loginWithPassword = async (email: string, password: string) => {
 };
 
 export const loginWithGoogle = async (credential: GoogleCredential) => {
-  const tokenForFallback = credential.accessToken || credential.idToken;
-  if (!tokenForFallback) throw new Error("Google tidak mengembalikan token autentikasi.");
-  let profile: GoogleProfile | null = null;
-
-  try {
-    profile = await fetchGoogleProfile(tokenForFallback);
-  } catch (profileErr) {
-    console.warn("fetchGoogleProfile note:", profileErr);
+  if (!credential.accessToken && !credential.idToken) {
+    throw new Error("Google tidak mengembalikan token autentikasi.");
   }
 
-  // 1. Check local cached accounts first for instant responsive sign-in
-  if (profile?.email) {
-    const normalized = normalizeEmail(profile.email);
-    const accounts = await loadAccounts();
-    const existingAccount = accounts.find(
-      (item) => item.email === normalized || (item.googleLinked && item.email === normalized)
-    );
-    if (existingAccount) {
-      if (existingAccount.status === "rejected") {
-        throw new Error(existingAccount.rejectionReason || "Akun Google ini ditolak administrator.");
-      }
-      if (!existingAccount.googleLinked) {
-        existingAccount.googleLinked = true;
-        if (!existingAccount.profilePhoto && profile.photo) existingAccount.profilePhoto = profile.photo;
-        await saveAccounts(accounts);
-      }
-      return { profile, account: existingAccount };
-    }
-  }
-
-  // 2. Query Backend API (MongoDB Atlas)
+  // The backend is authoritative for Google identity and GEOVERSE account
+  // membership. Never accept a locally cached or client-created profile as a
+  // successful login, because that bypasses Google token verification.
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
     const res = await fetch(getApiUrl("/auth/login"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
         googleAccessToken: credential.accessToken,
         googleIdToken: credential.idToken,
       }),
+      signal: controller.signal,
     });
-    const result = await res.json();
-
+    const result = await res.json().catch(() => ({}));
     if (result.success && result.data) {
       const resolvedProfile: GoogleProfile = result.googleProfile || {
         id: result.data.googleId || result.data.id,
@@ -209,8 +191,10 @@ export const loginWithGoogle = async (credential: GoogleCredential) => {
         email: result.data.email,
         photo: result.data.profilePhoto,
       };
-      profile = resolvedProfile;
-      const normalized = normalizeEmail(resolvedProfile.email);
+      if (!resolvedProfile.email || !result.data.token) {
+        throw new Error("Respons autentikasi Google dari server tidak lengkap.");
+      }
+
       const dbUser: AuthAccount = {
         id: result.data.id || result.data._id,
         role: result.data.role,
@@ -229,9 +213,9 @@ export const loginWithGoogle = async (credential: GoogleCredential) => {
         updatedAt: result.data.updatedAt || new Date().toISOString(),
       };
 
-      // Cache locally
       const accounts = await loadAccounts();
-      const existingIdx = accounts.findIndex((a) => a.email === normalized);
+      const normalized = normalizeEmail(dbUser.email);
+      const existingIdx = accounts.findIndex((a) => normalizeEmail(a.email) === normalized);
       if (existingIdx >= 0) accounts[existingIdx] = dbUser;
       else accounts.push(dbUser);
       await saveAccounts(accounts);
@@ -243,40 +227,28 @@ export const loginWithGoogle = async (credential: GoogleCredential) => {
       return { profile: resolvedProfile, account: dbUser };
     }
 
-    if (result.needsRegistration && result.googleProfile) {
-      profile = result.googleProfile as GoogleProfile;
-      return { profile, account: null, credential };
+    if (result.needsRegistration && result.googleProfile?.email) {
+      return { profile: result.googleProfile as GoogleProfile, account: null, credential };
     }
+
+    throw new Error(result.message || `Login Google gagal (HTTP ${res.status}).`);
   } catch (apiErr) {
-    if (apiErr instanceof Error && apiErr.message.includes("ditolak")) {
+    const message = apiErr instanceof Error ? apiErr.message : "";
+    const lowerMessage = message.toLowerCase();
+    const isNetworkFailure =
+      lowerMessage.includes("network") ||
+      lowerMessage.includes("failed to fetch") ||
+      lowerMessage.includes("fetch failed") ||
+      lowerMessage.includes("aborted") ||
+      lowerMessage.includes("timeout");
+    if (message && !isNetworkFailure) {
       throw apiErr;
     }
-    console.warn("Backend Google login note:", apiErr);
+    console.warn("Backend Google login error:", apiErr);
+    throw new Error("Gagal menghubungkan autentikasi Google ke server GEOVERSE. Periksa koneksi internet lalu coba lagi.");
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
-
-  if (!profile) profile = await fetchGoogleProfile(tokenForFallback);
-  const normalized = normalizeEmail(profile.email);
-
-  // 3. Fallback: Check local storage again
-  const accounts = await loadAccounts();
-  const account = accounts.find(
-    (item) => item.email === normalized || (item.googleLinked && item.email === normalized)
-  );
-
-  if (account) {
-    if (account.status === "rejected") {
-      throw new Error(account.rejectionReason || "Akun Google ini ditolak admin.");
-    }
-    if (!account.googleLinked) {
-      account.googleLinked = true;
-      if (!account.profilePhoto && profile.photo) account.profilePhoto = profile.photo;
-      await saveAccounts(accounts);
-    }
-    return { profile, account };
-  }
-
-  // 4. Account not found -> route to role selection for registration
-  return { profile, account: null, credential };
 };
 
 export const registerAccount = async (role: AuthRegistrationRole, form: RegistrationForm, googleProfile?: GoogleProfile, googleCredential?: GoogleCredential) => {
@@ -306,9 +278,7 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
 
     const result = await res.json();
     if (!result.success && result.message) {
-      if (result.message.includes("sudah terdaftar")) {
-        return { account: null, error: result.message };
-      }
+      return { account: null, error: result.message };
     }
 
     if (result.success && result.data) {
@@ -335,6 +305,15 @@ export const registerAccount = async (role: AuthRegistrationRole, form: Registra
     }
   } catch (apiErr) {
     console.warn("Backend register error, fallback to local storage:", apiErr);
+  }
+
+  // A Google registration must never be completed locally. The backend has
+  // to verify the Google token and persist the account before a session exists.
+  if (googleCredential) {
+    return {
+      account: null,
+      error: "Registrasi Google gagal terhubung ke server GEOVERSE. Periksa koneksi internet lalu coba lagi.",
+    };
   }
 
   // 2. Fallback to Local Storage

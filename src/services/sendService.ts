@@ -6,6 +6,7 @@ import {
   SendPackageData,
   SendPartyData,
 } from "../types";
+import { loadAuthToken } from "../screens/auth/authTokenStorage";
 
 const AUTH_ACCOUNTS_KEY = "rangers.auth.accounts.v1";
 const AUTH_SESSION_KEY = "rangers.auth.session.v1";
@@ -26,7 +27,7 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
       session?.currentAccount ||
       accounts[0];
 
-    const token = target?.token || target?.accessToken || session?.token;
+    const token = target?.token || target?.accessToken || await loadAuthToken(target?.id || target?._id || session?.accountId || accountId) || session?.token;
     const resolvedId = target?.id || target?._id || session?.accountId || accountId;
 
     if (token) {

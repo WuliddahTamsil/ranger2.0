@@ -1,5 +1,6 @@
 import { getApiUrl } from "./api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loadAuthToken } from "../screens/auth/authTokenStorage";
 import {
   WasteBankUI,
   WasteCategory,
@@ -27,7 +28,7 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
       ? accounts.find((item: any) => String(item.id) === String(requestedAccountId))
       : null;
     const target = account || (requestedAccountId && requestedAccountId === session?.currentAccount?.id ? session.currentAccount : null);
-    const token = target?.token || (requestedAccountId && requestedAccountId.length === 24 ? requestedAccountId : session?.currentAccount?.token);
+    const token = target?.token || await loadAuthToken(requestedAccountId) || session?.currentAccount?.token;
     return token ? { Authorization: `Bearer ${token}` } : {};
   } catch {
     return {};

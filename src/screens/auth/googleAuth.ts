@@ -25,35 +25,35 @@ const activeClientId = Platform.OS === "web"
     ? (googleClientIds.iosClientId || googleClientIds.webClientId)
     : (googleClientIds.androidClientId || googleClientIds.webClientId);
 
-import { makeRedirectUri } from "expo-auth-session";
-
-export const getGoogleRedirectUri = () => {
-  if (Platform.OS === "web") {
-    return makeRedirectUri();
-  }
-  return makeRedirectUri({
-    scheme: "geoverse",
-  });
-};
-
 export const hasGoogleClientId = Boolean(activeClientId);
 
 export const googleConfigMessage = "Login Google belum siap. Isi EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (web) atau client ID platform di .env, lalu restart Expo.";
 
-export const isLikelyGoogleOAuthBlockedError = (err?: string | null): boolean => {
-  if (!err) return false;
-  const lower = String(err).toLowerCase();
-  return (
-    lower.includes("disallowed_useragent") ||
-    lower.includes("redirect_uri_mismatch") ||
-    lower.includes("disabled_client") ||
-    lower.includes("unauthorized_client") ||
-    lower.includes("access blocked") ||
-    lower.includes("akses diblokir") ||
-    lower.includes("invalid_request") ||
-    lower.includes("403") ||
-    lower.includes("400")
-  );
+export const formatGoogleOAuthError = (errorCode?: string | null, description?: string | null): string => {
+  const code = String(errorCode || "").toLowerCase();
+  const detail = String(description || "").trim();
+  const raw = `${code} ${detail}`;
+
+  if (code === "access_denied" && !raw.includes("blocked")) {
+    return "Autentikasi Google dibatalkan. Pilih akun Google lalu izinkan akses untuk GEOVERSE.";
+  }
+  if (raw.includes("disallowed_useragent")) {
+    return "Google menolak browser autentikasi ini. Pastikan aplikasi dibuka dari build GEOVERSE terbaru, bukan browser tertanam atau APK lama.";
+  }
+  if (raw.includes("access blocked") || raw.includes("akses diblokir")) {
+    return "Google memblokir aplikasi ini. Pastikan OAuth consent screen sudah aktif dan akun Anda sudah ditambahkan sebagai Test User di Google Cloud Console.";
+  }
+  if (raw.includes("redirect_uri_mismatch")) {
+    return "Redirect Google tidak cocok dengan aplikasi. Build ulang aplikasi setelah konfigurasi scheme dan client Android diperbaiki.";
+  }
+  if (raw.includes("disabled_client") || raw.includes("invalid_client") || raw.includes("unauthorized_client")) {
+    return "Google OAuth client tidak aktif atau tidak diizinkan untuk build ini. Periksa Android OAuth client, package name, dan SHA-1 signing certificate.";
+  }
+  if (raw.includes("invalid_request") || raw.includes("400")) {
+    return "Permintaan login Google tidak valid. Pastikan APK berasal dari build terbaru dan client ID Google sesuai dengan package aplikasi.";
+  }
+  if (detail) return `Login Google gagal: ${detail}`;
+  return `Login Google gagal (${errorCode || "error"}). Coba lagi.`;
 };
 
 // Helper to decode JWT ID Token if Google returns id_token
@@ -86,48 +86,8 @@ const parseIdToken = (token: string): Partial<GoogleProfile> | null => {
   }
 };
 
-export const createSimulatedGoogleCredential = (email: string, name?: string): { idToken: string; accessToken: string } => {
-  const cleanEmail = email.toLowerCase().trim();
-  const cleanName = (name && name.trim()) || cleanEmail.split("@")[0];
-  const payload = {
-    id: `google_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-    email: cleanEmail,
-    name: cleanName,
-    photo: `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=059669&color=fff`,
-  };
-  const jsonStr = JSON.stringify(payload);
-  let b64 = "";
-  if (typeof btoa === "function") {
-    b64 = btoa(jsonStr);
-  } else if (typeof (globalThis as any).Buffer !== "undefined") {
-    b64 = (globalThis as any).Buffer.from(jsonStr, "utf-8").toString("base64");
-  }
-  const token = `geoverse_google_sim_${b64}`;
-  return { idToken: token, accessToken: token };
-};
-
 export const fetchGoogleProfile = async (token?: string): Promise<GoogleProfile> => {
   if (!token) throw new Error("Google tidak mengembalikan token akses.");
-
-  // Direct simulated/dev Google token support
-  if (token.startsWith("geoverse_google_sim_")) {
-    try {
-      const b64 = token.replace("geoverse_google_sim_", "");
-      let json = "";
-      if (typeof atob === "function") {
-        json = atob(b64);
-      } else if (typeof (globalThis as any).Buffer !== "undefined") {
-        json = (globalThis as any).Buffer.from(b64, "base64").toString("utf-8");
-      }
-      const data = JSON.parse(json);
-      return {
-        id: data.id || `google_${Date.now()}`,
-        name: data.name || data.email.split("@")[0],
-        email: data.email,
-        photo: data.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name || data.email)}&background=059669&color=fff`,
-      };
-    } catch {}
-  }
 
   // If token looks like a JWT ID token (3 dot-separated parts)
   if (token.split(".").length === 3) {

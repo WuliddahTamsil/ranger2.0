@@ -1,5 +1,6 @@
 import { getApiUrl } from "../../../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loadAuthToken } from "../../../screens/auth/authTokenStorage";
 import {
   PointWalletUI,
   PointLedgerUI,
@@ -27,7 +28,7 @@ export const getAuthHeaders = async (accountId?: string): Promise<Record<string,
       : null;
     const target = account || session?.currentAccount;
     const resolvedId = requestedAccountId || target?.id || target?._id;
-    const token = target?.token;
+    const token = target?.token || await loadAuthToken(resolvedId);
     if (!token) {
       return {};
     }

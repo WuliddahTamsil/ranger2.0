@@ -70,7 +70,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "EXPO_PUBLIC_USE_RN_FETCH": "1",

@@ -35,10 +35,9 @@ import { exchangeCodeAsync } from "expo-auth-session";
 import { Nav } from "../../types";
 import { AuthRegistrationRole, GoogleCredential, GoogleProfile } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
-import { getGoogleRedirectUri, googleClientIds, hasGoogleClientId, isLikelyGoogleOAuthBlockedError } from "./googleAuth";
+import { formatGoogleOAuthError, googleClientIds, hasGoogleClientId } from "./googleAuth";
 import { AuthBrand } from "./components/AuthBrand";
 import { GoogleLogo } from "./components/GoogleLogo";
-import { GoogleDirectModal } from "./components/GoogleDirectModal";
 
 interface Props extends Nav {
   googleDraft?: GoogleProfile | null;
@@ -349,48 +348,61 @@ const GoogleConnectSection: React.FC<{
 }> = ({ onConnect }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showDirectModal, setShowDirectModal] = useState(false);
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
+  // Use Expo's native redirect for installed builds. A manually forced
+  // geoverse:// redirect was rejected by Google's Android OAuth client.
+  const [request, , promptAsync] = Google.useAuthRequest({
     ...googleClientIds,
     scopes: ["openid", "profile", "email"],
     selectAccount: true,
-    redirectUri: getGoogleRedirectUri(),
   });
 
   const handledTokenRef = React.useRef<string | null>(null);
 
-  React.useEffect(() => {
-    if (response?.type === "success") {
-      const accessToken = response.authentication?.accessToken || response.params?.access_token;
-      const idToken = response.authentication?.idToken || response.params?.id_token;
-      const tokenKey = `${accessToken || ""}_${idToken || ""}`;
-      if ((accessToken || idToken) && handledTokenRef.current !== tokenKey) {
-        handledTokenRef.current = tokenKey;
-        void onConnect({ accessToken, idToken });
-      }
-    } else if (response?.type === "error") {
-      const errorCode = response.params?.error || "";
-      const desc = response.params?.error_description || "";
-      const userMsg =
-        errorCode === "redirect_uri_mismatch"
-          ? "Redirect URI sedang dalam proses penyesuaian di Google Cloud Console."
-          : errorCode === "disabled_client"
-          ? "Klien Google OAuth dinonaktifkan di Google Cloud Console."
-          : `Pendaftaran Google dialihkan (${errorCode || "error"}).`;
-      setError(desc ? `${userMsg} (${desc})` : userMsg);
+  const handleAuthResult = async (result: Awaited<ReturnType<typeof promptAsync>>) => {
+    if (result.type === "error") {
+      setError(formatGoogleOAuthError(result.params?.error, result.params?.error_description));
+      return;
     }
-  }, [response, onConnect]);
+    if (result.type !== "success") return;
+
+    let accessToken: string | undefined = result.authentication?.accessToken || result.params?.access_token;
+    let idToken: string | undefined = result.authentication?.idToken || result.params?.id_token;
+
+    if (!accessToken && !idToken && result.params?.code) {
+      if (!request?.codeVerifier || !request.redirectUri) {
+        throw new Error("Sesi autentikasi Google belum siap. Silakan coba lagi.");
+      }
+      const clientId = Platform.OS === "android"
+        ? googleClientIds.androidClientId
+        : Platform.OS === "ios"
+          ? googleClientIds.iosClientId || googleClientIds.webClientId
+          : googleClientIds.webClientId;
+      const tokenResult = await exchangeCodeAsync(
+        {
+          clientId,
+          code: result.params.code,
+          redirectUri: request.redirectUri,
+          extraParams: { code_verifier: request.codeVerifier },
+        },
+        Google.discovery,
+      );
+      accessToken = tokenResult.accessToken;
+      idToken = tokenResult.idToken;
+    }
+
+    if (!accessToken && !idToken) {
+      throw new Error("Google tidak mengembalikan token autentikasi. Silakan coba lagi.");
+    }
+
+    const tokenKey = `${accessToken || ""}_${idToken || ""}`;
+    if (handledTokenRef.current === tokenKey) return;
+    handledTokenRef.current = tokenKey;
+    await onConnect({ accessToken, idToken });
+  };
 
   const connect = async () => {
     setError("");
-
-    // On native mobile (Android/iOS standalone), open the official Google Sign-In Sheet directly
-    if (Platform.OS !== "web") {
-      setShowDirectModal(true);
-      return;
-    }
-
     setLoading(true);
     try {
       if (!request) {
@@ -398,51 +410,7 @@ const GoogleConnectSection: React.FC<{
         return;
       }
       const result = await promptAsync();
-      if (result.type === "success") {
-        let accessToken: string | undefined = result.authentication?.accessToken || result.params?.access_token;
-        let idToken: string | undefined = result.authentication?.idToken || result.params?.id_token;
-
-        if (!accessToken && !idToken && result.params?.code) {
-          try {
-            const activeId = googleClientIds.webClientId;
-            const tokenResult = await exchangeCodeAsync(
-              {
-                clientId: activeId,
-                code: result.params.code,
-                redirectUri: getGoogleRedirectUri(),
-                extraParams: {
-                  code_verifier: request?.codeVerifier || "",
-                },
-              },
-              Google.discovery
-            );
-            accessToken = tokenResult.accessToken;
-            idToken = tokenResult.idToken;
-          } catch (exchangeErr) {
-            console.warn("Direct code exchange fallback error:", exchangeErr);
-          }
-        }
-
-        const tokenKey = `${accessToken || ""}_${idToken || ""}`;
-        if (accessToken || idToken) {
-          if (handledTokenRef.current !== tokenKey) {
-            handledTokenRef.current = tokenKey;
-            await onConnect({ accessToken, idToken });
-          }
-        } else if (!result.params?.code) {
-          throw new Error("Token autentikasi Google tidak ditemukan.");
-        }
-      } else if (result.type === "error") {
-        const errorCode = result.params?.error || "";
-        const desc = result.params?.error_description || "";
-        const userMsg =
-          errorCode === "redirect_uri_mismatch"
-            ? "Redirect URI sedang dalam proses penyesuaian di Google Cloud Console."
-            : errorCode === "disabled_client"
-            ? "Klien Google OAuth dinonaktifkan di Google Cloud Console."
-            : `Pendaftaran Google dialihkan (${errorCode || "error"}).`;
-        setError(desc ? `${userMsg} (${desc})` : userMsg);
-      }
+      await handleAuthResult(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Gagal menyambungkan akun Google.";
       setError(msg);
@@ -468,19 +436,7 @@ const GoogleConnectSection: React.FC<{
           </>
         )}
       </TouchableOpacity>
-      {/* Tombol alternatif saat browser diblokir Google */}
-      
-
       {error ? <Text style={styles.googleErrorText}>{error}</Text> : null}
-
-      <GoogleDirectModal
-        visible={showDirectModal}
-        onClose={() => setShowDirectModal(false)}
-        onSuccess={async (cred) => {
-          await onConnect(cred);
-        }}
-        errorMessage={error}
-      />
     </View>
   );
 };

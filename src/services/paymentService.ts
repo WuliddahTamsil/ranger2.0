@@ -1,5 +1,6 @@
 import { API_BASE_URL, getApiUrl } from "./api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loadAuthToken } from "../screens/auth/authTokenStorage";
 
 const AUTH_ACCOUNTS_KEY = "rangers.auth.accounts.v1";
 const AUTH_SESSION_KEY = "rangers.auth.session.v1";
@@ -68,7 +69,8 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
     const account = Array.isArray(accounts)
       ? accounts.find((item: any) => String(item.id) === String(requestedAccountId))
       : null;
-    return account?.token ? { Authorization: `Bearer ${account.token}` } : {};
+    const token = account?.token || await loadAuthToken(requestedAccountId);
+    return token ? { Authorization: `Bearer ${token}` } : {};
   } catch {
     return {};
   }

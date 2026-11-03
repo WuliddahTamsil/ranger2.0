@@ -1,5 +1,6 @@
 import { getApiUrl } from "./api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loadAuthToken } from "../screens/auth/authTokenStorage";
 
 export type VoucherDiscountType = "FIXED" | "PERCENTAGE" | "FREE_SHIPPING";
 
@@ -72,7 +73,7 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
         "Content-Type": "application/json",
       };
     }
-    const token = target?.token;
+    const token = target?.token || await loadAuthToken(resolvedId);
     if (!token) {
       return {
         "Content-Type": "application/json",
