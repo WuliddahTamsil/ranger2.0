@@ -237,6 +237,24 @@ export const LoginScreen: React.FC<Props> = ({
               </TouchableOpacity>
             </View>
 
+                        {/* Demo / App Reviewer Quick Access */}
+            <TouchableOpacity
+              onPress={() => {
+                setEmail("wuliddahtamsilbarokah19@gmail.com");
+                setPassword("12345678");
+                setError("");
+              }}
+              style={styles.demoReviewBtn}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Gunakan Akun Demo Pengujian"
+            >
+              <ShieldCheck size={16} color="#0D7A53" />
+              <Text style={styles.demoReviewBtnText}>
+                Gunakan Akun Demo Pengujian (App Review)
+              </Text>
+            </TouchableOpacity>
+
             {/* Guest Exploration Action */}
             <TouchableOpacity
               onPress={handleCancel}
@@ -315,6 +333,14 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
 
   const handlePress = async () => {
     onError("");
+
+    // On native mobile (Android/iOS standalone), open the official Google Sign-In Sheet directly
+    // This avoids Google OAuth 2.0 Error 400: invalid_request (redirect_uri=com.wuliddah...)
+    if (Platform.OS !== "web") {
+      setShowDirectModal(true);
+      return;
+    }
+
     onBusyChange(true);
     try {
       if (!request) {
@@ -328,11 +354,7 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
 
         if (!accessToken && !idToken && result.params?.code) {
           try {
-            const activeId = Platform.OS === "android"
-              ? (googleClientIds.androidClientId || googleClientIds.webClientId)
-              : Platform.OS === "ios"
-                ? (googleClientIds.iosClientId || googleClientIds.webClientId)
-                : googleClientIds.webClientId;
+            const activeId = googleClientIds.webClientId;
             const tokenResult = await exchangeCodeAsync(
               {
                 clientId: activeId,
@@ -398,17 +420,7 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={() => setShowDirectModal(true)}
-        style={styles.directGoogleFallbackBtn}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.directGoogleFallbackText}>
-          {isLikelyGoogleOAuthBlockedError(lastError)
-            ? "⚠️ Browser HP diblokir Google? Masuk via Email Google"
-            : "Masuk via Email Google Langsung"}
-        </Text>
-      </TouchableOpacity>
+      
 
       <GoogleDirectModal
         visible={showDirectModal}
@@ -705,6 +717,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: "#15803D",
+  },
+  demoReviewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: "#E8F5EF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#A7DCBE",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  demoReviewBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0D7A53",
   },
   guestActionBtn: {
     marginTop: 14,

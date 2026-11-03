@@ -562,17 +562,13 @@ const loginUser = async (req, res) => {
         });
       }
 
-      if (user.googleId && user.googleId !== verifiedGoogleProfile.id) {
-        return res.status(401).json({ success: false, message: "Akun Google tidak cocok dengan email akun GEOVERSE ini." });
-      }
-
       let updated = false;
-      if (!user.googleLinked) {
-        user.googleLinked = true;
+      if (!user.googleId || user.googleId !== verifiedGoogleProfile.id) {
+        user.googleId = verifiedGoogleProfile.id;
         updated = true;
       }
-      if (!user.googleId) {
-        user.googleId = verifiedGoogleProfile.id;
+      if (!user.googleLinked) {
+        user.googleLinked = true;
         updated = true;
       }
       if (!user.profilePhoto && verifiedGoogleProfile.photo) {

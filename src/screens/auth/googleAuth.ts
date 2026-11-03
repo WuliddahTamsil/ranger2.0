@@ -32,7 +32,6 @@ export const getGoogleRedirectUri = () => {
     return makeRedirectUri();
   }
   return makeRedirectUri({
-    native: "com.wuliddah_tamsil.the_ranger_react_native:/oauthredirect",
     scheme: "geoverse",
   });
 };

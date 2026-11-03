@@ -2119,14 +2119,20 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
 
   return (
     <ResponsiveSafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <View style={styles.appShell}>
+      <View style={[styles.appShell, windowWidth >= 768 && styles.tabletAppShell]}>
         {/* Active Tab Panel */}
         <View style={styles.tabContainer}>{renderTabContent()}</View>
 
         {/* ============================================================ */}
         {/* FIXED BOTTOM NAVIGATION BAR (Exact Gojek 5-Menu Polish) */}
         {/* ============================================================ */}
-        <View style={[styles.bottomNavBar, { paddingBottom: Math.max(insets.bottom, 6) }]}>
+        <View
+          style={[
+            styles.bottomNavBar,
+            windowWidth >= 768 && styles.tabletBottomNavBar,
+            { paddingBottom: Math.max(insets.bottom, 6) },
+          ]}
+        >
           {navItems.map((item, index) => {
             const active = currentTab === index;
             const IconComp = item.icon;
@@ -2833,6 +2839,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 4 },
+  },
+  tabletAppShell: {
+    maxWidth: 1200,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   tabContainer: {
     flex: 1,
@@ -3737,6 +3749,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-around",
     paddingTop: 4,
+  },
+  tabletBottomNavBar: {
+    maxWidth: 760,
+    width: "100%",
+    alignSelf: "center",
   },
   bottomNavItem: {
     alignItems: "center",

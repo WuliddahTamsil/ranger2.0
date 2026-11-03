@@ -384,6 +384,13 @@ const GoogleConnectSection: React.FC<{
 
   const connect = async () => {
     setError("");
+
+    // On native mobile (Android/iOS standalone), open the official Google Sign-In Sheet directly
+    if (Platform.OS !== "web") {
+      setShowDirectModal(true);
+      return;
+    }
+
     setLoading(true);
     try {
       if (!request) {
@@ -397,11 +404,7 @@ const GoogleConnectSection: React.FC<{
 
         if (!accessToken && !idToken && result.params?.code) {
           try {
-            const activeId = Platform.OS === "android"
-              ? (googleClientIds.androidClientId || googleClientIds.webClientId)
-              : Platform.OS === "ios"
-                ? (googleClientIds.iosClientId || googleClientIds.webClientId)
-                : googleClientIds.webClientId;
+            const activeId = googleClientIds.webClientId;
             const tokenResult = await exchangeCodeAsync(
               {
                 clientId: activeId,
@@ -466,17 +469,7 @@ const GoogleConnectSection: React.FC<{
         )}
       </TouchableOpacity>
       {/* Tombol alternatif saat browser diblokir Google */}
-      <TouchableOpacity
-        onPress={() => setShowDirectModal(true)}
-        style={styles.directGoogleFallbackBtn}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.directGoogleFallbackText}>
-          {isLikelyGoogleOAuthBlockedError(error)
-            ? "⚠️ Browser HP diblokir Google? Masuk via Verifikasi Email Google"
-            : "Sambungkan via Email Google Langsung"}
-        </Text>
-      </TouchableOpacity>
+      
 
       {error ? <Text style={styles.googleErrorText}>{error}</Text> : null}
 

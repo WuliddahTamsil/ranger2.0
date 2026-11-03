@@ -720,7 +720,7 @@ export default function App() {
           <SendProvider>
             <ShopCartProvider>
               <KeyboardAvoidingView
-                style={styles.container}
+                style={styles.outerContainer}
                 behavior={Platform.OS === "ios" ? (currentScreen === "login" || currentScreen === "auth_register" ? undefined : "padding") : undefined}
                 keyboardVerticalOffset={0}
               >
@@ -740,8 +740,16 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
   container: {
     flex: 1,
+    width: "100%",
+    maxWidth: 1440,
+    minWidth: 0,
+    alignSelf: "center",
     backgroundColor: "#FFFFFF",
   },
 });
