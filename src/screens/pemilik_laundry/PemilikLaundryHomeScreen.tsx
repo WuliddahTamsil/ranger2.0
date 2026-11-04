@@ -556,7 +556,7 @@ export const PemilikLaundryHomeScreen: React.FC<PemilikLaundryHomeProps> = ({ na
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               {/* Template Cepat Layanan */}
               <View style={{ marginBottom: 12 }}>
                 <Text style={{ fontSize: 11, fontWeight: "800", color: "#64748B", marginBottom: 6 }}>

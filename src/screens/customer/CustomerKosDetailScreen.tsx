@@ -758,7 +758,8 @@ export const CustomerKosDetailScreen: React.FC<CustomerKosDetailProps> = ({ navi
         customerName: tenantName || "Customer",
         customerPhone: phone || "081234567890",
         customerEmail: email || "customer@geoverse.id",
-      });
+        customerId: authAccount?.id,
+      }, authAccount?.id);
 
       if (payRes?.data?.snapRedirectUrl) {
         Linking.openURL(payRes.data.snapRedirectUrl).catch(() => {});

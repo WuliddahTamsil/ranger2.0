@@ -29,6 +29,79 @@ export const hasGoogleClientId = Boolean(activeClientId);
 
 export const googleConfigMessage = "Login Google belum siap. Isi EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (web) atau client ID platform di .env, lalu restart Expo.";
 
+export interface NativeGoogleAuthResult {
+  credential: { accessToken?: string; idToken?: string };
+  profile: GoogleProfile;
+}
+
+let nativeGoogleConfigured = false;
+
+const formatNativeGoogleError = (error: unknown): Error => {
+  const code = String((error as { code?: string })?.code || "").toUpperCase();
+  const message = String((error as { message?: string })?.message || "").trim();
+
+  if (code === "SIGN_IN_CANCELLED") {
+    return new Error("__GOOGLE_SIGN_IN_CANCELLED__");
+  }
+  if (code === "PLAY_SERVICES_NOT_AVAILABLE") {
+    return new Error("Google Play Services tidak tersedia atau perlu diperbarui di HP ini.");
+  }
+  if (code === "10" || code.includes("DEVELOPER_ERROR") || code.includes("INVALID_CLIENT")) {
+    return new Error("Konfigurasi Google pada APK belum cocok. Periksa package Android dan SHA-1 signing certificate di Google Cloud, lalu build ulang APK.");
+  }
+  if (code === "12501" || code.includes("CANCELED")) {
+    return new Error("Autentikasi Google dibatalkan.");
+  }
+  return new Error(message || `Login Google gagal (${code || "native_error"}).`);
+};
+
+export const signInWithNativeGoogle = async (): Promise<NativeGoogleAuthResult | null> => {
+  if (Platform.OS !== "android") return null;
+
+  try {
+    // Lazy-load the native module so Expo Go/web can still open the app and
+    // show a useful message instead of crashing at module initialization.
+    const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
+    if (!nativeGoogleConfigured) {
+      GoogleSignin.configure({
+        webClientId: googleClientIds.webClientId,
+        offlineAccess: false,
+        scopes: ["openid", "profile", "email"],
+      });
+      nativeGoogleConfigured = true;
+    }
+
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const result = await GoogleSignin.signIn();
+    if (result.type === "cancelled") return null;
+
+    const tokens = await GoogleSignin.getTokens();
+    const user = result.data.user;
+    const idToken = tokens.idToken || result.data.idToken || undefined;
+    const accessToken = tokens.accessToken || undefined;
+    if (!idToken && !accessToken) {
+      throw new Error("Google tidak mengembalikan token autentikasi.");
+    }
+    if (!user?.id || !user.email) {
+      throw new Error("Profil Google belum memiliki email yang valid.");
+    }
+
+    return {
+      credential: { accessToken, idToken },
+      profile: {
+        id: user.id,
+        name: user.name || user.email.split("@")[0],
+        email: user.email,
+        photo: user.photo || undefined,
+      },
+    };
+  } catch (error) {
+    const formatted = formatNativeGoogleError(error);
+    if (formatted.message === "__GOOGLE_SIGN_IN_CANCELLED__") return null;
+    throw formatted;
+  }
+};
+
 export const formatGoogleOAuthError = (errorCode?: string | null, description?: string | null): string => {
   const code = String(errorCode || "").toLowerCase();
   const detail = String(description || "").trim();

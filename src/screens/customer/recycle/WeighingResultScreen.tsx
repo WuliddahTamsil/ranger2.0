@@ -432,7 +432,7 @@ export const WeighingResultScreen: React.FC<Nav> = ({ navigate }) => {
               Pilih alasan keberatan & sertakan catatan Anda untuk proses verifikasi ulang oleh Bank Sampah.
             </Text>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               {/* Category Chips */}
               <Text style={{ fontSize: 12, fontWeight: "700", color: "#374151", marginBottom: 8 }}>
                 Kategori Keberatan:

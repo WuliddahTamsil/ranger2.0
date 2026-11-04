@@ -34,7 +34,7 @@ router.get("/profile/:id", requireAuth, getUserProfile);
 router.put("/profile/:id", requireAuth, updateUserProfile);
 
 // Strictly Protected Admin routes
-router.get("/mitra", requireAuth, requireRole("admin"), getMitraAccounts);
+router.get("/mitra", requireAuth, requireRole("admin", "pemilik_marketplace", "pemilik_catering"), getMitraAccounts);
 router.get("/users", requireAuth, requireRole("admin"), getAllUsers);
 router.put("/mitra/:id/status", requireAuth, requireRole("admin"), updateMitraStatus);
 router.get("/admin/stats", requireAuth, requireRole("admin"), getSystemStats);

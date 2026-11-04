@@ -681,7 +681,7 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               <Text style={{ fontSize: 12.5, color: "#374151", lineHeight: 19, textAlign: "justify", marginBottom: 10 }}>
                 Kebijakan Privasi & Perlindungan Data Mitra Pengelola Properti GEOVERSE:
               </Text>

@@ -657,7 +657,7 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               {/* Template Cepat Layanan */}
               <View style={{ marginBottom: 12 }}>
                 <Text style={{ fontSize: 11, fontWeight: "800", color: "#6B7280", marginBottom: 6 }}>
@@ -809,7 +809,7 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               <Text style={styles.paymentModalNotice}>
                 Pilih metode pembayaran yang Anda sediakan. Customer akan langsung melihat dan mentransfer tagihan ke rekening / scan barcode QRIS toko Anda.
               </Text>

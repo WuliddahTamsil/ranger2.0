@@ -12,7 +12,7 @@ export const invalidateAuthCache = () => {
   cachedAuthHeaders = {};
 };
 
-const getAuthHeaders = async (accountId?: string): Promise<Record<string, string>> => {
+export const getAuthHeaders = async (accountId?: string): Promise<Record<string, string>> => {
   const cacheKey = accountId || "__current__";
   const now = Date.now();
   if (cachedAuthHeaders[cacheKey] && cachedAuthHeaders[cacheKey].expiresAt > now) {
@@ -126,9 +126,10 @@ export const getApiUrl = (endpoint: string) => {
 export const updateUserProfile = async (userId: string, profileData: Record<string, unknown>) => {
   try {
     const targetId = userId?.trim() || "6acccf5a8931baef62204624";
+    const authHeaders = await getAuthHeaders(userId);
     const res = await fetch(getApiUrl(`/auth/profile/${targetId}`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify(profileData),
     });
     return await readApiJson(res);
@@ -379,9 +380,10 @@ export const getCateringProductsForOwner = async (ownerId: string) => {
 
 export const createCateringProduct = async (productData: any) => {
   try {
+    const authHeaders = await getAuthHeaders(String(productData?.ownerId || ""));
     const res = await fetch(getApiUrl("/catering/products"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify(productData),
     });
     return await readApiJson(res);
@@ -398,9 +400,10 @@ export const createCateringProduct = async (productData: any) => {
 
 export const updateCateringProduct = async (id: string | number, productData: any) => {
   try {
+    const authHeaders = await getAuthHeaders(String(productData?.ownerId || ""));
     const res = await fetch(getApiUrl(`/catering/products/${id}`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify(productData),
     });
     return await readApiJson(res);
@@ -412,8 +415,10 @@ export const updateCateringProduct = async (id: string | number, productData: an
 
 export const deleteCateringProduct = async (id: string | number) => {
   try {
+    const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/catering/products/${id}`), {
       method: "DELETE",
+      headers: authHeaders,
     });
     return await readApiJson(res);
   } catch (err: any) {
@@ -774,9 +779,9 @@ export const simulateMarketplacePayment = async (orderId: string, actorId?: stri
 };
 
 
-export const getDrivers = async () => {
+export const getDrivers = async (accountId?: string) => {
   try {
-    const res = await fetch(getApiUrl("/auth/mitra?role=driver"));
+    const res = await fetch(getApiUrl("/auth/mitra?role=driver"), { headers: await getAuthHeaders(accountId) });
     return await readApiJson(res);
   } catch (err) {
     console.error("getDrivers error:", err);
@@ -810,9 +815,10 @@ export const markNotificationRead = async (notificationId: string) => {
 
 export const updateCateringStatus = async (ownerId: string, isOpen: boolean) => {
   try {
+    const authHeaders = await getAuthHeaders(ownerId);
     const res = await fetch(getApiUrl(`/auth/profile/${ownerId}`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({
         roleData: {
           isDapurOpen: isOpen ? "true" : "false",
@@ -927,7 +933,7 @@ export const assignCateringDriver = async (orderId: string, driverId: string) =>
 
 export const getAdminStats = async () => {
   try {
-    const res = await fetch(getApiUrl("/auth/admin/stats"));
+    const res = await fetch(getApiUrl("/auth/admin/stats"), { headers: await getAuthHeaders() });
     return await readApiJson(res);
   } catch (err) {
     console.error("getAdminStats error:", err);
@@ -1180,11 +1186,12 @@ export interface DigitalPaymentPayload {
   customerId?: string;
 }
 
-export const createDigitalPayment = async (payload: DigitalPaymentPayload) => {
+export const createDigitalPayment = async (payload: DigitalPaymentPayload, accountId?: string) => {
   try {
+    const authHeaders = await getAuthHeaders(accountId || payload.customerId);
     const res = await fetch(getApiUrl("/payments/create"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify(payload),
     });
     return await readApiJson(res);
@@ -1194,10 +1201,12 @@ export const createDigitalPayment = async (payload: DigitalPaymentPayload) => {
   }
 };
 
-export const checkDigitalPaymentStatus = async (paymentId: string) => {
+export const checkDigitalPaymentStatus = async (paymentId: string, accountId?: string) => {
   try {
+    const authHeaders = await getAuthHeaders(accountId);
     const res = await fetch(getApiUrl(`/payments/${paymentId}/status`), {
       method: "GET",
+      headers: authHeaders,
     });
     return await readApiJson(res);
   } catch (error: any) {

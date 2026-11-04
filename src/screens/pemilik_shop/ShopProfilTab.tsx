@@ -835,7 +835,7 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               <Text style={styles.fieldLabel}>Nama Lengkap Pemilik</Text>
               <TextInput
                 style={styles.inputField}
@@ -893,7 +893,7 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               <Text style={styles.fieldLabel}>Password Saat Ini</Text>
               <TextInput
                 style={styles.inputField}
@@ -945,7 +945,7 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               <Text style={styles.fieldLabel}>Nama Toko / Outlet</Text>
               <TextInput
                 style={styles.inputField}
@@ -1024,7 +1024,7 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               <Text style={styles.fieldLabel}>HARI OPERASIONAL</Text>
               <View style={styles.bankPillsRow}>
                 {["Buka Setiap Hari", "Senin - Sabtu", "Senin - Jumat", "Pukul 24 Jam"].map((d) => (
@@ -1103,7 +1103,7 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               <Text style={styles.paymentModalNotice}>
                 Pilih metode pembayaran toko Anda. Pelanggan akan mentransfer atau memindai barcode QRIS saat berbelanja.
               </Text>

@@ -25,7 +25,7 @@ function enforceStaffOrAdmin(req, res, next) {
     return res.status(401).json({ success: false, message: "Autentikasi diperlukan." });
   }
 
-  const allowedRoles = ["admin", "bank_sampah"];
+  const allowedRoles = ["admin", "admin_sampah", "bank_sampah"];
   if (!allowedRoles.includes(req.authUser.role)) {
     return res.status(403).json({
       success: false,

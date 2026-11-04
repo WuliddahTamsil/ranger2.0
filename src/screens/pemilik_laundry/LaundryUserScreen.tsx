@@ -400,7 +400,7 @@ export const LaundryUserScreen: React.FC<LaundryUserScreenProps> = ({ navigate, 
 
             {/* Order History */}
             <Text style={styles.historySectionTitle}>Daftar Pesanan di Toko Anda:</Text>
-            <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: "82%" }} showsVerticalScrollIndicator={false}>
               {selectedCustomer?.orders && selectedCustomer.orders.length > 0 ? (
                 selectedCustomer.orders.map((ord, idx) => (
                   <View key={idx} style={styles.historyCard}>

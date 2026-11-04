@@ -1,4 +1,4 @@
-import { getApiUrl } from "./api";
+import { getApiUrl, getAuthHeaders } from "./api";
 
 export interface KostData {
   _id?: string;
@@ -117,7 +117,7 @@ export const fetchKostById = async (id: string) => {
 export const fetchKostsByOwner = async (ownerId: string) => {
   try {
     const url = getApiUrl(`/kosts/owner/${ownerId}`);
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: await getAuthHeaders(ownerId) });
     const result = await response.json();
     return result.data || [];
   } catch (error) {
@@ -129,7 +129,7 @@ export const fetchKostsByOwner = async (ownerId: string) => {
 export const fetchKostProperty = async (ownerId: string) => {
   try {
     const url = getApiUrl(`/kosts/property/${ownerId}`);
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: await getAuthHeaders(ownerId) });
     const result = await response.json();
     return result.data || null;
   } catch (error) {
@@ -143,7 +143,7 @@ export const updateKostProperty = async (ownerId: string, propertyData: Partial<
     const url = getApiUrl(`/kosts/property/${ownerId}`);
     const response = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(ownerId)) },
       body: JSON.stringify(propertyData),
     });
     return await response.json();
@@ -158,7 +158,7 @@ export const createNewKost = async (data: Partial<KostData>) => {
     const url = getApiUrl("/kosts");
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(String(data.ownerId || ""))) },
       body: JSON.stringify(data),
     });
     return await response.json();
@@ -173,7 +173,7 @@ export const createKostBooking = async (data: BookingData) => {
     const url = getApiUrl("/bookings");
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(data.customerId)) },
       body: JSON.stringify(data),
     });
     return await response.json();
@@ -187,7 +187,7 @@ export const fetchOwnerBookings = async (ownerId: string, status?: string) => {
   try {
     const query = status ? `?status=${status}` : "";
     const url = getApiUrl(`/bookings/owner/${ownerId}${query}`);
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: await getAuthHeaders(ownerId) });
     const result = await response.json();
     return result.data || [];
   } catch (error) {
@@ -196,12 +196,12 @@ export const fetchOwnerBookings = async (ownerId: string, status?: string) => {
   }
 };
 
-export const verifyDpBooking = async (bookingId: string, status: "dp_verified" | "rejected", rejectionReason?: string) => {
+export const verifyDpBooking = async (bookingId: string, status: "dp_verified" | "rejected", rejectionReason?: string, accountId?: string) => {
   try {
     const url = getApiUrl(`/bookings/${bookingId}/verify-dp`);
     const response = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(accountId)) },
       body: JSON.stringify({ status, rejectionReason }),
     });
     return await response.json();
@@ -213,13 +213,14 @@ export const verifyDpBooking = async (bookingId: string, status: "dp_verified" |
 
 export const settleKostBooking = async (
   bookingId: string,
-  data: { paymentMethod: "transfer" | "cash"; settledAmount?: number; notes?: string; proofImage?: string }
+  data: { paymentMethod: "transfer" | "cash"; settledAmount?: number; notes?: string; proofImage?: string },
+  accountId?: string
 ) => {
   try {
     const url = getApiUrl(`/bookings/${bookingId}/settle`);
     const response = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(accountId)) },
       body: JSON.stringify(data),
     });
     return await response.json();
@@ -232,7 +233,7 @@ export const settleKostBooking = async (
 export const fetchCustomerBookings = async (customerId: string) => {
   try {
     const url = getApiUrl(`/bookings/customer/${customerId}`);
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: await getAuthHeaders(customerId) });
     const result = await response.json();
     return result.data || [];
   } catch (error) {
@@ -246,7 +247,7 @@ export const fetchRoomsByOwner = async (ownerId: string, category?: string) => {
   try {
     const query = category ? `?category=${category}` : "";
     const url = getApiUrl(`/kosts/rooms/${ownerId}${query}`);
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: await getAuthHeaders(ownerId) });
     const result = await response.json();
     return result.data || [];
   } catch (error) {
@@ -260,7 +261,7 @@ export const addRoomToKost = async (ownerId: string, roomData: any) => {
     const url = getApiUrl(`/kosts/rooms/${ownerId}`);
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(ownerId)) },
       body: JSON.stringify(roomData),
     });
     return await response.json();
@@ -275,7 +276,7 @@ export const updateRoomInKost = async (ownerId: string, roomId: string, updateDa
     const url = getApiUrl(`/kosts/rooms/${ownerId}/${roomId}`);
     const response = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(ownerId)) },
       body: JSON.stringify(updateData),
     });
     return await response.json();
@@ -288,7 +289,7 @@ export const updateRoomInKost = async (ownerId: string, roomId: string, updateDa
 export const deleteRoomFromKost = async (ownerId: string, roomId: string) => {
   try {
     const url = getApiUrl(`/kosts/rooms/${ownerId}/${roomId}`);
-    const response = await fetch(url, { method: "DELETE" });
+    const response = await fetch(url, { method: "DELETE", headers: await getAuthHeaders(ownerId) });
     return await response.json();
   } catch (error) {
     console.error("❌ deleteRoomFromKost error:", error);
@@ -300,7 +301,7 @@ export const deleteRoomFromKost = async (ownerId: string, roomId: string) => {
 export const fetchTenantsByOwner = async (ownerId: string) => {
   try {
     const url = getApiUrl(`/kosts/tenants/${ownerId}`);
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: await getAuthHeaders(ownerId) });
     const result = await response.json();
     return result.data || [];
   } catch (error) {
@@ -314,7 +315,7 @@ export const addTenantToKost = async (ownerId: string, tenantData: any) => {
     const url = getApiUrl(`/kosts/tenants/${ownerId}`);
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(ownerId)) },
       body: JSON.stringify(tenantData),
     });
     return await response.json();
@@ -329,7 +330,7 @@ export const updateTenantInKost = async (ownerId: string, tenantId: string, tena
     const url = getApiUrl(`/kosts/tenants/${ownerId}/${tenantId}`);
     const response = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(ownerId)) },
       body: JSON.stringify(tenantData),
     });
     return await response.json();
@@ -342,7 +343,7 @@ export const updateTenantInKost = async (ownerId: string, tenantId: string, tena
 export const deleteTenantFromKost = async (ownerId: string, tenantId: string) => {
   try {
     const url = getApiUrl(`/kosts/tenants/${ownerId}/${tenantId}`);
-    const response = await fetch(url, { method: "DELETE" });
+    const response = await fetch(url, { method: "DELETE", headers: await getAuthHeaders(ownerId) });
     return await response.json();
   } catch (error) {
     console.error("❌ deleteTenantFromKost error:", error);
@@ -354,7 +355,7 @@ export const deleteTenantFromKost = async (ownerId: string, tenantId: string) =>
 export const fetchTransactionsByOwner = async (ownerId: string) => {
   try {
     const url = getApiUrl(`/transactions/owner/${ownerId}`);
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: await getAuthHeaders(ownerId) });
     const result = await response.json();
     return result.data || [];
   } catch (error) {
@@ -378,7 +379,7 @@ export const createOwnerTransaction = async (txData: {
     const url = getApiUrl("/transactions");
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(txData.ownerId)) },
       body: JSON.stringify(txData),
     });
     return await response.json();
@@ -391,7 +392,7 @@ export const createOwnerTransaction = async (txData: {
 export const deleteOwnerTransaction = async (txId: string) => {
   try {
     const url = getApiUrl(`/transactions/${txId}`);
-    const response = await fetch(url, { method: "DELETE" });
+    const response = await fetch(url, { method: "DELETE", headers: await getAuthHeaders() });
     return await response.json();
   } catch (error) {
     console.error("❌ deleteOwnerTransaction error:", error);
@@ -404,7 +405,7 @@ export const cancelKostBooking = async (bookingId: string, reason?: string) => {
     const url = getApiUrl(`/bookings/${bookingId}/cancel`);
     const response = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
       body: JSON.stringify({ reason }),
     });
     return await response.json();

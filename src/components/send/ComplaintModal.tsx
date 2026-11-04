@@ -75,7 +75,7 @@ export const ComplaintModal: React.FC<ComplaintModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ maxHeight: "88%" }} showsVerticalScrollIndicator={false}>
             <Text style={styles.sectionLabel}>Pilih Kategori Masalah:</Text>
             <View style={styles.chipsRow}>
               {CATEGORIES.map((cat) => {

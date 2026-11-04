@@ -633,15 +633,25 @@ const getMitraAccounts = async (req, res) => {
     const { role, status, includeCustomers } = req.query;
     let filter = {};
 
-    if (role && role !== "semua") {
+    // Partner dashboards only need a safe driver directory for assignment.
+    // Keep the broad directory restricted to admin while allowing verified
+    // marketplace/catering owners to request drivers only.
+    if (req.authUser?.role !== "admin") {
+      if (!["pemilik_marketplace", "pemilik_catering"].includes(req.authUser?.role) || role !== "driver") {
+        return res.status(403).json({ success: false, message: "Akses direktori mitra hanya tersedia untuk admin atau daftar driver partner." });
+      }
+      filter = { role: "driver", status: "verified" };
+    }
+
+    if (req.authUser?.role === "admin" && role && role !== "semua") {
       filter.role = role;
-    } else if (includeCustomers === "true") {
+    } else if (req.authUser?.role === "admin" && includeCustomers === "true") {
       filter.role = { $ne: "admin" };
-    } else {
+    } else if (req.authUser?.role === "admin") {
       filter.role = { $nin: ["customer", "admin"] };
     }
 
-    if (status && status !== "semua") filter.status = status;
+    if (req.authUser?.role === "admin" && status && status !== "semua") filter.status = status;
 
     const mitras = await User.find(filter)
       .select("-passwordHash -resetPasswordOtp -resetPasswordToken -resetPasswordExpires")

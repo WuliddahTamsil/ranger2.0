@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
     right: 16,
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    maxHeight: 280,
+    maxHeight: "80%",
     zIndex: 9999,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   suggestionsList: {
-    maxHeight: 320,
+    maxHeight: "80%",
   },
   suggestionItem: {
     flexDirection: "row",

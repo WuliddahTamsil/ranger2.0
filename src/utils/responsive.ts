@@ -26,6 +26,26 @@ export const isShortScreen = (height: number) => height < 680;
 export const isNarrowScreen = (width: number) => width < 360;
 export const isTablet = (width: number) => width >= 768;
 
+/**
+ * Keep sheets and dialogs usable on short phones, split-screen tablets, and
+ * desktop-sized web viewports. Percentages are intentionally avoided here so
+ * native and web receive the same predictable pixel ceiling.
+ */
+export const getResponsiveModalMaxHeight = (
+  height: number,
+  ratio = 0.88,
+  minimum = 280,
+) => Math.min(
+  Math.max(160, Math.max(minimum, Math.round(height * clamp(ratio, 0.7, 0.94)))),
+  Math.max(160, height - 24),
+);
+
+export const getResponsiveContentWidth = (
+  width: number,
+  maxWidth = 720,
+  gutter = getResponsiveGutter(width),
+) => Math.min(maxWidth, Math.max(0, width - gutter * 2));
+
 export const useResponsiveLayout = () => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -48,6 +68,8 @@ export const useResponsiveLayout = () => {
     bottomSpace: Math.max(insets.bottom, 0) + 80,
     getBottomSpace: (barHeight = 64, extra = 16) => Math.max(insets.bottom, 0) + barHeight + extra,
     scaleText: (size: number) => scaleFont(size, width),
+    contentWidth: (maxWidth = 720) => getResponsiveContentWidth(width, maxWidth, getResponsiveGutter(width)),
+    modalMaxHeight: (ratio = 0.88, minimum = 280) => getResponsiveModalMaxHeight(height, ratio, minimum),
   };
 };
 

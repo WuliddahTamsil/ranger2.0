@@ -481,7 +481,7 @@ export const ShopKeuanganTab: React.FC<ShopKeuanganTabProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               {/* Nominal Input */}
               <Text style={styles.inputLabel}>Nominal Penarikan (Rp)</Text>
               <TextInput

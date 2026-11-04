@@ -271,6 +271,14 @@ io.on("connection", (socket) => {
       const record = await findOrderByIdentifier(orderId);
       const participant = user && record ? await resolveParticipant(user._id, record) : null;
 
+      // Never subscribe an unauthenticated or unrelated account to an order chat.
+      // The HTTP chat endpoints enforce the same participant rule; Socket.io must
+      // not become a bypass that leaks live messages.
+      if (!participant) {
+        socket.emit("chat:join_denied", { message: "Anda tidak memiliki akses ke percakapan ini." });
+        return;
+      }
+
       const orderRoomId = record?.order?._id ? String(record.order._id) : String(orderId);
       const roomsToJoin = new Set([
         `conversation:${orderRoomId}`,
@@ -286,7 +294,7 @@ io.on("connection", (socket) => {
       console.log(`Socket ${socket.id} joined chat room(s): ${Array.from(roomsToJoin).join(", ")}`);
     } catch (err) {
       console.warn("Socket join_conversation error:", err.message);
-      socket.join(`conversation:${String(orderId)}`);
+      socket.emit("chat:join_denied", { message: "Percakapan belum dapat dibuka. Silakan coba lagi." });
     }
   });
 
@@ -305,6 +313,7 @@ io.on("connection", (socket) => {
     if (!orderId) return;
     try {
       const SendOrder = require("./models/SendOrder");
+      const user = token ? await verifyAccessToken(token) : null;
       let order = null;
       if (mongoose.Types.ObjectId.isValid(orderId)) {
         order = await SendOrder.findById(orderId).select("customerId driverId orderCode").lean().catch(() => null);
@@ -314,6 +323,19 @@ io.on("connection", (socket) => {
       }
       if (!order && String(orderId).startsWith("#")) {
         order = await SendOrder.findOne({ orderCode: String(orderId).replace(/^#/, "") }).select("customerId driverId orderCode").lean().catch(() => null);
+      }
+
+      const userId = String(user?._id || "");
+      const isParticipant = Boolean(
+        user && order && (
+          user.role === "admin" ||
+          userId === String(order.customerId || "") ||
+          userId === String(order.driverId || "")
+        )
+      );
+      if (!isParticipant) {
+        socket.emit("send:join_denied", { message: "Anda tidak memiliki akses ke pesanan pengiriman ini." });
+        return;
       }
 
       const rooms = new Set([`send:${String(orderId)}`]);
@@ -330,12 +352,30 @@ io.on("connection", (socket) => {
       console.log(`📡 Socket ${socket.id} joined authorized send room(s): ${Array.from(rooms).join(", ")}`);
     } catch (err) {
       console.warn("Socket send room join error:", err.message);
-      socket.join(`send:${String(orderId)}`);
+      socket.emit("send:join_denied", { message: "Channel pengiriman belum dapat dibuka. Silakan coba lagi." });
     }
   });
 
-  socket.on("join_shop_room", async ({ orderId } = {}) => {
+  socket.on("join_shop_room", async ({ orderId, token } = {}) => {
     if (!orderId) return;
+    const user = token ? await verifyAccessToken(token) : null;
+    const ShopOrder = require("./models/ShopOrder");
+    const MarketplaceStore = require("./models/MarketplaceStore");
+    const order = await ShopOrder.findById(orderId).select("customerId driverId storeId").lean().catch(() => null);
+    const store = order?.storeId ? await MarketplaceStore.findById(order.storeId).select("ownerId").lean().catch(() => null) : null;
+    const userId = String(user?._id || "");
+    const isParticipant = Boolean(
+      user && order && (
+        user.role === "admin" ||
+        userId === String(order.customerId || "") ||
+        userId === String(order.driverId || "") ||
+        userId === String(store?.ownerId || "")
+      )
+    );
+    if (!isParticipant) {
+      socket.emit("shop:join_denied", { message: "Anda tidak memiliki akses ke pesanan shop ini." });
+      return;
+    }
     const roomName = `shop:${String(orderId)}`;
     socket.join(roomName);
     socket.emit("shop:room_joined", { orderId, roomName });

@@ -12,7 +12,9 @@ class PaymentGateway {
   constructor() {
     this.providerName = process.env.PAYMENT_PROVIDER || "MIDTRANS";
     this.isProduction = process.env.NODE_ENV === "production" && process.env.MIDTRANS_IS_PRODUCTION === "true";
-    this.serverKey = process.env.MIDTRANS_SERVER_KEY || "";
+    // Keep local/demo webhook tests deterministic without ever falling back to a
+    // demo key in production, where a real Midtrans key must be configured.
+    this.serverKey = process.env.MIDTRANS_SERVER_KEY || (this.isProduction ? "" : "SB-Mid-server-DEFAULT_DEV_KEY");
     this.clientKey = process.env.MIDTRANS_CLIENT_KEY || "";
     this.merchantId = process.env.MIDTRANS_MERCHANT_ID || "";
 

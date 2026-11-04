@@ -1626,7 +1626,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
             </View>
 
             {stockProduct && (
-              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
                 {/* Product Summary */}
                 <View style={styles.stockProductCard}>
                   {stockProduct.img ? (
@@ -1777,7 +1777,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
             </View>
 
             {photoProduct && (
-              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 500 }}>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
                 {/* Primary Photo Hero Preview */}
                 <Text style={styles.inputSectionLabel}>Foto Utama (Tampil di Etalase)</Text>
                 <View style={styles.primaryPhotoContainer}>
@@ -2755,7 +2755,7 @@ const styles = StyleSheet.create({
   },
   // Form add product styles
   formContainer: {
-    maxHeight: 420,
+    maxHeight: "88%",
   },
   inputLabel: {
     fontSize: 12,
