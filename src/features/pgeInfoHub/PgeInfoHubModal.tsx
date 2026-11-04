@@ -47,6 +47,7 @@ interface PgeInfoHubModalProps {
   visible: boolean;
   onClose: () => void;
   initialCategory?: PgeInfoHubCategory | "Semua";
+  initialDetailItem?: PgeInfoHubItem | null;
 }
 
 const CATEGORY_ITEMS: Array<{
@@ -76,6 +77,7 @@ export const PgeInfoHubModal: React.FC<PgeInfoHubModalProps> = ({
   visible,
   onClose,
   initialCategory = "Semua",
+  initialDetailItem = null,
 }) => {
   const insets = useSafeAreaInsets();
   const topSafe = Math.max(
@@ -103,9 +105,14 @@ export const PgeInfoHubModal: React.FC<PgeInfoHubModalProps> = ({
 
   useEffect(() => {
     if (visible) {
+      if (initialDetailItem) {
+        setSelectedDetailItem(initialDetailItem);
+      }
       loadData(true);
+    } else {
+      setSelectedDetailItem(null);
     }
-  }, [visible, loadData]);
+  }, [visible, initialDetailItem, loadData]);
 
   const onRefresh = async () => {
     setRefreshing(true);

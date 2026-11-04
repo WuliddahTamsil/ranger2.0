@@ -5,6 +5,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl, getStoredAuthToken } from "./api";
+import { INITIAL_PGE_INFO_HUB_ITEMS } from "../features/pgeInfoHub/data";
 
 export type PgeInfoHubCategory =
   | "Company Profile"
@@ -66,6 +67,18 @@ export interface CreatePgeInfoHubPayload {
 const CACHE_KEY_PGE_INFO_HUB = "geoverse.cache.pge_info_hub.v1";
 const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
+export async function invalidatePgeCache(): Promise<void> {
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const pgeKeys = allKeys.filter((k) => k.startsWith(CACHE_KEY_PGE_INFO_HUB));
+    if (pgeKeys.length > 0) {
+      await AsyncStorage.multiRemove(pgeKeys);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 async function getAdminToken(): Promise<string> {
   try {
     const token = await getStoredAuthToken();
@@ -83,6 +96,7 @@ async function getAdminToken(): Promise<string> {
 
 /**
  * Customer: Fetch published PGE Info Hub items
+ * Uses Network First with AsyncStorage Cache and Guaranteed Seed Fallback
  */
 export async function fetchPublishedPgeInfoHub(
   category?: string,
@@ -109,19 +123,44 @@ export async function fetchPublishedPgeInfoHub(
     const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (res.ok) {
       const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
+      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+        const normalized: PgeInfoHubItem[] = json.data.map((item: any) => ({
+          ...item,
+          id: item.id || item.itemId || String(item._id),
+          isPublished: typeof item.isPublished === "boolean" ? item.isPublished : item.status === "PUBLISHED",
+        }));
         await AsyncStorage.setItem(
           cacheKey,
-          JSON.stringify({ timestamp: Date.now(), data: json.data })
+          JSON.stringify({ timestamp: Date.now(), data: normalized })
         ).catch(() => {});
-        return json.data;
+        return normalized;
       }
     }
   } catch (err) {
     console.warn("fetchPublishedPgeInfoHub network error:", err);
   }
 
-  return [];
+  // Fallback 1: Stale AsyncStorage cache
+  try {
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) {
+      const { data } = JSON.parse(cached);
+      if (Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    }
+  } catch {
+    // ignore cache read error
+  }
+
+  // Fallback 2: Guaranteed authentic initial items
+  let fallback = [...INITIAL_PGE_INFO_HUB_ITEMS];
+  if (category && category !== "Semua") {
+    fallback = fallback.filter(
+      (item) => item.category?.toLowerCase() === category.toLowerCase()
+    );
+  }
+  return fallback as PgeInfoHubItem[];
 }
 
 /**
@@ -181,8 +220,8 @@ export async function createPgeInfoHubItem(
     throw new Error(json.message || "Gagal membuat konten PGE Info Hub.");
   }
 
-  // Clear customer cache
-  await AsyncStorage.removeItem(CACHE_KEY_PGE_INFO_HUB).catch(() => {});
+  // Clear customer cache across all categories
+  await invalidatePgeCache();
 
   return json.data;
 }
@@ -212,8 +251,8 @@ export async function updatePgeInfoHubItem(
     throw new Error(json.message || "Gagal memperbarui konten PGE Info Hub.");
   }
 
-  // Clear customer cache
-  await AsyncStorage.removeItem(CACHE_KEY_PGE_INFO_HUB).catch(() => {});
+  // Clear customer cache across all categories
+  await invalidatePgeCache();
 
   return json.data;
 }
@@ -248,8 +287,8 @@ export async function updatePgeInfoHubStatus(
     throw new Error(json.message || `Gagal mengubah status menjadi ${status}.`);
   }
 
-  // Clear customer cache
-  await AsyncStorage.removeItem(CACHE_KEY_PGE_INFO_HUB).catch(() => {});
+  // Clear customer cache across all categories
+  await invalidatePgeCache();
 
   return json.data;
 }
@@ -274,8 +313,8 @@ export async function deletePgeInfoHubItem(id: string): Promise<void> {
     throw new Error(json.message || "Gagal menghapus konten PGE Info Hub.");
   }
 
-  // Clear customer cache
-  await AsyncStorage.removeItem(CACHE_KEY_PGE_INFO_HUB).catch(() => {});
+  // Clear customer cache across all categories
+  await invalidatePgeCache();
 }
 
 /**

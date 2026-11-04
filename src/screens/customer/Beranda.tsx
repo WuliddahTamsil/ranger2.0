@@ -88,7 +88,8 @@ import { getCustomerOrders, hydrateCustomerOrders, subscribeCustomerOrders } fro
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 import { setPendingMarketplaceCart } from "./marketplaceCartStore";
 import { setActiveCateringTrackingOrderId } from "./customerCateringStore";
-import { PgeInfoHubModal } from "../../features/pgeInfoHub";
+import { PgeInfoHubModal, INITIAL_PGE_INFO_HUB_ITEMS } from "../../features/pgeInfoHub";
+import { fetchPublishedPgeInfoHub, PgeInfoHubItem } from "../../services/pgeInfoHubService";
 import { HomeHeroBannerView } from "../../components/HomeHeroBannerView";
 import { fetchActiveHomeHero, HomeHeroBannerItem } from "../../services/homeHeroService";
 
@@ -188,8 +189,29 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   const [launcherExpanded, setLauncherExpanded] = useState(false);
   const [helpModalVisible, setHelpModalVisible] = useState(false);
   const [pgeInfoHubVisible, setPgeInfoHubVisible] = useState(false);
+  const [selectedPgeDetailItem, setSelectedPgeDetailItem] = useState<PgeInfoHubItem | null>(null);
+  const [pgeItems, setPgeItems] = useState<PgeInfoHubItem[]>(INITIAL_PGE_INFO_HUB_ITEMS as any);
+  const [pgeLoading, setPgeLoading] = useState(false);
   const [heroBanners, setHeroBanners] = useState<HomeHeroBannerItem[]>([]);
   const [heroLoading, setHeroLoading] = useState(false);
+
+  const loadPgeContent = useCallback(async (force = false) => {
+    try {
+      setPgeLoading(true);
+      const data = await fetchPublishedPgeInfoHub(undefined, force);
+      if (Array.isArray(data) && data.length > 0) {
+        setPgeItems(data);
+      }
+    } catch (err) {
+      console.warn("loadPgeContent error:", err);
+    } finally {
+      setPgeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPgeContent();
+  }, [loadPgeContent]);
 
   useEffect(() => {
     let isMounted = true;
@@ -217,6 +239,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
     try {
       await Promise.allSettled([
         refreshPointWallet(),
+        loadPgeContent(true),
         fetchActiveHomeHero("CUSTOMER_HOME_HERO", true)
           .then((b) => setHeroBanners(b))
           .catch(() => {}),
@@ -2031,6 +2054,111 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         </View>
 
         {/* ============================================================ */}
+        {/* 7.5. PGE INFO HUB • KABAR KAMOJANG */}
+        {/* ============================================================ */}
+        <View style={styles.pgeSectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                <Sparkles size={16} color="#0D7A53" />
+                <Text style={styles.sectionMainTitle}>PGE Info Hub • Kabar Kamojang</Text>
+              </View>
+              <Text style={styles.sectionSubtitle} numberOfLines={1}>
+                Profil resmi, agenda kegiatan, program CSR & komunitas
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setSelectedPgeDetailItem(null);
+                setPgeInfoHubVisible(true);
+              }}
+              activeOpacity={0.8}
+              style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+            >
+              <Text style={styles.seeAllGreenText}>Lihat semua</Text>
+              <ChevronRight size={14} color="#0D7A53" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pgeCarouselContent}
+            decelerationRate="fast"
+            snapToInterval={282}
+          >
+            {pgeItems.filter((i) => i.isPublished).map((item) => {
+              const categoryColor =
+                item.category === "Company Profile"
+                  ? { bg: "#ECFDF5", text: "#0D7A53", border: "#A7F3D0" }
+                  : item.category === "CSR"
+                  ? { bg: "#EFF6FF", text: "#1D4ED8", border: "#BFDBFE" }
+                  : item.category === "Acara"
+                  ? { bg: "#FFFBEB", text: "#B45309", border: "#FDE68A" }
+                  : item.category === "Kegiatan Komunitas"
+                  ? { bg: "#F5F3FF", text: "#6D28D9", border: "#DDD6FE" }
+                  : item.category === "Pengumuman"
+                  ? { bg: "#FDF2F8", text: "#BE185D", border: "#FBCFE8" }
+                  : { bg: "#FEF2F2", text: "#B91C1C", border: "#FECACA" };
+
+              const cardImg = item.imageUrl || item.posterUrl;
+
+              return (
+                <TouchableOpacity
+                  key={item.id || item.itemId || (item as any)._id}
+                  style={styles.pgeFeedCard}
+                  onPress={() => {
+                    setSelectedPgeDetailItem(item);
+                    setPgeInfoHubVisible(true);
+                  }}
+                  activeOpacity={0.88}
+                >
+                  <View style={styles.pgeCardImageWrapper}>
+                    {cardImg ? (
+                      <Image source={{ uri: cardImg }} style={styles.pgeCardImage} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.pgeCardImagePlaceholder}>
+                        <Building2 size={32} color="#0D7A53" />
+                        <Text style={styles.pgeCardPlaceholderText}>PGE KAMOJANG</Text>
+                      </View>
+                    )}
+                    <View
+                      style={[
+                        styles.pgeCategoryBadge,
+                        { backgroundColor: categoryColor.bg, borderColor: categoryColor.border },
+                      ]}
+                    >
+                      <Text style={[styles.pgeCategoryBadgeText, { color: categoryColor.text }]}>
+                        {item.category}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.pgeCardBody}>
+                    <Text style={styles.pgeCardTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.pgeCardDescription} numberOfLines={2}>
+                      {item.description}
+                    </Text>
+
+                    <View style={styles.pgeCardFooter}>
+                      <Text style={styles.pgeCardMeta} numberOfLines={1}>
+                        {item.authorOrDept || item.location || "PGE Area Kamojang"}
+                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <Text style={styles.pgeCardReadMore}>Baca</Text>
+                        <ArrowRight size={12} color="#0D7A53" />
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* ============================================================ */}
         {/* 8. REKOMENDASI UNTUKMU */}
         {/* ============================================================ */}
         <View style={styles.recommendationSection}>
@@ -2761,7 +2889,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       {/* ============================================================ */}
       <PgeInfoHubModal
         visible={pgeInfoHubVisible}
-        onClose={() => setPgeInfoHubVisible(false)}
+        onClose={() => {
+          setPgeInfoHubVisible(false);
+          setSelectedPgeDetailItem(null);
+        }}
+        initialDetailItem={selectedPgeDetailItem}
       />
 
       {/* ============================================================ */}
@@ -3621,6 +3753,103 @@ const styles = StyleSheet.create({
   promoCtaText: {
     fontSize: 10.5,
     fontWeight: "800",
+    color: "#0D7A53",
+  },
+
+  // 7.5. PGE INFO HUB SECTION
+  pgeSectionContainer: {
+    marginBottom: 20,
+  },
+  pgeCarouselContent: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  pgeFeedCard: {
+    width: 270,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+    elevation: 3,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  pgeCardImageWrapper: {
+    width: "100%",
+    height: 126,
+    backgroundColor: "#F1F5F9",
+    position: "relative",
+  },
+  pgeCardImage: {
+    width: "100%",
+    height: "100%",
+  },
+  pgeCardImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#E6F4EA",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pgeCardPlaceholderText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0D7A53",
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+  pgeCategoryBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  pgeCategoryBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  pgeCardBody: {
+    padding: 12,
+  },
+  pgeCardTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+    lineHeight: 18,
+    minHeight: 36,
+  },
+  pgeCardDescription: {
+    fontSize: 11,
+    color: "#64748B",
+    lineHeight: 15,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  pgeCardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  pgeCardMeta: {
+    fontSize: 10,
+    color: "#94A3B8",
+    fontWeight: "600",
+    flex: 1,
+    marginRight: 6,
+  },
+  pgeCardReadMore: {
+    fontSize: 11,
+    fontWeight: "700",
     color: "#0D7A53",
   },
 
