@@ -21,8 +21,11 @@ export const getAuthHeaders = async (accountId?: string): Promise<Record<string,
       AsyncStorage.getItem(AUTH_SESSION_KEY),
     ]);
     const session = sessionRaw ? JSON.parse(sessionRaw) : null;
+    if (!session || !session.accountId) {
+      return {};
+    }
     const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
-    const requestedAccountId = accountId || session?.accountId || session?.id || session?.userId || session?.currentAccount?.id;
+    const requestedAccountId = accountId || session.accountId;
     let account = Array.isArray(accounts) && requestedAccountId
       ? accounts.find((item: any) => String(item.id) === String(requestedAccountId) || String(item._id) === String(requestedAccountId))
       : null;

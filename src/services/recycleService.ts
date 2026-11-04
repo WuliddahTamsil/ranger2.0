@@ -22,8 +22,11 @@ const getAuthHeaders = async (accountId?: string): Promise<Record<string, string
       AsyncStorage.getItem(AUTH_SESSION_KEY),
     ]);
     const session = sessionRaw ? JSON.parse(sessionRaw) : null;
+    if (!session || !session.accountId) {
+      return {};
+    }
     const accounts = accountsRaw ? JSON.parse(accountsRaw) : [];
-    const requestedAccountId = accountId || session?.accountId;
+    const requestedAccountId = accountId || session.accountId;
     const account = Array.isArray(accounts)
       ? accounts.find((item: any) => String(item.id) === String(requestedAccountId))
       : null;

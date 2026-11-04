@@ -169,7 +169,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
     formatPoint,
     formatRupiah,
   } = useGeoversePoint();
-  const isGuest = !authAccount || !authAccount.token;
+  const isGuest = !authAccount || !authAccount.token || (authAccount as any).isGuest;
   const wallet = isGuest ? null : (pointWallet || recycleWallet);
   const recyclePoints = isGuest ? 0 : (wallet?.balancePoint || 0);
   const recycleTotalKg = isGuest ? 0 : (wallet?.totalKgDeposited || 0);
@@ -1306,7 +1306,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             <View style={styles.walletBarTextCol}>
               <View style={styles.walletBalanceRow}>
                 <Text style={styles.walletBarBalance} numberOfLines={1}>
-                  {formatNumberSafe(pointBalance)} Pts
+                  {isGuest ? "0 Pts" : `${formatNumberSafe(pointBalance)} Pts`}
                 </Text>
                 <View style={styles.walletPlusCircle}>
                   <Plus size={9} color="#0D7A53" />
@@ -1314,7 +1314,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               </View>
               <View style={styles.walletSubRow}>
                 <Text style={styles.walletBarSub} numberOfLines={1} ellipsizeMode="tail">
-                  ≈ {rp(rupiahEquivalent)}
+                  {isGuest ? "≈ Rp 0" : `≈ ${rp(rupiahEquivalent)}`}
                 </Text>
               </View>
             </View>

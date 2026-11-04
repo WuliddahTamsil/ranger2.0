@@ -87,7 +87,8 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
   const serviceFee = order?.serviceFee || 1000;
   const totalBill = order?.totalAmount || (laundryPrice > 0 ? laundryPrice + deliveryPickup + deliveryDrop + serviceFee : 0);
 
-  const userPoints = wallet?.balancePoint || 0;
+  const isGuest = !authAccount || !authAccount.token || (authAccount as any).isGuest;
+  const userPoints = isGuest ? 0 : (wallet?.balancePoint || 0);
   // 100 Point = Rp 1
   const pointsNeededToCoverBill = Math.ceil(totalBill * 100);
   const maxPointsUsable = Math.min(userPoints, pointsNeededToCoverBill);
@@ -298,7 +299,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
         customerId: order.customerId,
       };
 
-      const res = await createDigitalPayment(payload);
+      const res = await createDigitalPayment(payload, authAccount?.id);
       if (res.success && res.data) {
         const redirectUrl = res.data.snapRedirectUrl || res.data.paymentUrl;
         if (redirectUrl) {
@@ -313,7 +314,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
                 text: "Sudah Bayar / Cek Status",
                 onPress: async () => {
                   if (res.data.paymentId) {
-                    const statusRes = await checkDigitalPaymentStatus(res.data.paymentId);
+                    const statusRes = await checkDigitalPaymentStatus(res.data.paymentId, authAccount?.id);
                     if (statusRes.success && (statusRes.data?.status === "PAID" || statusRes.data?.status === "SETTLEMENT")) {
                       setIsPaymentModalOpen(false);
                       Alert.alert("Pembayaran Berhasil!", "Pembayaran laundry Anda telah lunas!");
@@ -766,7 +767,7 @@ export const CustomerLaundryTrackingScreen: React.FC<CustomerLaundryTrackingProp
             </View>
             <Text style={styles.modalSubtitle}>Pilih metode (QRIS / Transfer Bank) dan unggah bukti transfer.</Text>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               {/* Total Amount Box */}
               <View style={styles.modalTotalBox}>
                 <Text style={styles.modalTotalLabel}>Total Tagihan Riil</Text>

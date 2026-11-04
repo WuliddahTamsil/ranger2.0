@@ -221,7 +221,8 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
   const discount = promoApplied ? 5000 : 0;
 
   const { wallet } = useRecycle();
-  const userPoints = wallet?.balancePoint || 0;
+  const isGuest = !authAccount || !authAccount.token || (authAccount as any).isGuest;
+  const userPoints = isGuest ? 0 : (wallet?.balancePoint || 0);
   const [usePoints, setUsePoints] = useState(false);
 
   const rawTotalBeforePoints = subtotal + deliveryFee + serviceFee + driverTip - discount;

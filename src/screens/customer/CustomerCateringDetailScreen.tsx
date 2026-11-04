@@ -388,7 +388,8 @@ export const CustomerCateringDetailScreen: React.FC<CustomerCateringDetailProps>
   const selectedPaymentObj = CATERING_PAYMENT_METHODS.find((method) => method.id === paymentMethod) || CATERING_PAYMENT_METHODS[0];
 
   const { wallet } = useRecycle();
-  const userPoints = wallet?.balancePoint || 0;
+  const isGuest = !authAccount || !authAccount.token || (authAccount as any).isGuest;
+  const userPoints = isGuest ? 0 : (wallet?.balancePoint || 0);
   const [usePoints, setUsePoints] = useState(false);
 
   const deliveryFee = 15000;

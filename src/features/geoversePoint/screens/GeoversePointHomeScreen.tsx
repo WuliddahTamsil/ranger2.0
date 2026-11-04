@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, Bell, Sparkles, User, RefreshCw, Ticket } from "lucide-react-native";
 import { Nav } from "../../../types";
+import { AuthAccount } from "../../../screens/auth/authTypes";
 import { useGeoversePoint } from "../hooks/useGeoversePoint";
 import { GeoversePointHeroCard } from "../components/GeoversePointHeroCard";
 import { GeoversePointQuickActions } from "../components/GeoversePointQuickActions";
@@ -24,7 +25,8 @@ import { GeoversePointSkeleton } from "../components/GeoversePointSkeleton";
 import { PointVoucherUI } from "../types/pointTypes";
 import { createRedemption } from "../services/geoversePointService";
 
-export const GeoversePointHomeScreen: React.FC<Nav> = ({ navigate }) => {
+export const GeoversePointHomeScreen: React.FC<Nav & { authAccount?: AuthAccount | null }> = ({ navigate, authAccount }) => {
+  const isGuest = !authAccount || !authAccount.token || (authAccount as any).isGuest;
   const { width } = useWindowDimensions();
   const isTabletOrDesktop = width >= 768;
 
