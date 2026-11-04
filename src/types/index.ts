@@ -14,6 +14,7 @@ export type Screen =
   | "c_recycle_wallet" | "c_recycle_ledger" | "c_recycle_redemption"
   | "c_point_home" | "c_point_ledger" | "c_point_vouchers" | "c_point_redeem_cash" | "c_point_redemption_detail" | "c_point_how_it_works"
   | "c_shop_home" | "c_shop_discovery" | "c_shop_store" | "c_shop_cart" | "c_shop_checkout" | "c_shop_order_detail"
+  | "c_geo_direct" | "c_geo_direct_detail" | "c_geo_direct_booking" | "c_geo_direct_payment" | "c_geo_direct_history"
   | "shop_merchant_orders"
   | "bank_sampah_dashboard" | "bank_sampah_weighing"
   | "d_home"

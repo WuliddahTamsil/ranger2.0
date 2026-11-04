@@ -58,6 +58,7 @@ import {
   Compass,
   HelpCircle,
   FileText,
+  Flame,
   ShieldCheck,
   RefreshCw,
   ExternalLink,
@@ -1596,6 +1597,20 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 </View>
                 <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Homestay</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.launcherItem}
+                onPress={() => navigate("c_geo_direct")}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.launcherSquircle, { backgroundColor: "#ECFDF5" }]}>
+                  <View style={[styles.launcherBadge, { backgroundColor: "#0D7A53" }]}>
+                    <Text style={styles.launcherBadgeText}>PGE CoE</Text>
+                  </View>
+                  <Flame size={28} color="#0D7A53" />
+                </View>
+                <Text style={styles.launcherLabel} numberOfLines={2}>Geo Direct</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -2486,6 +2501,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   { label: "Kanyaah Catering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5", route: "c_catering" },
                   { label: "Kanyaah Laundry", icon: Wind, color: "#16A34A", bg: "#F0FDF4", route: "c_laundry" },
                   { label: "Kos Kamojang", icon: Building, color: "#9333EA", bg: "#F3E8FF", route: "c_kos" },
+                  { label: "Geo Direct Use", icon: Flame, color: "#0D7A53", bg: "#ECFDF5", route: "c_geo_direct" },
                   { label: "Kanyaah Ride", icon: Bike, color: "#0D7A53", bg: "#EAF8F0", route: "c_ride" },
                   { label: "Kanyaah Send", icon: Package, color: "#D97706", bg: "#FEF3C7", route: "c_send" },
                   { label: "Bank Sampah", icon: Recycle, color: "#0D7A53", bg: "#DCFCE7", route: "c_recycle_home" },

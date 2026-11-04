@@ -99,6 +99,11 @@ import { ShopOrderDetailScreen } from "./src/screens/customer/shop/ShopOrderDeta
 import { ShopMerchantOrderScreen } from "./src/screens/pemilik_shop/ShopMerchantOrderScreen";
 import { WasteBankDashboardScreen } from "./src/screens/bank_sampah/WasteBankDashboardScreen";
 import { WasteWeighingScreen } from "./src/screens/bank_sampah/WasteWeighingScreen";
+import { GeoDirectHomeScreen } from "./src/screens/customer/geo_direct/GeoDirectHomeScreen";
+import { GeoDirectDetailScreen } from "./src/screens/customer/geo_direct/GeoDirectDetailScreen";
+import { GeoDirectBookingScreen } from "./src/screens/customer/geo_direct/GeoDirectBookingScreen";
+import { GeoDirectPaymentScreen } from "./src/screens/customer/geo_direct/GeoDirectPaymentScreen";
+import { GeoDirectHistoryScreen } from "./src/screens/customer/geo_direct/GeoDirectHistoryScreen";
 import { Beranda as DriverHomeScreen } from "./src/screens/driver/Beranda";
 import { Beranda as PemilikCateringHomeScreen } from "./src/screens/pemilik_catering/Beranda";
 import { Beranda as PemilikMarketplaceHomeScreen } from "./src/screens/pemilik_marketplace/Beranda";
@@ -143,6 +148,8 @@ export default function App() {
   const [selectedShopStoreId, setSelectedShopStoreId] = useState<string>("");
   const [selectedShopOrderId, setSelectedShopOrderId] = useState<string>("");
   const [selectedPointRedemptionId, setSelectedPointRedemptionId] = useState<string>("");
+  const [geoDirectEquipmentId, setGeoDirectEquipmentId] = useState<string | undefined>(undefined);
+  const [geoDirectBookingId, setGeoDirectBookingId] = useState<string | undefined>(undefined);
   const [postLoginTarget, setPostLoginTarget] = useState<{ screen: Screen; params?: Record<string, any> } | null>(null);
   const [loginPromptReason, setLoginPromptReason] = useState<string>("");
   const [lastPublicScreen, setLastPublicScreen] = useState<Screen>("c_home");
@@ -267,6 +274,9 @@ export default function App() {
         "c_point_how_it_works",
         "c_point_ledger",
         "c_addresses",
+        "c_geo_direct",
+        "c_geo_direct_detail",
+        "c_geo_direct_history",
       ];
       if (publicScreens.includes(screen)) {
         setLastPublicScreen(screen);
@@ -276,6 +286,8 @@ export default function App() {
     if (params?.storeId) setSelectedShopStoreId(params.storeId);
     if (params?.orderId) setSelectedShopOrderId(params.orderId);
     if (params?.redemptionId) setSelectedPointRedemptionId(params.redemptionId);
+    if (params?.equipmentId) setGeoDirectEquipmentId(params.equipmentId);
+    if (params?.bookingId) setGeoDirectBookingId(params.bookingId);
     if (params?.tab !== undefined) {
       setCustomerInitialTab(Number(params.tab));
     }
@@ -651,6 +663,18 @@ export default function App() {
         return <ShopCheckoutScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_shop_order_detail":
         return <ShopOrderDetailScreen navigate={navigate} orderId={selectedShopOrderId} />;
+
+      // Geo Direct Use Screens (PGE Kamojang Center of Excellence)
+      case "c_geo_direct":
+        return <GeoDirectHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
+      case "c_geo_direct_detail":
+        return <GeoDirectDetailScreen navigate={navigate} routeParams={{ equipmentId: geoDirectEquipmentId }} />;
+      case "c_geo_direct_booking":
+        return <GeoDirectBookingScreen navigate={navigate} authAccount={currentAuthAccount} routeParams={{ equipmentId: geoDirectEquipmentId }} />;
+      case "c_geo_direct_payment":
+        return <GeoDirectPaymentScreen navigate={navigate} routeParams={{ bookingId: geoDirectBookingId }} />;
+      case "c_geo_direct_history":
+        return <GeoDirectHistoryScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "shop_merchant_orders":
         return <ShopMerchantOrderScreen navigate={navigate} authAccount={currentAuthAccount} />;
 

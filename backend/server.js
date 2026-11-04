@@ -124,6 +124,7 @@ const voucherRoutes = require("./routes/voucherRoutes");
 const shopRoutes = require("./routes/shopRoutes");
 const homeHeroRoutes = require("./routes/homeHeroRoutes");
 const pgeInfoHubRoutes = require("./features/pgeInfoHub/pgeInfoHubRoutes");
+const geoDirectRoutes = require("./routes/geoDirectRoutes");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -150,6 +151,7 @@ app.use("/api/shop", shopRoutes);
 app.use("/api/home-hero", homeHeroRoutes);
 app.use("/api/admin/home-hero", homeHeroRoutes);
 app.use("/api/pge-info-hub", pgeInfoHubRoutes);
+app.use("/api/geo-direct", geoDirectRoutes);
 
 // Health Check
 app.get("/api/health", (req, res) => {

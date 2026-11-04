@@ -67,6 +67,10 @@ const testSuites = [
     name: "Audit Autentikasi Google (Mobile & Web Resilience)",
     file: "backend/tests/googleAuthAudit.test.js",
   },
+  {
+    name: "PGE Geo Direct Use Workflow & Financial Integrity",
+    file: "backend/tests/geoDirectUseWorkflow.test.js",
+  },
 ];
 
 console.log("================================================================================");

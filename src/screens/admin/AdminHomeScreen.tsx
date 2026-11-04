@@ -96,6 +96,7 @@ import { getApiUrl } from "../../services/api";
 import { subscribeToAdminRealtime } from "../../services/userRealtime";
 import { AdminHomeHeroSection } from "../../components/AdminHomeHeroSection";
 import { AdminPgeInfoHubSection } from "../../components/AdminPgeInfoHubSection";
+import { AdminGeoDirectSection } from "../../components/AdminGeoDirectSection";
 import { MerchantVoucherManagementModal } from "../../components/MerchantVoucherManagementModal";
 
 interface AdminHomeProps extends Nav {
@@ -201,7 +202,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
   const [notifModalVisible, setNotifModalVisible] = useState(false);
 
   // Sub-Tab State for CMS (Tab 4: Hero Slider vs PGE Info Hub vs Voucher & Poin)
-  const [adminCmsSubTab, setAdminCmsSubTab] = useState<"HERO" | "INFO_HUB" | "VOUCHER_POINT">("HERO");
+  const [adminCmsSubTab, setAdminCmsSubTab] = useState<"HERO" | "INFO_HUB" | "VOUCHER_POINT" | "GEO_DIRECT">("HERO");
   const [showPlatformVoucherModal, setShowPlatformVoucherModal] = useState<boolean>(false);
 
   // Fullscreen Preview Image Modal State
@@ -2602,6 +2603,36 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                     gap: 6,
                     paddingVertical: 9,
                     borderRadius: 11,
+                    backgroundColor: adminCmsSubTab === "GEO_DIRECT" ? "#FFFFFF" : "transparent",
+                    shadowColor: adminCmsSubTab === "GEO_DIRECT" ? "#000" : "transparent",
+                    shadowOpacity: adminCmsSubTab === "GEO_DIRECT" ? 0.08 : 0,
+                    shadowRadius: 3,
+                    elevation: adminCmsSubTab === "GEO_DIRECT" ? 2 : 0,
+                  }}
+                  onPress={() => setAdminCmsSubTab("GEO_DIRECT")}
+                  activeOpacity={0.8}
+                >
+                  <Flame size={14} color={adminCmsSubTab === "GEO_DIRECT" ? "#0D7A53" : "#64748B"} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: adminCmsSubTab === "GEO_DIRECT" ? "700" : "600",
+                      color: adminCmsSubTab === "GEO_DIRECT" ? "#0D7A53" : "#64748B",
+                    }}
+                  >
+                    Geo Direct
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    paddingVertical: 9,
+                    borderRadius: 11,
                     backgroundColor: adminCmsSubTab === "VOUCHER_POINT" ? "#FFFFFF" : "transparent",
                     shadowColor: adminCmsSubTab === "VOUCHER_POINT" ? "#000" : "transparent",
                     shadowOpacity: adminCmsSubTab === "VOUCHER_POINT" ? 0.08 : 0,
@@ -2629,6 +2660,8 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
               <AdminHomeHeroSection onPreviewCustomer={() => navigate("c_home")} />
             ) : adminCmsSubTab === "INFO_HUB" ? (
               <AdminPgeInfoHubSection onPreviewCustomer={() => navigate("c_home")} />
+            ) : adminCmsSubTab === "GEO_DIRECT" ? (
+              <AdminGeoDirectSection />
             ) : (
               <View style={{ paddingHorizontal: 16, paddingTop: 10, gap: 16 }}>
                 {/* 1. Master Voucher Platform Management Card */}
