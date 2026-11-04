@@ -15,6 +15,8 @@ const generateToken = (id) => {
 };
 
 const getGoogleClientIds = () => [
+  "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com",
+  "803732196043-pt2aavu49jdigke5k5fu5vcofnmdci5i.apps.googleusercontent.com",
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_WEB_CLIENT_ID,
   process.env.GOOGLE_ANDROID_CLIENT_ID,

@@ -12,7 +12,20 @@
           "package_name": "com.wuliddah_tamsil.the_ranger_react_native"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "803732196043-pt2aavu49jdigke5k5fu5vcofnmdci5i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.wuliddah_tamsil.the_ranger_react_native",
+            "certificate_hash": "961c192256a63797d36a6dbc6302ffa06b4ecec0"
+          }
+        },
+        {
+          "client_id": "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDG2l17bhBjLHJFMKQn61MXR_ytQe2ddt4"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

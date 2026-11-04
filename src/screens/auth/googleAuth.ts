@@ -1,8 +1,8 @@
 import { GoogleProfile } from "./authTypes";
 import { Platform } from "react-native";
 
-const DEFAULT_WEB_CLIENT_ID = "409515412776-oa8u9l8hvlr9ahgj7u69nhvlgepm006u.apps.googleusercontent.com";
-const DEFAULT_ANDROID_CLIENT_ID = "409515412776-85khlnbqile0gohn5ff7f1o0c8tcs9sp.apps.googleusercontent.com";
+const DEFAULT_WEB_CLIENT_ID = "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com";
+const DEFAULT_ANDROID_CLIENT_ID = "803732196043-pt2aavu49jdigke5k5fu5vcofnmdci5i.apps.googleusercontent.com";
 
 const readClientId = (value: unknown, fallback = "") => {
   if (typeof value === "string" && value.trim()) {
