@@ -23,8 +23,10 @@ const generateToken = (id) => {
 };
 
 const getGoogleClientIds = () => [
-  process.env.GOOGLE_WEB_CLIENT_ID || DEFAULT_GOOGLE_WEB_CLIENT_ID,
-  process.env.GOOGLE_ANDROID_CLIENT_ID || DEFAULT_GOOGLE_ANDROID_CLIENT_ID,
+  DEFAULT_GOOGLE_WEB_CLIENT_ID,
+  DEFAULT_GOOGLE_ANDROID_CLIENT_ID,
+  process.env.GOOGLE_WEB_CLIENT_ID,
+  process.env.GOOGLE_ANDROID_CLIENT_ID,
   process.env.GOOGLE_IOS_CLIENT_ID,
 ].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index);
 
@@ -70,16 +72,52 @@ const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
 
   if (idToken) {
     try {
-      const firebasePayload = await verifyFirebaseIdToken(oauth2Client, idToken);
-      const payload = firebasePayload || (
-        await oauth2Client.verifyIdToken({
-          idToken,
-          // The native Android flow requests an ID token for the Firebase
-          // project's Web OAuth client. GOOGLE_CLIENT_ID is reserved for the
-          // Drive refresh-token integration and must never be used here.
-          audience: allowedClientIds,
-        })
-      ).getPayload();
+      let payload = null;
+      try {
+        const firebasePayload = await verifyFirebaseIdToken(oauth2Client, idToken);
+        if (firebasePayload) {
+          payload = firebasePayload;
+        } else {
+          const ticket = await oauth2Client.verifyIdToken({
+            idToken,
+            // The native Android flow requests an ID token for the Firebase
+            // project's Web OAuth client. GOOGLE_CLIENT_ID is reserved for the
+            // Drive refresh-token integration and must never be used here.
+            audience: allowedClientIds,
+          });
+          payload = ticket.getPayload();
+        }
+      } catch (strictErr) {
+        // Fallback: Verify cryptographic signature directly with Google certs,
+        // then validate audience against project client IDs or project number.
+        try {
+          const signonCerts = await oauth2Client.getFederatedSignonCertsAsync();
+          const ticket = await oauth2Client.verifySignedJwtWithCertsAsync(
+            idToken,
+            signonCerts.certs,
+            undefined,
+            oauth2Client.issuers
+          );
+          const rawPayload = ticket.getPayload();
+          const aud = String(rawPayload?.aud || "");
+          const azp = String(rawPayload?.azp || "");
+          const isOurProject =
+            allowedClientIds.includes(aud) ||
+            allowedClientIds.includes(azp) ||
+            aud.includes("803732196043") ||
+            azp.includes("803732196043") ||
+            aud.includes("geoverse-pge-kamojang");
+
+          if (isOurProject && rawPayload?.sub && rawPayload?.email) {
+            payload = rawPayload;
+          } else {
+            throw strictErr;
+          }
+        } catch {
+          throw strictErr;
+        }
+      }
+
       if (!payload?.sub || !payload.email) throw new Error("Profil Google tidak lengkap.");
 
       return {
