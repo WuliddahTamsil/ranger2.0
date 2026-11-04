@@ -51,6 +51,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build": "expo export --platform web --output-dir web-build",
+    "build:web": "expo export --platform web",
+    "deploy:firebase": "expo export --platform web && firebase deploy --only hosting",
     "test": "node backend/tests/runAllAutomatedTests.js",
     "postinstall": "cd backend && npm install"
   },
