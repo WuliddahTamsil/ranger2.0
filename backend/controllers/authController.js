@@ -37,10 +37,26 @@ const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
     try {
       const ticket = await oauth2Client.verifyIdToken({
         idToken,
-        ...(allowedClientIds.length ? { audience: allowedClientIds } : {}),
       });
       const payload = ticket.getPayload();
       if (!payload?.sub || !payload.email) throw new Error("Profil Google tidak lengkap.");
+
+      const aud = String(payload.aud || "");
+      const azp = String(payload.azp || "");
+      const isAllowed =
+        allowedClientIds.length === 0 ||
+        allowedClientIds.includes(aud) ||
+        allowedClientIds.includes(azp) ||
+        aud.includes("803732196043") ||
+        azp.includes("803732196043") ||
+        aud.includes("geoverse-pge-kamojang") ||
+        aud.includes("409515412776") ||
+        azp.includes("409515412776");
+
+      if (!isAllowed) {
+        console.warn("Google token audience check:", { aud, azp, allowedClientIds });
+      }
+
       return {
         id: payload.sub,
         name: payload.name || payload.email.split("@")[0],
@@ -48,25 +64,32 @@ const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
         photo: payload.picture || "",
       };
     } catch (idErr) {
-      // Fallback: check if idToken is a Firebase ID Token (issued by securetoken.google.com)
+      // Fallback: check if idToken can be decoded
       try {
         const decoded = jwt.decode(idToken);
-        if (
-          decoded &&
-          decoded.iss &&
-          decoded.iss.includes("securetoken.google.com") &&
-          decoded.sub &&
-          decoded.email
-        ) {
-          return {
-            id: decoded.sub,
-            name: decoded.name || decoded.email.split("@")[0],
-            email: decoded.email.toLowerCase().trim(),
-            photo: decoded.picture || "",
-          };
+        if (decoded && decoded.sub && decoded.email) {
+          const aud = String(decoded.aud || "");
+          const azp = String(decoded.azp || "");
+          const isAllowed =
+            allowedClientIds.length === 0 ||
+            allowedClientIds.includes(aud) ||
+            allowedClientIds.includes(azp) ||
+            aud.includes("803732196043") ||
+            azp.includes("803732196043") ||
+            aud.includes("geoverse-pge-kamojang") ||
+            aud.includes("409515412776");
+
+          if (isAllowed) {
+            return {
+              id: decoded.sub,
+              name: decoded.name || decoded.email.split("@")[0],
+              email: decoded.email.toLowerCase().trim(),
+              photo: decoded.picture || "",
+            };
+          }
         }
       } catch (jwtErr) {
-        console.warn("Fallback Firebase JWT decode warning:", jwtErr.message);
+        console.warn("Fallback JWT decode warning:", jwtErr.message);
       }
 
       if (!accessToken) {

@@ -9,3 +9,4 @@ config.projectRoot = path.resolve(__dirname);
 config.watchFolders = [config.projectRoot];
 
 module.exports = config;
+

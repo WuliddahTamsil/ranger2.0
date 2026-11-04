@@ -87,11 +87,11 @@ export const signInWithNativeGoogle = async (): Promise<NativeGoogleAuthResult |
     let idToken = payload?.idToken || (result as any)?.idToken;
     let accessToken = payload?.accessToken || (result as any)?.accessToken;
 
-    if (!idToken && !accessToken) {
+    if (!idToken || !accessToken) {
       try {
         const tokens = await GoogleSignin.getTokens();
-        idToken = tokens?.idToken;
-        accessToken = tokens?.accessToken;
+        if (tokens?.idToken) idToken = tokens.idToken;
+        if (tokens?.accessToken) accessToken = tokens.accessToken;
       } catch (tErr) {
         console.warn("GoogleSignin.getTokens note:", tErr);
       }
