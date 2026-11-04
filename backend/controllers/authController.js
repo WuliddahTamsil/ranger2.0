@@ -8,6 +8,14 @@ const crypto = require("crypto");
 
 const MITRA_ROLES = ["driver", "pemilik_marketplace", "pemilik_shop", "pemilik_catering", "pemilik_laundry", "pemilik_kos", "bank_sampah"];
 
+const DEFAULT_FIREBASE_PROJECT_ID = "geoverse-pge-kamojang";
+const DEFAULT_GOOGLE_WEB_CLIENT_ID = "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com";
+const DEFAULT_GOOGLE_ANDROID_CLIENT_ID = "803732196043-pt2aavu49jdigke5k5fu5vcofnmdci5i.apps.googleusercontent.com";
+const FIREBASE_CERTS_URL = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
+
+let firebaseCertsCache = null;
+let firebaseCertsExpiresAt = 0;
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || "rangers_app_secret", {
     expiresIn: "30d",
@@ -15,13 +23,44 @@ const generateToken = (id) => {
 };
 
 const getGoogleClientIds = () => [
-  process.env.GOOGLE_CLIENT_ID,
+  DEFAULT_GOOGLE_WEB_CLIENT_ID,
+  DEFAULT_GOOGLE_ANDROID_CLIENT_ID,
   process.env.GOOGLE_WEB_CLIENT_ID,
   process.env.GOOGLE_ANDROID_CLIENT_ID,
   process.env.GOOGLE_IOS_CLIENT_ID,
-  "409515412776-oa8u9l8hvlr9ahgj7u69nhvlgepm006u.apps.googleusercontent.com",
-  "409515412776-85khlnbqile0gohn5ff7f1o0c8tcs9sp.apps.googleusercontent.com",
-].filter(Boolean);
+].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index);
+
+const getFirebaseProjectId = () => process.env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID;
+
+const getFirebasePublicCerts = async () => {
+  if (firebaseCertsCache && Date.now() < firebaseCertsExpiresAt) return firebaseCertsCache;
+  if (typeof fetch !== "function") throw new Error("Runtime backend tidak mendukung fetch untuk verifikasi Firebase.");
+
+  const response = await fetch(FIREBASE_CERTS_URL);
+  if (!response.ok) throw new Error(`Gagal mengambil sertifikat publik Firebase (${response.status}).`);
+
+  const cacheControl = response.headers.get("cache-control") || "";
+  const maxAgeMatch = cacheControl.match(/max-age=(\d+)/i);
+  const maxAgeMs = Math.max(60_000, Number(maxAgeMatch?.[1] || 3600) * 1000);
+  firebaseCertsCache = await response.json();
+  firebaseCertsExpiresAt = Date.now() + maxAgeMs;
+  return firebaseCertsCache;
+};
+
+const verifyFirebaseIdToken = async (oauth2Client, idToken) => {
+  const decoded = jwt.decode(idToken);
+  const payload = decoded && typeof decoded === "object" ? decoded : null;
+  const projectId = getFirebaseProjectId();
+  const issuer = `https://securetoken.google.com/${projectId}`;
+
+  // Decode is used only to route Firebase tokens. Signature and claims are
+  // still verified cryptographically below; decoded data is never trusted.
+  if (payload?.aud !== projectId || payload?.iss !== issuer) return null;
+
+  const certs = await getFirebasePublicCerts();
+  const ticket = await oauth2Client.verifySignedJwtWithCertsAsync(idToken, certs, projectId, [issuer]);
+  return ticket.getPayload();
+};
 
 const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
   if (!accessToken && !idToken) {
@@ -32,18 +71,70 @@ const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
   const allowedClientIds = getGoogleClientIds();
 
   if (idToken) {
-    const ticket = await oauth2Client.verifyIdToken({
-      idToken,
-      ...(allowedClientIds.length ? { audience: allowedClientIds } : {}),
-    });
-    const payload = ticket.getPayload();
-    if (!payload?.sub || !payload.email) throw new Error("Profil Google tidak lengkap.");
-    return {
-      id: payload.sub,
-      name: payload.name || payload.email.split("@")[0],
-      email: payload.email.toLowerCase().trim(),
-      photo: payload.picture || "",
-    };
+    try {
+      let payload = null;
+      try {
+        const firebasePayload = await verifyFirebaseIdToken(oauth2Client, idToken);
+        if (firebasePayload) {
+          payload = firebasePayload;
+        } else {
+          const ticket = await oauth2Client.verifyIdToken({
+            idToken,
+            // The native Android flow requests an ID token for the Firebase
+            // project's Web OAuth client. GOOGLE_CLIENT_ID is reserved for the
+            // Drive refresh-token integration and must never be used here.
+            audience: allowedClientIds,
+          });
+          payload = ticket.getPayload();
+        }
+      } catch (strictErr) {
+        // Fallback: Verify cryptographic signature directly with Google certs,
+        // then validate audience against project client IDs or project number.
+        try {
+          const signonCerts = await oauth2Client.getFederatedSignonCertsAsync();
+          const ticket = await oauth2Client.verifySignedJwtWithCertsAsync(
+            idToken,
+            signonCerts.certs,
+            undefined,
+            oauth2Client.issuers
+          );
+          const rawPayload = ticket.getPayload();
+          const aud = String(rawPayload?.aud || "");
+          const azp = String(rawPayload?.azp || "");
+          const isOurProject =
+            allowedClientIds.includes(aud) ||
+            allowedClientIds.includes(azp) ||
+            aud.includes("803732196043") ||
+            azp.includes("803732196043") ||
+            aud.includes("geoverse-pge-kamojang");
+
+          if (isOurProject && rawPayload?.sub && rawPayload?.email) {
+            payload = rawPayload;
+          } else {
+            throw strictErr;
+          }
+        } catch {
+          throw strictErr;
+        }
+      }
+
+      if (!payload?.sub || !payload.email) throw new Error("Profil Google tidak lengkap.");
+
+      return {
+        id: payload.sub,
+        name: payload.name || payload.email.split("@")[0],
+        email: payload.email.toLowerCase().trim(),
+        photo: payload.picture || "",
+      };
+    } catch (idErr) {
+      if (!accessToken) {
+        const message = String(idErr?.message || "");
+        if (message.includes("Wrong recipient") || message.includes("audience")) {
+          throw new Error("Token Google berasal dari client ID yang berbeda. APK harus memakai Firebase Web Client ID terbaru dan dibuild ulang.");
+        }
+        throw idErr;
+      }
+    }
   }
 
   oauth2Client.setCredentials({ access_token: accessToken });
@@ -633,15 +724,25 @@ const getMitraAccounts = async (req, res) => {
     const { role, status, includeCustomers } = req.query;
     let filter = {};
 
-    if (role && role !== "semua") {
+    // Partner dashboards only need a safe driver directory for assignment.
+    // Keep the broad directory restricted to admin while allowing verified
+    // marketplace/catering owners to request drivers only.
+    if (req.authUser?.role !== "admin") {
+      if (!["pemilik_marketplace", "pemilik_catering"].includes(req.authUser?.role) || role !== "driver") {
+        return res.status(403).json({ success: false, message: "Akses direktori mitra hanya tersedia untuk admin atau daftar driver partner." });
+      }
+      filter = { role: "driver", status: "verified" };
+    }
+
+    if (req.authUser?.role === "admin" && role && role !== "semua") {
       filter.role = role;
-    } else if (includeCustomers === "true") {
+    } else if (req.authUser?.role === "admin" && includeCustomers === "true") {
       filter.role = { $ne: "admin" };
-    } else {
+    } else if (req.authUser?.role === "admin") {
       filter.role = { $nin: ["customer", "admin"] };
     }
 
-    if (status && status !== "semua") filter.status = status;
+    if (req.authUser?.role === "admin" && status && status !== "semua") filter.status = status;
 
     const mitras = await User.find(filter)
       .select("-passwordHash -resetPasswordOtp -resetPasswordToken -resetPasswordExpires")

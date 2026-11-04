@@ -2,7 +2,7 @@ import { AuthAccount, AuthRegistrationRole, GoogleCredential, GoogleProfile, Reg
 import { clearSession, loadAccounts, loadSession, saveAccounts, saveSession } from "./authStorage";
 import { loadAuthToken, saveAuthToken } from "./authTokenStorage";
 import { hashSecret, normalizeEmail, normalizePhone } from "./authValidation";
-import { getApiUrl, updateUserProfile } from "../../services/api";
+import { getApiUrl, getAuthHeaders, updateUserProfile } from "../../services/api";
 
 const LOGIN_TIMEOUT_MS = 20000;
 const LOGIN_RETRY_DELAYS_MS = [500, 1500];
@@ -430,7 +430,7 @@ export const loadMitraAccounts = async (includeCustomers: boolean = true) => {
       : getApiUrl("/auth/mitra");
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { headers: await getAuthHeaders(), signal: controller.signal });
     clearTimeout(timer);
     if (res.ok) {
       const result = await res.json();
@@ -483,7 +483,7 @@ export const updateAccountStatus = async (accountId: string, status: AuthAccount
     const timer = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(getApiUrl(`/auth/mitra/${accountId}/status`), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
       body: JSON.stringify({ status, rejectionReason, ...options }),
       signal: controller.signal,
     });
@@ -527,7 +527,7 @@ export const fetchAdminStats = async () => {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch(getApiUrl("/auth/admin/stats"), { signal: controller.signal });
+    const res = await fetch(getApiUrl("/auth/admin/stats"), { headers: await getAuthHeaders(), signal: controller.signal });
     clearTimeout(timer);
     return await res.json();
   } catch (err: any) {
@@ -544,7 +544,7 @@ export const fetchAdminTransactions = async () => {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
-    const res = await fetch(getApiUrl("/auth/admin/transactions"), { signal: controller.signal });
+    const res = await fetch(getApiUrl("/auth/admin/transactions"), { headers: await getAuthHeaders(), signal: controller.signal });
     clearTimeout(timer);
     return await res.json();
   } catch (err: any) {

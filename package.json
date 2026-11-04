@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/metro-runtime": "~57.0.9",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-google-signin/google-signin": "^16.1.5",
     "@react-navigation/bottom-tabs": "^7.18.16",
     "@react-navigation/native": "^7.3.16",
     "expo": "~57.0.31",
@@ -41,13 +42,18 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "node backend/server.js",
+    "server": "node backend/server.js",
     "backend": "node backend/server.js",
+    "dev": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build": "expo export --platform web --output-dir web-build",
-    "test": "node backend/tests/runAllAutomatedTests.js"
+    "build:web": "expo export --platform web",
+    "deploy:firebase": "expo export --platform web && firebase deploy --only hosting",
+    "test": "node backend/tests/runAllAutomatedTests.js",
+    "postinstall": "cd backend && npm install"
   },
   "private": true
 }

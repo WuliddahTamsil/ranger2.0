@@ -1,4 +1,4 @@
-import { getApiUrl, API_BASE_URL } from "./api";
+import { getApiUrl, getAuthHeaders, API_BASE_URL } from "./api";
 // @ts-ignore
 import { io } from "socket.io-client/dist/socket.io.js";
 import { CustomerAddress } from "../types";
@@ -224,7 +224,7 @@ export const clearAllLaundryOrders = async () => {
   notifyListeners();
   try {
     const url = getApiUrl(`/laundry/orders/all`);
-    await fetch(url, { method: "DELETE" });
+    await fetch(url, { method: "DELETE", headers: await getAuthHeaders() });
   } catch (err) {
     console.warn("⚠️ clearAllLaundryOrders error:", err);
   }
@@ -311,7 +311,7 @@ export const fetchLaundryStoreById = async (id: string): Promise<LaundryStore | 
 export const fetchMyLaundryStore = async (ownerId: string): Promise<LaundryStore | null> => {
   try {
     const url = getApiUrl(`/laundry/store/my-store?ownerId=${ownerId}`);
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: await getAuthHeaders(ownerId) });
     const json = await res.json();
     if (json.success && json.data) return json.data;
   } catch (err) {
@@ -350,7 +350,7 @@ export const saveMyLaundryStore = async (storeData: Partial<LaundryStore>): Prom
     const url = getApiUrl(`/laundry/store/my-store`);
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(String(storeData.ownerId || ""))) },
       body: JSON.stringify(storeData),
     });
     const json = await res.json();
@@ -366,7 +366,7 @@ export const createLaundryOrder = async (orderPayload: Partial<LaundryOrder>): P
     const url = getApiUrl(`/laundry/orders`);
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(String(orderPayload.customerId || ""))) },
       body: JSON.stringify(orderPayload),
     });
     const json = await res.json();
@@ -414,7 +414,7 @@ export const createLaundryOrder = async (orderPayload: Partial<LaundryOrder>): P
 export const acceptLaundryOrder = async (orderId: string): Promise<LaundryOrder | null> => {
   try {
     const url = getApiUrl(`/laundry/orders/${orderId}/accept`);
-    const res = await fetch(url, { method: "PUT" });
+    const res = await fetch(url, { method: "PUT", headers: await getAuthHeaders() });
     const json = await res.json();
     if (json.success && json.data) {
       setActiveLaundryOrder(json.data);
@@ -442,7 +442,7 @@ export const takeLaundryPickupJob = async (
     const url = getApiUrl(`/laundry/orders/${orderId}/take-pickup`);
     const res = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(driverInfo.driverId)) },
       body: JSON.stringify(driverInfo),
     });
     const json = await res.json();
@@ -470,7 +470,7 @@ export const takeLaundryPickupJob = async (
 export const pickedUpLaundryByDriver = async (orderId: string): Promise<LaundryOrder | null> => {
   try {
     const url = getApiUrl(`/laundry/orders/${orderId}/picked-up`);
-    const res = await fetch(url, { method: "PUT" });
+    const res = await fetch(url, { method: "PUT", headers: await getAuthHeaders() });
     const json = await res.json();
     if (json.success && json.data) {
       setActiveLaundryOrder(json.data);
@@ -493,7 +493,7 @@ export const pickedUpLaundryByDriver = async (orderId: string): Promise<LaundryO
 export const arrivedLaundryAtStore = async (orderId: string): Promise<LaundryOrder | null> => {
   try {
     const url = getApiUrl(`/laundry/orders/${orderId}/arrived-at-laundry`);
-    const res = await fetch(url, { method: "PUT" });
+    const res = await fetch(url, { method: "PUT", headers: await getAuthHeaders() });
     const json = await res.json();
     if (json.success && json.data) {
       setActiveLaundryOrder(json.data);
@@ -516,7 +516,7 @@ export const arrivedLaundryAtStore = async (orderId: string): Promise<LaundryOrd
 export const markLaundryReadyForDelivery = async (orderId: string): Promise<LaundryOrder | null> => {
   try {
     const url = getApiUrl(`/laundry/orders/${orderId}/ready-for-delivery`);
-    const res = await fetch(url, { method: "PUT" });
+    const res = await fetch(url, { method: "PUT", headers: await getAuthHeaders() });
     const json = await res.json();
     if (json.success && json.data) {
       setActiveLaundryOrder(json.data);
@@ -544,7 +544,7 @@ export const takeLaundryDeliveryJob = async (
     const url = getApiUrl(`/laundry/orders/${orderId}/take-delivery`);
     const res = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(driverInfo.driverId)) },
       body: JSON.stringify(driverInfo),
     });
     const json = await res.json();
@@ -572,7 +572,7 @@ export const takeLaundryDeliveryJob = async (
 export const completeLaundryDelivery = async (orderId: string): Promise<LaundryOrder | null> => {
   try {
     const url = getApiUrl(`/laundry/orders/${orderId}/complete-delivery`);
-    const res = await fetch(url, { method: "PUT" });
+    const res = await fetch(url, { method: "PUT", headers: await getAuthHeaders() });
     const json = await res.json();
     if (json.success && json.data) {
       setActiveLaundryOrder(json.data);
@@ -602,7 +602,7 @@ export const updateLaundryDriverLocation = async (
     const url = getApiUrl(`/laundry/orders/${orderId}/driver-location`);
     const res = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
       body: JSON.stringify({ coords, lat, lng }),
     });
     const json = await res.json();
@@ -631,7 +631,7 @@ export const fetchDriverLaundryJobs = async (driverId?: string): Promise<Laundry
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
     const url = getApiUrl(`/laundry/driver/jobs${driverId ? `?driverId=${encodeURIComponent(driverId)}` : ""}`);
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { headers: await getAuthHeaders(driverId), signal: controller.signal });
     clearTimeout(timeout);
     const json = await res.json();
     if (json.success && Array.isArray(json.data)) {
@@ -660,7 +660,7 @@ export const fetchStoreOrders = async (ownerId: string = "all"): Promise<Laundry
     const url = getApiUrl(`/laundry/orders/store/${ownerId}`);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, { headers: await getAuthHeaders(ownerId), signal: controller.signal });
     clearTimeout(timeoutId);
     const json = await res.json();
     if (json.success && Array.isArray(json.data)) {
@@ -682,7 +682,7 @@ export const fetchCustomerLaundryOrders = async (customerId?: string, phone?: st
   try {
     const cId = customerId || "cust_active";
     const url = getApiUrl(`/laundry/orders/customer/${cId}${phone ? `?phone=${encodeURIComponent(phone)}` : ""}`);
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: await getAuthHeaders(customerId) });
     const json = await res.json();
     if (json.success && Array.isArray(json.data)) {
       if (json.data.length === 0) {
@@ -726,7 +726,7 @@ export const fetchStoreCustomers = async (ownerId: string = "all"): Promise<Laun
   if (!ownerId || ownerId === "none") return [];
   try {
     const url = getApiUrl(`/laundry/customers/store/${ownerId}`);
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: await getAuthHeaders(ownerId) });
     const json = await res.json();
     if (json.success && Array.isArray(json.data)) {
       return json.data;
@@ -775,7 +775,7 @@ export const weighAndBillLaundryOrder = async (
     const url = getApiUrl(`/laundry/orders/${orderId}/weigh-and-bill`);
     const res = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
       body: JSON.stringify({ weightOrQty, customLaundryCost, weighingProofImage }),
     });
     const json = await res.json();
@@ -816,7 +816,7 @@ export const payLaundryOrder = async (
     const url = getApiUrl(`/laundry/orders/${orderId}/pay`);
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
       body: JSON.stringify({ paymentMethod, paymentProofUrl, pointsUsed }),
     });
     const json = await res.json();
@@ -852,7 +852,7 @@ export const verifyLaundryPayment = async (
     const url = getApiUrl(`/laundry/orders/${orderId}/verify-payment`);
     const res = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
       body: JSON.stringify({ action, rejectionReason }),
     });
     const json = await res.json();
@@ -887,7 +887,7 @@ export const updateLaundryOrderStatus = async (
     const url = getApiUrl(`/laundry/orders/${orderId}/update-status`);
     const res = await fetch(url, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders(driverInfo?.driverId)) },
       body: JSON.stringify({ status, ...driverInfo }),
     });
     const json = await res.json();

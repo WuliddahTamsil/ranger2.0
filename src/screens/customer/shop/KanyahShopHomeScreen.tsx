@@ -76,7 +76,7 @@ const TABS: TabConfig[] = [
     icon: LayoutGrid,
     color: "#DC2626",
     searchPlaceholder: "Search instant noodles, beras, kopi...",
-    heroBadge: "KANYAAH SHOP EXPRESS",
+    heroBadge: "GEOSHOP EXPRESS",
     heroTitle: "Lengkap,\ntinggal dipilih",
     heroSub: "Semua kebutuhan harian sampai dalam 30 menit",
     heroGradient: ["#881337", "#4C0519"],

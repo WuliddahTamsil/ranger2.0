@@ -26,7 +26,7 @@ const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-const bankGuard = [requireAuth, requireRole("bank_sampah", "admin")];
+const bankGuard = [requireAuth, requireRole("bank_sampah", "admin_sampah", "admin")];
 const driverGuard = [requireAuth, requireRole("driver", "admin")];
 
 // -------------------------------------------------------------

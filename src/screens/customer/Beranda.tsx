@@ -1,5 +1,5 @@
 import { SafeAreaView as ResponsiveSafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -89,7 +89,8 @@ import { getCustomerOrders, hydrateCustomerOrders, subscribeCustomerOrders } fro
 import { subscribeToUserRealtime } from "../../services/userRealtime";
 import { setPendingMarketplaceCart } from "./marketplaceCartStore";
 import { setActiveCateringTrackingOrderId } from "./customerCateringStore";
-import { PgeInfoHubModal } from "../../features/pgeInfoHub";
+import { PgeInfoHubModal, INITIAL_PGE_INFO_HUB_ITEMS } from "../../features/pgeInfoHub";
+import { fetchPublishedPgeInfoHub, PgeInfoHubItem } from "../../services/pgeInfoHubService";
 import { HomeHeroBannerView } from "../../components/HomeHeroBannerView";
 import { fetchActiveHomeHero, HomeHeroBannerItem } from "../../services/homeHeroService";
 
@@ -136,6 +137,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const isCompact = windowWidth < 380;
+  const carouselWidth = Math.min(760, Math.max(200, windowWidth - 40));
   const [currentTab, setCurrentTab] = useState<number>(initialTab ?? 0);
 
   useEffect(() => {
@@ -169,7 +171,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
     formatPoint,
     formatRupiah,
   } = useGeoversePoint();
-  const isGuest = !authAccount || !authAccount.token;
+  const isGuest = !authAccount || !authAccount.token || (authAccount as any).isGuest;
   const wallet = isGuest ? null : (pointWallet || recycleWallet);
   const recyclePoints = isGuest ? 0 : (wallet?.balancePoint || 0);
   const recycleTotalKg = isGuest ? 0 : (wallet?.totalKgDeposited || 0);
@@ -188,8 +190,29 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   const [launcherExpanded, setLauncherExpanded] = useState(false);
   const [helpModalVisible, setHelpModalVisible] = useState(false);
   const [pgeInfoHubVisible, setPgeInfoHubVisible] = useState(false);
+  const [selectedPgeDetailItem, setSelectedPgeDetailItem] = useState<PgeInfoHubItem | null>(null);
+  const [pgeItems, setPgeItems] = useState<PgeInfoHubItem[]>(INITIAL_PGE_INFO_HUB_ITEMS as any);
+  const [pgeLoading, setPgeLoading] = useState(false);
   const [heroBanners, setHeroBanners] = useState<HomeHeroBannerItem[]>([]);
   const [heroLoading, setHeroLoading] = useState(false);
+
+  const loadPgeContent = useCallback(async (force = false) => {
+    try {
+      setPgeLoading(true);
+      const data = await fetchPublishedPgeInfoHub(undefined, force);
+      if (Array.isArray(data) && data.length > 0) {
+        setPgeItems(data);
+      }
+    } catch (err) {
+      console.warn("loadPgeContent error:", err);
+    } finally {
+      setPgeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPgeContent();
+  }, [loadPgeContent]);
 
   useEffect(() => {
     let isMounted = true;
@@ -217,6 +240,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
     try {
       await Promise.allSettled([
         refreshPointWallet(),
+        loadPgeContent(true),
         fetchActiveHomeHero("CUSTOMER_HOME_HERO", true)
           .then((b) => setHeroBanners(b))
           .catch(() => {}),
@@ -864,7 +888,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               id: `driver_${o.id}`,
               orderId: o.id,
               participantType: "driver",
-              participantName: o.type === "Kanyaah Ride" ? `${o.driverName} (Driver Kanyaah Ride)` : `${o.driverName} (Kurir)`,
+              participantName: o.type === "Kanyaah Ride" ? `${o.driverName} (Driver Georide)` : `${o.driverName} (Kurir)`,
               lastMessage: o.type === "Kanyaah Ride" ? `Driver Kanyaah Ride ${o.orderCode || `#${o.id.slice(-5)}`}.` : `Kurir mengantar pesanan #${o.id.slice(-5)}.`,
               updatedAt: "Baru saja",
               unreadCount: 0,
@@ -1306,7 +1330,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             <View style={styles.walletBarTextCol}>
               <View style={styles.walletBalanceRow}>
                 <Text style={styles.walletBarBalance} numberOfLines={1}>
-                  {formatNumberSafe(pointBalance)} Pts
+                  {isGuest ? "0 Pts" : `${formatNumberSafe(pointBalance)} Pts`}
                 </Text>
                 <View style={styles.walletPlusCircle}>
                   <Plus size={9} color="#0D7A53" />
@@ -1314,7 +1338,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               </View>
               <View style={styles.walletSubRow}>
                 <Text style={styles.walletBarSub} numberOfLines={1} ellipsizeMode="tail">
-                  ≈ {rp(rupiahEquivalent)}
+                  {isGuest ? "≈ Rp 0" : `≈ ${rp(rupiahEquivalent)}`}
                 </Text>
               </View>
             </View>
@@ -1409,7 +1433,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Ride</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Georide</Text>
             </TouchableOpacity>
 
             {/* 2. GoSend / Kanyaah Send */}
@@ -1428,7 +1452,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Send</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Geosend</Text>
             </TouchableOpacity>
 
             {/* 3. GoFood / Kanyaah Catering */}
@@ -1447,7 +1471,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={2}>Katering</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Geocatering</Text>
             </TouchableOpacity>
 
             {/* 4. GoMart / Kanyaah Shop */}
@@ -1466,7 +1490,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Shop</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Geoshop</Text>
             </TouchableOpacity>
           </View>
 
@@ -1488,7 +1512,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Laundry</Text>
+              <Text style={styles.launcherLabel} numberOfLines={1}>Geolaundry</Text>
             </TouchableOpacity>
 
             {/* 6. Kanyaah Recycle */}
@@ -1507,7 +1531,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Recycle</Text>
+              <Text style={styles.launcherLabel} numberOfLines={1}>Georecycle</Text>
             </TouchableOpacity>
 
             {/* 7. GEOVERSE Point */}
@@ -1535,7 +1559,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Point</Text>
+              <Text style={styles.launcherLabel} numberOfLines={1}>Geopoint</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1577,7 +1601,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     resizeMode="cover"
                   />
                 </View>
-                <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Mart</Text>
+                <Text style={styles.launcherLabel} numberOfLines={2}>Geomart</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1595,7 +1619,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     resizeMode="cover"
                   />
                 </View>
-                <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Homestay</Text>
+                <Text style={styles.launcherLabel} numberOfLines={2}>Geohomestay</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1843,7 +1867,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#0D7A53" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH SHOP</Text>
+                  <Text style={styles.promoBadgeText}>GEOSHOP</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-shop.png")}
@@ -1895,7 +1919,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#D97706" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH SEND</Text>
+                  <Text style={styles.promoBadgeText}>GEOSEND</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-send.png")}
@@ -1921,7 +1945,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#EA580C" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH CATERING</Text>
+                  <Text style={styles.promoBadgeText}>GEOCATERING</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-catering.png")}
@@ -1946,7 +1970,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#15803D" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH RIDE</Text>
+                  <Text style={styles.promoBadgeText}>GEORIDE</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-ride.png")}
@@ -1972,7 +1996,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#0284C7" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH LAUNDRY</Text>
+                  <Text style={styles.promoBadgeText}>GEOLAUNDRY</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-laundry.png")}
@@ -1998,7 +2022,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#9333EA" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH HOMESTAY</Text>
+                  <Text style={styles.promoBadgeText}>GEOHOMESTAY</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-homestay.png")}
@@ -2041,6 +2065,111 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <ArrowRight size={13} color="#A16207" />
               </View>
             </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {/* ============================================================ */}
+        {/* 7.5. PGE INFO HUB • KABAR KAMOJANG */}
+        {/* ============================================================ */}
+        <View style={styles.pgeSectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                <Sparkles size={16} color="#0D7A53" />
+                <Text style={styles.sectionMainTitle}>PGE Info Hub • Kabar Kamojang</Text>
+              </View>
+              <Text style={styles.sectionSubtitle} numberOfLines={1}>
+                Profil resmi, agenda kegiatan, program CSR & komunitas
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setSelectedPgeDetailItem(null);
+                setPgeInfoHubVisible(true);
+              }}
+              activeOpacity={0.8}
+              style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+            >
+              <Text style={styles.seeAllGreenText}>Lihat semua</Text>
+              <ChevronRight size={14} color="#0D7A53" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pgeCarouselContent}
+            decelerationRate="fast"
+            snapToInterval={282}
+          >
+            {pgeItems.filter((i) => i.isPublished).map((item) => {
+              const categoryColor =
+                item.category === "Company Profile"
+                  ? { bg: "#ECFDF5", text: "#0D7A53", border: "#A7F3D0" }
+                  : item.category === "CSR"
+                  ? { bg: "#EFF6FF", text: "#1D4ED8", border: "#BFDBFE" }
+                  : item.category === "Acara"
+                  ? { bg: "#FFFBEB", text: "#B45309", border: "#FDE68A" }
+                  : item.category === "Kegiatan Komunitas"
+                  ? { bg: "#F5F3FF", text: "#6D28D9", border: "#DDD6FE" }
+                  : item.category === "Pengumuman"
+                  ? { bg: "#FDF2F8", text: "#BE185D", border: "#FBCFE8" }
+                  : { bg: "#FEF2F2", text: "#B91C1C", border: "#FECACA" };
+
+              const cardImg = item.imageUrl || item.posterUrl;
+
+              return (
+                <TouchableOpacity
+                  key={item.id || item.itemId || (item as any)._id}
+                  style={styles.pgeFeedCard}
+                  onPress={() => {
+                    setSelectedPgeDetailItem(item);
+                    setPgeInfoHubVisible(true);
+                  }}
+                  activeOpacity={0.88}
+                >
+                  <View style={styles.pgeCardImageWrapper}>
+                    {cardImg ? (
+                      <Image source={{ uri: cardImg }} style={styles.pgeCardImage} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.pgeCardImagePlaceholder}>
+                        <Building2 size={32} color="#0D7A53" />
+                        <Text style={styles.pgeCardPlaceholderText}>PGE KAMOJANG</Text>
+                      </View>
+                    )}
+                    <View
+                      style={[
+                        styles.pgeCategoryBadge,
+                        { backgroundColor: categoryColor.bg, borderColor: categoryColor.border },
+                      ]}
+                    >
+                      <Text style={[styles.pgeCategoryBadgeText, { color: categoryColor.text }]}>
+                        {item.category}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.pgeCardBody}>
+                    <Text style={styles.pgeCardTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.pgeCardDescription} numberOfLines={2}>
+                      {item.description}
+                    </Text>
+
+                    <View style={styles.pgeCardFooter}>
+                      <Text style={styles.pgeCardMeta} numberOfLines={1}>
+                        {item.authorOrDept || item.location || "PGE Area Kamojang"}
+                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <Text style={styles.pgeCardReadMore}>Baca</Text>
+                        <ArrowRight size={12} color="#0D7A53" />
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
 
@@ -2363,8 +2492,8 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <>
                   <View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Detail Produk</Text><TouchableOpacity onPress={() => setSelectedProduct(null)}><X size={20} color="#111827" /></TouchableOpacity></View>
                   <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}>
-                    <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={(event) => setSelectedProductImage(Math.round(event.nativeEvent.contentOffset.x / 320))}>
-                      {images.map((image: string, index: number) => <View key={`${image}-${index}`} style={styles.carouselSlide}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{images.length}</Text></View>)}
+                    <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={(event) => setSelectedProductImage(Math.round(event.nativeEvent.contentOffset.x / carouselWidth))}>
+                      {images.map((image: string, index: number) => <View key={`${image}-${index}`} style={[styles.carouselSlide, { width: carouselWidth }]}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{images.length}</Text></View>)}
                     </ScrollView>
                     <View style={styles.dotRow}>{images.map((_: string, index: number) => <View key={index} style={[styles.dot, index === selectedProductImage && styles.dotActive]} />)}</View>
                     <Text style={styles.detailProductName}>{selectedProduct.name}</Text>
@@ -2387,7 +2516,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       <Modal visible={Boolean(selectedService)} transparent animationType="slide" onRequestClose={() => setSelectedService(null)}>
         <View style={styles.modalBgBottom}>
           <View style={styles.detailSheet}>
-            {selectedService && <><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>{selectedService.name}</Text><TouchableOpacity onPress={() => setSelectedService(null)}><X size={20} color="#111827" /></TouchableOpacity></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}><ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>{(selectedService.images.length ? selectedService.images : [products[0]?.img]).filter(Boolean).map((image: string, index: number) => <View key={index} style={styles.carouselSlide}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{selectedService.images.length || 1}</Text></View>)}</ScrollView><Text style={styles.detailProductName}>{selectedService.name}</Text><Text style={styles.detailDescription}>{selectedService.description}</Text><View style={styles.storeInfoCard}><Store size={20} color="#1B7A4E" /><View style={{ flex: 1 }}><Text style={styles.storeInfoName}>{selectedService.provider}</Text><Text style={styles.mutedText}>{selectedService.price}</Text></View></View><View style={styles.detailRatingRow}><Text style={styles.ratingStars}>★ {selectedService.rating}</Text><Text style={styles.mutedText}>Layanan GEOVERSE</Text></View><Text style={styles.detailSectionTitle}>Ulasan Pengguna</Text><Text style={styles.mutedText}>Ulasan akan tampil setelah customer menyelesaikan pesanan.</Text></ScrollView><TouchableOpacity style={styles.detailAddButton} onPress={() => { const action = selectedService.action; setSelectedService(null); action(); }}><Text style={styles.checkoutBtnText}>Lihat Layanan</Text><ChevronRight size={17} color="#FFFFFF" /></TouchableOpacity></>}
+            {selectedService && <><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>{selectedService.name}</Text><TouchableOpacity onPress={() => setSelectedService(null)}><X size={20} color="#111827" /></TouchableOpacity></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}><ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>{(selectedService.images.length ? selectedService.images : [products[0]?.img]).filter(Boolean).map((image: string, index: number) => <View key={index} style={[styles.carouselSlide, { width: carouselWidth }]}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{selectedService.images.length || 1}</Text></View>)}</ScrollView><Text style={styles.detailProductName}>{selectedService.name}</Text><Text style={styles.detailDescription}>{selectedService.description}</Text><View style={styles.storeInfoCard}><Store size={20} color="#1B7A4E" /><View style={{ flex: 1 }}><Text style={styles.storeInfoName}>{selectedService.provider}</Text><Text style={styles.mutedText}>{selectedService.price}</Text></View></View><View style={styles.detailRatingRow}><Text style={styles.ratingStars}>★ {selectedService.rating}</Text><Text style={styles.mutedText}>Layanan GEOVERSE</Text></View><Text style={styles.detailSectionTitle}>Ulasan Pengguna</Text><Text style={styles.mutedText}>Ulasan akan tampil setelah customer menyelesaikan pesanan.</Text></ScrollView><TouchableOpacity style={styles.detailAddButton} onPress={() => { const action = selectedService.action; setSelectedService(null); action(); }}><Text style={styles.checkoutBtnText}>Lihat Layanan</Text><ChevronRight size={17} color="#FFFFFF" /></TouchableOpacity></>}
           </View>
         </View>
       </Modal>
@@ -2496,16 +2625,16 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               <Text style={styles.searchSectionLabel}>Pintasan Layanan</Text>
               <View style={styles.searchShortcutGrid}>
                 {[
-                  { label: "Kanyaah Mart", icon: Store, color: "#E11D48", bg: "#FFE4E6", route: "c_marketplace" },
-                  { label: "Kanyaah Shop", icon: ShoppingBag, color: "#DB2777", bg: "#FDF2F8", route: "c_shop_home" },
-                  { label: "Kanyaah Catering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5", route: "c_catering" },
-                  { label: "Kanyaah Laundry", icon: Wind, color: "#16A34A", bg: "#F0FDF4", route: "c_laundry" },
-                  { label: "Kos Kamojang", icon: Building, color: "#9333EA", bg: "#F3E8FF", route: "c_kos" },
+                  { label: "Geomart", icon: Store, color: "#E11D48", bg: "#FFE4E6", route: "c_marketplace" },
+                  { label: "Geoshop", icon: ShoppingBag, color: "#DB2777", bg: "#FDF2F8", route: "c_shop_home" },
+                  { label: "Geocatering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5", route: "c_catering" },
+                  { label: "Geolaundry", icon: Wind, color: "#16A34A", bg: "#F0FDF4", route: "c_laundry" },
+                  { label: "Geohomestay", icon: Building, color: "#9333EA", bg: "#F3E8FF", route: "c_kos" },
                   { label: "Geo Direct Use", icon: Flame, color: "#0D7A53", bg: "#ECFDF5", route: "c_geo_direct" },
-                  { label: "Kanyaah Ride", icon: Bike, color: "#0D7A53", bg: "#EAF8F0", route: "c_ride" },
-                  { label: "Kanyaah Send", icon: Package, color: "#D97706", bg: "#FEF3C7", route: "c_send" },
-                  { label: "Bank Sampah", icon: Recycle, color: "#0D7A53", bg: "#DCFCE7", route: "c_recycle_home" },
-                  { label: "GEOVERSE Point", icon: Sparkles, color: "#CA8A04", bg: "#FEF9C3", route: "c_point_home" },
+                  { label: "Georide", icon: Bike, color: "#0D7A53", bg: "#EAF8F0", route: "c_ride" },
+                  { label: "Geosend", icon: Package, color: "#D97706", bg: "#FEF3C7", route: "c_send" },
+                  { label: "Georecycle", icon: Recycle, color: "#0D7A53", bg: "#DCFCE7", route: "c_recycle_home" },
+                  { label: "Geopoint", icon: Sparkles, color: "#CA8A04", bg: "#FEF9C3", route: "c_point_home" },
                 ].map((s) => {
                   const Icon = s.icon;
                   return (
@@ -2525,55 +2654,55 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                       activeOpacity={0.8}
                     >
                       <View style={[styles.searchShortcutIconBox, { backgroundColor: s.bg }]}>
-                        {s.label === "Kanyaah Ride" ? (
+                        {s.label === "Georide" || s.label === "Kanyaah Ride" ? (
                           <Image
                             source={require("../../../assets/kanyaah-ride.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Send" ? (
+                        ) : s.label === "Geosend" || s.label === "Kanyaah Send" ? (
                           <Image
                             source={require("../../../assets/kanyaah-send.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Laundry" ? (
+                        ) : s.label === "Geolaundry" || s.label === "Kanyaah Laundry" ? (
                           <Image
                             source={require("../../../assets/kanyaah-laundry.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "GEOVERSE Point" ? (
+                        ) : s.label === "Geopoint" || s.label === "GEOVERSE Point" ? (
                           <Image
                             source={require("../../../assets/kanyaah-point.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Bank Sampah" ? (
+                        ) : s.label === "Georecycle" || s.label === "Bank Sampah" ? (
                           <Image
                             source={require("../../../assets/kanyaah-recycle.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kos Kamojang" ? (
+                        ) : s.label === "Geohomestay" || s.label === "Kos Kamojang" ? (
                           <Image
                             source={require("../../../assets/kanyaah-homestay.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Shop" ? (
+                        ) : s.label === "Geoshop" || s.label === "Kanyaah Shop" ? (
                           <Image
                             source={require("../../../assets/kanyaah-shop.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Catering" ? (
+                        ) : s.label === "Geocatering" || s.label === "Kanyaah Catering" ? (
                           <Image
                             source={require("../../../assets/kanyaah-catering.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Mart" ? (
+                        ) : s.label === "Geomart" || s.label === "Kanyaah Mart" ? (
                           <Image
                             source={require("../../../assets/kanyaah-mart.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
@@ -2776,7 +2905,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       {/* ============================================================ */}
       <PgeInfoHubModal
         visible={pgeInfoHubVisible}
-        onClose={() => setPgeInfoHubVisible(false)}
+        onClose={() => {
+          setPgeInfoHubVisible(false);
+          setSelectedPgeDetailItem(null);
+        }}
+        initialDetailItem={selectedPgeDetailItem}
       />
 
       {/* ============================================================ */}
@@ -2816,7 +2949,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.faqCard}>
                   <Text style={styles.faqQuestion}>Bagaimana cara memesan kurir atau ojek?</Text>
                   <Text style={styles.faqAnswer}>
-                    Gunakan layanan Kanyaah Ride untuk ojek penumpang dan Kanyaah Send untuk kirim barang kilat. Masukkan lokasi penjemputan dan tujuan di area Kamojang & Garut.
+                    Gunakan layanan Georide untuk ojek penumpang dan Geosend untuk kirim barang kilat. Masukkan lokasi penjemputan dan tujuan di area Kamojang & Garut.
                   </Text>
                 </View>
               </View>
@@ -3639,6 +3772,103 @@ const styles = StyleSheet.create({
     color: "#0D7A53",
   },
 
+  // 7.5. PGE INFO HUB SECTION
+  pgeSectionContainer: {
+    marginBottom: 20,
+  },
+  pgeCarouselContent: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  pgeFeedCard: {
+    width: 270,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+    elevation: 3,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  pgeCardImageWrapper: {
+    width: "100%",
+    height: 126,
+    backgroundColor: "#F1F5F9",
+    position: "relative",
+  },
+  pgeCardImage: {
+    width: "100%",
+    height: "100%",
+  },
+  pgeCardImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#E6F4EA",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pgeCardPlaceholderText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0D7A53",
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+  pgeCategoryBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  pgeCategoryBadgeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  pgeCardBody: {
+    padding: 12,
+  },
+  pgeCardTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+    lineHeight: 18,
+    minHeight: 36,
+  },
+  pgeCardDescription: {
+    fontSize: 11,
+    color: "#64748B",
+    lineHeight: 15,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  pgeCardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  pgeCardMeta: {
+    fontSize: 10,
+    color: "#94A3B8",
+    fontWeight: "600",
+    flex: 1,
+    marginRight: 6,
+  },
+  pgeCardReadMore: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+
   // 8. REKOMENDASI UNTUKMU
   recommendationSection: {
     marginTop: 6,
@@ -4237,7 +4467,7 @@ const styles = StyleSheet.create({
     maxHeight: "94%",
   },
   detailScroll: { paddingBottom: 16 },
-  carouselSlide: { width: 320, height: 220, position: "relative" },
+  carouselSlide: { width: "100%", height: 220, position: "relative", maxWidth: 760 },
   detailImage: { width: "100%", height: "100%", borderRadius: 18, backgroundColor: "#E2E8F0" },
   imageCounter: { position: "absolute", right: 12, bottom: 12, color: "#FFFFFF", backgroundColor: "rgba(15,23,42,.65)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, fontSize: 11, fontWeight: "700" },
   dotRow: { flexDirection: "row", justifyContent: "center", gap: 5, marginVertical: 10 },
@@ -4320,11 +4550,11 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   sheetProductList: {
-    maxHeight: 380,
+    maxHeight: "88%",
     paddingBottom: 20,
   },
   sheetList: {
-    maxHeight: 400,
+    maxHeight: "88%",
     gap: 12,
   },
   restaurantRowCard: {
@@ -4416,7 +4646,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cartItemsScroll: {
-    maxHeight: 280,
+    maxHeight: "80%",
   },
   cartItemRow: {
     flexDirection: "row",

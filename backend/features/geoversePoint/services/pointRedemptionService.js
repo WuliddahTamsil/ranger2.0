@@ -184,11 +184,11 @@ async function getRedemptionById(id, userId, userRole, authorizedBankId = null) 
     throw new Error("Penukaran poin tidak ditemukan.");
   }
   // Access check
-  if (userRole === "bank_sampah") {
+  if (["bank_sampah", "admin_sampah"].includes(userRole)) {
     if (authorizedBankId && String(redemption.bankSampahId) !== String(authorizedBankId)) {
       throw new Error("Anda tidak memiliki akses ke penukaran pada bank sampah lain.");
     }
-  } else if (userRole !== "admin" && String(redemption.userId) !== String(userId)) {
+  } else if (!["admin", "admin_sampah"].includes(userRole) && String(redemption.userId) !== String(userId)) {
     throw new Error("Anda tidak memiliki akses ke penukaran poin ini.");
   }
   return redemption;

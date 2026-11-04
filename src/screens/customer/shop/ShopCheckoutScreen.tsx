@@ -83,7 +83,8 @@ export const ShopCheckoutScreen: React.FC<ShopCheckoutScreenProps> = ({
   } = useShopCart();
 
   const { wallet } = useRecycle();
-  const userPoints = wallet?.balancePoint || 0;
+  const isGuest = !authAccount || !authAccount.token || (authAccount as any).isGuest;
+  const userPoints = isGuest ? 0 : (wallet?.balancePoint || 0);
 
   const primaryAddress = getPrimaryCustomerAddress(authAccount);
 
@@ -829,7 +830,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
   },
   modalSheetList: {
-    maxHeight: 450,
+    maxHeight: "88%",
   },
   pickerVoucherCard: {
     flexDirection: "row",

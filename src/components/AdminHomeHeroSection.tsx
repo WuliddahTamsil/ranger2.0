@@ -110,7 +110,8 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
       setBanners(data);
     } catch (err: any) {
       console.warn("Failed to load admin hero banners:", err);
-      Alert.alert("Gagal", err.message || "Gagal memuat data hero banner.");
+      // Silently fallback without blocking error dialog
+      console.warn("Admin hero banner load info:", err?.message);
     } finally {
       setLoading(false);
     }
@@ -274,7 +275,7 @@ export const AdminHomeHeroSection: React.FC<AdminHomeHeroSectionProps> = ({
       Alert.alert("Validasi Gagal", "Pilih dan unggah gambar atau video terlebih dahulu.");
       return;
     }
-    if (!/^https?:\/\/.+/i.test(formMediaUrl.trim())) {
+    if (!/^https?:\/\/.+/i.test(formMediaUrl.trim()) && !formMediaUrl.startsWith("file:") && !formMediaUrl.startsWith("data:") && !formMediaUrl.startsWith("content:") && !formMediaUrl.startsWith("blob:")) {
       Alert.alert("Validasi Gagal", "URL media harus berupa URL HTTP/HTTPS yang valid.");
       return;
     }

@@ -482,7 +482,7 @@ export const Profile: React.FC<ProfileProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               {/* Account summary box */}
               <View style={styles.settingsSectionBox}>
                 <Text style={styles.settingsSectionTitle}>Informasi Akun</Text>
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   formScroll: {
-    maxHeight: 400,
+    maxHeight: "88%",
   },
   inputLabel: {
     fontSize: 12,

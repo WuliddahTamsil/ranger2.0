@@ -4,11 +4,11 @@
     "slug": "the_ranger_react_native",
     "scheme": "geoverse",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.wuliddahtamsil.geoverse",
       "appleTeamId": "A23N5QDWR3",
       "infoPlist": {
@@ -20,6 +20,7 @@
       }
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -47,6 +48,7 @@
         }
       ],
       "expo-web-browser",
+      "@react-native-google-signin/google-signin",
       "expo-sharing",
       [
         "expo-location",
@@ -76,9 +78,9 @@
     "extra": {
       "EXPO_PUBLIC_USE_RN_FETCH": "1",
       "eas": {
-        "projectId": "409168f7-10a9-4ad3-8c79-adc24ec8f1f9"
+        "projectId": "775fa982-0579-4002-b518-4c22a6f1d545"
       }
     },
-    "owner": "aisyahphr"
+    "owner": "wuliddah_tamsil"
   }
 }

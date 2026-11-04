@@ -1563,7 +1563,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   formScrollContainer: {
-    maxHeight: 350,
+    maxHeight: "88%",
   },
   inputLabel: {
     fontSize: 12,

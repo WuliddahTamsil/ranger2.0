@@ -1334,7 +1334,7 @@ export const CustomerRideTrackingScreen: React.FC<CustomerRideTrackingScreenProp
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: "88%" }}>
               {complaintSubmitted ? (
                 <View style={styles.complaintSuccessWrap}>
                   <CheckCircle size={36} color="#15803D" />

@@ -1350,7 +1350,8 @@ const styles = StyleSheet.create({
   },
   lightboxImage: {
     width: "100%",
-    height: 380,
+    aspectRatio: 1.5,
+    maxHeight: 380,
     borderRadius: 14,
   },
   lightboxCaption: {

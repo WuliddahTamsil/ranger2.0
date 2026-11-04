@@ -19,7 +19,7 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Use
 import { Nav } from "../../types";
 import { GoogleCredential } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
-import { formatGoogleOAuthError, googleClientIds } from "./googleAuth";
+import { formatGoogleOAuthError, googleClientIds, signInWithNativeGoogle, signInWithWebGoogle } from "./googleAuth";
 import { AuthBrand } from "./components/AuthBrand";
 import { GoogleLogo } from "./components/GoogleLogo";
 
@@ -295,8 +295,8 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
   onLogin,
   onError,
 }) => {
-  // Let the Google provider create the platform-native redirect for installed
-  // builds. Overriding it with geoverse:// caused redirect_uri_mismatch on Android.
+  // Android uses the native Google Sign-In module below. AuthSession remains the
+  // browser-based fallback for web and other platforms.
   const [request, , promptAsync] = Google.useAuthRequest({
     ...googleClientIds,
     scopes: ["openid", "profile", "email"],
@@ -354,6 +354,34 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
     onError("");
     onBusyChange(true);
     try {
+      if (Platform.OS === "android") {
+        try {
+          const nativeResult = await signInWithNativeGoogle();
+          if (nativeResult) {
+            await onLogin(nativeResult.credential);
+            return;
+          }
+          return;
+        } catch (nativeErr: any) {
+          console.warn("Native Google Sign-In attempt note:", nativeErr?.message);
+          onError(nativeErr?.message || "Autentikasi Google belum dapat diproses.");
+          return;
+        }
+      }
+      if (Platform.OS === "web") {
+        try {
+          const webResult = await signInWithWebGoogle();
+          if (webResult) {
+            await onLogin(webResult.credential);
+            return;
+          }
+          return;
+        } catch (webErr: any) {
+          console.warn("Web Google Sign-In attempt note:", webErr?.message);
+          onError(webErr?.message || "Autentikasi Google Web belum dapat diproses.");
+          return;
+        }
+      }
       if (!request) {
         onError("Konfigurasi Google Cloud sedang memuat. Silakan periksa koneksi Anda.");
         return;

@@ -3144,7 +3144,7 @@ const styles = StyleSheet.create({
   },
   // Form add product styles
   formContainer: {
-    maxHeight: 420,
+    maxHeight: "88%",
   },
   inputLabel: {
     fontSize: 12,

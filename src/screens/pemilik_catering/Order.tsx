@@ -2841,7 +2841,7 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   sheetScroll: {
-    maxHeight: 450,
+    maxHeight: "88%",
   },
   detailHeaderRow: {
     flexDirection: "row",

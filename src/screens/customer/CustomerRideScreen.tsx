@@ -466,7 +466,8 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
   const estimatedDuration = useMemo(() => rideRoute?.durationMinutes || 0, [rideRoute]);
 
   const { wallet } = useRecycle();
-  const userPoints = wallet?.balancePoint || 0;
+  const isGuest = !authAccount || !authAccount.token || (authAccount as any).isGuest;
+  const userPoints = isGuest ? 0 : (wallet?.balancePoint || 0);
   const [usePoints, setUsePoints] = useState(false);
 
   const rawEstimatedFare = useMemo(() => fareBreakdown?.estimatedFare || 0, [fareBreakdown?.estimatedFare]);
@@ -569,7 +570,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
     if (!authAccount?.id) {
       Alert.alert(
         "Masuk ke Akun Diperlukan",
-        "Silakan masuk ke akun GEOVERSE Anda untuk memesan perjalanan Kanyaah Ride dan terhubung dengan driver.",
+        "Silakan masuk ke akun GEOVERSE Anda untuk memesan perjalanan Georide dan terhubung dengan driver.",
         [
           { text: "Batal", style: "cancel" },
           {
@@ -577,7 +578,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
             onPress: () =>
               navigate("login", {
                 targetScreen: "c_ride",
-                reason: "Masuk ke akun GEOVERSE untuk memesan layanan perjalanan Kanyaah Ride.",
+                reason: "Masuk ke akun GEOVERSE untuk memesan layanan perjalanan Georide.",
               }),
           },
         ]
@@ -746,7 +747,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
           <ArrowLeft size={20} color="#0F172A" />
         </TouchableOpacity>
         <View style={styles.headerTitles}>
-          <Text style={styles.headerTitle}>Kanyaah Ride</Text>
+          <Text style={styles.headerTitle}>Georide</Text>
           <Text style={styles.headerSub}>Mau pergi ke mana?</Text>
         </View>
         <View style={{ width: 40 }} />
@@ -766,7 +767,7 @@ export const CustomerRideScreen: React.FC<CustomerRideScreenProps> = ({
             />
           </View>
           <View style={styles.bannerTextWrap}>
-            <Text style={styles.bannerTitle}>Kanyaah Ride</Text>
+            <Text style={styles.bannerTitle}>Georide</Text>
             <Text style={styles.bannerSub}>Perjalanan nyaman bersama GEOVERSE.</Text>
           </View>
         </View>

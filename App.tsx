@@ -417,7 +417,7 @@ export default function App() {
       );
     }
 
-    if ((currentScreen === "bank_sampah_dashboard" || currentScreen === "bank_sampah_weighing") && (!hasValidToken || (currentAuthAccount?.role !== "bank_sampah" && currentAuthAccount?.role !== "admin"))) {
+    if ((currentScreen === "bank_sampah_dashboard" || currentScreen === "bank_sampah_weighing") && (!hasValidToken || (currentAuthAccount?.role !== "bank_sampah" && currentAuthAccount?.role !== "admin_sampah" && currentAuthAccount?.role !== "admin"))) {
       return (
         <LoginScreen
           navigate={navigate}
@@ -441,13 +441,25 @@ export default function App() {
       );
     }
 
-    if ((currentScreen === "pemilik_marketplace_home" || currentScreen === "pemilik_shop_home" || currentScreen === "shop_merchant_orders") && (!hasValidToken || (currentAuthAccount?.role !== "pemilik_marketplace" && currentAuthAccount?.role !== "pemilik_shop" && currentAuthAccount?.role !== "admin"))) {
+    if (currentScreen === "pemilik_marketplace_home" && (!hasValidToken || (currentAuthAccount?.role !== "pemilik_marketplace" && currentAuthAccount?.role !== "admin"))) {
       return (
         <LoginScreen
           navigate={navigate}
           onLogin={handleLogin}
           onGoogleLogin={handleGoogleLogin}
-          loginReason="Akses Mitra Toko/Marketplace memerlukan login akun yang terverifikasi."
+          loginReason="Akses Mitra Marketplace memerlukan login akun pemilik marketplace yang terverifikasi."
+          onCancel={handleCancelLogin}
+        />
+      );
+    }
+
+    if ((currentScreen === "pemilik_shop_home" || currentScreen === "shop_merchant_orders") && (!hasValidToken || (currentAuthAccount?.role !== "pemilik_shop" && currentAuthAccount?.role !== "admin"))) {
+      return (
+        <LoginScreen
+          navigate={navigate}
+          onLogin={handleLogin}
+          onGoogleLogin={handleGoogleLogin}
+          loginReason="Akses Kanyaah Shop memerlukan login akun pemilik shop yang terverifikasi."
           onCancel={handleCancelLogin}
         />
       );
@@ -630,7 +642,7 @@ export default function App() {
         return <WeighingResultScreen navigate={navigate} />;
       // GEOVERSE Point Screens
       case "c_point_home":
-        return <GeoversePointHomeScreen navigate={navigate} />;
+        return <GeoversePointHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_point_ledger":
         return <GeoversePointLedgerScreen navigate={navigate} />;
       case "c_point_vouchers":

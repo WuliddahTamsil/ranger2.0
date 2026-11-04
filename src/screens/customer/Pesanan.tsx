@@ -114,14 +114,14 @@ export const Pesanan: React.FC<PesananProps> = ({
 
   const SERVICE_CATEGORIES = [
     { key: "ALL", label: "Semua", icon: ShoppingBag, color: "#0D7A53" },
-    { key: "SHOP", label: "Shop", icon: ShoppingBag, color: "#2563EB" },
-    { key: "MART", label: "Mart", icon: Store, color: "#1B7A4E" },
-    { key: "RIDE", label: "Ride", icon: Bike, color: "#16A34A" },
-    { key: "SEND", label: "Send", icon: Truck, color: "#0284C7" },
-    { key: "LAUNDRY", label: "Laundry", icon: Wind, color: "#0284C7" },
-    { key: "CATERING", label: "Catering", icon: Coffee, color: "#EA580C" },
-    { key: "KOS", label: "Kos/Stay", icon: Building, color: "#9333EA" },
-    { key: "RECYCLE", label: "Recycle", icon: Recycle, color: "#0D7A53" },
+    { key: "SHOP", label: "Geoshop", icon: ShoppingBag, color: "#2563EB" },
+    { key: "MART", label: "Geomart", icon: Store, color: "#1B7A4E" },
+    { key: "RIDE", label: "Georide", icon: Bike, color: "#16A34A" },
+    { key: "SEND", label: "Geosend", icon: Truck, color: "#0284C7" },
+    { key: "LAUNDRY", label: "Geolaundry", icon: Wind, color: "#0284C7" },
+    { key: "CATERING", label: "Geocatering", icon: Coffee, color: "#EA580C" },
+    { key: "KOS", label: "Geohomestay", icon: Building, color: "#9333EA" },
+    { key: "RECYCLE", label: "Georecycle", icon: Recycle, color: "#0D7A53" },
   ] as const;
 
   const [trackModalVisible, setTrackModalVisible] = useState(false);

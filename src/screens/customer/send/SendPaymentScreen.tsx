@@ -162,7 +162,8 @@ export const SendPaymentScreen: React.FC<SendPaymentScreenProps> = ({
     paymentMethods.find((m) => m.id === selectedMethod) || paymentMethods[1];
 
   const { wallet } = useRecycle();
-  const userPoints = wallet?.balancePoint || 0;
+  const isGuest = !authAccount || !authAccount.token || (authAccount as any).isGuest;
+  const userPoints = isGuest ? 0 : (wallet?.balancePoint || 0);
   const [usePoints, setUsePoints] = useState(false);
 
   const rawTotalAmount =

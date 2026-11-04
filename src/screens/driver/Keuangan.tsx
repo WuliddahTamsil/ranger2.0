@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   formContainer: {
-    maxHeight: 380,
+    maxHeight: "88%",
   },
   presetsRow: {
     flexDirection: "row",

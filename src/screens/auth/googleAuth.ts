@@ -1,8 +1,9 @@
 import { GoogleProfile } from "./authTypes";
 import { Platform } from "react-native";
+import { signInWithFirebaseGoogleNative, signInWithFirebaseGoogleWeb } from "../../services/firebaseAuth";
 
-const DEFAULT_WEB_CLIENT_ID = "409515412776-oa8u9l8hvlr9ahgj7u69nhvlgepm006u.apps.googleusercontent.com";
-const DEFAULT_ANDROID_CLIENT_ID = "409515412776-85khlnbqile0gohn5ff7f1o0c8tcs9sp.apps.googleusercontent.com";
+const DEFAULT_WEB_CLIENT_ID = "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com";
+const DEFAULT_ANDROID_CLIENT_ID = "803732196043-pt2aavu49jdigke5k5fu5vcofnmdci5i.apps.googleusercontent.com";
 
 const readClientId = (value: unknown, fallback = "") => {
   if (typeof value === "string" && value.trim()) {
@@ -28,6 +29,140 @@ const activeClientId = Platform.OS === "web"
 export const hasGoogleClientId = Boolean(activeClientId);
 
 export const googleConfigMessage = "Login Google belum siap. Isi EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID (web) atau client ID platform di .env, lalu restart Expo.";
+
+export interface NativeGoogleAuthResult {
+  credential: { accessToken?: string; idToken?: string };
+  profile: GoogleProfile;
+}
+
+let nativeGoogleConfigured = false;
+
+const formatNativeGoogleError = (error: unknown): Error => {
+  const code = String((error as { code?: string })?.code || "").toUpperCase();
+  const message = String((error as { message?: string })?.message || "").trim();
+
+  if (code === "SIGN_IN_CANCELLED") {
+    return new Error("__GOOGLE_SIGN_IN_CANCELLED__");
+  }
+  if (code === "PLAY_SERVICES_NOT_AVAILABLE") {
+    return new Error("Google Play Services tidak tersedia atau perlu diperbarui di HP ini.");
+  }
+  if (code === "10" || code.includes("DEVELOPER_ERROR") || code.includes("INVALID_CLIENT")) {
+    return new Error("Konfigurasi Google pada APK belum cocok. Periksa package Android dan SHA-1 signing certificate di Google Cloud, lalu build ulang APK.");
+  }
+  if (code === "12501" || code.includes("CANCELED")) {
+    return new Error("Autentikasi Google dibatalkan.");
+  }
+  return new Error(message || `Login Google gagal (${code || "native_error"}).`);
+};
+
+export const signInWithNativeGoogle = async (): Promise<NativeGoogleAuthResult | null> => {
+  if (Platform.OS !== "android") return null;
+
+  try {
+    const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
+    if (!nativeGoogleConfigured) {
+      GoogleSignin.configure({
+        webClientId: googleClientIds.webClientId,
+        offlineAccess: false,
+        scopes: ["openid", "profile", "email"],
+      });
+      nativeGoogleConfigured = true;
+    }
+
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    } catch (psErr) {
+      console.warn("hasPlayServices warning:", psErr);
+    }
+
+    const result = await GoogleSignin.signIn();
+    if (!result) return null;
+    if (result.type === "cancelled" || (result as any).type === "noSavedCredentialFound") {
+      return null;
+    }
+
+    const payload = (result as any)?.data || result;
+    const user = payload?.user;
+    let idToken = payload?.idToken || (result as any)?.idToken;
+    let accessToken = payload?.accessToken || (result as any)?.accessToken;
+
+    if (!idToken || !accessToken) {
+      try {
+        const tokens = await GoogleSignin.getTokens();
+        if (tokens?.idToken) idToken = tokens.idToken;
+        if (tokens?.accessToken) accessToken = tokens.accessToken;
+      } catch (tErr) {
+        console.warn("GoogleSignin.getTokens note:", tErr);
+      }
+    }
+
+    if (!idToken && !accessToken) {
+      throw new Error("Google tidak mengembalikan token autentikasi.");
+    }
+    if (!user?.id || !user.email) {
+      throw new Error("Profil Google belum memiliki email yang valid.");
+    }
+
+    let firebaseIdToken = idToken;
+    if (idToken) {
+      try {
+        const firebaseResult = await signInWithFirebaseGoogleNative(idToken);
+        firebaseIdToken = firebaseResult.idToken;
+      } catch (firebaseError) {
+        // Keep the Google token fallback so a temporary Firebase REST outage
+        // does not turn a valid native Google sign-in into a hard failure.
+        console.warn("Firebase native token exchange warning:", firebaseError);
+      }
+    }
+
+    return {
+      credential: { accessToken, idToken: firebaseIdToken },
+      profile: {
+        id: user.id,
+        name: user.name || user.email.split("@")[0],
+        email: user.email,
+        photo: user.photo || undefined,
+      },
+    };
+  } catch (error: any) {
+    const formatted = formatNativeGoogleError(error);
+    if (formatted.message === "__GOOGLE_SIGN_IN_CANCELLED__") return null;
+    throw formatted;
+  }
+};
+
+export const signInWithWebGoogle = async (): Promise<NativeGoogleAuthResult | null> => {
+  if (Platform.OS !== "web") return null;
+
+  try {
+    const result = await signInWithFirebaseGoogleWeb();
+    if (!result?.profile?.email) {
+      throw new Error("Gagal membaca profil dari akun Google.");
+    }
+    return {
+      credential: result.credential,
+      profile: {
+        id: result.profile.id,
+        name: result.profile.name,
+        email: result.profile.email,
+        photo: result.profile.photo,
+      },
+    };
+  } catch (err: any) {
+    const code = err?.code || "";
+    if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+      return null;
+    }
+    if (code === "auth/popup-blocked") {
+      throw new Error("Pop-up Google login diblokir oleh browser. Silakan izinkan pop-up di browser Anda.");
+    }
+    if (code === "auth/unauthorized-domain") {
+      throw new Error("Domain ini belum terdaftar di Firebase Authorized domains. Tambahkan di Firebase Console.");
+    }
+    throw new Error(err?.message || "Autentikasi Google Web gagal. Silakan coba lagi.");
+  }
+};
 
 export const formatGoogleOAuthError = (errorCode?: string | null, description?: string | null): string => {
   const code = String(errorCode || "").toLowerCase();

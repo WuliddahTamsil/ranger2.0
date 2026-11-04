@@ -211,7 +211,7 @@ export const KanyahSendHomeScreen: React.FC<KanyahSendHomeScreenProps> = ({
         <View style={styles.headerTextCol}>
           <View style={styles.brandBadgeRow}>
             <Package size={14} color="#059669" />
-            <Text style={styles.brandBadgeText}>KANYAAH SEND</Text>
+            <Text style={styles.brandBadgeText}>GEOSEND</Text>
           </View>
           <Text style={styles.headerTitle}>Kirim Barang</Text>
           <Text style={styles.headerSub}>Antar barang dengan aman sampai tujuan.</Text>

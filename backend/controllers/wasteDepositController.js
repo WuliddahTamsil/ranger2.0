@@ -359,7 +359,7 @@ const acceptDeposit = async (req, res) => {
       return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
     }
 
-    if (req.authUser && req.authUser.role !== "bank_sampah" && req.authUser.role !== "admin") {
+    if (req.authUser && !["bank_sampah", "admin_sampah", "admin"].includes(req.authUser.role)) {
       return res.status(403).json({ success: false, message: "Akses ditolak: Hanya pengelola Bank Sampah atau Admin yang dapat menerima setoran." });
     }
 
@@ -621,7 +621,7 @@ const weighDeposit = async (req, res) => {
       return res.status(404).json({ success: false, message: "Setoran tidak ditemukan." });
     }
 
-    if (req.authUser && req.authUser.role !== "bank_sampah" && req.authUser.role !== "admin") {
+    if (req.authUser && !["bank_sampah", "admin_sampah", "admin"].includes(req.authUser.role)) {
       return res.status(403).json({ success: false, message: "Akses ditolak: Hanya pengelola Bank Sampah atau Admin yang dapat menimbang sampah." });
     }
 

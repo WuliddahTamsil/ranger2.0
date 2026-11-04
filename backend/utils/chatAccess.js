@@ -18,6 +18,7 @@ const ownerRoles = new Set([
   "pemilik_laundry",
   "pemilik_kos",
   "bank_sampah",
+  "admin_sampah",
 ]);
 
 // Ultra-fast memory cache for order identifier resolution (eliminates redundant DB queries on 2.5s poll loops)
@@ -230,6 +231,7 @@ const normalizeRole = (role) => {
       "pemilik_laundry",
       "pemilik_kos",
       "bank_sampah",
+      "admin_sampah",
       "store",
       "merchant",
     ].includes(r)
