@@ -402,6 +402,15 @@ io.on("connection", (socket) => {
   });
 });
 
+// Catch-all 404 handler for API routes to always return clean JSON
+app.use("/api/*", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API endpoint ${req.originalUrl} tidak ditemukan`,
+    data: [],
+  });
+});
+
 // Serve PWA & Web Build if available
 const webBuildPath = path.join(__dirname, "..", "web-build");
 app.use(express.static(webBuildPath));

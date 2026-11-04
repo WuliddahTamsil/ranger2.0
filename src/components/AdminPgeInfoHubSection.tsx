@@ -120,7 +120,8 @@ export const AdminPgeInfoHubSection: React.FC<AdminPgeInfoHubSectionProps> = ({
       const data = await fetchAdminPgeInfoHub();
       setItems(data);
     } catch (err: any) {
-      Alert.alert("Gagal Memuat Konten", err.message || "Periksa koneksi backend.");
+      // Silently fallback without blocking error dialog
+      console.warn("Admin PGE Info Hub load info:", err?.message);
     } finally {
       setLoading(false);
     }

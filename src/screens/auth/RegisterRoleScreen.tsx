@@ -413,7 +413,7 @@ const GoogleConnectSection: React.FC<{
             return;
           }
           return;
-        } catch (nativeErr) {
+        } catch (nativeErr: any) {
           console.warn("Native Google Sign-In connect note:", nativeErr?.message);
           if (request) {
             const result = await promptAsync();

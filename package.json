@@ -8,7 +8,6 @@
     "@react-native-google-signin/google-signin": "^16.1.5",
     "@react-navigation/bottom-tabs": "^7.18.16",
     "@react-navigation/native": "^7.3.16",
-    "@react-native-google-signin/google-signin": "^16.1.5",
     "expo": "~57.0.31",
     "expo-auth-session": "~57.0.16",
     "expo-build-properties": "~57.0.22",
@@ -43,14 +42,17 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "node backend/server.js",
+    "server": "node backend/server.js",
     "backend": "node backend/server.js",
-    "postinstall": "cd backend && npm install",
+    "expo": "expo start",
+    "dev": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build": "expo export --platform web --output-dir web-build",
-    "test": "node backend/tests/runAllAutomatedTests.js"
+    "test": "node backend/tests/runAllAutomatedTests.js",
+    "postinstall": "cd backend && npm install"
   },
   "private": true
 }
