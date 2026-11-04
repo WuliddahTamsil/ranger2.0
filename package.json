@@ -45,7 +45,6 @@
     "start": "node backend/server.js",
     "server": "node backend/server.js",
     "backend": "node backend/server.js",
-    "expo": "expo start",
     "dev": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",

@@ -78,3 +78,4 @@ export async function signOutFirebase(): Promise<void> {
     console.warn("signOutFirebase error:", err);
   }
 }
+
