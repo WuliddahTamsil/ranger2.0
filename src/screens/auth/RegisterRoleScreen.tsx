@@ -35,7 +35,7 @@ import { exchangeCodeAsync } from "expo-auth-session";
 import { Nav } from "../../types";
 import { AuthRegistrationRole, GoogleCredential, GoogleProfile } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
-import { formatGoogleOAuthError, googleClientIds, hasGoogleClientId } from "./googleAuth";
+import { formatGoogleOAuthError, googleClientIds, hasGoogleClientId, signInWithNativeGoogle } from "./googleAuth";
 import { AuthBrand } from "./components/AuthBrand";
 import { GoogleLogo } from "./components/GoogleLogo";
 
@@ -349,8 +349,8 @@ const GoogleConnectSection: React.FC<{
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Use Expo's native redirect for installed builds. A manually forced
-  // geoverse:// redirect was rejected by Google's Android OAuth client.
+  // Android uses the native Google Sign-In module below. AuthSession remains the
+  // browser-based fallback for web and other platforms.
   const [request, , promptAsync] = Google.useAuthRequest({
     ...googleClientIds,
     scopes: ["openid", "profile", "email"],
@@ -405,6 +405,24 @@ const GoogleConnectSection: React.FC<{
     setError("");
     setLoading(true);
     try {
+      if (Platform.OS === "android") {
+        try {
+          const nativeResult = await signInWithNativeGoogle();
+          if (nativeResult) {
+            await onConnect(nativeResult.credential);
+            return;
+          }
+          return;
+        } catch (nativeErr) {
+          console.warn("Native Google Sign-In connect note:", nativeErr?.message);
+          if (request) {
+            const result = await promptAsync();
+            await handleAuthResult(result);
+            return;
+          }
+          throw nativeErr;
+        }
+      }
       if (!request) {
         setError("Konfigurasi Google Cloud sedang memuat. Silakan periksa koneksi Anda.");
         return;
