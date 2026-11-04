@@ -8,6 +8,14 @@ const crypto = require("crypto");
 
 const MITRA_ROLES = ["driver", "pemilik_marketplace", "pemilik_shop", "pemilik_catering", "pemilik_laundry", "pemilik_kos", "bank_sampah"];
 
+const DEFAULT_FIREBASE_PROJECT_ID = "geoverse-pge-kamojang";
+const DEFAULT_GOOGLE_WEB_CLIENT_ID = "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com";
+const DEFAULT_GOOGLE_ANDROID_CLIENT_ID = "803732196043-pt2aavu49jdigke5k5fu5vcofnmdci5i.apps.googleusercontent.com";
+const FIREBASE_CERTS_URL = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
+
+let firebaseCertsCache = null;
+let firebaseCertsExpiresAt = 0;
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || "rangers_app_secret", {
     expiresIn: "30d",
@@ -15,15 +23,42 @@ const generateToken = (id) => {
 };
 
 const getGoogleClientIds = () => [
-  "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com",
-  "803732196043-pt2aavu49jdigke5k5fu5vcofnmdci5i.apps.googleusercontent.com",
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_WEB_CLIENT_ID,
-  process.env.GOOGLE_ANDROID_CLIENT_ID,
+  process.env.GOOGLE_WEB_CLIENT_ID || DEFAULT_GOOGLE_WEB_CLIENT_ID,
+  process.env.GOOGLE_ANDROID_CLIENT_ID || DEFAULT_GOOGLE_ANDROID_CLIENT_ID,
   process.env.GOOGLE_IOS_CLIENT_ID,
-  "409515412776-oa8u9l8hvlr9ahgj7u69nhvlgepm006u.apps.googleusercontent.com",
-  "409515412776-85khlnbqile0gohn5ff7f1o0c8tcs9sp.apps.googleusercontent.com",
-].filter(Boolean);
+].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index);
+
+const getFirebaseProjectId = () => process.env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID;
+
+const getFirebasePublicCerts = async () => {
+  if (firebaseCertsCache && Date.now() < firebaseCertsExpiresAt) return firebaseCertsCache;
+  if (typeof fetch !== "function") throw new Error("Runtime backend tidak mendukung fetch untuk verifikasi Firebase.");
+
+  const response = await fetch(FIREBASE_CERTS_URL);
+  if (!response.ok) throw new Error(`Gagal mengambil sertifikat publik Firebase (${response.status}).`);
+
+  const cacheControl = response.headers.get("cache-control") || "";
+  const maxAgeMatch = cacheControl.match(/max-age=(\d+)/i);
+  const maxAgeMs = Math.max(60_000, Number(maxAgeMatch?.[1] || 3600) * 1000);
+  firebaseCertsCache = await response.json();
+  firebaseCertsExpiresAt = Date.now() + maxAgeMs;
+  return firebaseCertsCache;
+};
+
+const verifyFirebaseIdToken = async (oauth2Client, idToken) => {
+  const decoded = jwt.decode(idToken);
+  const payload = decoded && typeof decoded === "object" ? decoded : null;
+  const projectId = getFirebaseProjectId();
+  const issuer = `https://securetoken.google.com/${projectId}`;
+
+  // Decode is used only to route Firebase tokens. Signature and claims are
+  // still verified cryptographically below; decoded data is never trusted.
+  if (payload?.aud !== projectId || payload?.iss !== issuer) return null;
+
+  const certs = await getFirebasePublicCerts();
+  const ticket = await oauth2Client.verifySignedJwtWithCertsAsync(idToken, certs, projectId, [issuer]);
+  return ticket.getPayload();
+};
 
 const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
   if (!accessToken && !idToken) {
@@ -35,27 +70,17 @@ const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
 
   if (idToken) {
     try {
-      const ticket = await oauth2Client.verifyIdToken({
-        idToken,
-      });
-      const payload = ticket.getPayload();
+      const firebasePayload = await verifyFirebaseIdToken(oauth2Client, idToken);
+      const payload = firebasePayload || (
+        await oauth2Client.verifyIdToken({
+          idToken,
+          // The native Android flow requests an ID token for the Firebase
+          // project's Web OAuth client. GOOGLE_CLIENT_ID is reserved for the
+          // Drive refresh-token integration and must never be used here.
+          audience: allowedClientIds,
+        })
+      ).getPayload();
       if (!payload?.sub || !payload.email) throw new Error("Profil Google tidak lengkap.");
-
-      const aud = String(payload.aud || "");
-      const azp = String(payload.azp || "");
-      const isAllowed =
-        allowedClientIds.length === 0 ||
-        allowedClientIds.includes(aud) ||
-        allowedClientIds.includes(azp) ||
-        aud.includes("803732196043") ||
-        azp.includes("803732196043") ||
-        aud.includes("geoverse-pge-kamojang") ||
-        aud.includes("409515412776") ||
-        azp.includes("409515412776");
-
-      if (!isAllowed) {
-        console.warn("Google token audience check:", { aud, azp, allowedClientIds });
-      }
 
       return {
         id: payload.sub,
@@ -64,35 +89,11 @@ const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
         photo: payload.picture || "",
       };
     } catch (idErr) {
-      // Fallback: check if idToken can be decoded
-      try {
-        const decoded = jwt.decode(idToken);
-        if (decoded && decoded.sub && decoded.email) {
-          const aud = String(decoded.aud || "");
-          const azp = String(decoded.azp || "");
-          const isAllowed =
-            allowedClientIds.length === 0 ||
-            allowedClientIds.includes(aud) ||
-            allowedClientIds.includes(azp) ||
-            aud.includes("803732196043") ||
-            azp.includes("803732196043") ||
-            aud.includes("geoverse-pge-kamojang") ||
-            aud.includes("409515412776");
-
-          if (isAllowed) {
-            return {
-              id: decoded.sub,
-              name: decoded.name || decoded.email.split("@")[0],
-              email: decoded.email.toLowerCase().trim(),
-              photo: decoded.picture || "",
-            };
-          }
-        }
-      } catch (jwtErr) {
-        console.warn("Fallback JWT decode warning:", jwtErr.message);
-      }
-
       if (!accessToken) {
+        const message = String(idErr?.message || "");
+        if (message.includes("Wrong recipient") || message.includes("audience")) {
+          throw new Error("Token Google berasal dari client ID yang berbeda. APK harus memakai Firebase Web Client ID terbaru dan dibuild ulang.");
+        }
         throw idErr;
       }
     }

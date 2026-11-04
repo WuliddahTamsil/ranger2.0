@@ -1,6 +1,6 @@
 import { GoogleProfile } from "./authTypes";
 import { Platform } from "react-native";
-import { signInWithFirebaseGoogleWeb } from "../../services/firebaseAuth";
+import { signInWithFirebaseGoogleNative, signInWithFirebaseGoogleWeb } from "../../services/firebaseAuth";
 
 const DEFAULT_WEB_CLIENT_ID = "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com";
 const DEFAULT_ANDROID_CLIENT_ID = "803732196043-pt2aavu49jdigke5k5fu5vcofnmdci5i.apps.googleusercontent.com";
@@ -104,8 +104,20 @@ export const signInWithNativeGoogle = async (): Promise<NativeGoogleAuthResult |
       throw new Error("Profil Google belum memiliki email yang valid.");
     }
 
+    let firebaseIdToken = idToken;
+    if (idToken) {
+      try {
+        const firebaseResult = await signInWithFirebaseGoogleNative(idToken);
+        firebaseIdToken = firebaseResult.idToken;
+      } catch (firebaseError) {
+        // Keep the Google token fallback so a temporary Firebase REST outage
+        // does not turn a valid native Google sign-in into a hard failure.
+        console.warn("Firebase native token exchange warning:", firebaseError);
+      }
+    }
+
     return {
-      credential: { accessToken, idToken },
+      credential: { accessToken, idToken: firebaseIdToken },
       profile: {
         id: user.id,
         name: user.name || user.email.split("@")[0],

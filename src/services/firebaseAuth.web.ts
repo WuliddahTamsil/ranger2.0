@@ -13,7 +13,7 @@ import {
 } from "firebase/auth";
 
 export const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyAJRpTiBir5zPwxH9vNCi8LixnojFkIo-E",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyDG2l17bhBjLHJFMKQn61MXR_ytQe2ddt4",
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "geoverse-pge-kamojang.firebaseapp.com",
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "geoverse-pge-kamojang",
   storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "geoverse-pge-kamojang.firebasestorage.app",
@@ -38,6 +38,17 @@ export interface FirebaseAuthResult {
     email: string;
     photo?: string;
   };
+}
+
+export interface FirebaseNativeAuthResult {
+  idToken: string;
+  profile: FirebaseAuthResult["profile"];
+}
+
+// Native Google Sign-In is selected only on Android/iOS. This keeps the
+// platform-specific export shape consistent for TypeScript and web bundling.
+export async function signInWithFirebaseGoogleNative(_googleIdToken: string): Promise<FirebaseNativeAuthResult> {
+  throw new Error("Firebase Native Auth hanya didukung di platform native.");
 }
 
 /**
