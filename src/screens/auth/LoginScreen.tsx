@@ -19,7 +19,7 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, Use
 import { Nav } from "../../types";
 import { GoogleCredential } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
-import { formatGoogleOAuthError, googleClientIds, signInWithNativeGoogle } from "./googleAuth";
+import { formatGoogleOAuthError, googleClientIds, signInWithNativeGoogle, signInWithWebGoogle } from "./googleAuth";
 import { AuthBrand } from "./components/AuthBrand";
 import { GoogleLogo } from "./components/GoogleLogo";
 
@@ -365,6 +365,20 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
         } catch (nativeErr: any) {
           console.warn("Native Google Sign-In attempt note:", nativeErr?.message);
           onError(nativeErr?.message || "Autentikasi Google belum dapat diproses.");
+          return;
+        }
+      }
+      if (Platform.OS === "web") {
+        try {
+          const webResult = await signInWithWebGoogle();
+          if (webResult) {
+            await onLogin(webResult.credential);
+            return;
+          }
+          return;
+        } catch (webErr: any) {
+          console.warn("Web Google Sign-In attempt note:", webErr?.message);
+          onError(webErr?.message || "Autentikasi Google Web belum dapat diproses.");
           return;
         }
       }

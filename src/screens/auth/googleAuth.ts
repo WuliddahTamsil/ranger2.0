@@ -1,5 +1,6 @@
 import { GoogleProfile } from "./authTypes";
 import { Platform } from "react-native";
+import { signInWithFirebaseGoogleWeb } from "../../services/firebaseAuth";
 
 const DEFAULT_WEB_CLIENT_ID = "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com";
 const DEFAULT_ANDROID_CLIENT_ID = "803732196043-pt2aavu49jdigke5k5fu5vcofnmdci5i.apps.googleusercontent.com";
@@ -116,6 +117,38 @@ export const signInWithNativeGoogle = async (): Promise<NativeGoogleAuthResult |
     const formatted = formatNativeGoogleError(error);
     if (formatted.message === "__GOOGLE_SIGN_IN_CANCELLED__") return null;
     throw formatted;
+  }
+};
+
+export const signInWithWebGoogle = async (): Promise<NativeGoogleAuthResult | null> => {
+  if (Platform.OS !== "web") return null;
+
+  try {
+    const result = await signInWithFirebaseGoogleWeb();
+    if (!result?.profile?.email) {
+      throw new Error("Gagal membaca profil dari akun Google.");
+    }
+    return {
+      credential: result.credential,
+      profile: {
+        id: result.profile.id,
+        name: result.profile.name,
+        email: result.profile.email,
+        photo: result.profile.photo,
+      },
+    };
+  } catch (err: any) {
+    const code = err?.code || "";
+    if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+      return null;
+    }
+    if (code === "auth/popup-blocked") {
+      throw new Error("Pop-up Google login diblokir oleh browser. Silakan izinkan pop-up di browser Anda.");
+    }
+    if (code === "auth/unauthorized-domain") {
+      throw new Error("Domain ini belum terdaftar di Firebase Authorized domains. Tambahkan di Firebase Console.");
+    }
+    throw new Error(err?.message || "Autentikasi Google Web gagal. Silakan coba lagi.");
   }
 };
 

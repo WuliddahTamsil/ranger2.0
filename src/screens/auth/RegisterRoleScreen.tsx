@@ -35,7 +35,7 @@ import { exchangeCodeAsync } from "expo-auth-session";
 import { Nav } from "../../types";
 import { AuthRegistrationRole, GoogleCredential, GoogleProfile } from "./authTypes";
 import { authColors, authStyles } from "./authStyles";
-import { formatGoogleOAuthError, googleClientIds, hasGoogleClientId, signInWithNativeGoogle } from "./googleAuth";
+import { formatGoogleOAuthError, googleClientIds, hasGoogleClientId, signInWithNativeGoogle, signInWithWebGoogle } from "./googleAuth";
 import { AuthBrand } from "./components/AuthBrand";
 import { GoogleLogo } from "./components/GoogleLogo";
 
@@ -416,6 +416,20 @@ const GoogleConnectSection: React.FC<{
         } catch (nativeErr: any) {
           console.warn("Native Google Sign-In connect note:", nativeErr?.message);
           setError(nativeErr?.message || "Autentikasi Google belum dapat diproses.");
+          return;
+        }
+      }
+      if (Platform.OS === "web") {
+        try {
+          const webResult = await signInWithWebGoogle();
+          if (webResult) {
+            await onConnect(webResult.credential);
+            return;
+          }
+          return;
+        } catch (webErr: any) {
+          console.warn("Web Google connect note:", webErr?.message);
+          setError(webErr?.message || "Autentikasi Google Web belum dapat diproses.");
           return;
         }
       }

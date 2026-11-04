@@ -34,18 +34,45 @@ const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
   const allowedClientIds = getGoogleClientIds();
 
   if (idToken) {
-    const ticket = await oauth2Client.verifyIdToken({
-      idToken,
-      ...(allowedClientIds.length ? { audience: allowedClientIds } : {}),
-    });
-    const payload = ticket.getPayload();
-    if (!payload?.sub || !payload.email) throw new Error("Profil Google tidak lengkap.");
-    return {
-      id: payload.sub,
-      name: payload.name || payload.email.split("@")[0],
-      email: payload.email.toLowerCase().trim(),
-      photo: payload.picture || "",
-    };
+    try {
+      const ticket = await oauth2Client.verifyIdToken({
+        idToken,
+        ...(allowedClientIds.length ? { audience: allowedClientIds } : {}),
+      });
+      const payload = ticket.getPayload();
+      if (!payload?.sub || !payload.email) throw new Error("Profil Google tidak lengkap.");
+      return {
+        id: payload.sub,
+        name: payload.name || payload.email.split("@")[0],
+        email: payload.email.toLowerCase().trim(),
+        photo: payload.picture || "",
+      };
+    } catch (idErr) {
+      // Fallback: check if idToken is a Firebase ID Token (issued by securetoken.google.com)
+      try {
+        const decoded = jwt.decode(idToken);
+        if (
+          decoded &&
+          decoded.iss &&
+          decoded.iss.includes("securetoken.google.com") &&
+          decoded.sub &&
+          decoded.email
+        ) {
+          return {
+            id: decoded.sub,
+            name: decoded.name || decoded.email.split("@")[0],
+            email: decoded.email.toLowerCase().trim(),
+            photo: decoded.picture || "",
+          };
+        }
+      } catch (jwtErr) {
+        console.warn("Fallback Firebase JWT decode warning:", jwtErr.message);
+      }
+
+      if (!accessToken) {
+        throw idErr;
+      }
+    }
   }
 
   oauth2Client.setCredentials({ access_token: accessToken });
