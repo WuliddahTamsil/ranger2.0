@@ -59,8 +59,6 @@ export const signInWithNativeGoogle = async (): Promise<NativeGoogleAuthResult |
   if (Platform.OS !== "android") return null;
 
   try {
-    // Lazy-load the native module so Expo Go/web can still open the app and
-    // show a useful message instead of crashing at module initialization.
     const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
     if (!nativeGoogleConfigured) {
       GoogleSignin.configure({
@@ -71,14 +69,33 @@ export const signInWithNativeGoogle = async (): Promise<NativeGoogleAuthResult |
       nativeGoogleConfigured = true;
     }
 
-    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-    const result = await GoogleSignin.signIn();
-    if (result.type === "cancelled") return null;
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    } catch (psErr) {
+      console.warn("hasPlayServices warning:", psErr);
+    }
 
-    const tokens = await GoogleSignin.getTokens();
-    const user = result.data.user;
-    const idToken = tokens.idToken || result.data.idToken || undefined;
-    const accessToken = tokens.accessToken || undefined;
+    const result = await GoogleSignin.signIn();
+    if (!result) return null;
+    if (result.type === "cancelled" || (result as any).type === "noSavedCredentialFound") {
+      return null;
+    }
+
+    const payload = (result as any)?.data || result;
+    const user = payload?.user;
+    let idToken = payload?.idToken || (result as any)?.idToken;
+    let accessToken = payload?.accessToken || (result as any)?.accessToken;
+
+    if (!idToken && !accessToken) {
+      try {
+        const tokens = await GoogleSignin.getTokens();
+        idToken = tokens?.idToken;
+        accessToken = tokens?.accessToken;
+      } catch (tErr) {
+        console.warn("GoogleSignin.getTokens note:", tErr);
+      }
+    }
+
     if (!idToken && !accessToken) {
       throw new Error("Google tidak mengembalikan token autentikasi.");
     }
@@ -95,7 +112,7 @@ export const signInWithNativeGoogle = async (): Promise<NativeGoogleAuthResult |
         photo: user.photo || undefined,
       },
     };
-  } catch (error) {
+  } catch (error: any) {
     const formatted = formatNativeGoogleError(error);
     if (formatted.message === "__GOOGLE_SIGN_IN_CANCELLED__") return null;
     throw formatted;

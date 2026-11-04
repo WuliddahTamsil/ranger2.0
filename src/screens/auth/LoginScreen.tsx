@@ -364,12 +364,8 @@ const GoogleLoginButton: React.FC<GoogleLoginProps> = ({
           return;
         } catch (nativeErr: any) {
           console.warn("Native Google Sign-In attempt note:", nativeErr?.message);
-          if (request) {
-            const result = await promptAsync();
-            await handleAuthResult(result);
-            return;
-          }
-          throw nativeErr;
+          onError(nativeErr?.message || "Autentikasi Google belum dapat diproses.");
+          return;
         }
       }
       if (!request) {
