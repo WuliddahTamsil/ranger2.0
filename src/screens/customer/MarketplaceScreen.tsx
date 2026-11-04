@@ -453,7 +453,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
     if (view === "cart") return "Keranjang Belanja";
     if (view === "checkout") return "Checkout Marketplace";
     if (view === "success") return partialCheckout ? "Pesanan Sebagian Tersimpan" : "Pesanan Dibuat";
-    return "Kanyaah Mart";
+    return "Geomart";
   }, [view]);
 
   const renderMenu = () => (
@@ -465,7 +465,7 @@ export const MarketplaceScreen: React.FC<MarketplaceScreenProps> = ({ navigate, 
           resizeMode="cover"
         />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 15, fontWeight: "800", color: "#881337" }}>Kanyaah Mart</Text>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: "#881337" }}>Geomart</Text>
           <Text style={{ fontSize: 11, color: "#9F1239", marginTop: 2 }}>
             Sajian kuliner, jajanan manis & kebutuhan harian UMKM
           </Text>

@@ -135,6 +135,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const isCompact = windowWidth < 380;
+  const carouselWidth = Math.min(760, Math.max(200, windowWidth - 40));
   const [currentTab, setCurrentTab] = useState<number>(initialTab ?? 0);
 
   useEffect(() => {
@@ -863,7 +864,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               id: `driver_${o.id}`,
               orderId: o.id,
               participantType: "driver",
-              participantName: o.type === "Kanyaah Ride" ? `${o.driverName} (Driver Kanyaah Ride)` : `${o.driverName} (Kurir)`,
+              participantName: o.type === "Kanyaah Ride" ? `${o.driverName} (Driver Georide)` : `${o.driverName} (Kurir)`,
               lastMessage: o.type === "Kanyaah Ride" ? `Driver Kanyaah Ride ${o.orderCode || `#${o.id.slice(-5)}`}.` : `Kurir mengantar pesanan #${o.id.slice(-5)}.`,
               updatedAt: "Baru saja",
               unreadCount: 0,
@@ -1408,7 +1409,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Ride</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Georide</Text>
             </TouchableOpacity>
 
             {/* 2. GoSend / Kanyaah Send */}
@@ -1427,7 +1428,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Send</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Geosend</Text>
             </TouchableOpacity>
 
             {/* 3. GoFood / Kanyaah Catering */}
@@ -1446,7 +1447,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={2}>Katering</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Geocatering</Text>
             </TouchableOpacity>
 
             {/* 4. GoMart / Kanyaah Shop */}
@@ -1465,7 +1466,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Shop</Text>
+              <Text style={styles.launcherLabel} numberOfLines={2}>Geoshop</Text>
             </TouchableOpacity>
           </View>
 
@@ -1487,7 +1488,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Laundry</Text>
+              <Text style={styles.launcherLabel} numberOfLines={1}>Geolaundry</Text>
             </TouchableOpacity>
 
             {/* 6. Kanyaah Recycle */}
@@ -1506,7 +1507,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Recycle</Text>
+              <Text style={styles.launcherLabel} numberOfLines={1}>Georecycle</Text>
             </TouchableOpacity>
 
             {/* 7. GEOVERSE Point */}
@@ -1534,7 +1535,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   resizeMode="cover"
                 />
               </View>
-              <Text style={styles.launcherLabel} numberOfLines={1}>Point</Text>
+              <Text style={styles.launcherLabel} numberOfLines={1}>Geopoint</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1576,7 +1577,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     resizeMode="cover"
                   />
                 </View>
-                <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Mart</Text>
+                <Text style={styles.launcherLabel} numberOfLines={2}>Geomart</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1594,7 +1595,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                     resizeMode="cover"
                   />
                 </View>
-                <Text style={styles.launcherLabel} numberOfLines={2}>Kanyaah Homestay</Text>
+                <Text style={styles.launcherLabel} numberOfLines={2}>Geohomestay</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1828,7 +1829,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#0D7A53" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH SHOP</Text>
+                  <Text style={styles.promoBadgeText}>GEOSHOP</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-shop.png")}
@@ -1880,7 +1881,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#D97706" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH SEND</Text>
+                  <Text style={styles.promoBadgeText}>GEOSEND</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-send.png")}
@@ -1906,7 +1907,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#EA580C" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH CATERING</Text>
+                  <Text style={styles.promoBadgeText}>GEOCATERING</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-catering.png")}
@@ -1931,7 +1932,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#15803D" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH RIDE</Text>
+                  <Text style={styles.promoBadgeText}>GEORIDE</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-ride.png")}
@@ -1957,7 +1958,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#0284C7" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH LAUNDRY</Text>
+                  <Text style={styles.promoBadgeText}>GEOLAUNDRY</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-laundry.png")}
@@ -1983,7 +1984,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             >
               <View style={styles.promoCardTop}>
                 <View style={[styles.promoBadgePill, { backgroundColor: "#9333EA" }]}>
-                  <Text style={styles.promoBadgeText}>KANYAAH HOMESTAY</Text>
+                  <Text style={styles.promoBadgeText}>GEOHOMESTAY</Text>
                 </View>
                 <Image
                   source={require("../../../assets/kanyaah-homestay.png")}
@@ -2348,8 +2349,8 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <>
                   <View style={styles.sheetHeader}><Text style={styles.sheetTitle}>Detail Produk</Text><TouchableOpacity onPress={() => setSelectedProduct(null)}><X size={20} color="#111827" /></TouchableOpacity></View>
                   <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}>
-                    <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={(event) => setSelectedProductImage(Math.round(event.nativeEvent.contentOffset.x / 320))}>
-                      {images.map((image: string, index: number) => <View key={`${image}-${index}`} style={styles.carouselSlide}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{images.length}</Text></View>)}
+                    <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={(event) => setSelectedProductImage(Math.round(event.nativeEvent.contentOffset.x / carouselWidth))}>
+                      {images.map((image: string, index: number) => <View key={`${image}-${index}`} style={[styles.carouselSlide, { width: carouselWidth }]}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{images.length}</Text></View>)}
                     </ScrollView>
                     <View style={styles.dotRow}>{images.map((_: string, index: number) => <View key={index} style={[styles.dot, index === selectedProductImage && styles.dotActive]} />)}</View>
                     <Text style={styles.detailProductName}>{selectedProduct.name}</Text>
@@ -2372,7 +2373,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
       <Modal visible={Boolean(selectedService)} transparent animationType="slide" onRequestClose={() => setSelectedService(null)}>
         <View style={styles.modalBgBottom}>
           <View style={styles.detailSheet}>
-            {selectedService && <><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>{selectedService.name}</Text><TouchableOpacity onPress={() => setSelectedService(null)}><X size={20} color="#111827" /></TouchableOpacity></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}><ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>{(selectedService.images.length ? selectedService.images : [products[0]?.img]).filter(Boolean).map((image: string, index: number) => <View key={index} style={styles.carouselSlide}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{selectedService.images.length || 1}</Text></View>)}</ScrollView><Text style={styles.detailProductName}>{selectedService.name}</Text><Text style={styles.detailDescription}>{selectedService.description}</Text><View style={styles.storeInfoCard}><Store size={20} color="#1B7A4E" /><View style={{ flex: 1 }}><Text style={styles.storeInfoName}>{selectedService.provider}</Text><Text style={styles.mutedText}>{selectedService.price}</Text></View></View><View style={styles.detailRatingRow}><Text style={styles.ratingStars}>★ {selectedService.rating}</Text><Text style={styles.mutedText}>Layanan GEOVERSE</Text></View><Text style={styles.detailSectionTitle}>Ulasan Pengguna</Text><Text style={styles.mutedText}>Ulasan akan tampil setelah customer menyelesaikan pesanan.</Text></ScrollView><TouchableOpacity style={styles.detailAddButton} onPress={() => { const action = selectedService.action; setSelectedService(null); action(); }}><Text style={styles.checkoutBtnText}>Lihat Layanan</Text><ChevronRight size={17} color="#FFFFFF" /></TouchableOpacity></>}
+            {selectedService && <><View style={styles.sheetHeader}><Text style={styles.sheetTitle}>{selectedService.name}</Text><TouchableOpacity onPress={() => setSelectedService(null)}><X size={20} color="#111827" /></TouchableOpacity></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}><ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>{(selectedService.images.length ? selectedService.images : [products[0]?.img]).filter(Boolean).map((image: string, index: number) => <View key={index} style={[styles.carouselSlide, { width: carouselWidth }]}><Image source={{ uri: image }} style={styles.detailImage} /><Text style={styles.imageCounter}>{index + 1}/{selectedService.images.length || 1}</Text></View>)}</ScrollView><Text style={styles.detailProductName}>{selectedService.name}</Text><Text style={styles.detailDescription}>{selectedService.description}</Text><View style={styles.storeInfoCard}><Store size={20} color="#1B7A4E" /><View style={{ flex: 1 }}><Text style={styles.storeInfoName}>{selectedService.provider}</Text><Text style={styles.mutedText}>{selectedService.price}</Text></View></View><View style={styles.detailRatingRow}><Text style={styles.ratingStars}>★ {selectedService.rating}</Text><Text style={styles.mutedText}>Layanan GEOVERSE</Text></View><Text style={styles.detailSectionTitle}>Ulasan Pengguna</Text><Text style={styles.mutedText}>Ulasan akan tampil setelah customer menyelesaikan pesanan.</Text></ScrollView><TouchableOpacity style={styles.detailAddButton} onPress={() => { const action = selectedService.action; setSelectedService(null); action(); }}><Text style={styles.checkoutBtnText}>Lihat Layanan</Text><ChevronRight size={17} color="#FFFFFF" /></TouchableOpacity></>}
           </View>
         </View>
       </Modal>
@@ -2481,15 +2482,15 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               <Text style={styles.searchSectionLabel}>Pintasan Layanan</Text>
               <View style={styles.searchShortcutGrid}>
                 {[
-                  { label: "Kanyaah Mart", icon: Store, color: "#E11D48", bg: "#FFE4E6", route: "c_marketplace" },
-                  { label: "Kanyaah Shop", icon: ShoppingBag, color: "#DB2777", bg: "#FDF2F8", route: "c_shop_home" },
-                  { label: "Kanyaah Catering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5", route: "c_catering" },
-                  { label: "Kanyaah Laundry", icon: Wind, color: "#16A34A", bg: "#F0FDF4", route: "c_laundry" },
-                  { label: "Kos Kamojang", icon: Building, color: "#9333EA", bg: "#F3E8FF", route: "c_kos" },
-                  { label: "Kanyaah Ride", icon: Bike, color: "#0D7A53", bg: "#EAF8F0", route: "c_ride" },
-                  { label: "Kanyaah Send", icon: Package, color: "#D97706", bg: "#FEF3C7", route: "c_send" },
-                  { label: "Bank Sampah", icon: Recycle, color: "#0D7A53", bg: "#DCFCE7", route: "c_recycle_home" },
-                  { label: "GEOVERSE Point", icon: Sparkles, color: "#CA8A04", bg: "#FEF9C3", route: "c_point_home" },
+                  { label: "Geomart", icon: Store, color: "#E11D48", bg: "#FFE4E6", route: "c_marketplace" },
+                  { label: "Geoshop", icon: ShoppingBag, color: "#DB2777", bg: "#FDF2F8", route: "c_shop_home" },
+                  { label: "Geocatering", icon: Coffee, color: "#EA580C", bg: "#FFEDD5", route: "c_catering" },
+                  { label: "Geolaundry", icon: Wind, color: "#16A34A", bg: "#F0FDF4", route: "c_laundry" },
+                  { label: "Geohomestay", icon: Building, color: "#9333EA", bg: "#F3E8FF", route: "c_kos" },
+                  { label: "Georide", icon: Bike, color: "#0D7A53", bg: "#EAF8F0", route: "c_ride" },
+                  { label: "Geosend", icon: Package, color: "#D97706", bg: "#FEF3C7", route: "c_send" },
+                  { label: "Georecycle", icon: Recycle, color: "#0D7A53", bg: "#DCFCE7", route: "c_recycle_home" },
+                  { label: "Geopoint", icon: Sparkles, color: "#CA8A04", bg: "#FEF9C3", route: "c_point_home" },
                 ].map((s) => {
                   const Icon = s.icon;
                   return (
@@ -2509,55 +2510,55 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                       activeOpacity={0.8}
                     >
                       <View style={[styles.searchShortcutIconBox, { backgroundColor: s.bg }]}>
-                        {s.label === "Kanyaah Ride" ? (
+                        {s.label === "Georide" || s.label === "Kanyaah Ride" ? (
                           <Image
                             source={require("../../../assets/kanyaah-ride.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Send" ? (
+                        ) : s.label === "Geosend" || s.label === "Kanyaah Send" ? (
                           <Image
                             source={require("../../../assets/kanyaah-send.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Laundry" ? (
+                        ) : s.label === "Geolaundry" || s.label === "Kanyaah Laundry" ? (
                           <Image
                             source={require("../../../assets/kanyaah-laundry.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "GEOVERSE Point" ? (
+                        ) : s.label === "Geopoint" || s.label === "GEOVERSE Point" ? (
                           <Image
                             source={require("../../../assets/kanyaah-point.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Bank Sampah" ? (
+                        ) : s.label === "Georecycle" || s.label === "Bank Sampah" ? (
                           <Image
                             source={require("../../../assets/kanyaah-recycle.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kos Kamojang" ? (
+                        ) : s.label === "Geohomestay" || s.label === "Kos Kamojang" ? (
                           <Image
                             source={require("../../../assets/kanyaah-homestay.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Shop" ? (
+                        ) : s.label === "Geoshop" || s.label === "Kanyaah Shop" ? (
                           <Image
                             source={require("../../../assets/kanyaah-shop.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Catering" ? (
+                        ) : s.label === "Geocatering" || s.label === "Kanyaah Catering" ? (
                           <Image
                             source={require("../../../assets/kanyaah-catering.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
                             resizeMode="contain"
                           />
-                        ) : s.label === "Kanyaah Mart" ? (
+                        ) : s.label === "Geomart" || s.label === "Kanyaah Mart" ? (
                           <Image
                             source={require("../../../assets/kanyaah-mart.png")}
                             style={{ width: 22, height: 22, borderRadius: 6 }}
@@ -2800,7 +2801,7 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                 <View style={styles.faqCard}>
                   <Text style={styles.faqQuestion}>Bagaimana cara memesan kurir atau ojek?</Text>
                   <Text style={styles.faqAnswer}>
-                    Gunakan layanan Kanyaah Ride untuk ojek penumpang dan Kanyaah Send untuk kirim barang kilat. Masukkan lokasi penjemputan dan tujuan di area Kamojang & Garut.
+                    Gunakan layanan Georide untuk ojek penumpang dan Geosend untuk kirim barang kilat. Masukkan lokasi penjemputan dan tujuan di area Kamojang & Garut.
                   </Text>
                 </View>
               </View>
@@ -4221,7 +4222,7 @@ const styles = StyleSheet.create({
     maxHeight: "94%",
   },
   detailScroll: { paddingBottom: 16 },
-  carouselSlide: { width: 320, height: 220, position: "relative" },
+  carouselSlide: { width: "100%", height: 220, position: "relative", maxWidth: 760 },
   detailImage: { width: "100%", height: "100%", borderRadius: 18, backgroundColor: "#E2E8F0" },
   imageCounter: { position: "absolute", right: 12, bottom: 12, color: "#FFFFFF", backgroundColor: "rgba(15,23,42,.65)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, fontSize: 11, fontWeight: "700" },
   dotRow: { flexDirection: "row", justifyContent: "center", gap: 5, marginVertical: 10 },
@@ -4304,11 +4305,11 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   sheetProductList: {
-    maxHeight: 380,
+    maxHeight: "88%",
     paddingBottom: 20,
   },
   sheetList: {
-    maxHeight: 400,
+    maxHeight: "88%",
     gap: 12,
   },
   restaurantRowCard: {
@@ -4400,7 +4401,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cartItemsScroll: {
-    maxHeight: 280,
+    maxHeight: "80%",
   },
   cartItemRow: {
     flexDirection: "row",

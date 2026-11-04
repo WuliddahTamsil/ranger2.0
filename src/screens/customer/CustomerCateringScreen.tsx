@@ -87,7 +87,7 @@ export const CustomerCateringScreen: React.FC<CustomerCateringProps> = ({ naviga
 
   return (
     <ResponsiveSafeAreaView style={styles.container}>
-      <BackHeader title="Catering Lokal" onBack={() => navigate("c_home")} />
+      <BackHeader title="Geocatering" onBack={() => navigate("c_home")} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <Image

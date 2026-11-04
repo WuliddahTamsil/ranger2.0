@@ -145,7 +145,7 @@ export const GeoversePointHomeScreen: React.FC<Nav> = ({ navigate }) => {
             resizeMode="cover"
           />
           <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>GEOVERSE Point</Text>
+            <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>Geopoint</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>Loyalty Dompet Lingkungan</Text>
           </View>
         </View>

@@ -292,7 +292,7 @@ export const CustomerLaundryScreen: React.FC<CustomerLaundryScreenProps> = ({ na
         </TouchableOpacity>
 
         <View style={styles.headerTitleCol}>
-          <Text style={styles.headerTitle}>Layanan Laundry</Text>
+          <Text style={styles.headerTitle}>Geolaundry</Text>
           <Text style={styles.headerSubTitle} numberOfLines={1} ellipsizeMode="tail">Pilihan mitra laundry terpercaya di sekitarmu</Text>
         </View>
 
