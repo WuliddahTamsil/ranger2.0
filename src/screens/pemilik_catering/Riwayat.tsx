@@ -171,21 +171,21 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders, loadError, onRetry }) 
                   activeOpacity={0.8}
                 >
                   <View style={styles.cardHeader}>
-                    <Text style={styles.cardId}>{item.orderCode || `#${item.id.slice(-8).toUpperCase()}`}</Text>
+                    <Text style={styles.cardId} numberOfLines={1}>{item.orderCode || `#${item.id.slice(-8).toUpperCase()}`}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
-                      <Text style={[styles.statusText, { color: statusColor }]}>
+                      <Text style={[styles.statusText, { color: statusColor }]} numberOfLines={1}>
                         {item.status}
                       </Text>
                     </View>
                   </View>
 
-                  <Text style={styles.customerName}>{item.customerName}</Text>
-                  <Text style={styles.itemSummary}>{item.itemSummary}</Text>
+                  <Text style={styles.customerName} numberOfLines={1} ellipsizeMode="tail">{item.customerName}</Text>
+                  <Text style={styles.itemSummary} numberOfLines={2} ellipsizeMode="tail">{item.itemSummary}</Text>
 
                   <View style={styles.cardFooter}>
-                    <Text style={styles.totalPrice}>{rp(item.total)}</Text>
+                    <Text style={styles.totalPrice} numberOfLines={1}>{rp(item.total)}</Text>
                     <View style={styles.cardFooterRight}>
-                      <Text style={styles.timeText}>{item.time}</Text>
+                      <Text style={styles.timeText} numberOfLines={1}>{item.time}</Text>
                       <View style={styles.invoiceHintPill}>
                         <FileText size={11} color="#0D7A53" />
                         <Text style={styles.invoiceHintText}>Lihat Faktur</Text>
@@ -329,6 +329,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexShrink: 0,
   },
   invoiceHintPill: {
     flexDirection: "row",

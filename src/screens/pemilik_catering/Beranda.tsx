@@ -741,7 +741,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           >
             <ShoppingBag size={18} color="#1B7A4E" />
             <Text style={styles.summaryValue} numberOfLines={1}>{orders.length}</Text>
-            <Text style={styles.summaryLabel}>Order - Hari ini</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>Order - Hari ini</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -750,8 +750,8 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
             activeOpacity={0.8}
           >
             <Wallet size={18} color="#1B7A4E" />
-            <Text style={styles.summaryValue} numberOfLines={2}>{rp(totalRevenueVal)}</Text>
-            <Text style={styles.summaryLabel}>Pendapatan - Tercatat</Text>
+            <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>{rp(totalRevenueVal)}</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>Pendapatan - Tercatat</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -761,7 +761,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           >
             <TrendingUp size={18} color="#1B7A4E" />
             <Text style={styles.summaryValue} numberOfLines={1}>{activeOrdersCount}</Text>
-            <Text style={styles.summaryLabel}>Diproses - Perlu aksi</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>Diproses - Perlu aksi</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -771,7 +771,7 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
           >
             <MessageSquare size={18} color="#1B7A4E" />
             <Text style={styles.summaryValue} numberOfLines={1}>—</Text>
-            <Text style={styles.summaryLabel}>Rating - Belum ada</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>Rating - Belum ada</Text>
           </TouchableOpacity>
         </View>
 
@@ -1090,14 +1090,14 @@ export const Beranda: React.FC<CateringHomeProps> = ({ navigate, authAccount, on
 
                           {/* Category Badge Top-Left */}
                           <View style={styles.gridCategoryBadge}>
-                            <Text style={styles.gridCategoryBadgeText}>
+                            <Text style={styles.gridCategoryBadgeText} numberOfLines={1} ellipsizeMode="tail">
                               {product.cat || "Nasi Box"}
                             </Text>
                           </View>
 
                           {/* Status Badge Top-Right */}
                           <View style={[styles.gridStatusBadge, { backgroundColor: statusBg }]}>
-                            <Text style={[styles.gridStatusBadgeText, { color: statusColor }]}>
+                            <Text style={[styles.gridStatusBadgeText, { color: statusColor }]} numberOfLines={1} ellipsizeMode="tail">
                               {statusText}
                             </Text>
                           </View>
@@ -2022,6 +2022,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
+    flexShrink: 0,
   },
   outletToggleBtnText: {
     color: "#1B7A4E",
@@ -2084,13 +2085,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     padding: 14,
-    width: "48%",
+    flex: 1,
+    minWidth: "46%",
     minHeight: 88,
     justifyContent: "center",
     gap: 4,
   },
   summaryValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
     color: "#111827",
     flexShrink: 1,
@@ -2381,7 +2383,7 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     overflow: "hidden",
     width: "48.5%",
-    minWidth: 260,
+    minWidth: 240,
     flexGrow: 1,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -2403,6 +2405,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 10,
     left: 10,
+    maxWidth: "48%",
     backgroundColor: "rgba(15, 23, 42, 0.75)",
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -2419,6 +2422,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 10,
     right: 10,
+    maxWidth: "48%",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -2595,12 +2599,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   listCardLeft: {
-    width: 90,
-    height: 90,
+    width: 80,
+    height: 80,
     borderRadius: 14,
     overflow: "hidden",
     position: "relative",
     backgroundColor: "#F3F4F6",
+    flexShrink: 0,
   },
   listCardImg: {
     width: "100%",
@@ -2622,6 +2627,7 @@ const styles = StyleSheet.create({
   listCardRight: {
     flex: 1,
     gap: 4,
+    minWidth: 0,
   },
   listCardHeaderRow: {
     flexDirection: "row",
@@ -2643,6 +2649,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     color: "#1B7A4E",
+    flexShrink: 0,
   },
   listCardDesc: {
     fontSize: 11,
@@ -2657,11 +2664,15 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
+    flexWrap: "wrap",
+    rowGap: 6,
+    columnGap: 8,
   },
   listStepperGroup: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flexShrink: 0,
   },
   listStockText: {
     fontSize: 11,
@@ -2671,6 +2682,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flexShrink: 0,
   },
   listEditBtn: {
     flexDirection: "row",

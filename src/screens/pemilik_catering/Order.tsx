@@ -2330,7 +2330,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, ownerId, driver
                         activeOpacity={0.8}
                       >
                         <CheckCircle size={13} color="#FFFFFF" />
-                        <Text style={styles.cardVerifyBtnText} numberOfLines={1}>Verifikasi Pembayaran</Text>
+                        <Text style={styles.cardVerifyBtnText} numberOfLines={1} ellipsizeMode="tail">Verifikasi Pembayaran</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -3247,6 +3247,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 6,
     paddingHorizontal: 4,
+    flexShrink: 0,
   },
   fullPageBackText: {
     fontSize: 14,
@@ -3257,12 +3258,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    flexShrink: 0,
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "flex-end",
   },
   fullPageOrderCode: {
     fontSize: 13,
     fontWeight: "800",
     color: "#4B5563",
+    flexShrink: 1,
   },
   fullPageScroll: {
     flex: 1,
@@ -3493,16 +3497,17 @@ const styles = StyleSheet.create({
   },
   trackingSegmentBtn: {
     flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#F8FAFC",
-    gap: 5,
+    gap: 4,
   },
   trackingSegmentBtnActiveStore: {
     backgroundColor: "#15803D",
@@ -3520,6 +3525,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#64748B",
+    flexShrink: 1,
   },
   trackingSegmentTextActive: {
     color: "#FFFFFF",
@@ -3537,11 +3543,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
   },
   driverJourneyLiveBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flex: 1,
+    minWidth: 0,
   },
   driverJourneyPulseDot: {
     width: 8,
@@ -3554,11 +3563,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#15803D",
     letterSpacing: 0.3,
+    flexShrink: 1,
   },
   driverJourneyEta: {
     fontSize: 11,
     fontWeight: "700",
     color: "#166534",
+    flexShrink: 0,
   },
   driverProfileRow: {
     flexDirection: "row",
@@ -4069,11 +4080,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 8,
+    gap: 8,
   },
   cardPendingTitleWrap: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flex: 1,
+    minWidth: 0,
   },
   cardPendingTitle: {
     fontSize: 12.5,
@@ -4085,6 +4099,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 20,
+    flexShrink: 0,
   },
   cardPendingBadgeText: {
     fontSize: 10.5,
@@ -4141,6 +4156,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginTop: 8,
+    flexWrap: "wrap",
   },
   cardRejectBtn: {
     flexDirection: "row",
@@ -4153,6 +4169,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 7,
     paddingHorizontal: 12,
+    flexShrink: 0,
   },
   cardRejectBtnText: {
     fontSize: 11.5,
@@ -4161,6 +4178,7 @@ const styles = StyleSheet.create({
   },
   cardVerifyBtn: {
     flex: 1,
+    minWidth: 130,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
