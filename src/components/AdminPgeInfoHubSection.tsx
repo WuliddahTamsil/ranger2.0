@@ -1345,6 +1345,8 @@ const styles = StyleSheet.create({
   itemActionsRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    rowGap: 6,
     gap: 8,
     marginTop: 14,
     paddingTop: 12,

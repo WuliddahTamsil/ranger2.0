@@ -1114,6 +1114,8 @@ const styles = StyleSheet.create({
   itemActionRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    rowGap: 6,
     gap: 8,
     marginTop: 8,
     paddingTop: 8,
@@ -1308,6 +1310,8 @@ const styles = StyleSheet.create({
   },
   ctaActionRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 6,
     gap: 8,
   },
   ctaChoiceBtn: {

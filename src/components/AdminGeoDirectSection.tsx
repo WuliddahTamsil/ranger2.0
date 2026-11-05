@@ -1580,12 +1580,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
+    rowGap: 6,
+    gap: 8,
     marginTop: 4,
   },
   btnDetailSmall: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    flexShrink: 0,
   },
   btnDetailSmallText: {
     fontSize: 11,

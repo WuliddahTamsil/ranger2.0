@@ -592,9 +592,9 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                 </Text>
               </View>
             </View>
-            <Text style={[styles.kpiCardVal, { color: pendingCount > 0 ? "#B45309" : "#0F172A" }]}>{pendingCount}</Text>
+            <Text style={[styles.kpiCardVal, { color: pendingCount > 0 ? "#B45309" : "#0F172A" }]} numberOfLines={1} adjustsFontSizeToFit>{pendingCount}</Text>
             <Text style={styles.kpiCardLabel}>Menunggu</Text>
-            <Text style={styles.kpiCardSub}>
+            <Text style={styles.kpiCardSub} numberOfLines={1}>
               {pendingCount > 0 ? "Perlu tinjau" : "Selesai"}
             </Text>
           </TouchableOpacity>
@@ -619,9 +619,9 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                 <Text style={[styles.kpiStatusPillText, { color: "#065F46" }]}>Aktif</Text>
               </View>
             </View>
-            <Text style={[styles.kpiCardVal, { color: "#0D7A53" }]}>{approvedCount}</Text>
+            <Text style={[styles.kpiCardVal, { color: "#0D7A53" }]} numberOfLines={1} adjustsFontSizeToFit>{approvedCount}</Text>
             <Text style={styles.kpiCardLabel}>Disetujui</Text>
-            <Text style={styles.kpiCardSub}>Mitra aktif</Text>
+            <Text style={styles.kpiCardSub} numberOfLines={1}>Mitra aktif</Text>
           </TouchableOpacity>
         </View>
 
@@ -647,9 +647,9 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                 <Text style={[styles.kpiStatusPillText, { color: "#991B1B" }]}>Ditolak</Text>
               </View>
             </View>
-            <Text style={[styles.kpiCardVal, { color: "#DC2626" }]}>{rejectedCount}</Text>
+            <Text style={[styles.kpiCardVal, { color: "#DC2626" }]} numberOfLines={1} adjustsFontSizeToFit>{rejectedCount}</Text>
             <Text style={styles.kpiCardLabel}>Ditolak</Text>
-            <Text style={styles.kpiCardSub}>Perlu revisi</Text>
+            <Text style={styles.kpiCardSub} numberOfLines={1}>Perlu revisi</Text>
           </TouchableOpacity>
 
           {/* KPI 4: Total Applicants */}
@@ -672,9 +672,9 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                 <Text style={[styles.kpiStatusPillText, { color: "#334155" }]}>Total</Text>
               </View>
             </View>
-            <Text style={styles.kpiCardVal}>{pendingCount + approvedCount + rejectedCount}</Text>
+            <Text style={styles.kpiCardVal} numberOfLines={1} adjustsFontSizeToFit>{pendingCount + approvedCount + rejectedCount}</Text>
             <Text style={styles.kpiCardLabel}>Total Mitra</Text>
-            <Text style={styles.kpiCardSub}>Semua berkas</Text>
+            <Text style={styles.kpiCardSub} numberOfLines={1}>Semua berkas</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1088,42 +1088,42 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
       {/* Platform Financial Hero Banner */}
       <View style={styles.masterFinCard}>
         <View style={styles.masterFinHeader}>
-          <Text style={styles.masterFinLabel}>Omset Seluruh Transaksi Platform</Text>
+          <Text style={styles.masterFinLabel} numberOfLines={1}>Omset Seluruh Transaksi Platform</Text>
           <View style={styles.pulseLiveWrap}>
             <View style={styles.livePulseDot} />
             <Text style={styles.pulseLiveText}>LIVE</Text>
           </View>
         </View>
 
-        <Text style={styles.masterFinValue}>{rp(totalRevenue)}</Text>
+        <Text style={styles.masterFinValue} numberOfLines={1} adjustsFontSizeToFit>{rp(totalRevenue)}</Text>
 
         <View style={styles.masterFinGrid}>
           <View style={styles.masterFinStat}>
-            <Text style={styles.masterFinStatVal}>{stats?.totalCustomers || customerAccounts.length || 2}</Text>
-            <Text style={styles.masterFinStatLbl}>Customer Aktif</Text>
+            <Text style={styles.masterFinStatVal} numberOfLines={1} adjustsFontSizeToFit>{stats?.totalCustomers || customerAccounts.length || 2}</Text>
+            <Text style={styles.masterFinStatLbl} numberOfLines={1}>Customer Aktif</Text>
           </View>
           <View style={styles.masterFinDivider} />
           <View style={styles.masterFinStat}>
-            <Text style={styles.masterFinStatVal}>{stats?.totalMitra || mitraAccounts.filter(m => m.role !== "customer").length}</Text>
-            <Text style={styles.masterFinStatLbl}>Mitra Terdaftar</Text>
+            <Text style={styles.masterFinStatVal} numberOfLines={1} adjustsFontSizeToFit>{stats?.totalMitra || mitraAccounts.filter(m => m.role !== "customer").length}</Text>
+            <Text style={styles.masterFinStatLbl} numberOfLines={1}>Mitra Terdaftar</Text>
           </View>
           <View style={styles.masterFinDivider} />
           <View style={styles.masterFinStat}>
-            <Text style={styles.masterFinStatVal}>{stats?.totalDrivers || mitraAccounts.filter(m => m.role === "driver").length || 1}</Text>
-            <Text style={styles.masterFinStatLbl}>Driver GEOVERSE</Text>
+            <Text style={styles.masterFinStatVal} numberOfLines={1} adjustsFontSizeToFit>{stats?.totalDrivers || mitraAccounts.filter(m => m.role === "driver").length || 1}</Text>
+            <Text style={styles.masterFinStatLbl} numberOfLines={1}>Driver GEOVERSE</Text>
           </View>
         </View>
 
         {/* Catalog & Asset Global Strip */}
         <View style={styles.masterCatalogStrip}>
           <View style={styles.catalogStripItem}>
-            <Text style={styles.catalogStripVal}>{stats?.totalCatalogItems || 32}</Text>
-            <Text style={styles.catalogStripLbl}>📦 Total Produk & Layanan</Text>
+            <Text style={styles.catalogStripVal} numberOfLines={1} adjustsFontSizeToFit>{stats?.totalCatalogItems || 32}</Text>
+            <Text style={styles.catalogStripLbl} numberOfLines={1}>📦 Total Produk & Layanan</Text>
           </View>
           <View style={styles.catalogStripDivider} />
           <View style={styles.catalogStripItem}>
-            <Text style={styles.catalogStripVal}>{stats?.totalOrdersCount || 31}</Text>
-            <Text style={styles.catalogStripLbl}>⚡ Total Pesanan/Booking</Text>
+            <Text style={styles.catalogStripVal} numberOfLines={1} adjustsFontSizeToFit>{stats?.totalOrdersCount || 31}</Text>
+            <Text style={styles.catalogStripLbl} numberOfLines={1}>⚡ Total Pesanan/Booking</Text>
           </View>
         </View>
       </View>
@@ -1637,7 +1637,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                 <View style={[styles.legendDot, { backgroundColor: "#2563EB" }]} />
                 <Text style={[styles.paymentMethodTitle, { color: "#1E40AF" }]}>Bank Transfer</Text>
               </View>
-              <Text style={styles.paymentMethodAmount}>{rp(bankTotal)}</Text>
+              <Text style={styles.paymentMethodAmount} numberOfLines={1} adjustsFontSizeToFit>{rp(bankTotal)}</Text>
               <Text style={[styles.paymentMethodPct, { color: "#2563EB" }]}>{bankPct}% Volume</Text>
             </View>
 
@@ -1646,7 +1646,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                 <View style={[styles.legendDot, { backgroundColor: "#10B981" }]} />
                 <Text style={[styles.paymentMethodTitle, { color: "#065F46" }]}>QRIS / E-Wallet</Text>
               </View>
-              <Text style={styles.paymentMethodAmount}>{rp(qrisTotal)}</Text>
+              <Text style={styles.paymentMethodAmount} numberOfLines={1} adjustsFontSizeToFit>{rp(qrisTotal)}</Text>
               <Text style={[styles.paymentMethodPct, { color: "#10B981" }]}>{qrisPct}% Volume</Text>
             </View>
 
@@ -1655,7 +1655,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                 <View style={[styles.legendDot, { backgroundColor: "#F59E0B" }]} />
                 <Text style={[styles.paymentMethodTitle, { color: "#92400E" }]}>Tunai / COD</Text>
               </View>
-              <Text style={styles.paymentMethodAmount}>{rp(codTotal)}</Text>
+              <Text style={styles.paymentMethodAmount} numberOfLines={1} adjustsFontSizeToFit>{rp(codTotal)}</Text>
               <Text style={[styles.paymentMethodPct, { color: "#D97706" }]}>{codPct}% Volume</Text>
             </View>
           </View>
@@ -1665,8 +1665,8 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           {/* Velocity KPIs Matrix */}
           <View style={styles.txKpiRow}>
             <View style={styles.txKpiCard}>
-              <Text style={styles.txKpiVal}>{rp(avgOrderValue)}</Text>
-              <Text style={styles.txKpiLbl}>Rata-rata Transaksi (AOV)</Text>
+              <Text style={styles.txKpiVal} numberOfLines={1} adjustsFontSizeToFit>{rp(avgOrderValue)}</Text>
+              <Text style={styles.txKpiLbl} numberOfLines={1}>Rata-rata Transaksi (AOV)</Text>
             </View>
             <View style={styles.txKpiDivider} />
             <View style={styles.txKpiCard}>
@@ -2215,18 +2215,18 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             {/* 3-Column Stat Row */}
             <View style={styles.statsRow}>
               <View style={styles.statCol}>
-                <Text style={styles.statVal}>{mitraAccounts.filter((m) => m.role !== "customer").length}</Text>
-                <Text style={styles.statLbl}>Mitra Terdaftar</Text>
+                <Text style={styles.statVal} numberOfLines={1}>{mitraAccounts.filter((m) => m.role !== "customer").length}</Text>
+                <Text style={styles.statLbl} numberOfLines={1}>Mitra Terdaftar</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statCol}>
-                <Text style={styles.statVal}>{customerAccounts.length}</Text>
-                <Text style={styles.statLbl}>Customer</Text>
+                <Text style={styles.statVal} numberOfLines={1}>{customerAccounts.length}</Text>
+                <Text style={styles.statLbl} numberOfLines={1}>Customer</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statCol}>
-                <Text style={[styles.statVal, { color: "#059669" }]}>Aktif</Text>
-                <Text style={styles.statLbl}>Status Sistem</Text>
+                <Text style={[styles.statVal, { color: "#059669" }]} numberOfLines={1}>Aktif</Text>
+                <Text style={styles.statLbl} numberOfLines={1}>Status Sistem</Text>
               </View>
             </View>
           </View>
@@ -2525,14 +2525,17 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           <View style={{ width: "100%", paddingBottom: 24 }}>
             {/* Top CMS Switcher */}
             <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
-              <View
-                style={{
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
                   flexDirection: "row",
                   backgroundColor: "#E2E8F0",
                   borderRadius: 14,
                   padding: 4,
                   gap: 4,
                 }}
+                style={{ flexGrow: 0 }}
               >
                 <TouchableOpacity
                   style={{
@@ -2649,11 +2652,12 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                       fontWeight: adminCmsSubTab === "VOUCHER_POINT" ? "700" : "600",
                       color: adminCmsSubTab === "VOUCHER_POINT" ? "#0D7A53" : "#64748B",
                     }}
+                    numberOfLines={1}
                   >
                     Voucher & Poin
                   </Text>
                 </TouchableOpacity>
-              </View>
+              </ScrollView>
             </View>
 
             {adminCmsSubTab === "HERO" ? (
@@ -2967,9 +2971,9 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
           >
             <View style={styles.mobileHeaderTopRow}>
               <View style={styles.mobileRolePill}>
-                <ShieldCheck size={14} color="#A7F3D0" strokeWidth={2.3} />
-                <Text style={styles.mobileRolePillText}>GEOVERSE • PGE KAMOJANG</Text>
-                <View style={styles.roleLiveDot} />
+                <ShieldCheck size={14} color="#A7F3D0" strokeWidth={2.3} style={{ flexShrink: 0 }} />
+                <Text style={styles.mobileRolePillText} numberOfLines={1} ellipsizeMode="tail">GEOVERSE • PGE KAMOJANG</Text>
+                <View style={[styles.roleLiveDot, { flexShrink: 0 }]} />
               </View>
 
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -3002,10 +3006,10 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
 
             <View style={styles.mobileGreetingRow}>
               <Text style={styles.mobileGreetingText}>Halo, {formattedGreeting}</Text>
-              <Text style={styles.mobileNameText} numberOfLines={1}>
+              <Text style={styles.mobileNameText} numberOfLines={1} adjustsFontSizeToFit>
                 {getAdminDisplayName()}
               </Text>
-              <Text style={styles.mobileSublineText}>Pusat Kendali & Administrasi Platform</Text>
+              <Text style={styles.mobileSublineText} numberOfLines={1}>Pusat Kendali & Administrasi Platform</Text>
             </View>
           </View>
 
@@ -3070,6 +3074,8 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
                   <Text
                     style={[styles.mobileNavLabel, active && styles.mobileNavLabelActive]}
                     numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
                   >
                     {displayLabel}
                   </Text>
@@ -4416,12 +4422,16 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
     gap: 6,
+    flexShrink: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   mobileRolePillText: {
     color: "#FFFFFF",
     fontSize: 10.5,
     fontWeight: "700",
     letterSpacing: 0.4,
+    flexShrink: 1,
   },
   mobileSyncBtn: {
     width: 36,
@@ -4650,16 +4660,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   kpiStatusPill: {
     paddingHorizontal: 7,
     paddingVertical: 2.5,
     borderRadius: 6,
+    flexShrink: 1,
   },
   kpiStatusPillText: {
     fontSize: 9.5,
     fontWeight: "700",
     letterSpacing: 0.1,
+    flexShrink: 1,
   },
   kpiCardVal: {
     fontSize: 22,
@@ -5316,6 +5329,7 @@ const styles = StyleSheet.create({
   },
   masterFinStat: {
     flex: 1,
+    minWidth: 0,
     alignItems: "center",
   },
   masterFinStatVal: {
@@ -5344,6 +5358,7 @@ const styles = StyleSheet.create({
   },
   catalogStripItem: {
     flex: 1,
+    minWidth: 0,
     alignItems: "center",
   },
   catalogStripVal: {
@@ -5964,22 +5979,27 @@ const styles = StyleSheet.create({
   },
   statCol: {
     flex: 1,
+    minWidth: 0,
     alignItems: "center",
   },
   statVal: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",
+    flexShrink: 1,
   },
   statLbl: {
     fontSize: 10,
     color: "#E8F5EE",
     marginTop: 2,
+    textAlign: "center",
+    flexShrink: 1,
   },
   statDivider: {
     width: 1,
     height: 22,
     backgroundColor: "rgba(255,255,255,0.25)",
+    marginHorizontal: 4,
   },
   sectionLabel: {
     fontSize: 11,
@@ -6342,6 +6362,8 @@ const styles = StyleSheet.create({
 
   modalActionRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 8,
     gap: 10,
     paddingTop: 14,
     borderTopWidth: 1,
@@ -6350,6 +6372,7 @@ const styles = StyleSheet.create({
   },
   modalRejectBtn: {
     flex: 1,
+    minWidth: 120,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -6419,6 +6442,8 @@ const styles = StyleSheet.create({
   },
   rejectBtnRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 8,
     gap: 10,
     marginTop: 16,
   },
@@ -6557,6 +6582,8 @@ const styles = StyleSheet.create({
   },
   confirmBtnRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 8,
     gap: 12,
     width: "100%",
   },
@@ -6852,7 +6879,7 @@ const styles = StyleSheet.create({
   // Payment Method Pill Grid
   paymentMethodPill: {
     flex: 1,
-    minWidth: "30%",
+    minWidth: 88,
     padding: 10,
     borderRadius: 12,
     borderWidth: 1,
@@ -6884,6 +6911,7 @@ const styles = StyleSheet.create({
   },
   txKpiCard: {
     flex: 1,
+    minWidth: 0,
     alignItems: "center",
   },
   txKpiVal: {
