@@ -203,7 +203,8 @@ export const LoginScreen: React.FC<Props> = ({
               </Pressable>
             </View>
 
-            {/* Divider & Google Login (Hidden on iOS to comply with Apple Guideline 4.8 without Apple Sign In) */}
+            {/* Google Login temporarily hidden per user request */}
+            {/*
             {Platform.OS !== "ios" && (
               <>
                 <View style={styles.divider}>
@@ -212,7 +213,6 @@ export const LoginScreen: React.FC<Props> = ({
                   <View style={styles.dividerLine} />
                 </View>
 
-                {/* Official Google Button Only */}
                 <GoogleLoginButton
                   disabled={loading}
                   loading={googleLoading}
@@ -222,6 +222,7 @@ export const LoginScreen: React.FC<Props> = ({
                 />
               </>
             )}
+            */}
 
             {/* Registration Callout */}
             <View style={styles.registerSection}>
@@ -235,24 +236,6 @@ export const LoginScreen: React.FC<Props> = ({
                 <ArrowRight size={14} color={authColors.primary} />
               </TouchableOpacity>
             </View>
-
-                        {/* Demo / App Reviewer Quick Access */}
-            <TouchableOpacity
-              onPress={() => {
-                setEmail("wuliddahtamsilbarokah19@gmail.com");
-                setPassword("12345678");
-                setError("");
-              }}
-              style={styles.demoReviewBtn}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Gunakan Akun Demo Pengujian"
-            >
-              <ShieldCheck size={16} color="#0D7A53" />
-              <Text style={styles.demoReviewBtnText}>
-                Gunakan Akun Demo Pengujian (App Review)
-              </Text>
-            </TouchableOpacity>
 
             {/* Guest Exploration Action */}
             <TouchableOpacity

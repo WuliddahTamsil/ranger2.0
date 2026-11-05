@@ -161,7 +161,8 @@ export const RegisterRoleScreen: React.FC<Props> = ({
             </Text>
           </View>
 
-          {/* Google Connected Status / Action (Hidden on iOS to comply with Apple Guideline 4.8 without Apple Sign In) */}
+          {/* Google Connected Status / Action (temporarily hidden per user request) */}
+          {/*
           {Platform.OS !== "ios" && (
             googleDraft ? (
               <View style={styles.googleConnectedBox}>
@@ -178,6 +179,7 @@ export const RegisterRoleScreen: React.FC<Props> = ({
               <GoogleConnectSection onConnect={onGoogleConnect} />
             ) : null
           )}
+          */}
 
           {/* Modern Interactive Tab Selector */}
           <View style={styles.tabContainer}>
