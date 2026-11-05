@@ -920,9 +920,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
           <View style={styles.fullPageHeaderRight}>
             <Text style={styles.fullPageOrderCode} numberOfLines={1}>#{selectedOrder.id.slice(-8)}</Text>
             <View style={[styles.statusChip, { backgroundColor: getStatusBgColor(selectedOrder.status) }]}>
-              <Text style={[styles.statusChipText, { color: getStatusColor(selectedOrder.status) }]} numberOfLines={1}>
-                {getStatusLabel(selectedOrder.status)}
-              </Text>
+              <Text style={[styles.statusChipText, { color: getStatusColor(selectedOrder.status) }]} numberOfLines={1}>{getStatusLabel(selectedOrder.status)}</Text>
             </View>
           </View>
         </View>
@@ -1579,9 +1577,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                     </View>
                   </View>
                   <View style={[styles.statusChip, { backgroundColor: statusBg }]}>
-                    <Text style={[styles.statusChipText, { color: statusCol }]} numberOfLines={1}>
-                      {getStatusLabel(item.status)}
-                    </Text>
+                    <Text style={[styles.statusChipText, { color: statusCol }]} numberOfLines={1}>{getStatusLabel(item.status)}</Text>
                   </View>
                 </View>
 
