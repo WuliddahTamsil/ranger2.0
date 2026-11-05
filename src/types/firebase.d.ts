@@ -1,5 +1,12 @@
 declare module "firebase/app" {
-  export * from "@firebase/app";
+  export interface FirebaseApp {
+    name: string;
+    options: Record<string, any>;
+    [key: string]: any;
+  }
+  export function initializeApp(options: Record<string, any>, name?: string): FirebaseApp;
+  export function getApps(): FirebaseApp[];
+  export function getApp(name?: string): FirebaseApp;
 }
 
 declare module "firebase/auth" {
