@@ -411,18 +411,18 @@ export const Profile: React.FC<ProfileProps> = ({ storeInfo, setStoreInfo, userI
 
           <View style={styles.statsRow}>
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{isProfileComplete ? "Siap" : "-"}</Text>
-              <Text style={styles.statLbl}>Profil</Text>
+              <Text style={styles.statVal} numberOfLines={1}>{isProfileComplete ? "Siap" : "-"}</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Profil</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{storeInfo.isOpen ? "Buka" : "Tutup"}</Text>
-              <Text style={styles.statLbl}>Status Toko</Text>
+              <Text style={styles.statVal} numberOfLines={1}>{storeInfo.isOpen ? "Buka" : "Tutup"}</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Status Toko</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{storeInfo.isVerified ? "Ya" : "Proses"}</Text>
-              <Text style={styles.statLbl}>Terverifikasi</Text>
+              <Text style={styles.statVal} numberOfLines={1}>{storeInfo.isVerified ? "Ya" : "Proses"}</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Terverifikasi</Text>
             </View>
           </View>
         </View>
@@ -1247,7 +1247,8 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   statCol: {
-    width: 94,
+    flex: 1,
+    minWidth: 0,
     alignItems: "center",
   },
   statVal: {
@@ -1469,6 +1470,8 @@ const styles = StyleSheet.create({
   previewContainer: {
     width: 250,
     height: 250,
+    maxWidth: "85%",
+    aspectRatio: 1,
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     padding: 10,

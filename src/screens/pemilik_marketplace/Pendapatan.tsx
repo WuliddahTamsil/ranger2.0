@@ -644,7 +644,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     padding: 12,
-    width: "48%",
+    flex: 1,
+    minWidth: "45%",
     minHeight: 80,
     justifyContent: "center",
     gap: 4,
@@ -677,7 +678,9 @@ const styles = StyleSheet.create({
   },
   withdrawInfo: {
     flex: 1,
+    minWidth: 0,
     marginLeft: 12,
+    marginRight: 8,
     gap: 2,
   },
   withdrawLabel: {
@@ -688,12 +691,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900",
     color: "#111827",
+    flexShrink: 1,
   },
   withdrawBtn: {
     backgroundColor: "#1B7A4E",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
+    flexShrink: 0,
   },
   withdrawBtnDisabled: {
     backgroundColor: "#9CA3AF",
@@ -838,15 +843,20 @@ const styles = StyleSheet.create({
   breakdownRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
   },
   breakdownLabel: {
     fontSize: 13,
     color: "#6B7280",
+    flex: 1,
+    minWidth: 0,
   },
   breakdownVal: {
     fontSize: 13,
     fontWeight: "700",
     color: "#111827",
+    flexShrink: 0,
   },
   emphasizedText: {
     fontWeight: "800",
@@ -887,14 +897,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 4,
+    gap: 8,
   },
   historyInfo: {
     gap: 2,
+    flex: 1,
+    minWidth: 0,
   },
   historyAmount: {
     fontSize: 14,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   historySub: {
     fontSize: 11,
@@ -904,6 +918,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
+    flexShrink: 0,
   },
   statusBadgeText: {
     fontSize: 10,

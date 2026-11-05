@@ -918,9 +918,9 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
             <Text style={styles.fullPageBackText}>Daftar Order</Text>
           </TouchableOpacity>
           <View style={styles.fullPageHeaderRight}>
-            <Text style={styles.fullPageOrderCode}>#{selectedOrder.id.slice(-8)}</Text>
+            <Text style={styles.fullPageOrderCode} numberOfLines={1}>#{selectedOrder.id.slice(-8)}</Text>
             <View style={[styles.statusChip, { backgroundColor: getStatusBgColor(selectedOrder.status) }]}>
-              <Text style={[styles.statusChipText, { color: getStatusColor(selectedOrder.status) }]}>
+              <Text style={[styles.statusChipText, { color: getStatusColor(selectedOrder.status) }]} numberOfLines={1}>
                 {getStatusLabel(selectedOrder.status)}
               </Text>
             </View>
@@ -1571,15 +1571,15 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
               >
                 <View style={styles.cardHeader}>
                   <View style={styles.cardHeaderLeft}>
-                    <Text style={styles.orderId}>#{item.id.slice(-8)}</Text>
+                    <Text style={styles.orderId} numberOfLines={1}>#{item.id.slice(-8)}</Text>
                     <Text style={styles.cardDotSeparator}>•</Text>
                     <View style={styles.timeRow}>
                       <Clock size={12} color="#94A3B8" />
-                      <Text style={styles.timeText}>{item.time}</Text>
+                      <Text style={styles.timeText} numberOfLines={1}>{item.time}</Text>
                     </View>
                   </View>
                   <View style={[styles.statusChip, { backgroundColor: statusBg }]}>
-                    <Text style={[styles.statusChipText, { color: statusCol }]}>
+                    <Text style={[styles.statusChipText, { color: statusCol }]} numberOfLines={1}>
                       {getStatusLabel(item.status)}
                     </Text>
                   </View>
@@ -1612,7 +1612,7 @@ export const Order: React.FC<OrderProps> = ({ orders, setOrders, onStatusChange,
                 {/* Total Price */}
                 <View style={styles.cardTotalRow}>
                   <Text style={styles.totalPriceLabel} numberOfLines={1}>Total Pesanan</Text>
-                  <Text style={styles.totalPrice}>{rp(item.total)}</Text>
+                  <Text style={styles.totalPrice} numberOfLines={1}>{rp(item.total)}</Text>
                 </View>
               </TouchableOpacity>
 
@@ -2447,6 +2447,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
+    gap: 8,
   },
   fullPageBackBtn: {
     flexDirection: "row",
@@ -2454,6 +2455,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 6,
     paddingHorizontal: 4,
+    flexShrink: 0,
   },
   fullPageBackText: {
     fontSize: 14,
@@ -2464,11 +2466,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "flex-end",
   },
   fullPageOrderCode: {
     fontSize: 13,
     fontWeight: "800",
     color: "#4B5563",
+    flexShrink: 1,
   },
   fullPageScroll: {
     flex: 1,
@@ -2689,16 +2695,17 @@ const styles = StyleSheet.create({
   },
   trackingSegmentBtn: {
     flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#F8FAFC",
-    gap: 5,
+    gap: 4,
   },
   trackingSegmentBtnActiveStore: {
     backgroundColor: "#15803D",
@@ -2716,6 +2723,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
     color: "#64748B",
+    flexShrink: 1,
   },
   trackingSegmentTextActive: {
     color: "#FFFFFF",
@@ -2733,11 +2741,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
   },
   driverJourneyLiveBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    flex: 1,
+    minWidth: 0,
   },
   driverJourneyPulseDot: {
     width: 8,
@@ -2750,11 +2761,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#15803D",
     letterSpacing: 0.3,
+    flexShrink: 1,
   },
   driverJourneyEta: {
     fontSize: 11,
     fontWeight: "700",
     color: "#166534",
+    flexShrink: 0,
   },
   driverProfileRow: {
     flexDirection: "row",

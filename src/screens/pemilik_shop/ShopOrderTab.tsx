@@ -1724,6 +1724,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900",
     color: "#0F172A",
+    flexShrink: 1,
   },
   btnPrimary: {
     flexDirection: "row",
@@ -1733,6 +1734,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
+    flexShrink: 0,
   },
   btnPrimaryText: {
     fontSize: 11,

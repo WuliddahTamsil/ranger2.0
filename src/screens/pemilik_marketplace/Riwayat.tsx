@@ -151,7 +151,7 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders, loading = false, error
                   activeOpacity={0.8}
                 >
                   <View style={styles.cardHeader}>
-                    <Text style={styles.cardId}>#{item.id}</Text>
+                    <Text style={styles.cardId} numberOfLines={1}>#{item.id}</Text>
                     <Text
                       style={[
                         styles.statusText,
@@ -161,12 +161,12 @@ export const Riwayat: React.FC<RiwayatProps> = ({ orders, loading = false, error
                       {item.status}
                     </Text>
                   </View>
-                  <Text style={styles.customerName}>{item.customerName}</Text>
-                  <Text style={styles.itemSummary}>{item.itemSummary}</Text>
+                  <Text style={styles.customerName} numberOfLines={1} ellipsizeMode="tail">{item.customerName}</Text>
+                  <Text style={styles.itemSummary} numberOfLines={2} ellipsizeMode="tail">{item.itemSummary}</Text>
                   <View style={styles.cardFooter}>
-                    <Text style={styles.totalText}>{rp(item.total)}</Text>
+                    <Text style={styles.totalText} numberOfLines={1}>{rp(item.total)}</Text>
                     <View style={styles.cardFooterRight}>
-                      <Text style={styles.timeText}>{item.time}</Text>
+                      <Text style={styles.timeText} numberOfLines={1}>{item.time}</Text>
                       <View style={styles.invoiceHintPill}>
                         <FileText size={11} color="#0D7A53" />
                         <Text style={styles.invoiceHintText}>Lihat Faktur</Text>
@@ -309,6 +309,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexShrink: 0,
   },
   invoiceHintPill: {
     flexDirection: "row",

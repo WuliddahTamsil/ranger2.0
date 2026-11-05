@@ -929,7 +929,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           >
             <ShoppingBag size={18} color="#1B7A4E" />
             <Text style={styles.summaryValue} numberOfLines={1}>{orders.length}</Text>
-            <Text style={styles.summaryLabel}>Order - Hari ini</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>Order - Hari ini</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -938,8 +938,8 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
             activeOpacity={0.8}
           >
             <Wallet size={18} color="#1B7A4E" />
-            <Text style={styles.summaryValue} numberOfLines={2}>{rp(totalRevenueVal)}</Text>
-            <Text style={styles.summaryLabel}>Pendapatan - Tercatat</Text>
+            <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>{rp(totalRevenueVal)}</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>Pendapatan - Tercatat</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -949,7 +949,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           >
             <TrendingUp size={18} color="#1B7A4E" />
             <Text style={styles.summaryValue} numberOfLines={1}>{activeOrdersCount}</Text>
-            <Text style={styles.summaryLabel}>Diproses - Perlu aksi</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>Diproses - Perlu aksi</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -959,7 +959,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
           >
             <MessageSquare size={18} color="#1B7A4E" />
             <Text style={styles.summaryValue} numberOfLines={1}>—</Text>
-            <Text style={styles.summaryLabel}>Rating - Belum ada</Text>
+            <Text style={styles.summaryLabel} numberOfLines={1}>Rating - Belum ada</Text>
           </TouchableOpacity>
         </View>
 
@@ -1268,7 +1268,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
 
                     {/* Stock Status Badge */}
                     <View style={[styles.gridStatusBadge, { backgroundColor: statusBg }]}>
-                      <Text style={[styles.gridStatusText, { color: statusColor }]}>
+                      <Text style={[styles.gridStatusText, { color: statusColor }]} numberOfLines={1} ellipsizeMode="tail">
                         {statusLabel}
                       </Text>
                     </View>
@@ -1308,7 +1308,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
                       activeOpacity={0.7}
                     >
                       <Package size={12} color="#1B7A4E" />
-                      <Text style={styles.gridActionStockText}>Stok</Text>
+                      <Text style={styles.gridActionStockText} numberOfLines={1}>Stok</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1317,7 +1317,7 @@ export const Beranda: React.FC<MarketplaceHomeProps> = ({ navigate, authAccount 
                       activeOpacity={0.7}
                     >
                       <Camera size={12} color="#0284C7" />
-                      <Text style={styles.gridActionPhotoText}>Foto</Text>
+                      <Text style={styles.gridActionPhotoText} numberOfLines={1}>Foto</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -2333,6 +2333,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
+    flexShrink: 0,
   },
   outletToggleBtnText: {
     color: "#1B7A4E",
@@ -2395,13 +2396,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     padding: 14,
-    width: "48%",
+    flex: 1,
+    minWidth: "46%",
     minHeight: 88,
     justifyContent: "center",
     gap: 4,
   },
   summaryValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
     color: "#111827",
     flexShrink: 1,
@@ -3120,7 +3122,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   gridCard: {
-    width: "48.2%",
+    width: "48%",
+    minWidth: 145,
+    flexGrow: 1,
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
@@ -3157,6 +3161,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 8,
     left: 8,
+    maxWidth: "85%",
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
@@ -3294,6 +3299,9 @@ const styles = StyleSheet.create({
   listStockQuickRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    rowGap: 4,
+    columnGap: 6,
     marginTop: 4,
   },
   listQuickStockBtn: {

@@ -902,6 +902,8 @@ Madu TJ Murni 150g, Kesehatan, 23500, 25, botol, Tresno Joyo, 8997001600055, htt
                             styles.floatingStockText,
                             { color: isOut ? "#DC2626" : isLow ? "#D97706" : "#15803D" },
                           ]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
                         >
                           {isOut ? "Habis (0)" : `Stok: ${product.stock}`}
                         </Text>
@@ -929,6 +931,8 @@ Madu TJ Murni 150g, Kesehatan, 23500, 25, botol, Tresno Joyo, 8997001600055, htt
                             styles.floatingVisibilityText,
                             { color: product.isActive ? "#15803D" : "#64748B" },
                           ]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
                         >
                           {product.isActive ? "Tampil" : "Nonaktif"}
                         </Text>
@@ -1552,7 +1556,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   statCard: {
-    width: "48.5%",
+    flex: 1,
+    minWidth: "45%",
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     paddingVertical: 9,
@@ -1713,7 +1718,9 @@ const styles = StyleSheet.create({
     rowGap: 10,
   },
   gridCard: {
-    width: "48.5%",
+    width: "48%",
+    flex: 1,
+    minWidth: 145,
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
@@ -1746,6 +1753,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 6,
     left: 6,
+    maxWidth: "48%",
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
@@ -1765,6 +1773,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 6,
     right: 6,
+    maxWidth: "48%",
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
