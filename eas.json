@@ -37,6 +37,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://ranger20-production.up.railway.app",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "803732196043-lfck1c4tg1pn4sqcae9q4krtk38c55c9.apps.googleusercontent.com",
