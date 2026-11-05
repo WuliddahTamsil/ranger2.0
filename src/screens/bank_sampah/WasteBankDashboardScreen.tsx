@@ -1250,13 +1250,13 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
       <View style={styles.financeSummaryCard}>
         <View style={styles.financeSummaryItem}>
           <Text style={styles.financeSummaryLabel}>Total Kas Dibayarkan</Text>
-          <Text style={styles.financeSummaryVal}>{rp(totalCashDisbursed)}</Text>
+          <Text style={styles.financeSummaryVal} numberOfLines={1} adjustsFontSizeToFit>{rp(totalCashDisbursed)}</Text>
           <Text style={styles.financeSummarySub}>Pencairan sukses</Text>
         </View>
         <View style={styles.financeDividerV} />
         <View style={styles.financeSummaryItem}>
           <Text style={styles.financeSummaryLabel}>Menunggu Bayar</Text>
-          <Text style={[styles.financeSummaryVal, { color: pendingRedemptionsCount > 0 ? "#DC2626" : "#0E6641" }]}>
+          <Text style={[styles.financeSummaryVal, { color: pendingRedemptionsCount > 0 ? "#DC2626" : "#0E6641" }]} numberOfLines={1} adjustsFontSizeToFit>
             {pendingRedemptionsCount}
           </Text>
           <Text style={styles.financeSummarySub}>Permintaan nasabah</Text>
@@ -1601,18 +1601,18 @@ export const WasteBankDashboardScreen: React.FC<Props> = ({ navigate, authAccoun
         {/* 3 Stats Row (Profil | Status Loket | Terverifikasi) */}
         <View style={styles.statsRow}>
           <View style={styles.statCol}>
-            <Text style={styles.statVal}>Siap</Text>
-            <Text style={styles.statLbl}>Profil</Text>
+            <Text style={styles.statVal} numberOfLines={1}>Siap</Text>
+            <Text style={styles.statLbl} numberOfLines={1}>Profil</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statCol}>
-            <Text style={styles.statVal}>{isOpenLoket ? "Buka" : "Tutup"}</Text>
-            <Text style={styles.statLbl}>Status Loket</Text>
+            <Text style={styles.statVal} numberOfLines={1}>{isOpenLoket ? "Buka" : "Tutup"}</Text>
+            <Text style={styles.statLbl} numberOfLines={1}>Status Loket</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statCol}>
-            <Text style={styles.statVal}>Aktif</Text>
-            <Text style={styles.statLbl}>Terverifikasi</Text>
+            <Text style={styles.statVal} numberOfLines={1}>Aktif</Text>
+            <Text style={styles.statLbl} numberOfLines={1}>Terverifikasi</Text>
           </View>
         </View>
       </View>
@@ -3636,6 +3636,7 @@ const styles = StyleSheet.create({
   },
   financeSummaryItem: {
     flex: 1,
+    minWidth: 0,
     alignItems: "center",
   },
   financeSummaryLabel: {

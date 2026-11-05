@@ -216,20 +216,20 @@ export const Profile: React.FC<ProfileProps> = ({ driverInfo, setDriverInfo, use
 
           <View style={styles.statsRow}>
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{driverInfo.rating > 0 ? driverInfo.rating : "—"}</Text>
-              <Text style={styles.statLbl}>Rating</Text>
+              <Text style={styles.statVal} numberOfLines={1}>{driverInfo.rating > 0 ? driverInfo.rating : "—"}</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Rating</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{driverInfo.vehicle.verified ? "Ya" : "Proses"}</Text>
-              <Text style={styles.statLbl}>Kendaraan</Text>
+              <Text style={styles.statVal} numberOfLines={1}>{driverInfo.vehicle.verified ? "Ya" : "Proses"}</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Kendaraan</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>
+              <Text style={styles.statVal} numberOfLines={1}>
                 {Object.values(driverInfo.documents).filter((status) => status === "Terverifikasi").length}/{Object.keys(driverInfo.documents).length}
               </Text>
-              <Text style={styles.statLbl}>Dokumen</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Dokumen</Text>
             </View>
           </View>
         </View>
@@ -678,29 +678,34 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-around",
     marginTop: 18,
     width: "100%",
+    maxWidth: 360,
   },
   statCol: {
-    width: 94,
+    flex: 1,
+    minWidth: 0,
     alignItems: "center",
   },
   statVal: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",
+    flexShrink: 1,
   },
   statLbl: {
     fontSize: 10,
     color: "#E8F5EE",
     marginTop: 2,
     textAlign: "center",
+    flexShrink: 1,
   },
   statDivider: {
     width: 1,
     height: 24,
     backgroundColor: "rgba(255,255,255,0.25)",
+    marginHorizontal: 4,
   },
   title: {
     fontSize: 22,

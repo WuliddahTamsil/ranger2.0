@@ -458,18 +458,18 @@ export const LaundryProfilScreen: React.FC<LaundryProfilProps> = ({ navigate, au
 
           <View style={styles.statsRow}>
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{store.services?.length || 5}</Text>
-              <Text style={styles.statLbl}>Layanan</Text>
+              <Text style={styles.statVal} numberOfLines={1}>{store.services?.length || 5}</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Layanan</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>4.8</Text>
-              <Text style={styles.statLbl}>Rating</Text>
+              <Text style={styles.statVal} numberOfLines={1}>4.8</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Rating</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>Aktif</Text>
-              <Text style={styles.statLbl}>Mitra</Text>
+              <Text style={styles.statVal} numberOfLines={1}>Aktif</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Mitra</Text>
             </View>
           </View>
         </View>
@@ -1215,14 +1215,17 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.15)",
     borderRadius: 16,
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 12,
     marginTop: 16,
     alignItems: "center",
+    justifyContent: "space-around",
+    width: "100%",
+    maxWidth: 360,
   },
-  statCol: { alignItems: "center", minWidth: 60 },
-  statVal: { fontSize: 16, fontWeight: "800", color: "#FFFFFF" },
-  statLbl: { fontSize: 11, color: "#D1FAE5", marginTop: 2 },
-  statDivider: { width: 1, height: 24, backgroundColor: "rgba(255, 255, 255, 0.3)", marginHorizontal: 12 },
+  statCol: { alignItems: "center", flex: 1, minWidth: 0 },
+  statVal: { fontSize: 15, fontWeight: "800", color: "#FFFFFF", flexShrink: 1 },
+  statLbl: { fontSize: 10, color: "#D1FAE5", marginTop: 2, textAlign: "center", flexShrink: 1 },
+  statDivider: { width: 1, height: 24, backgroundColor: "rgba(255, 255, 255, 0.3)", marginHorizontal: 6 },
   sectionTitle: {
     fontSize: 11,
     fontWeight: "800",
@@ -1548,7 +1551,7 @@ const styles = StyleSheet.create({
   confirmCard: { backgroundColor: "#FFFFFF", borderRadius: 20, padding: 20, width: "100%", maxWidth: 320, alignItems: "center" },
   confirmTitle: { fontSize: 17, fontWeight: "800", color: "#111827" },
   confirmSub: { fontSize: 13, color: "#6B7280", textAlign: "center", marginTop: 6, marginBottom: 16 },
-  confirmBtnRow: { flexDirection: "row", gap: 10, width: "100%" },
+  confirmBtnRow: { flexDirection: "row", flexWrap: "wrap", rowGap: 8, gap: 10, width: "100%" },
   btnCancel: { flex: 1, height: 42, borderRadius: 10, backgroundColor: "#F3F4F6", alignItems: "center", justifyContent: "center" },
   btnCancelText: { fontSize: 13, fontWeight: "700", color: "#374151" },
   btnLogout: { flex: 1, height: 42, borderRadius: 10, backgroundColor: "#DC2626", alignItems: "center", justifyContent: "center" },

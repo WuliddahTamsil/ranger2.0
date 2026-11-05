@@ -131,7 +131,7 @@ export const Pendapatan: React.FC<PendapatanProps> = ({ orders }) => {
         {/* Today Summary Banner */}
         <View style={styles.revenueBanner}>
           <Text style={styles.revenueBannerLabel}>PENDAPATAN DRIVER HARI INI</Text>
-          <Text style={styles.revenueBannerValue}>
+          <Text style={styles.revenueBannerValue} numberOfLines={1} adjustsFontSizeToFit>
             {todayRevenue > 0 ? rp(todayRevenue) : "Rp 0"}
           </Text>
           <Text style={styles.revenueBannerSub}>

@@ -743,7 +743,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
               <Wallet size={20} color={totalPendapatan > 0 ? "#0D7A53" : "#9CA3AF"} />
             </View>
             <Text style={styles.statCardLabel}>Pendapatan</Text>
-            <Text style={styles.statCardVal}>Rp {totalPendapatan.toLocaleString("id-ID")}</Text>
+            <Text style={styles.statCardVal} numberOfLines={1} adjustsFontSizeToFit>Rp {totalPendapatan.toLocaleString("id-ID")}</Text>
             <View style={styles.statBadgeRow}>
               <View style={[styles.miniPill, { backgroundColor: totalPendapatan > 0 ? "#DCFCE7" : "#F3F4F6" }]}>
                 <Text style={[styles.miniPillText, { color: totalPendapatan > 0 ? "#0D7A53" : "#6B7280" }]}>
@@ -766,7 +766,7 @@ export const LaporanKeuanganScreen: React.FC<LaporanKeuanganProps> = ({ navigate
               <ArrowDownRight size={20} color={totalPengeluaran > 0 ? "#DC2626" : "#9CA3AF"} />
             </View>
             <Text style={styles.statCardLabel}>Pengeluaran</Text>
-            <Text style={styles.statCardVal}>Rp {totalPengeluaran.toLocaleString("id-ID")}</Text>
+            <Text style={styles.statCardVal} numberOfLines={1} adjustsFontSizeToFit>Rp {totalPengeluaran.toLocaleString("id-ID")}</Text>
             <View style={styles.statBadgeRow}>
               <View style={[styles.miniPill, { backgroundColor: totalPengeluaran > 0 ? "#FEE2E2" : "#F3F4F6" }]}>
                 <Text style={[styles.miniPillText, { color: totalPengeluaran > 0 ? "#DC2626" : "#6B7280" }]}>

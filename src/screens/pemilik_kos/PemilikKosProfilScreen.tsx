@@ -208,18 +208,18 @@ export const PemilikKosProfilScreen: React.FC<PemilikKosProfilProps> = ({ naviga
 
           <View style={styles.statsRow}>
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{name.trim() && phone.trim() ? "Siap" : "-"}</Text>
-              <Text style={styles.statLbl}>Profil</Text>
+              <Text style={styles.statVal} numberOfLines={1}>{name.trim() && phone.trim() ? "Siap" : "-"}</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Profil</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>{alamatKos.trim() ? "Ada" : "-"}</Text>
-              <Text style={styles.statLbl}>Alamat</Text>
+              <Text style={styles.statVal} numberOfLines={1}>{alamatKos.trim() ? "Ada" : "-"}</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Alamat</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={styles.statVal}>Aktif</Text>
-              <Text style={styles.statLbl}>Status</Text>
+              <Text style={styles.statVal} numberOfLines={1}>Aktif</Text>
+              <Text style={styles.statLbl} numberOfLines={1}>Status</Text>
             </View>
           </View>
         </View>
@@ -817,29 +817,34 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-around",
     marginTop: 18,
     width: "100%",
+    maxWidth: 360,
   },
   statCol: {
-    width: 94,
+    flex: 1,
+    minWidth: 0,
     alignItems: "center",
   },
   statVal: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",
+    flexShrink: 1,
   },
   statLbl: {
     fontSize: 10,
     color: "#E8F5EE",
     marginTop: 2,
     textAlign: "center",
+    flexShrink: 1,
   },
   statDivider: {
     width: 1,
     height: 24,
     backgroundColor: "rgba(255,255,255,0.25)",
+    marginHorizontal: 4,
   },
 
   // Section Titles

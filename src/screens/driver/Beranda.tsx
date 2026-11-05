@@ -2790,10 +2790,14 @@ const styles = StyleSheet.create({
   },
   btnRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 8,
     gap: 10,
     marginTop: 14,
   },
   actionBtn: {
+    flex: 1,
+    minWidth: 120,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

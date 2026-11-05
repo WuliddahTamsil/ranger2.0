@@ -150,7 +150,7 @@ export const Keuangan: React.FC<KeuanganProps> = ({
         {/* Balance Card */}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>SALDO TERSEDIA</Text>
-          <Text style={styles.balanceValue}>{rp(balance)}</Text>
+          <Text style={styles.balanceValue} numberOfLines={1} adjustsFontSizeToFit>{rp(balance)}</Text>
           
           <View style={styles.balanceActionsRow}>
             <TouchableOpacity 

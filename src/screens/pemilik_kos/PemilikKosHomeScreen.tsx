@@ -428,7 +428,7 @@ export const PemilikKosHomeScreen: React.FC<PemilikKosHomeProps> = ({ navigate, 
                 ? "Total Pendapatan Penjualan Tiket"
                 : "Laba Bersih Kos Bulan Ini"}
             </Text>
-            <Text style={styles.incomeAmount}>Rp {labaBersih.toLocaleString("id-ID")}</Text>
+            <Text style={styles.incomeAmount} numberOfLines={1} adjustsFontSizeToFit>Rp {labaBersih.toLocaleString("id-ID")}</Text>
 
             <View style={styles.incomeBadgeRow}>
               <View style={[styles.trendBadge, { backgroundColor: "rgba(255,255,255,0.2)" }]}>

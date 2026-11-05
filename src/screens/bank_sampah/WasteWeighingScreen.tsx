@@ -987,6 +987,8 @@ const styles = StyleSheet.create({
   photoActionRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    rowGap: 6,
     gap: 6,
     padding: 8,
     backgroundColor: "#F0FDF4",
