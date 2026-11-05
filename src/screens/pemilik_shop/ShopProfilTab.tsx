@@ -483,8 +483,8 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
         {/* 3-Column Profile Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.statCol}>
-            <Text style={styles.statVal}>{(store as any)?.products?.length || 77}</Text>
-            <Text style={styles.statLbl}>Produk</Text>
+            <Text style={styles.statVal} numberOfLines={1}>{(store as any)?.products?.length || 77}</Text>
+            <Text style={styles.statLbl} numberOfLines={1}>Produk</Text>
           </View>
           <View style={styles.statDivider} />
           <TouchableOpacity
@@ -493,15 +493,15 @@ export const ShopProfilTab: React.FC<ShopProfilTabProps> = ({
             activeOpacity={0.7}
             disabled={isUpdatingStatus}
           >
-            <Text style={styles.statVal}>{isOpenStatus ? "Buka" : "Tutup"}</Text>
-            <Text style={styles.statLbl}>Status Toko</Text>
+            <Text style={styles.statVal} numberOfLines={1}>{isOpenStatus ? "Buka" : "Tutup"}</Text>
+            <Text style={styles.statLbl} numberOfLines={1}>Status Toko</Text>
           </TouchableOpacity>
           <View style={styles.statDivider} />
           <View style={styles.statCol}>
-            <Text style={styles.statVal}>
+            <Text style={styles.statVal} numberOfLines={1}>
               {store?.isOfficialBrandPartner ? "Official" : "Mitra Aktif"}
             </Text>
-            <Text style={styles.statLbl}>Kemitraan</Text>
+            <Text style={styles.statLbl} numberOfLines={1}>Kemitraan</Text>
           </View>
         </View>
       </View>
@@ -1307,30 +1307,36 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.15)",
     borderRadius: 16,
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     marginTop: 16,
     alignItems: "center",
+    justifyContent: "space-around",
+    width: "100%",
+    maxWidth: 360,
   },
   statCol: {
     alignItems: "center",
-    minWidth: 70,
+    flex: 1,
+    minWidth: 0,
   },
   statVal: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",
+    flexShrink: 1,
   },
   statLbl: {
     fontSize: 10,
     color: "#D1FAE5",
     marginTop: 2,
     textAlign: "center",
+    flexShrink: 1,
   },
   statDivider: {
     width: 1,
     height: 24,
     backgroundColor: "rgba(255, 255, 255, 0.3)",
-    marginHorizontal: 12,
+    marginHorizontal: 6,
   },
 
   // Section Headers & Group Cards
@@ -1575,6 +1581,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 8,
+    maxWidth: "100%",
   },
   btnReuploadQris: {
     marginTop: 10,

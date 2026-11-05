@@ -1603,6 +1603,8 @@ const styles = StyleSheet.create({
   buttonActionRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    rowGap: 6,
     gap: 6,
   },
   addButton: {
@@ -1981,6 +1983,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    rowGap: 6,
+    columnGap: 8,
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
@@ -1994,15 +1999,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
+    flexShrink: 1,
   },
   listStockActionBtnText: {
     fontSize: 10,
     fontWeight: "700",
+    flexShrink: 1,
   },
   listActionIconRow: {
     flexDirection: "row",
     gap: 5,
     alignItems: "center",
+    flexShrink: 0,
   },
   listIconBtn: {
     width: 28,

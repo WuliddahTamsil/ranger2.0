@@ -301,7 +301,7 @@ export const ShopKeuanganTab: React.FC<ShopKeuanganTabProps> = ({
         </View>
 
         <Text style={styles.walletHeroLabel}>SALDO TOKO TERSEDIA</Text>
-        <Text style={styles.walletHeroBalance}>{rp(availableBalance)}</Text>
+        <Text style={styles.walletHeroBalance} numberOfLines={1} adjustsFontSizeToFit>{rp(availableBalance)}</Text>
 
         <View style={styles.escrowRow}>
           <Clock size={13} color="rgba(255, 255, 255, 0.8)" />
@@ -340,7 +340,7 @@ export const ShopKeuanganTab: React.FC<ShopKeuanganTabProps> = ({
           <View style={[styles.statIconCircle, { backgroundColor: "#DCFCE7" }]}>
             <ArrowDownLeft size={16} color="#15803D" />
           </View>
-          <Text style={styles.statAmount}>{rp(totalEarnings)}</Text>
+          <Text style={styles.statAmount} numberOfLines={1} adjustsFontSizeToFit>{rp(totalEarnings)}</Text>
           <Text style={styles.statLabel}>Total Pemasukan</Text>
         </View>
 
@@ -348,7 +348,7 @@ export const ShopKeuanganTab: React.FC<ShopKeuanganTabProps> = ({
           <View style={[styles.statIconCircle, { backgroundColor: "#FEF3C7" }]}>
             <ArrowUpRight size={16} color="#D97706" />
           </View>
-          <Text style={styles.statAmount}>{rp(totalWithdrawn)}</Text>
+          <Text style={styles.statAmount} numberOfLines={1} adjustsFontSizeToFit>{rp(totalWithdrawn)}</Text>
           <Text style={styles.statLabel}>Total Dicairkan</Text>
         </View>
       </View>
@@ -770,10 +770,13 @@ const styles = StyleSheet.create({
   },
   walletHeroActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 8,
     gap: 10,
   },
   btnWithdraw: {
     flex: 1,
+    minWidth: 120,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -794,6 +797,7 @@ const styles = StyleSheet.create({
   },
   btnSavedAccount: {
     flex: 1,
+    minWidth: 120,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -936,6 +940,7 @@ const styles = StyleSheet.create({
   },
   txCenter: {
     flex: 1,
+    minWidth: 0,
   },
   txTitle: {
     fontSize: 12,
@@ -954,10 +959,12 @@ const styles = StyleSheet.create({
   },
   txRight: {
     alignItems: "flex-end",
+    flexShrink: 0,
   },
   txAmount: {
     fontSize: 13,
     fontWeight: "900",
+    flexShrink: 0,
   },
   txAmountIn: {
     color: "#15803D",

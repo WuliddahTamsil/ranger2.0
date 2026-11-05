@@ -207,7 +207,7 @@ export const ShopPendapatanTab: React.FC<ShopPendapatanTabProps> = ({
           </View>
         </View>
 
-        <Text style={styles.revenueValue}>{rp(totalOmset)}</Text>
+        <Text style={styles.revenueValue} numberOfLines={1} adjustsFontSizeToFit>{rp(totalOmset)}</Text>
         <Text style={styles.revenueSub}>
           Dari {filteredOrders.length} transaksi selesai
         </Text>
@@ -215,12 +215,12 @@ export const ShopPendapatanTab: React.FC<ShopPendapatanTabProps> = ({
         <View style={styles.revenueStatsRow}>
           <View style={styles.revenueStatCol}>
             <Text style={styles.revenueStatLabel}>Order Berhasil</Text>
-            <Text style={styles.revenueStatValue}>{filteredOrders.length}</Text>
+            <Text style={styles.revenueStatValue} numberOfLines={1}>{filteredOrders.length}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.revenueStatCol}>
             <Text style={styles.revenueStatLabel}>Rata-rata Order (AOV)</Text>
-            <Text style={styles.revenueStatValue}>{rp(aov)}</Text>
+            <Text style={styles.revenueStatValue} numberOfLines={1}>{rp(aov)}</Text>
           </View>
         </View>
       </View>
@@ -231,7 +231,7 @@ export const ShopPendapatanTab: React.FC<ShopPendapatanTabProps> = ({
           <View style={[styles.metricIconBg, { backgroundColor: "#EFF6FF" }]}>
             <ShoppingBag size={18} color="#2563EB" />
           </View>
-          <Text style={styles.metricCardVal}>{completedOrders.length}</Text>
+          <Text style={styles.metricCardVal} numberOfLines={1}>{completedOrders.length}</Text>
           <Text style={styles.metricCardLabel}>Total Transaksi Selesai</Text>
         </View>
 
@@ -239,7 +239,7 @@ export const ShopPendapatanTab: React.FC<ShopPendapatanTabProps> = ({
           <View style={[styles.metricIconBg, { backgroundColor: "#ECFDF5" }]}>
             <PackageCheck size={18} color="#0D7A53" />
           </View>
-          <Text style={styles.metricCardVal}>{products.length}</Text>
+          <Text style={styles.metricCardVal} numberOfLines={1}>{products.length}</Text>
           <Text style={styles.metricCardLabel}>Katalog Produk Aktif</Text>
         </View>
       </View>
@@ -271,8 +271,8 @@ export const ShopPendapatanTab: React.FC<ShopPendapatanTabProps> = ({
               return (
                 <View key={cat} style={styles.categoryRow}>
                   <View style={styles.categoryTextRow}>
-                    <Text style={styles.categoryName}>{cat}</Text>
-                    <Text style={styles.categoryAmount}>
+                    <Text style={styles.categoryName} numberOfLines={1}>{cat}</Text>
+                    <Text style={styles.categoryAmount} numberOfLines={1}>
                       {rp(val)} ({pct}%)
                     </Text>
                   </View>
@@ -337,14 +337,14 @@ export const ShopPendapatanTab: React.FC<ShopPendapatanTabProps> = ({
                   </View>
                 )}
 
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
                   <Text style={styles.topProductName} numberOfLines={1}>
                     {p.name}
                   </Text>
                   <Text style={styles.topProductQty}>{p.qty} pcs terjual</Text>
                 </View>
 
-                <Text style={styles.topProductRevenue}>{rp(p.revenue)}</Text>
+                <Text style={styles.topProductRevenue} numberOfLines={1}>{rp(p.revenue)}</Text>
               </View>
             ))}
           </View>
@@ -376,8 +376,8 @@ export const ShopPendapatanTab: React.FC<ShopPendapatanTabProps> = ({
                 <View style={styles.recentOrderIcon}>
                   <PackageCheck size={16} color="#0D7A53" />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.recentOrderCode}>
+                <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                  <Text style={styles.recentOrderCode} numberOfLines={1}>
                     #{order.orderCode || order._id.slice(-6).toUpperCase()}
                   </Text>
                   <Text style={styles.recentOrderDate}>
@@ -389,7 +389,7 @@ export const ShopPendapatanTab: React.FC<ShopPendapatanTabProps> = ({
                     })}
                   </Text>
                 </View>
-                <Text style={styles.recentOrderAmount}>
+                <Text style={styles.recentOrderAmount} numberOfLines={1}>
                   {rp(order.totalAmount || order.totalPrice || 0)}
                 </Text>
               </View>
@@ -630,11 +630,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#334155",
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 8,
   },
   categoryAmount: {
     fontSize: 11,
     fontWeight: "800",
     color: "#0F172A",
+    flexShrink: 0,
   },
   progressBarTrack: {
     height: 6,
@@ -700,6 +704,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     color: "#0D7A53",
+    flexShrink: 0,
   },
   recentOrdersList: {
     marginTop: 4,
@@ -735,5 +740,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
     color: "#0F172A",
+    flexShrink: 0,
   },
 });

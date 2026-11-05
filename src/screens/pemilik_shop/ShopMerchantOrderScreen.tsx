@@ -215,7 +215,7 @@ export const ShopMerchantOrderScreen: React.FC<ShopMerchantOrderScreenProps> = (
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabRow} style={{ flexGrow: 0 }}>
         <TouchableOpacity
           style={[styles.tabBtn, activeTab === "NEW" && styles.activeTabBtn]}
           onPress={() => setActiveTab("NEW")}
@@ -253,7 +253,7 @@ export const ShopMerchantOrderScreen: React.FC<ShopMerchantOrderScreenProps> = (
             </Text>
           </TouchableOpacity>
         )}
-      </View>
+      </ScrollView>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -268,8 +268,10 @@ export const ShopMerchantOrderScreen: React.FC<ShopMerchantOrderScreenProps> = (
             {prescriptions.map((rx) => (
               <View key={rx._id} style={styles.orderCard}>
                 <View style={styles.orderCardHeader}>
-                  <Text style={styles.orderCode}>Resep #{rx.prescriptionCode}</Text>
-                  <Text style={styles.customerName}>{rx.customerName}</Text>
+                  <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                    <Text style={styles.orderCode} numberOfLines={1}>Resep #{rx.prescriptionCode}</Text>
+                    <Text style={styles.customerName} numberOfLines={1}>{rx.customerName}</Text>
+                  </View>
                 </View>
                 <Text style={styles.orderAddress}>Dokter: {rx.doctorName || "Tidak dicantumkan"}</Text>
                 {rx.customerNotes ? (
@@ -300,12 +302,12 @@ export const ShopMerchantOrderScreen: React.FC<ShopMerchantOrderScreenProps> = (
               <View key={ord._id} style={styles.orderCard}>
                 {/* Header */}
                 <View style={styles.orderCardHeader}>
-                  <View>
-                    <Text style={styles.orderCode}>#{ord.orderCode}</Text>
-                    <Text style={styles.customerName}>{ord.customerName} ({ord.customerPhone || "-"})</Text>
+                  <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                    <Text style={styles.orderCode} numberOfLines={1}>#{ord.orderCode}</Text>
+                    <Text style={styles.customerName} numberOfLines={1}>{ord.customerName} ({ord.customerPhone || "-"})</Text>
                   </View>
                   <View style={styles.statusBadge}>
-                    <Text style={styles.statusBadgeText}>{ord.orderStatus}</Text>
+                    <Text style={styles.statusBadgeText} numberOfLines={1}>{ord.orderStatus}</Text>
                   </View>
                 </View>
 
@@ -513,22 +515,26 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "space-between",
     marginBottom: 6,
+    gap: 8,
   },
   orderCode: {
     fontSize: 15,
     fontWeight: "800",
     color: "#111827",
+    flexShrink: 1,
   },
   customerName: {
     fontSize: 12,
     color: "#6B7280",
     marginTop: 2,
+    flexShrink: 1,
   },
   statusBadge: {
     backgroundColor: "#DCFCE7",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    flexShrink: 0,
   },
   statusBadgeText: {
     fontSize: 10,
@@ -603,11 +609,13 @@ const styles = StyleSheet.create({
   },
   btnRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginTop: 4,
   },
   actionBtn: {
     flex: 1,
+    minWidth: 120,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
