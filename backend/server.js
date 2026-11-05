@@ -158,6 +158,7 @@ app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "OK",
     service: "GEOVERSE Backend API",
+    version: "v2026.11.05-auth-kid-route",
     timestamp: new Date().toISOString(),
   });
 });
