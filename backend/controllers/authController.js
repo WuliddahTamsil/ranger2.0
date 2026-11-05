@@ -22,15 +22,31 @@ const generateToken = (id) => {
   });
 };
 
+const normalizeString = (str) => (typeof str === "string" ? str.trim().replace(/^["']|["']$/g, "") : "");
+
 const getGoogleClientIds = () => [
   DEFAULT_GOOGLE_WEB_CLIENT_ID,
   DEFAULT_GOOGLE_ANDROID_CLIENT_ID,
-  process.env.GOOGLE_WEB_CLIENT_ID,
-  process.env.GOOGLE_ANDROID_CLIENT_ID,
-  process.env.GOOGLE_IOS_CLIENT_ID,
+  normalizeString(process.env.GOOGLE_WEB_CLIENT_ID),
+  normalizeString(process.env.GOOGLE_ANDROID_CLIENT_ID),
+  normalizeString(process.env.GOOGLE_IOS_CLIENT_ID),
 ].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index);
 
-const getFirebaseProjectId = () => process.env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID;
+const getFirebaseProjectIds = () => [
+  normalizeString(process.env.FIREBASE_PROJECT_ID),
+  DEFAULT_FIREBASE_PROJECT_ID,
+  "803732196043",
+].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index);
+
+const parseJwtEnvelope = (token) => {
+  try {
+    const parts = String(token || "").split(".");
+    if (parts.length !== 3) return null;
+    return JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+};
 
 const getFirebasePublicCerts = async () => {
   if (firebaseCertsCache && Date.now() < firebaseCertsExpiresAt) return firebaseCertsCache;
@@ -48,18 +64,49 @@ const getFirebasePublicCerts = async () => {
 };
 
 const verifyFirebaseIdToken = async (oauth2Client, idToken) => {
-  const decoded = jwt.decode(idToken);
-  const payload = decoded && typeof decoded === "object" ? decoded : null;
-  const projectId = getFirebaseProjectId();
-  const issuer = `https://securetoken.google.com/${projectId}`;
+  const envelope = parseJwtEnvelope(idToken);
+  const kid = envelope?.kid;
+  if (!kid) return null;
 
-  // Decode is used only to route Firebase tokens. Signature and claims are
-  // still verified cryptographically below; decoded data is never trusted.
-  if (payload?.aud !== projectId || payload?.iss !== issuer) return null;
+  let certs = await getFirebasePublicCerts();
+  let isFirebaseKey = Object.prototype.hasOwnProperty.call(certs, kid);
 
-  const certs = await getFirebasePublicCerts();
-  const ticket = await oauth2Client.verifySignedJwtWithCertsAsync(idToken, certs, projectId, [issuer]);
-  return ticket.getPayload();
+  // If not found in cache, force refresh Firebase public certificates once
+  if (!isFirebaseKey) {
+    firebaseCertsCache = null;
+    firebaseCertsExpiresAt = 0;
+    certs = await getFirebasePublicCerts();
+    isFirebaseKey = Object.prototype.hasOwnProperty.call(certs, kid);
+  }
+
+  if (!isFirebaseKey) {
+    return null; // Not a Firebase token, fall through to Google OAuth verification
+  }
+
+  // Cryptographically verify against Firebase public certificates
+  const ticket = await oauth2Client.verifySignedJwtWithCertsAsync(idToken, certs, undefined, undefined);
+  const payload = ticket.getPayload();
+  if (!payload?.sub || !payload.email) throw new Error("Profil Firebase tidak lengkap.");
+
+  const aud = normalizeString(payload?.aud);
+  const iss = normalizeString(payload?.iss);
+  const allowedProjectIds = getFirebaseProjectIds();
+
+  const isAudValid = allowedProjectIds.some((pid) => aud === pid || aud.includes(pid));
+  const isIssValid =
+    iss.startsWith("https://securetoken.google.com/") &&
+    allowedProjectIds.some((pid) => iss.includes(pid));
+
+  if (!isAudValid || !isIssValid) {
+    throw new Error(`Token Firebase bukan milik aplikasi GEOVERSE (aud: ${aud}).`);
+  }
+
+  return {
+    id: payload.sub,
+    name: payload.name || payload.email.split("@")[0],
+    email: payload.email.toLowerCase().trim(),
+    photo: payload.picture || "",
+  };
 };
 
 const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
@@ -72,50 +119,47 @@ const verifyGoogleCredential = async ({ accessToken, idToken } = {}) => {
 
   if (idToken) {
     try {
+      // 1. Try Firebase token verification first (routed by Firebase kid & certs)
+      const firebaseProfile = await verifyFirebaseIdToken(oauth2Client, idToken);
+      if (firebaseProfile) {
+        return firebaseProfile;
+      }
+
+      // 2. If token is not signed by Firebase, verify as Google OAuth ID token
       let payload = null;
       try {
-        const firebasePayload = await verifyFirebaseIdToken(oauth2Client, idToken);
-        if (firebasePayload) {
-          payload = firebasePayload;
-        } else {
-          const ticket = await oauth2Client.verifyIdToken({
-            idToken,
-            // The native Android flow requests an ID token for the Firebase
-            // project's Web OAuth client. GOOGLE_CLIENT_ID is reserved for the
-            // Drive refresh-token integration and must never be used here.
-            audience: allowedClientIds,
-          });
-          payload = ticket.getPayload();
-        }
+        const ticket = await oauth2Client.verifyIdToken({
+          idToken,
+          // The native Android flow requests an ID token for the Firebase
+          // project's Web OAuth client. GOOGLE_CLIENT_ID is reserved for the
+          // Drive refresh-token integration and must never be used here.
+          audience: allowedClientIds,
+        });
+        payload = ticket.getPayload();
       } catch (strictErr) {
         // Fallback: Verify cryptographic signature directly with Google certs,
         // then validate audience against project client IDs or project number.
-        try {
-          const signonCerts = await oauth2Client.getFederatedSignonCertsAsync();
-          const ticket = await oauth2Client.verifySignedJwtWithCertsAsync(
-            idToken,
-            signonCerts.certs,
-            undefined,
-            oauth2Client.issuers
-          );
-          const rawPayload = ticket.getPayload();
-          const aud = String(rawPayload?.aud || "");
-          const azp = String(rawPayload?.azp || "");
-          const isOurProject =
-            allowedClientIds.includes(aud) ||
-            allowedClientIds.includes(azp) ||
-            aud.includes("803732196043") ||
-            azp.includes("803732196043") ||
-            aud.includes("geoverse-pge-kamojang");
+        const signonCerts = await oauth2Client.getFederatedSignonCertsAsync();
+        const ticket = await oauth2Client.verifySignedJwtWithCertsAsync(
+          idToken,
+          signonCerts.certs,
+          undefined,
+          oauth2Client.issuers
+        );
+        const rawPayload = ticket.getPayload();
+        const aud = normalizeString(rawPayload?.aud);
+        const azp = normalizeString(rawPayload?.azp);
+        const isOurProject =
+          allowedClientIds.includes(aud) ||
+          allowedClientIds.includes(azp) ||
+          aud.includes("803732196043") ||
+          azp.includes("803732196043") ||
+          aud.includes("geoverse-pge-kamojang");
 
-          if (isOurProject && rawPayload?.sub && rawPayload?.email) {
-            payload = rawPayload;
-          } else {
-            throw strictErr;
-          }
-        } catch {
+        if (!isOurProject) {
           throw strictErr;
         }
+        payload = rawPayload;
       }
 
       if (!payload?.sub || !payload.email) throw new Error("Profil Google tidak lengkap.");
