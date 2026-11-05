@@ -1173,6 +1173,50 @@ export const getChatConversations = async (
   return { success: false, data: [] };
 };
 
+
+export const deleteChatConversation = async (orderId: string) => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl(`/chat/conversation/${encodeURIComponent(orderId)}`), {
+      method: "DELETE",
+      headers: authHeaders,
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("deleteChatConversation error:", err);
+    return { success: false, message: "Gagal menghapus percakapan di server" };
+  }
+};
+
+export const deleteMultipleChatConversations = async (orderIds: string[]) => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl("/chat/delete-multiple"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ orderIds }),
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("deleteMultipleChatConversations error:", err);
+    return { success: false, message: "Gagal menghapus percakapan terpilih di server" };
+  }
+};
+
+export const clearAllChatConversations = async () => {
+  try {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(getApiUrl("/chat/clear-all"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+    });
+    return await readApiJson(res);
+  } catch (err) {
+    console.error("clearAllChatConversations error:", err);
+    return { success: false, message: "Gagal menghapus semua percakapan di server" };
+  }
+};
+
 export interface DigitalPaymentPayload {
   orderId: string;
   orderCode?: string;

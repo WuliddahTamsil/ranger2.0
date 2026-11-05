@@ -71,6 +71,11 @@ const chatMessageSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    deletedByUsers: {
+      type: [String],
+      default: [],
+      index: true,
+    },
   },
   {
     timestamps: true,

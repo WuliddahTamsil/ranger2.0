@@ -11,6 +11,7 @@ import {
   Modal,
   TextInput,
   Image,
+  Alert,
 } from "react-native";
 import {
   Bell,
@@ -22,11 +23,16 @@ import {
   Store,
   X,
   Send,
+  Trash2,
+  Check,
 } from "lucide-react-native";
 import {
   appendCustomerChatMessage,
   markCustomerChatThreadRead,
   updateCustomerChatThread,
+  deleteCustomerChatThread,
+  deleteCustomerChatThreads,
+  clearAllCustomerChatThreads,
   CustomerChatMessage,
   CustomerChatThread,
 } from "./customerInboxStore";
@@ -70,6 +76,10 @@ export const Inbox: React.FC<InboxProps> = ({
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [selectedThread, setSelectedThread] = useState<CustomerChatThread | null>(null);
 
+  // Chat selection mode state (for selecting one by one & deleting)
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
+
   // Chat message simulator lists
   const [typedMessage, setTypedMessage] = useState("");
   const [messagesHistory, setMessagesHistory] = useState<Record<string, Message[]>>({
@@ -88,6 +98,19 @@ export const Inbox: React.FC<InboxProps> = ({
       const next = { ...current };
       chatThreads.forEach((thread) => {
         if (thread.messages) next[thread.id] = thread.messages;
+      });
+      return next;
+    });
+  }, [chatThreads]);
+
+  // Clean up selected threads if active threads list changes
+  useEffect(() => {
+    setSelectedThreadIds((prev) => {
+      if (prev.size === 0) return prev;
+      const validIds = new Set(chatThreads.map((t) => t.id));
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (validIds.has(id)) next.add(id);
       });
       return next;
     });
@@ -132,6 +155,97 @@ export const Inbox: React.FC<InboxProps> = ({
   const handleMarkAllRead = () => {
     const updated = notifications.map((n) => ({ ...n, read: true }));
     setNotifications(updated);
+  };
+
+  const toggleSelectThread = (id: string) => {
+    setSelectedThreadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedThreadIds.size === chatThreads.length) {
+      setSelectedThreadIds(new Set());
+    } else {
+      setSelectedThreadIds(new Set(chatThreads.map((t) => t.id)));
+    }
+  };
+
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedThreadIds(new Set());
+  };
+
+  const handleDeleteSingle = (thread: CustomerChatThread) => {
+    Alert.alert(
+      "Hapus Chat",
+      `Hapus percakapan dengan ${thread.participantName}? Pesan ini tidak akan ditampilkan lagi.`,
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus",
+          style: "destructive",
+          onPress: async () => {
+            const nextThreads = chatThreads.filter((t) => t.id !== thread.id);
+            setChatThreads(nextThreads);
+            await deleteCustomerChatThread(thread.id, thread.orderId);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteSelected = () => {
+    const count = selectedThreadIds.size;
+    if (count === 0) return;
+
+    Alert.alert(
+      "Hapus Chat Terpilih",
+      `Apakah Anda yakin ingin menghapus ${count} percakapan yang dipilih?`,
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: `Hapus (${count})`,
+          style: "destructive",
+          onPress: async () => {
+            const idsToDelete = Array.from(selectedThreadIds);
+            const targetThreads = chatThreads.filter((t) => selectedThreadIds.has(t.id));
+            const orderIds = targetThreads.map((t) => t.orderId).filter(Boolean);
+            const nextThreads = chatThreads.filter((t) => !selectedThreadIds.has(t.id));
+            setChatThreads(nextThreads);
+            exitSelectionMode();
+            await deleteCustomerChatThreads(idsToDelete, orderIds);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAll = () => {
+    if (chatThreads.length === 0) return;
+
+    Alert.alert(
+      "Hapus Semua Chat",
+      "Apakah Anda yakin ingin menghapus seluruh riwayat chat? Tindakan ini tidak dapat dibatalkan.",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus Semua",
+          style: "destructive",
+          onPress: async () => {
+            setChatThreads([]);
+            exitSelectionMode();
+            await clearAllCustomerChatThreads();
+          },
+        },
+      ]
+    );
   };
 
   const openChatThread = async (thread: CustomerChatThread) => {
@@ -252,13 +366,35 @@ export const Inbox: React.FC<InboxProps> = ({
             <Text style={styles.markReadBtnText}>Tandai dibaca</Text>
           </TouchableOpacity>
         )}
+        {activeTab === "Chat" && chatThreads.length > 0 && !isSelectionMode && (
+          <View style={styles.chatHeaderActions}>
+            <TouchableOpacity
+              style={styles.manageBtn}
+              onPress={() => setIsSelectionMode(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.manageBtnText}>Pilih</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.deleteAllHeaderBtn}
+              onPress={handleDeleteAll}
+              activeOpacity={0.7}
+            >
+              <Trash2 size={13} color="#EF4444" style={{ marginRight: 3 }} />
+              <Text style={styles.deleteAllHeaderText}>Hapus Semua</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Tabs list switch */}
       <View style={styles.tabsRow}>
         <TouchableOpacity
           style={[styles.tabBtn, activeTab === "Notifikasi" && styles.tabBtnActive]}
-          onPress={() => setActiveTab("Notifikasi")}
+          onPress={() => {
+            setActiveTab("Notifikasi");
+            exitSelectionMode();
+          }}
         >
           <Text style={[styles.tabBtnText, activeTab === "Notifikasi" && styles.tabBtnTextActive]}>
             Notifikasi {unreadNotifs > 0 ? `(${unreadNotifs})` : ""}
@@ -274,6 +410,23 @@ export const Inbox: React.FC<InboxProps> = ({
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Selection Control Bar (Active when in selection mode) */}
+      {activeTab === "Chat" && isSelectionMode && (
+        <View style={styles.selectionBar}>
+          <TouchableOpacity onPress={exitSelectionMode} style={styles.selectionCancelBtn}>
+            <Text style={styles.selectionCancelText}>Batal</Text>
+          </TouchableOpacity>
+          <Text style={styles.selectionCountText}>
+            {selectedThreadIds.size} dipilih
+          </Text>
+          <TouchableOpacity onPress={toggleSelectAll} style={styles.selectionSelectAllBtn}>
+            <Text style={styles.selectionSelectAllText}>
+              {selectedThreadIds.size === chatThreads.length ? "Batalkan Semua" : "Pilih Semua"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Tab Panels */}
       {activeTab === "Notifikasi" ? (
@@ -320,18 +473,52 @@ export const Inbox: React.FC<InboxProps> = ({
         <FlatList
           data={chatThreads}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, isSelectionMode && selectedThreadIds.size > 0 && { paddingBottom: 90 }]}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => {
             const isDriver = item.participantType === "driver";
             const IconComp = isDriver ? Bike : Store;
+            const isSelected = selectedThreadIds.has(item.id);
 
             return (
               <TouchableOpacity
-                style={[styles.chatRow, item.unreadCount > 0 && styles.chatRowUnread]}
-                onPress={() => openChatThread(item)}
+                style={[
+                  styles.chatRow,
+                  item.unreadCount > 0 && styles.chatRowUnread,
+                  isSelected && styles.chatRowSelected,
+                ]}
+                onPress={() => {
+                  if (isSelectionMode) {
+                    toggleSelectThread(item.id);
+                  } else {
+                    openChatThread(item);
+                  }
+                }}
+                onLongPress={() => {
+                  if (!isSelectionMode) {
+                    setIsSelectionMode(true);
+                    setSelectedThreadIds(new Set([item.id]));
+                  }
+                }}
                 activeOpacity={0.8}
               >
+                {isSelectionMode && (
+                  <TouchableOpacity
+                    style={styles.checkboxContainer}
+                    onPress={() => toggleSelectThread(item.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <View
+                      style={[
+                        styles.checkboxCircle,
+                        isSelected && styles.checkboxCircleSelected,
+                      ]}
+                    >
+                      {isSelected && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                    </View>
+                  </TouchableOpacity>
+                )}
+
                 {item.participantPhoto ? (
                   <Image source={{ uri: item.participantPhoto }} style={styles.chatAvatarImage} />
                 ) : (
@@ -342,7 +529,7 @@ export const Inbox: React.FC<InboxProps> = ({
 
                 <View style={styles.chatBody}>
                   <View style={styles.chatHeaderRow}>
-                    <Text style={styles.chatName}>{item.participantName}</Text>
+                    <Text style={styles.chatName} numberOfLines={1}>{item.participantName}</Text>
                     <Text style={styles.chatTimeText}>{item.updatedAt}</Text>
                   </View>
 
@@ -355,9 +542,21 @@ export const Inbox: React.FC<InboxProps> = ({
                   </Text>
                 </View>
 
-                {item.unreadCount > 0 && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
+                {!isSelectionMode && (
+                  <View style={styles.chatRowRightActions}>
+                    {item.unreadCount > 0 && (
+                      <View style={styles.unreadBadge}>
+                        <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={styles.trashRowBtn}
+                      onPress={() => handleDeleteSingle(item)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityLabel="Hapus chat"
+                    >
+                      <Trash2 size={16} color="#9CA3AF" />
+                    </TouchableOpacity>
                   </View>
                 )}
               </TouchableOpacity>
@@ -371,6 +570,22 @@ export const Inbox: React.FC<InboxProps> = ({
             </View>
           }
         />
+      )}
+
+      {/* Floating Bottom Bar for Bulk Delete in Selection Mode */}
+      {activeTab === "Chat" && isSelectionMode && selectedThreadIds.size > 0 && (
+        <View style={styles.floatingDeleteBar}>
+          <TouchableOpacity
+            style={styles.deleteSelectedBtn}
+            onPress={handleDeleteSelected}
+            activeOpacity={0.85}
+          >
+            <Trash2 size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={styles.deleteSelectedBtnText}>
+              Hapus ({selectedThreadIds.size}) Chat Terpilih
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Unified Full-Featured Customer Chat Modal */}
@@ -409,6 +624,69 @@ const styles = StyleSheet.create({
   },
   markReadBtnText: {
     fontSize: 12,
+    fontWeight: "700",
+    color: "#1B7A4E",
+  },
+  chatHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  manageBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: "#E8F5EE",
+  },
+  manageBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#1B7A4E",
+  },
+  deleteAllHeaderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: "#FEE2E2",
+  },
+  deleteAllHeaderText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#EF4444",
+  },
+  selectionBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    marginBottom: 8,
+  },
+  selectionCancelBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  selectionCancelText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+  selectionCountText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  selectionSelectAllBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  selectionSelectAllText: {
+    fontSize: 13,
     fontWeight: "700",
     color: "#1B7A4E",
   },
@@ -503,6 +781,43 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8F5EE",
     borderColor: "#A7F3D0",
   },
+  chatRowSelected: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#86EFAC",
+  },
+  checkboxContainer: {
+    marginRight: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkboxCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: "#9CA3AF",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxCircleSelected: {
+    borderColor: "#1B7A4E",
+    backgroundColor: "#1B7A4E",
+  },
+  chatRowRightActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginLeft: 8,
+  },
+  trashRowBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   chatAvatar: {
     width: 42,
     height: 42,
@@ -579,109 +894,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 36,
     lineHeight: 18,
   },
-  modalBgBottom: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  chatSheetContainer: {
+  floatingDeleteBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
-    height: "75%",
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-    paddingBottom: 12,
-    marginBottom: 10,
-  },
-  sheetTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  sheetSubtitle: {
-    fontSize: 11,
-    color: "#9CA3AF",
-    marginTop: 2,
-  },
-  chatListContent: {
-    paddingVertical: 12,
-    gap: 10,
-  },
-  bubbleContainer: {
-    maxWidth: "80%",
-    marginBottom: 2,
-  },
-  bubbleLeft: {
-    alignSelf: "flex-start",
-    alignItems: "flex-start",
-  },
-  bubbleRight: {
-    alignSelf: "flex-end",
-    alignItems: "flex-end",
-  },
-  bubble: {
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  bubbleMe: {
-    backgroundColor: "#1B7A4E",
-    borderBottomRightRadius: 4,
-  },
-  bubbleOther: {
-    backgroundColor: "#F3F4F6",
-    borderBottomLeftRadius: 4,
-  },
-  bubbleText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  bubbleTextMe: {
-    color: "#FFFFFF",
-  },
-  bubbleTextOther: {
-    color: "#111827",
-  },
-  chatBubbleTime: {
-    fontSize: 9,
-    color: "#9CA3AF",
-    marginTop: 4,
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-    paddingTop: 12,
-  },
-  chatTextInput: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 20,
     paddingHorizontal: 16,
-    height: 40,
-    fontSize: 13,
-    color: "#111827",
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 8,
   },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#1B7A4E",
+  deleteSelectedBtn: {
+    backgroundColor: "#EF4444",
+    borderRadius: 14,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 13,
+  },
+  deleteSelectedBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
   guestInboxContainer: {
     flex: 1,

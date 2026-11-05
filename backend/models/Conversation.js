@@ -41,6 +41,7 @@ const conversationSchema = new mongoose.Schema(
     driverName: { type: String, default: "" },
     driverPhoto: { type: String, default: "" },
     driverIds: { type: [String], default: [] },
+    deletedByUsers: { type: [String], default: [], index: true },
     status: { type: String, default: "" },
     archived: { type: Boolean, default: false },
     lastMessageText: { type: String, default: "" },

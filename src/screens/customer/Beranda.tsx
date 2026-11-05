@@ -78,7 +78,7 @@ import { Jelajah } from "./Jelajah";
 import { Pesanan } from "./Pesanan";
 import { Inbox, CustomerNotification, CustomerChatThread } from "./Inbox";
 import { Profile } from "./Profile";
-import { hydrateCustomerChatThreads, subscribeCustomerChatThreads } from "./customerInboxStore";
+import { hydrateCustomerChatThreads, subscribeCustomerChatThreads, syncCustomerChatThreads, isCustomerChatThreadDeleted } from "./customerInboxStore";
 import { getMarketplaceProducts, getMarketplaceOrdersForCustomer, getCateringOrdersForCustomer, getNotifications, markNotificationRead, getCustomerReviews } from "../../services/api";
 import { fetchCustomerShopOrders } from "../../services/shopService";
 import { fetchCustomerSendOrders } from "../../services/sendService";
@@ -883,9 +883,12 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
         // Dynamically build chat threads for persisted orders.
         const dynamicThreads: CustomerChatThread[] = [];
         allCustomerOrders.forEach((o: any) => {
-          if (o.driverName) {
+          const driverThreadId = `driver_${o.id}`;
+          const merchantThreadId = `merchant_${o.id}`;
+
+          if (o.driverName && !isCustomerChatThreadDeleted(driverThreadId, o.id)) {
             dynamicThreads.push({
-              id: `driver_${o.id}`,
+              id: driverThreadId,
               orderId: o.id,
               participantType: "driver",
               participantName: o.type === "Kanyaah Ride" ? `${o.driverName} (Driver Georide)` : `${o.driverName} (Kurir)`,
@@ -894,9 +897,9 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
               unreadCount: 0,
             });
           }
-          if (o.type !== "Kanyaah Ride" && o.storeName) {
+          if (o.type !== "Kanyaah Ride" && o.storeName && !isCustomerChatThreadDeleted(merchantThreadId, o.id)) {
             dynamicThreads.push({
-              id: `merchant_${o.id}`,
+              id: merchantThreadId,
               orderId: o.id,
               participantType: "merchant",
               participantName: o.storeName,
@@ -906,7 +909,8 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
             });
           }
         });
-        setChatThreads(dynamicThreads);
+        const currentSynced = syncCustomerChatThreads(dynamicThreads);
+        setChatThreads(currentSynced);
       } catch {
         if (activeOrderLoader) setOrdersLoadError("Pesanan belum dapat diperbarui. Periksa koneksi lalu coba lagi.");
       } finally {

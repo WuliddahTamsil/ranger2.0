@@ -269,11 +269,13 @@ const getChatMessages = async (req, res) => {
       requestedChannel = resolveChatChannel(callerRole, targetRole);
     }
 
+    const callerUserId = req.authUser ? String(req.authUser._id) : null;
     const baseOrderCondition = {
       $or: [
         { conversationId: result.conversation._id },
         { orderId: String(result.record.order._id) },
       ],
+      ...(callerUserId ? { deletedByUsers: { $ne: callerUserId } } : {}),
     };
 
     let query = { ...baseOrderCondition };
@@ -387,7 +389,10 @@ const getConversations = async (req, res) => {
       }
     }
 
-    const conversations = await Conversation.find({ $or: baseOr })
+    const conversations = await Conversation.find({
+      $or: baseOr,
+      deletedByUsers: { $ne: userId },
+    })
       .sort({ updatedAt: -1, lastMessageAt: -1 })
       .limit(60)
       .lean();
@@ -396,11 +401,15 @@ const getConversations = async (req, res) => {
     const existingOrderIds = new Set(conversations.map((c) => String(c.orderId || c._id)));
     const msgOrderIds = await ChatMessage.distinct("orderId", {
       $or: [{ ownerId: userId }, { receiverId: userId }],
+      deletedByUsers: { $ne: userId },
     });
 
     for (const ordId of msgOrderIds) {
       if (ordId && !existingOrderIds.has(String(ordId))) {
-        const extraConv = await Conversation.findOne({ orderId: ordId }).lean();
+        const extraConv = await Conversation.findOne({
+          orderId: ordId,
+          deletedByUsers: { $ne: userId },
+        }).lean();
         if (extraConv) {
           conversations.push(extraConv);
           existingOrderIds.add(String(ordId));
@@ -544,11 +553,146 @@ const uploadChatAttachment = async (req, res) => {
   }
 };
 
+const deleteConversation = async (req, res) => {
+  try {
+    const userId = String(req.authUser._id);
+    const orderId = String(req.params.orderId);
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: "orderId wajib diisi" });
+    }
+
+    const convQueries = [{ orderId }];
+    if (mongoose.Types.ObjectId.isValid(orderId)) {
+      convQueries.push({ _id: orderId });
+    }
+
+    await Promise.all([
+      Conversation.updateMany(
+        { $or: convQueries },
+        { $addToSet: { deletedByUsers: userId } }
+      ),
+      ChatMessage.updateMany(
+        { $or: [{ orderId }, { conversationId: mongoose.Types.ObjectId.isValid(orderId) ? orderId : undefined }].filter(Boolean) },
+        { $addToSet: { deletedByUsers: userId } }
+      ),
+    ]);
+
+    return res.json({ success: true, message: "Percakapan berhasil dihapus." });
+  } catch (error) {
+    console.error("Delete conversation error:", error);
+    return res.status(500).json({ success: false, message: "Gagal menghapus percakapan", error: error.message });
+  }
+};
+
+const deleteMultipleConversations = async (req, res) => {
+  try {
+    const userId = String(req.authUser._id);
+    const { orderIds } = req.body;
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ success: false, message: "Daftar orderId tidak valid" });
+    }
+
+    const cleanOrderIds = orderIds.map(String).filter(Boolean);
+    const validObjectIds = cleanOrderIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+    await Promise.all([
+      Conversation.updateMany(
+        {
+          $or: [
+            { orderId: { $in: cleanOrderIds } },
+            ...(validObjectIds.length > 0 ? [{ _id: { $in: validObjectIds } }] : []),
+          ],
+        },
+        { $addToSet: { deletedByUsers: userId } }
+      ),
+      ChatMessage.updateMany(
+        {
+          $or: [
+            { orderId: { $in: cleanOrderIds } },
+            ...(validObjectIds.length > 0 ? [{ conversationId: { $in: validObjectIds } }] : []),
+          ],
+        },
+        { $addToSet: { deletedByUsers: userId } }
+      ),
+    ]);
+
+    return res.json({
+      success: true,
+      message: `${cleanOrderIds.length} percakapan berhasil dihapus.`,
+      count: cleanOrderIds.length,
+    });
+  } catch (error) {
+    console.error("Delete multiple conversations error:", error);
+    return res.status(500).json({ success: false, message: "Gagal menghapus beberapa percakapan", error: error.message });
+  }
+};
+
+const clearAllConversations = async (req, res) => {
+  try {
+    const userId = String(req.authUser._id);
+    const userRole = req.authUser.role;
+
+    const baseOr = [
+      { ownerId: userId },
+      { customerId: userId },
+      { driverId: userId },
+      { driverIds: userId },
+    ];
+
+    if (ownerRoles.has(userRole) || userRole === "admin") {
+      const roleServiceMap = {
+        pemilik_kos: "kos",
+        pemilik_laundry: "laundry",
+        pemilik_catering: "catering",
+        pemilik_marketplace: "marketplace",
+        pemilik_shop: "shop",
+        bank_sampah: "waste",
+      };
+      const serviceType = roleServiceMap[userRole];
+      if (serviceType) {
+        baseOr.push({ orderType: serviceType });
+      }
+    }
+
+    const conversations = await Conversation.find({ $or: baseOr }).select("orderId _id").lean();
+    const orderIds = Array.from(new Set(conversations.map((c) => String(c.orderId)).filter(Boolean)));
+    const convIds = conversations.map((c) => c._id);
+
+    await Promise.all([
+      Conversation.updateMany(
+        { $or: baseOr },
+        { $addToSet: { deletedByUsers: userId } }
+      ),
+      ChatMessage.updateMany(
+        {
+          $or: [
+            { senderId: userId },
+            { receiverId: userId },
+            { customerId: userId },
+            { ownerId: userId },
+            ...(orderIds.length > 0 ? [{ orderId: { $in: orderIds } }] : []),
+            ...(convIds.length > 0 ? [{ conversationId: { $in: convIds } }] : []),
+          ],
+        },
+        { $addToSet: { deletedByUsers: userId } }
+      ),
+    ]);
+
+    return res.json({ success: true, message: "Semua riwayat chat berhasil dihapus." });
+  } catch (error) {
+    console.error("Clear all conversations error:", error);
+    return res.status(500).json({ success: false, message: "Gagal menghapus seluruh percakapan", error: error.message });
+  }
+};
+
 module.exports = {
   getConversation,
   sendChatMessage,
   getChatMessages,
   getConversations,
   uploadChatAttachment,
+  deleteConversation,
+  deleteMultipleConversations,
+  clearAllConversations,
   roomForOrder,
 };

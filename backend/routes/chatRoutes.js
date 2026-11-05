@@ -6,6 +6,9 @@ const {
   getChatMessages,
   getConversations,
   uploadChatAttachment,
+  deleteConversation,
+  deleteMultipleConversations,
+  clearAllConversations,
 } = require("../controllers/chatController");
 const { requireAuth } = require("../middleware/authMiddleware");
 
@@ -22,5 +25,8 @@ router.get("/conversation/:orderId", getConversation);
 router.post("/send", sendChatMessage);
 router.get("/messages/:orderId", getChatMessages);
 router.post("/upload", upload.any(), uploadChatAttachment);
+router.delete("/conversation/:orderId", deleteConversation);
+router.post("/delete-multiple", deleteMultipleConversations);
+router.post("/clear-all", clearAllConversations);
 
 module.exports = router;

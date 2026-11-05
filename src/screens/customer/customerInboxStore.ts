@@ -1,4 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  deleteChatConversation,
+  deleteMultipleChatConversations,
+  clearAllChatConversations,
+} from "../../services/api";
 
 export type CustomerChatParticipantType = "driver" | "merchant" | "pemilik_kos" | "customer";
 
@@ -33,10 +38,12 @@ export interface CustomerChatThread {
 }
 
 const STORAGE_KEY = "ranger_customer_inbox_threads_v2";
+const DELETED_STORAGE_KEY = "ranger_customer_deleted_chat_threads_v1";
 
 const defaultThreads: CustomerChatThread[] = [];
 
 let threads: CustomerChatThread[] = [...defaultThreads];
+let deletedThreadIds: Set<string> = new Set();
 let hydrated = false;
 const listeners = new Set<(threads: CustomerChatThread[]) => void>();
 
@@ -49,7 +56,25 @@ const persist = () => {
   void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(threads));
 };
 
-export const getCustomerChatThreads = () => threads.map((thread) => ({ ...thread, messages: [...(thread.messages || [])] }));
+const persistDeleted = () => {
+  void AsyncStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify(Array.from(deletedThreadIds)));
+};
+
+export const isCustomerChatThreadDeleted = (threadId: string, orderId?: string): boolean => {
+  if (!threadId && !orderId) return false;
+  if (threadId && deletedThreadIds.has(threadId)) return true;
+  if (orderId) {
+    if (deletedThreadIds.has(orderId)) return true;
+    if (deletedThreadIds.has(`driver_${orderId}`)) return true;
+    if (deletedThreadIds.has(`merchant_${orderId}`)) return true;
+  }
+  return false;
+};
+
+export const getCustomerChatThreads = () =>
+  threads
+    .filter((thread) => !isCustomerChatThreadDeleted(thread.id, thread.orderId))
+    .map((thread) => ({ ...thread, messages: [...(thread.messages || [])] }));
 
 export const subscribeCustomerChatThreads = (listener: (threads: CustomerChatThread[]) => void) => {
   listeners.add(listener);
@@ -62,11 +87,24 @@ export const hydrateCustomerChatThreads = async () => {
   if (hydrated) return getCustomerChatThreads();
 
   try {
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as CustomerChatThread[];
+    const [storedThreads, storedDeleted] = await Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY),
+      AsyncStorage.getItem(DELETED_STORAGE_KEY),
+    ]);
+
+    if (storedDeleted) {
+      const parsedDeleted = JSON.parse(storedDeleted);
+      if (Array.isArray(parsedDeleted)) {
+        deletedThreadIds = new Set(parsedDeleted.map(String));
+      }
+    }
+
+    if (storedThreads) {
+      const parsed = JSON.parse(storedThreads) as CustomerChatThread[];
       if (Array.isArray(parsed)) {
-        threads = parsed.map((thread) => ({ ...thread, messages: Array.isArray(thread.messages) ? thread.messages : [] }));
+        threads = parsed
+          .filter((t) => !isCustomerChatThreadDeleted(t.id, t.orderId))
+          .map((thread) => ({ ...thread, messages: Array.isArray(thread.messages) ? thread.messages : [] }));
       }
     }
   } catch {
@@ -80,6 +118,10 @@ export const hydrateCustomerChatThreads = async () => {
 };
 
 export const upsertCustomerChatThread = (thread: CustomerChatThread) => {
+  if (isCustomerChatThreadDeleted(thread.id, thread.orderId)) {
+    return undefined;
+  }
+
   const existingIndex = threads.findIndex((item) => item.id === thread.id);
   if (existingIndex >= 0) {
     const existingThread = threads[existingIndex];
@@ -116,6 +158,32 @@ export const upsertCustomerChatThread = (thread: CustomerChatThread) => {
   return threads.find((item) => item.id === thread.id);
 };
 
+export const syncCustomerChatThreads = (incomingThreads: CustomerChatThread[]) => {
+  const validIncoming = incomingThreads.filter((t) => !isCustomerChatThreadDeleted(t.id, t.orderId));
+  
+  // Merge incoming with existing threads, prioritizing latest messages
+  const existingMap = new Map(threads.map((t) => [t.id, t]));
+  validIncoming.forEach((t) => {
+    const prev = existingMap.get(t.id);
+    if (!prev) {
+      existingMap.set(t.id, t);
+    } else {
+      existingMap.set(t.id, {
+        ...prev,
+        ...t,
+        messages: Array.isArray(t.messages) && t.messages.length > 0 ? t.messages : prev.messages,
+        lastMessage: t.lastMessage || prev.lastMessage,
+        updatedAt: t.updatedAt || prev.updatedAt,
+      });
+    }
+  });
+
+  threads = Array.from(existingMap.values()).filter((t) => !isCustomerChatThreadDeleted(t.id, t.orderId));
+  persist();
+  notify();
+  return getCustomerChatThreads();
+};
+
 export const updateCustomerChatThread = (threadId: string, updates: Partial<CustomerChatThread>) => {
   threads = threads.map((thread) => (thread.id === threadId ? { ...thread, ...updates } : thread));
   persist();
@@ -145,4 +213,78 @@ export const ensureCustomerChatThread = (input: Omit<CustomerChatThread, "messag
   const existing = threads.find((thread) => thread.id === input.id);
   if (existing) return existing;
   return upsertCustomerChatThread({ ...input, messages: input.messages || [] });
+};
+
+export const deleteCustomerChatThread = async (threadId: string, orderId?: string) => {
+  if (threadId) deletedThreadIds.add(threadId);
+  if (orderId) {
+    deletedThreadIds.add(orderId);
+    deletedThreadIds.add(`driver_${orderId}`);
+    deletedThreadIds.add(`merchant_${orderId}`);
+  }
+  persistDeleted();
+
+  threads = threads.filter((t) => t.id !== threadId && (!orderId || t.orderId !== orderId));
+  persist();
+  notify();
+
+  // Async server deletion
+  const targetOrderId = orderId || threadId.replace(/^(driver|merchant)_/, "");
+  if (targetOrderId) {
+    void deleteChatConversation(targetOrderId);
+  }
+};
+
+export const deleteCustomerChatThreads = async (threadIds: string[], orderIds?: string[]) => {
+  const idsToDelete = new Set(threadIds);
+  const distinctOrders = new Set<string>(orderIds ? orderIds.filter(Boolean) : []);
+
+  threadIds.forEach((id) => {
+    deletedThreadIds.add(id);
+    const extractedOrder = id.replace(/^(driver|merchant)_/, "");
+    if (extractedOrder) distinctOrders.add(extractedOrder);
+  });
+
+  if (orderIds) {
+    orderIds.forEach((oid) => {
+      if (oid) {
+        deletedThreadIds.add(oid);
+        deletedThreadIds.add(`driver_${oid}`);
+        deletedThreadIds.add(`merchant_${oid}`);
+        distinctOrders.add(oid);
+      }
+    });
+  }
+
+  persistDeleted();
+
+  threads = threads.filter(
+    (t) => !idsToDelete.has(t.id) && (!t.orderId || !distinctOrders.has(t.orderId))
+  );
+  persist();
+  notify();
+
+  // Async server deletion
+  const orderList = Array.from(distinctOrders);
+  if (orderList.length > 0) {
+    void deleteMultipleChatConversations(orderList);
+  }
+};
+
+export const clearAllCustomerChatThreads = async () => {
+  threads.forEach((t) => {
+    deletedThreadIds.add(t.id);
+    if (t.orderId) {
+      deletedThreadIds.add(t.orderId);
+      deletedThreadIds.add(`driver_${t.orderId}`);
+      deletedThreadIds.add(`merchant_${t.orderId}`);
+    }
+  });
+
+  persistDeleted();
+  threads = [];
+  persist();
+  notify();
+
+  void clearAllChatConversations();
 };
