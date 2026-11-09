@@ -239,6 +239,14 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                         {item.description}
                       </Text>
 
+                      {/* Capacity Badge */}
+                      <View style={styles.capacityBadge}>
+                        <Layers size={11} color="#0D7A53" />
+                        <Text style={styles.capacityBadgeText} numberOfLines={1}>
+                          {item.capacity || "Maksimal 10 Ton / hari"}
+                        </Text>
+                      </View>
+
                       {/* Pricing Tag */}
                       <View style={styles.priceContainer}>
                         <Text style={styles.priceLabel}>Biaya Sewa Pokok:</Text>
@@ -567,7 +575,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#64748B",
     lineHeight: 17,
+    marginBottom: 6,
+  },
+  capacityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: "flex-start",
     marginBottom: 8,
+  },
+  capacityBadgeText: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    color: "#0D7A53",
   },
   priceContainer: {
     backgroundColor: "#F8FAFC",

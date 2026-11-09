@@ -27,13 +27,14 @@ async function ensureDefaultEquipments() {
         specification:
           "Spesifikasi teknis alat dapat dikonfigurasi melalui Dashboard Admin PGE.",
         function: "Pemanfaatan langsung energi panas bumi (Direct Use).",
-        capacity: "Kapasitas operasional ditentukan oleh konfigurasi Admin PGE.",
+        capacity: "Maksimal 10 Ton (10.000 kg) / hari",
+        maxCapacityKgPerDay: 10000,
         rentalTerms:
           "1. Penggunaan alat wajib mematuhi SOP Keselamatan Kerja PGE Kamojang.\n2. Customer wajib membawa Nota Sewa Resmi yang disetujui.\n3. Pembayaran DP wajib diverifikasi oleh Admin.",
         imageUrl: "",
         isAvailable: true,
         isActive: true,
-        basePrice: 0,
+        basePrice: 2000000,
         pricingUnit: "per_hari",
         dpPercentage: 30,
         pricingFormulaType: "STANDARD_DAILY",
@@ -53,7 +54,7 @@ async function ensureDefaultEquipments() {
             unit: "kg",
             required: true,
             ratePerUnit: 0,
-            helperText: "Estimasi volume bahan baku yang diproses (Minimal 1 kg)",
+            helperText: "Estimasi volume bahan baku yang diproses (Minimal 1 kg, Maksimal 10 Ton/hari)",
           },
         ],
       },
@@ -65,13 +66,14 @@ async function ensureDefaultEquipments() {
         specification:
           "Spesifikasi teknis alat dapat dikonfigurasi melalui Dashboard Admin PGE.",
         function: "Pemanfaatan langsung energi panas bumi (Direct Use).",
-        capacity: "Kapasitas operasional ditentukan oleh konfigurasi Admin PGE.",
+        capacity: "Maksimal 10 Ton (10.000 kg) / hari",
+        maxCapacityKgPerDay: 10000,
         rentalTerms:
           "1. Mematuhi standar K3 PGE Area Kamojang.\n2. Wajib verifikasi identitas dan nota booking.",
         imageUrl: "",
         isAvailable: true,
         isActive: true,
-        basePrice: 0,
+        basePrice: 2000000,
         pricingUnit: "per_hari",
         dpPercentage: 30,
         pricingFormulaType: "STANDARD_DAILY",
@@ -100,13 +102,14 @@ async function ensureDefaultEquipments() {
         specification:
           "Spesifikasi teknis alat dapat dikonfigurasi melalui Dashboard Admin PGE.",
         function: "Pemanfaatan langsung energi panas bumi (Direct Use).",
-        capacity: "Kapasitas operasional ditentukan oleh konfigurasi Admin PGE.",
+        capacity: "Maksimal 10 Ton (10.000 kg) / hari",
+        maxCapacityKgPerDay: 10000,
         rentalTerms:
           "1. Mematuhi standar K3 PGE Area Kamojang.\n2. Wajib verifikasi identitas dan nota booking.",
         imageUrl: "",
         isAvailable: true,
         isActive: true,
-        basePrice: 0,
+        basePrice: 2000000,
         pricingUnit: "per_hari",
         dpPercentage: 30,
         pricingFormulaType: "STANDARD_DAILY",
@@ -134,13 +137,14 @@ async function ensureDefaultEquipments() {
         specification:
           "Spesifikasi teknis alat dapat dikonfigurasi melalui Dashboard Admin PGE.",
         function: "Pemanfaatan langsung energi panas bumi (Direct Use).",
-        capacity: "Kapasitas operasional ditentukan oleh konfigurasi Admin PGE.",
+        capacity: "Maksimal 10 Ton (10.000 kg) / hari",
+        maxCapacityKgPerDay: 10000,
         rentalTerms:
           "1. Mematuhi standar K3 PGE Area Kamojang.\n2. Wajib verifikasi identitas dan nota booking.",
         imageUrl: "",
         isAvailable: true,
         isActive: true,
-        basePrice: 0,
+        basePrice: 2000000,
         pricingUnit: "per_hari",
         dpPercentage: 30,
         pricingFormulaType: "STANDARD_DAILY",
@@ -164,22 +168,34 @@ async function ensureDefaultEquipments() {
 
     await GeoDirectEquipment.insertMany(defaultList);
   } else {
-    // Auto-migrate any existing records with unit 'ton' or paramKey 'rawMaterialTons' to 'kg'
+    // Auto-sync placeholder prices and capacity while keeping admin custom adjustments flexible
     try {
       await GeoDirectEquipment.updateMany(
-        { "productionParameters.unit": "ton" },
+        {
+          $or: [
+            { basePrice: 0 },
+            { basePrice: { $exists: false } },
+            { capacity: { $regex: /ditentukan oleh konfigurasi/i } },
+            { "productionParameters.unit": "ton" },
+          ],
+        },
         {
           $set: {
+            basePrice: 2000000,
+            capacity: "Maksimal 10 Ton (10.000 kg) / hari",
+            maxCapacityKgPerDay: 10000,
+            pricingUnit: "per_hari",
+            dpPercentage: 30,
             "productionParameters.$[elem].unit": "kg",
             "productionParameters.$[elem].paramLabel": "Kapasitas Bahan Baku (kg)",
             "productionParameters.$[elem].paramKey": "rawMaterialKg",
-            "productionParameters.$[elem].helperText": "Estimasi volume bahan baku yang diproses (Minimal 1 kg)",
+            "productionParameters.$[elem].helperText": "Estimasi volume bahan baku yang diproses (Minimal 1 kg, Maksimal 10 Ton/hari)",
           },
         },
-        { arrayFilters: [{ "elem.unit": "ton" }] }
+        { arrayFilters: [{ "elem.paramKey": { $in: ["rawMaterialTons", "rawMaterialKg"] } }] }
       );
     } catch (migErr) {
-      console.warn("Auto-migrate parameter unit warning:", migErr.message);
+      console.warn("Auto-sync equipment price & capacity warning:", migErr.message);
     }
   }
 }

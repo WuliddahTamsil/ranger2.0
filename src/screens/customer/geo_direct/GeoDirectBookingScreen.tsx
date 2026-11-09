@@ -232,6 +232,16 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
       return;
     }
 
+    const durDays = Math.max(1, parseInt(durationDays, 10) || 1);
+    const maxCapacityKg = durDays * 10000;
+    if (kg > maxCapacityKg) {
+      Alert.alert(
+        "Kapasitas Melebihi Batas Maksimal",
+        `Alat ini memiliki batas maksimal kapasitas pengolahan 10 Ton (10.000 kg) per hari.\n\nUntuk durasi sewa ${durDays} hari, kapasitas maksimal adalah ${maxCapacityKg / 1000} Ton (${maxCapacityKg.toLocaleString()} kg).\n\nSilakan kurangi jumlah bahan baku atau tambah durasi hari sewa.`
+      );
+      return;
+    }
+
     if (!equipment) return;
 
     try {
@@ -529,12 +539,12 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
               style={styles.inputField}
               value={rawMaterialKg}
               onChangeText={setRawMaterialKg}
-              placeholder="Minimal 1 kg (Contoh: 10)"
+              placeholder="Minimal 1 kg, Maksimal 10.000 kg/hari"
               placeholderTextColor="#94A3B8"
               keyboardType="numeric"
             />
             <Text style={styles.inputHelper}>
-              Minimal pemesanan pengolahan adalah 1 kg bahan baku.
+              Minimal 1 kg. Maksimal kapasitas alat adalah 10 Ton (10.000 kg) per hari (Maks. {(parseInt(durationDays, 10) || 1) * 10} Ton untuk {durationDays || 1} hari sewa).
             </Text>
           </View>
 

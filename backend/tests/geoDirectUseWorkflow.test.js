@@ -66,6 +66,28 @@ runTest("Pricing Engine: Default unconfigured base price (0) is recognized as un
   assert.strictEqual(calc.remainingBalance, 0);
 });
 
+runTest("Pricing Engine: Default provisional rate (Rp 2.000.000/hari, 30% DP, 10 ton max) calculates correctly", () => {
+  const equipment = {
+    code: "EQ-01",
+    name: "Equipment 01",
+    basePrice: 2000000, // Rp 2.000.000 / hari
+    dpPercentage: 30, // 30% DP
+    pricingUnit: "per_hari",
+    capacity: "Maksimal 10 Ton (10.000 kg) / hari",
+    maxCapacityKgPerDay: 10000,
+    pricingFormulaType: "STANDARD_DAILY",
+    productionParameters: [],
+  };
+
+  const calc = calculateRentalCost(equipment, { durationDays: 1 });
+  assert.strictEqual(calc.isConfigured, true);
+  assert.strictEqual(calc.durationDays, 1);
+  assert.strictEqual(calc.subtotalBase, 2000000);
+  assert.strictEqual(calc.totalRentalCost, 2000000);
+  assert.strictEqual(calc.requiredDpAmount, 600000); // 30% of 2jt = 600rb
+  assert.strictEqual(calc.remainingBalance, 1400000); // 2jt - 600rb = 1.4jt
+});
+
 runTest("Pricing Engine: Configured base price calculates subtotal and 30% DP correctly", () => {
   const equipment = {
     code: "EQ-01",

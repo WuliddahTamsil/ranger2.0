@@ -46,7 +46,11 @@ const geoDirectEquipmentSchema = new mongoose.Schema(
     },
     capacity: {
       type: String,
-      default: "Kapasitas operasional dapat dikonfigurasi melalui Dashboard Admin.",
+      default: "Maksimal 10 Ton (10.000 kg) / hari",
+    },
+    maxCapacityKgPerDay: {
+      type: Number,
+      default: 10000, // 10 Ton per hari
     },
     rentalTerms: {
       type: String,
@@ -66,7 +70,7 @@ const geoDirectEquipmentSchema = new mongoose.Schema(
     },
     basePrice: {
       type: Number,
-      default: 0, // 0 = Menunggu konfigurasi PGE
+      default: 2000000, // Sementara Rp 2.000.000 / hari
     },
     pricingUnit: {
       type: String,

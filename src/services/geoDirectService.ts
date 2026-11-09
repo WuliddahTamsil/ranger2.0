@@ -25,6 +25,7 @@ export interface GeoDirectEquipment {
   specification: string;
   function: string;
   capacity: string;
+  maxCapacityKgPerDay?: number;
   rentalTerms: string;
   imageUrl?: string;
   isAvailable: boolean;
