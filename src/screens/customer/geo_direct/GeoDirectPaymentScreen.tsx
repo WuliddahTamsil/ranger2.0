@@ -88,6 +88,7 @@ export const GeoDirectPaymentScreen: React.FC<GeoDirectPaymentScreenProps> = ({
 
       if (bookingData.paymentProof?.fileUrl) {
         setUploadedProofUrl(bookingData.paymentProof.fileUrl);
+        setSelectedProofUri(bookingData.paymentProof.fileUrl);
       }
 
       if (methodsData?.bankAccounts && methodsData.bankAccounts.length > 0) {
@@ -185,6 +186,8 @@ export const GeoDirectPaymentScreen: React.FC<GeoDirectPaymentScreenProps> = ({
       });
 
       setBooking(updated);
+      setUploadedProofUrl(updated.paymentProof?.fileUrl || finalUrl);
+      setSelectedProofUri(updated.paymentProof?.fileUrl || finalUrl);
       Alert.alert(
         "Bukti Terkirim! 🍃",
         "Bukti pembayaran Anda berhasil dikirim ke Admin PGE. Status booking kini dalam proses verifikasi."
@@ -218,10 +221,13 @@ export const GeoDirectPaymentScreen: React.FC<GeoDirectPaymentScreenProps> = ({
   }
 
   const isApproved = booking.bookingStatus === "APPROVED";
-  const isWaitingVerification = booking.paymentStatus === "WAITING_VERIFICATION";
+  const isWaitingVerification =
+    booking.paymentStatus === "WAITING_VERIFICATION" || booking.bookingStatus === "PAYMENT_REVIEW";
   const isVerified = booking.paymentStatus === "VERIFIED";
   const isPaymentRejected = booking.paymentStatus === "REJECTED";
   const isBookingRejected = booking.bookingStatus === "REJECTED";
+  const isProofUnderReview =
+    isWaitingVerification && (!selectedProofUri || selectedProofUri === booking.paymentProof?.fileUrl);
 
   return (
     <View style={styles.container}>
@@ -476,18 +482,40 @@ export const GeoDirectPaymentScreen: React.FC<GeoDirectPaymentScreenProps> = ({
               <TouchableOpacity
                 style={[
                   styles.btnSubmitProof,
-                  (!uploadedProofUrl && !selectedProofUri || submittingProof || uploading) && styles.btnDisabled,
+                  isProofUnderReview
+                    ? styles.btnWaitingVerification
+                    : (!uploadedProofUrl && !selectedProofUri || submittingProof || uploading)
+                    ? styles.btnDisabled
+                    : null,
                 ]}
-                onPress={handleSubmitProof}
-                disabled={(!uploadedProofUrl && !selectedProofUri) || submittingProof || uploading}
+                onPress={
+                  isProofUnderReview
+                    ? () => {
+                        Alert.alert(
+                          "Menunggu Verifikasi",
+                          "Bukti transfer Anda telah diterima dan sedang diperiksa oleh tim Admin PGE Kamojang. Mohon menunggu proses verifikasi selesai."
+                        );
+                      }
+                    : handleSubmitProof
+                }
+                disabled={submittingProof || uploading}
                 activeOpacity={0.85}
               >
                 {submittingProof || uploading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : isProofUnderReview ? (
+                  <>
+                    <Clock size={16} color="#FFFFFF" />
+                    <Text style={styles.btnSubmitProofText}>Menunggu Verifikasi</Text>
+                  </>
                 ) : (
                   <>
                     <CheckCircle2 size={16} color="#FFFFFF" />
-                    <Text style={styles.btnSubmitProofText}>Kirim Bukti Pembayaran</Text>
+                    <Text style={styles.btnSubmitProofText}>
+                      {isWaitingVerification
+                        ? "Perbarui Bukti Pembayaran"
+                        : "Kirim Bukti Pembayaran"}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -969,5 +997,8 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     backgroundColor: "#94A3B8",
+  },
+  btnWaitingVerification: {
+    backgroundColor: "#D97706",
   },
 });
