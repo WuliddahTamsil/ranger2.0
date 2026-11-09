@@ -183,11 +183,14 @@ const readUriAsBase64 = async (uri: string): Promise<string> => {
   });
 };
 
-const uploadFormDataViaXhr = (url: string, formData: FormData): Promise<any> => {
+const uploadFormDataViaXhr = (url: string, formData: FormData, authorizationHeader?: string): Promise<any> => {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
     xhr.timeout = 30000;
+    if (authorizationHeader) {
+      xhr.setRequestHeader("Authorization", authorizationHeader);
+    }
     xhr.onload = () => {
       try {
         const parsed = JSON.parse(xhr.responseText);
@@ -222,6 +225,7 @@ export const uploadFileToBackend = async (
 ) => {
   const safeFileName = fileName || `upload-${Date.now()}.jpg`;
   const safeMimeType = mimeType || "image/jpeg";
+  const authHeaders = await getAuthHeaders();
 
   // Step 1: Obtain Base64 string if not already provided
   let resolvedBase64 = base64Data || "";
@@ -244,7 +248,10 @@ export const uploadFileToBackend = async (
       const timer = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(getApiUrl("/upload"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          ...authHeaders,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           base64: resolvedBase64,
           fileName: safeFileName,
@@ -295,6 +302,9 @@ export const uploadFileToBackend = async (
       const timer = setTimeout(() => controller.abort(), 25000);
       const response = await fetch(getApiUrl("/upload"), {
         method: "POST",
+        headers: {
+          ...authHeaders,
+        },
         body: formData,
         signal: controller.signal,
       });
@@ -314,7 +324,7 @@ export const uploadFileToBackend = async (
           type: safeMimeType,
         } as any);
 
-        const res = await uploadFormDataViaXhr(getApiUrl("/upload"), formData);
+        const res = await uploadFormDataViaXhr(getApiUrl("/upload"), formData, authHeaders.Authorization);
         if (res) {
           return {
             ...res,

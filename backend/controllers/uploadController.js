@@ -37,8 +37,8 @@ const uploadFile = async (req, res) => {
       fileBuffer = req.file.buffer;
       originalName = req.file.originalname || "upload.jpg";
       mimeType = req.file.mimetype || "image/jpeg";
-    } else if (req.body && (req.body.base64 || req.body.dataUrl || req.body.image)) {
-      const rawBase64 = String(req.body.base64 || req.body.dataUrl || req.body.image);
+    } else if (req.body && (req.body.base64 || req.body.dataUrl || req.body.image || (typeof req.body.file === "string" && (req.body.file.startsWith("data:") || req.body.file.length > 100)))) {
+      const rawBase64 = String(req.body.base64 || req.body.dataUrl || req.body.image || req.body.file);
       const match = rawBase64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
       if (match) {
         mimeType = match[1].toLowerCase();

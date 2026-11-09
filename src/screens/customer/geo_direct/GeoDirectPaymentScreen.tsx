@@ -43,7 +43,7 @@ import {
   GeoDirectBooking,
   GeoPaymentMethodsConfig,
 } from "../../../services/geoDirectService";
-import { getApiUrl, getStoredAuthToken } from "../../../services/api";
+import { getApiUrl, getStoredAuthToken, uploadFileToBackend } from "../../../services/api";
 import { rp } from "../../../utils/formatters";
 import { GeoDirectInvoiceModal } from "./GeoDirectInvoiceModal";
 
@@ -68,6 +68,7 @@ export const GeoDirectPaymentScreen: React.FC<GeoDirectPaymentScreenProps> = ({
   const [uploading, setUploading] = useState(false);
   const [submittingProof, setSubmittingProof] = useState(false);
   const [selectedProofUri, setSelectedProofUri] = useState<string | null>(null);
+  const [selectedProofBase64, setSelectedProofBase64] = useState<string | null>(null);
   const [uploadedProofUrl, setUploadedProofUrl] = useState<string>("");
   const [selectedBankName, setSelectedBankName] = useState<string>("");
 
@@ -120,57 +121,54 @@ export const GeoDirectPaymentScreen: React.FC<GeoDirectPaymentScreenProps> = ({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         quality: 0.8,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         setSelectedProofUri(asset.uri);
-        await uploadImageFile(asset.uri);
+        setSelectedProofBase64(asset.base64 || null);
+        await uploadImageFile(asset.uri, asset.base64 || undefined);
       }
     } catch (err: any) {
       Alert.alert("Gagal Memilih Berkas", err.message || "Gagal mengambil gambar.");
     }
   };
 
-  const uploadImageFile = async (uri: string) => {
+  const uploadImageFile = async (uri: string, base64?: string): Promise<string | null> => {
     try {
       setUploading(true);
-      const token = await getStoredAuthToken();
-      const formData = new FormData();
-      const filename = uri.split("/").pop() || "payment_proof.jpg";
+      const filename = uri.split("/").pop() || `payment_proof_${Date.now()}.jpg`;
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : "image/jpeg";
 
-      formData.append("file", {
-        uri: Platform.OS === "ios" ? uri.replace("file://", "") : uri,
-        name: filename,
-        type,
-      } as any);
+      const uploadRes = await uploadFileToBackend(uri, filename, type, base64);
+      const finalUrl = uploadRes?.data?.url || uploadRes?.url;
 
-      const res = await fetch(getApiUrl("/upload"), {
-        method: "POST",
-        headers: {
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: formData,
-      });
-
-      const json = await res.json();
-      if (json.success && json.url) {
-        setUploadedProofUrl(json.url);
-        Alert.alert("Unggah Berhasil", "Bukti transfer siap dikirimkan untuk verifikasi.");
+      if (uploadRes?.success && finalUrl) {
+        setUploadedProofUrl(finalUrl);
+        Alert.alert("Unggah Berhasil", "Bukti transfer berhasil diproses dan siap dikirimkan untuk verifikasi.");
+        return finalUrl;
       } else {
-        throw new Error(json.message || "Gagal mengunggah gambar.");
+        throw new Error(uploadRes?.message || "Gagal mengunggah gambar.");
       }
     } catch (err: any) {
       Alert.alert("Gagal Mengunggah", err.message || "Pastikan koneksi internet aktif.");
+      return null;
     } finally {
       setUploading(false);
     }
   };
 
   const handleSubmitProof = async () => {
-    if (!uploadedProofUrl) {
+    let finalUrl = uploadedProofUrl;
+
+    // If customer selected an image but upload hasn't finished / failed, attempt on-the-fly upload
+    if (!finalUrl && selectedProofUri) {
+      finalUrl = (await uploadImageFile(selectedProofUri, selectedProofBase64 || undefined)) || "";
+    }
+
+    if (!finalUrl) {
       Alert.alert("Bukti Belum Diunggah", "Silakan pilih dan unggah foto bukti transfer terlebih dahulu.");
       return;
     }
@@ -180,7 +178,7 @@ export const GeoDirectPaymentScreen: React.FC<GeoDirectPaymentScreenProps> = ({
     try {
       setSubmittingProof(true);
       const updated = await uploadPaymentProof(booking._id, {
-        fileUrl: uploadedProofUrl,
+        fileUrl: finalUrl,
         fileName: "bukti_transfer_dp.jpg",
         paymentMethodType: activeMethod === "QRIS" ? "QRIS" : "BANK_TRANSFER",
         transferToBank: selectedBankName,
@@ -438,8 +436,21 @@ export const GeoDirectPaymentScreen: React.FC<GeoDirectPaymentScreenProps> = ({
               {selectedProofUri || uploadedProofUrl ? (
                 <View style={styles.proofPreviewBox}>
                   <Image source={{ uri: selectedProofUri || uploadedProofUrl }} style={styles.proofPreviewImg} resizeMode="contain" />
-                  <TouchableOpacity style={styles.btnChangeProof} onPress={handlePickProof} activeOpacity={0.75}>
-                    <Text style={styles.btnChangeProofText}>Ganti Gambar</Text>
+                  {uploading && (
+                    <View style={styles.uploadingOverlay}>
+                      <ActivityIndicator size="small" color="#0D7A53" />
+                      <Text style={styles.uploadingOverlayText}>Memproses unggahan bukti...</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    style={styles.btnChangeProof}
+                    onPress={handlePickProof}
+                    activeOpacity={0.75}
+                    disabled={uploading || submittingProof}
+                  >
+                    <Text style={styles.btnChangeProofText}>
+                      {uploading ? "Sedang Mengunggah..." : uploadedProofUrl ? "Ganti Gambar" : "Coba Unggah Ulang"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -465,13 +476,13 @@ export const GeoDirectPaymentScreen: React.FC<GeoDirectPaymentScreenProps> = ({
               <TouchableOpacity
                 style={[
                   styles.btnSubmitProof,
-                  (!uploadedProofUrl || submittingProof || uploading) && styles.btnDisabled,
+                  (!uploadedProofUrl && !selectedProofUri || submittingProof || uploading) && styles.btnDisabled,
                 ]}
                 onPress={handleSubmitProof}
-                disabled={!uploadedProofUrl || submittingProof || uploading}
+                disabled={(!uploadedProofUrl && !selectedProofUri) || submittingProof || uploading}
                 activeOpacity={0.85}
               >
-                {submittingProof ? (
+                {submittingProof || uploading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
@@ -912,6 +923,22 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 180,
     borderRadius: 8,
+  },
+  uploadingOverlay: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#EAF8F0",
+    borderRadius: 8,
+  },
+  uploadingOverlayText: {
+    fontSize: 12,
+    color: "#0D7A53",
+    fontWeight: "600",
   },
   btnChangeProof: {
     marginTop: 8,
