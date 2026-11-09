@@ -96,7 +96,6 @@ const geoDirectEquipmentSchema = new mongoose.Schema(
 );
 
 // Indexes
-geoDirectEquipmentSchema.index({ code: 1 });
 geoDirectEquipmentSchema.index({ isActive: 1, isAvailable: 1 });
 
 module.exports = mongoose.model("GeoDirectEquipment", geoDirectEquipmentSchema);

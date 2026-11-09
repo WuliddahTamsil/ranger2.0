@@ -156,7 +156,6 @@ const geoDirectBookingSchema = new mongoose.Schema(
 );
 
 geoDirectBookingSchema.index({ customer: 1, createdAt: -1 });
-geoDirectBookingSchema.index({ bookingCode: 1 });
 geoDirectBookingSchema.index({ bookingStatus: 1, paymentStatus: 1 });
 
 module.exports = mongoose.model("GeoDirectBooking", geoDirectBookingSchema);
