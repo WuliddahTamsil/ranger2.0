@@ -16,6 +16,7 @@ import {
   StatusBar,
   Platform,
   Switch,
+  Modal,
 } from "react-native";
 import {
   ArrowLeft,
@@ -33,7 +34,9 @@ import {
   AlertCircle,
   FileText,
   ChevronRight,
+  ChevronLeft,
   Info,
+  X,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import {
@@ -77,6 +80,45 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
     const d = new Date();
     return d.toISOString().slice(0, 10);
   });
+
+  // Interactive Material 3 Calendar Date Picker State
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
+
+  const monthNamesInd = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+
+  const totalDaysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(calYear, calMonth, 1).getDay();
+
+  const handlePrevMonth = () => {
+    if (calMonth === 0) {
+      setCalMonth(11);
+      setCalYear((prev) => prev - 1);
+    } else {
+      setCalMonth((prev) => prev - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (calMonth === 11) {
+      setCalMonth(0);
+      setCalYear((prev) => prev + 1);
+    } else {
+      setCalMonth((prev) => prev + 1);
+    }
+  };
+
+  const handleConfirmDate = (day: number, month: number, year: number) => {
+    const mm = String(month + 1).padStart(2, "0");
+    const dd = String(day).padStart(2, "0");
+    setStartDateStr(`${year}-${mm}-${dd}`);
+    setIsDatePickerOpen(false);
+  };
   const [durationDays, setDurationDays] = useState("3");
   const [usagePurpose, setUsagePurpose] = useState("");
   const [usageLocation, setUsageLocation] = useState("PGE Kamojang Center of Excellence");
@@ -364,14 +406,42 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Tanggal Mulai Sewa (YYYY-MM-DD) *</Text>
-            <TextInput
-              style={styles.inputField}
-              value={startDateStr}
-              onChangeText={setStartDateStr}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#94A3B8"
-            />
+            <Text style={styles.inputLabel}>Tanggal Mulai Sewa *</Text>
+            <TouchableOpacity
+              style={styles.datePickerInputBtn}
+              onPress={() => {
+                try {
+                  const curr = new Date(startDateStr);
+                  if (!isNaN(curr.getTime())) {
+                    setCalYear(curr.getFullYear());
+                    setCalMonth(curr.getMonth());
+                    setSelectedDay(curr.getDate());
+                  }
+                } catch {}
+                setIsDatePickerOpen(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.datePickerInputLeft}>
+                <View style={styles.datePickerIconCircle}>
+                  <Calendar size={18} color="#0D7A53" />
+                </View>
+                <View>
+                  <Text style={styles.datePickerInputText}>
+                    {startDateStr
+                      ? (() => {
+                          const d = new Date(startDateStr + "T00:00:00");
+                          return `${d.getDate()} ${monthNamesInd[d.getMonth()]} ${d.getFullYear()}`;
+                        })()
+                      : "Pilih Tanggal Mulai"}
+                  </Text>
+                  <Text style={styles.datePickerInputSubtext}>{startDateStr}</Text>
+                </View>
+              </View>
+              <View style={styles.datePickerBadge}>
+                <Text style={styles.datePickerBadgeText}>Pilih di Kalender</Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.inputGroup}>
@@ -575,6 +645,81 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Interactive Material 3 Calendar Picker Modal */}
+      <Modal visible={isDatePickerOpen} transparent animationType="fade" onRequestClose={() => setIsDatePickerOpen(false)}>
+        <TouchableOpacity
+          style={styles.m3DatePickerOverlay}
+          activeOpacity={1}
+          onPress={() => setIsDatePickerOpen(false)}
+        >
+          <View style={styles.m3CalendarCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.m3HeaderSection}>
+              <Text style={styles.m3SelectLabel}>PILIH TANGGAL MULAI SEWA</Text>
+              <Text style={styles.m3SelectedDateText}>
+                {selectedDay} {monthNamesInd[calMonth]} {calYear}
+              </Text>
+            </View>
+
+            <View style={styles.m3CalendarBody}>
+              <View style={styles.m3MonthNavRow}>
+                <Text style={styles.m3MonthTitleText}>
+                  {monthNamesInd[calMonth]} {calYear}
+                </Text>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <TouchableOpacity onPress={handlePrevMonth} style={styles.navMonthBtn}>
+                    <ChevronLeft size={20} color="#0D7A53" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleNextMonth} style={styles.navMonthBtn}>
+                    <ChevronRight size={20} color="#0D7A53" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Day Headers (Min, Sen, Sel, Rab, Kam, Jum, Sab) */}
+              <View style={styles.dayHeadersRow}>
+                {["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"].map((d) => (
+                  <Text key={d} style={styles.dayHeaderCell}>{d}</Text>
+                ))}
+              </View>
+
+              {/* Day Grid */}
+              <View style={styles.m3DaysGrid}>
+                {/* Empty cells before first day */}
+                {Array.from({ length: firstDayOfMonth }, (_, i) => (
+                  <View key={`empty-${i}`} style={styles.m3DayCellEmpty} />
+                ))}
+                {/* Days in Month */}
+                {Array.from({ length: totalDaysInMonth }, (_, i) => i + 1).map((dayNum) => (
+                  <TouchableOpacity
+                    key={dayNum}
+                    style={[styles.m3DayCell, selectedDay === dayNum && styles.m3DayCellSelected]}
+                    onPress={() => setSelectedDay(dayNum)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.m3DayNumText, selectedDay === dayNum && styles.m3DayNumTextSelected]}>
+                      {dayNum}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.m3ActionsRow}>
+              <TouchableOpacity onPress={() => setIsDatePickerOpen(false)} style={styles.m3CancelBtn}>
+                <Text style={styles.m3CancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.m3ActionBtnPrimary}
+                onPress={() => handleConfirmDate(selectedDay, calMonth, calYear)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.m3OkText}>Pilih Tanggal</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -907,6 +1052,180 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     backgroundColor: "#94A3B8",
+  },
+  datePickerInputBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  datePickerInputLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  datePickerIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#ECFDF5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  datePickerInputText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  datePickerInputSubtext: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  datePickerBadge: {
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  datePickerBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  m3DatePickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  m3CalendarCard: {
+    width: "100%",
+    maxWidth: 340,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  m3HeaderSection: {
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+  },
+  m3SelectLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "rgba(255, 255, 255, 0.8)",
+    letterSpacing: 0.8,
+  },
+  m3SelectedDateText: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginTop: 4,
+  },
+  m3CalendarBody: {
+    padding: 16,
+  },
+  m3MonthNavRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  m3MonthTitleText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  navMonthBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#ECFDF5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayHeadersRow: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  dayHeaderCell: {
+    width: "14.28%",
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  m3DaysGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  m3DayCellEmpty: {
+    width: "14.28%",
+    height: 38,
+  },
+  m3DayCell: {
+    width: "14.28%",
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 19,
+    marginVertical: 1,
+  },
+  m3DayCellSelected: {
+    backgroundColor: "#0D7A53",
+  },
+  m3DayNumText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1E293B",
+  },
+  m3DayNumTextSelected: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  m3ActionsRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  m3CancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  m3CancelText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  m3ActionBtnPrimary: {
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  m3OkText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });
 
