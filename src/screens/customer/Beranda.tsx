@@ -1635,7 +1635,11 @@ export const Beranda: React.FC<CustomerHomeProps> = ({ navigate, authAccount, on
                   <View style={[styles.launcherBadge, { backgroundColor: "#0D7A53" }]}>
                     <Text style={styles.launcherBadgeText}>PGE CoE</Text>
                   </View>
-                  <Flame size={28} color="#0D7A53" />
+                  <Image
+                    source={require("../../../assets/geo-direct.png")}
+                    style={styles.launcherRideImg}
+                    resizeMode="cover"
+                  />
                 </View>
                 <Text style={styles.launcherLabel} numberOfLines={2}>Geo Direct</Text>
               </TouchableOpacity>
