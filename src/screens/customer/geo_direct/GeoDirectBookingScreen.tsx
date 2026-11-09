@@ -108,6 +108,13 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
     }
   }, [startDateStr, durationDays]);
 
+  const effectiveDpDue = useMemo(() => {
+    if (!pricingCalc) return 0;
+    if (!applyDpCredit || customerDpBalance <= 0) return pricingCalc.requiredDpAmount;
+    const credit = Math.min(customerDpBalance, pricingCalc.requiredDpAmount);
+    return Math.max(0, pricingCalc.requiredDpAmount - credit);
+  }, [pricingCalc, applyDpCredit, customerDpBalance]);
+
   // Load Equipment & DP Balance
   useEffect(() => {
     if (!equipmentId) return;
@@ -242,13 +249,6 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
       </View>
     );
   }
-
-  const effectiveDpDue = useMemo(() => {
-    if (!pricingCalc) return 0;
-    if (!applyDpCredit || customerDpBalance <= 0) return pricingCalc.requiredDpAmount;
-    const credit = Math.min(customerDpBalance, pricingCalc.requiredDpAmount);
-    return Math.max(0, pricingCalc.requiredDpAmount - credit);
-  }, [pricingCalc, applyDpCredit, customerDpBalance]);
 
   return (
     <View style={styles.container}>
