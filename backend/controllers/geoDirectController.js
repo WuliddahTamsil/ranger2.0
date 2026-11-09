@@ -47,13 +47,13 @@ async function ensureDefaultEquipments() {
             helperText: "Pilih komoditas yang akan diolah",
           },
           {
-            paramKey: "rawMaterialTons",
-            paramLabel: "Kapasitas Bahan Baku (Ton)",
+            paramKey: "rawMaterialKg",
+            paramLabel: "Kapasitas Bahan Baku (kg)",
             paramType: "number",
-            unit: "ton",
+            unit: "kg",
             required: true,
             ratePerUnit: 0,
-            helperText: "Estimasi volume bahan baku yang diproses",
+            helperText: "Estimasi volume bahan baku yang diproses (Minimal 1 kg)",
           },
         ],
       },
@@ -84,10 +84,10 @@ async function ensureDefaultEquipments() {
             required: true,
           },
           {
-            paramKey: "rawMaterialTons",
-            paramLabel: "Volume Bahan (Ton)",
+            paramKey: "rawMaterialKg",
+            paramLabel: "Volume Bahan (kg)",
             paramType: "number",
-            unit: "ton",
+            unit: "kg",
             required: true,
           },
         ],
@@ -118,10 +118,10 @@ async function ensureDefaultEquipments() {
             required: true,
           },
           {
-            paramKey: "rawMaterialTons",
-            paramLabel: "Kapasitas (Ton)",
+            paramKey: "rawMaterialKg",
+            paramLabel: "Kapasitas (kg)",
             paramType: "number",
-            unit: "ton",
+            unit: "kg",
             required: true,
           },
         ],
@@ -152,10 +152,10 @@ async function ensureDefaultEquipments() {
             required: true,
           },
           {
-            paramKey: "rawMaterialTons",
-            paramLabel: "Kapasitas (Ton)",
+            paramKey: "rawMaterialKg",
+            paramLabel: "Kapasitas (kg)",
             paramType: "number",
-            unit: "ton",
+            unit: "kg",
             required: true,
           },
         ],
@@ -163,6 +163,24 @@ async function ensureDefaultEquipments() {
     ];
 
     await GeoDirectEquipment.insertMany(defaultList);
+  } else {
+    // Auto-migrate any existing records with unit 'ton' or paramKey 'rawMaterialTons' to 'kg'
+    try {
+      await GeoDirectEquipment.updateMany(
+        { "productionParameters.unit": "ton" },
+        {
+          $set: {
+            "productionParameters.$[elem].unit": "kg",
+            "productionParameters.$[elem].paramLabel": "Kapasitas Bahan Baku (kg)",
+            "productionParameters.$[elem].paramKey": "rawMaterialKg",
+            "productionParameters.$[elem].helperText": "Estimasi volume bahan baku yang diproses (Minimal 1 kg)",
+          },
+        },
+        { arrayFilters: [{ "elem.unit": "ton" }] }
+      );
+    } catch (migErr) {
+      console.warn("Auto-migrate parameter unit warning:", migErr.message);
+    }
   }
 }
 

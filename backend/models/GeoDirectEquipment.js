@@ -70,7 +70,7 @@ const geoDirectEquipmentSchema = new mongoose.Schema(
     },
     pricingUnit: {
       type: String,
-      enum: ["per_hari", "per_minggu", "per_bulan", "per_ton", "per_batch"],
+      enum: ["per_hari", "per_minggu", "per_bulan", "per_ton", "per_kg", "per_batch"],
       default: "per_hari",
     },
     dpPercentage: {

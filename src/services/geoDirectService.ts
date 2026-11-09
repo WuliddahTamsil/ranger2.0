@@ -105,6 +105,7 @@ export interface GeoDirectBooking {
   notes?: string;
   productionNeeds?: {
     productType?: string;
+    rawMaterialKg?: number;
     rawMaterialTons?: number;
     processRequirements?: string;
     customParameters?: Record<string, any>;

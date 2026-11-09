@@ -69,6 +69,7 @@ const geoDirectBookingSchema = new mongoose.Schema(
     },
     productionNeeds: {
       productType: { type: String, default: "" }, // e.g. Teh, Kopi, etc.
+      rawMaterialKg: { type: Number, default: 0 },
       rawMaterialTons: { type: Number, default: 0 },
       processRequirements: { type: String, default: "" },
       customParameters: { type: mongoose.Schema.Types.Mixed, default: {} },

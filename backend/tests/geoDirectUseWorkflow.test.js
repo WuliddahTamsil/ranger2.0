@@ -116,6 +116,32 @@ runTest("Pricing Engine: Production parameter add-on (rate per ton) is integrate
   assert.strictEqual(calc.remainingBalance, 3375000); // 4.5jt - 1.125jt = 3.375.000
 });
 
+runTest("Pricing Engine: Production parameter add-on supports rate per kg with minimum 1 kg", () => {
+  const equipment = {
+    code: "EQ-01",
+    name: "Equipment 01",
+    basePrice: 1500000,
+    dpPercentage: 30,
+    productionParameters: [
+      {
+        paramKey: "rawMaterialKg",
+        paramLabel: "Kapasitas Bahan Baku (kg)",
+        ratePerUnit: 25000, // Rp 25.000 / kg
+      },
+    ],
+  };
+
+  const calc = calculateRentalCost(equipment, {
+    durationDays: 1,
+    productionNeeds: { rawMaterialKg: 10 }, // 10 kg * 25rb = 250rb
+  });
+
+  assert.strictEqual(calc.subtotalBase, 1500000);
+  assert.strictEqual(calc.productionAddonTotal, 250000);
+  assert.strictEqual(calc.totalRentalCost, 1750000);
+  assert.strictEqual(calc.requiredDpAmount, 525000); // 30% of 1.750.000
+});
+
 // ---------------------------------------------------------
 // TEST GROUP 2: DP CREDIT BALANCE & FINANCIAL INTEGRITY
 // ---------------------------------------------------------

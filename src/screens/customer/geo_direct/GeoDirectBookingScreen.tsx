@@ -126,7 +126,7 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
 
   // Dynamic Production Parameters
   const [productType, setProductType] = useState("Teh");
-  const [rawMaterialTons, setRawMaterialTons] = useState("2");
+  const [rawMaterialKg, setRawMaterialKg] = useState("1");
   const [processDetails, setProcessDetails] = useState("");
   const [customParamAnswers, setCustomParamAnswers] = useState<Record<string, any>>({});
 
@@ -189,7 +189,7 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
   useEffect(() => {
     if (!equipment) return;
     const dur = Math.max(1, parseInt(durationDays, 10) || 1);
-    const tons = Math.max(0, parseFloat(rawMaterialTons) || 0);
+    const kg = Math.max(1, parseFloat(rawMaterialKg) || 1);
 
     const timer = setTimeout(async () => {
       try {
@@ -199,7 +199,8 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
           durationDays: dur,
           productionNeeds: {
             productType,
-            rawMaterialTons: tons,
+            rawMaterialKg: kg,
+            rawMaterialTons: kg,
             ...customParamAnswers,
           },
         });
@@ -212,7 +213,7 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [equipment, durationDays, rawMaterialTons, productType, customParamAnswers]);
+  }, [equipment, durationDays, rawMaterialKg, productType, customParamAnswers]);
 
   const handleSubmit = async () => {
     if (!custName.trim() || !custPhone.trim()) {
@@ -222,6 +223,12 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
 
     if (!usagePurpose.trim() || !usageLocation.trim()) {
       Alert.alert("Informasi Belum Lengkap", "Tujuan dan lokasi penggunaan alat wajib diisi.");
+      return;
+    }
+
+    const kg = parseFloat(rawMaterialKg);
+    if (isNaN(kg) || kg < 1) {
+      Alert.alert("Kapasitas Tidak Valid", "Kapasitas bahan baku minimal adalah 1 kg.");
       return;
     }
 
@@ -247,7 +254,8 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
         notes: notes.trim(),
         productionNeeds: {
           productType,
-          rawMaterialTons: parseFloat(rawMaterialTons) || 0,
+          rawMaterialKg: kg,
+          rawMaterialTons: kg,
           processRequirements: processDetails.trim(),
           customParameters: customParamAnswers,
         },
@@ -514,17 +522,20 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
             />
           </View>
 
-          {/* Volume Tonnage */}
+          {/* Volume Kapasitas Bahan Baku (kg) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Kapasitas Bahan Baku (Ton)</Text>
+            <Text style={styles.inputLabel}>Kapasitas Bahan Baku (kg) *</Text>
             <TextInput
               style={styles.inputField}
-              value={rawMaterialTons}
-              onChangeText={setRawMaterialTons}
-              placeholder="Contoh: 2"
+              value={rawMaterialKg}
+              onChangeText={setRawMaterialKg}
+              placeholder="Minimal 1 kg (Contoh: 10)"
               placeholderTextColor="#94A3B8"
               keyboardType="numeric"
             />
+            <Text style={styles.inputHelper}>
+              Minimal pemesanan pengolahan adalah 1 kg bahan baku.
+            </Text>
           </View>
 
           {/* Process details */}

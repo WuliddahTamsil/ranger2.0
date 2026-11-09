@@ -305,8 +305,8 @@ export const GeoDirectInvoiceModal: React.FC<GeoDirectInvoiceModalProps> = ({
         ? `<div class="info-row">
             <div class="info-label">Komoditas / Bahan Baku</div>
             <div class="info-value">: ${booking.productionNeeds.productType} ${
-            booking.productionNeeds.rawMaterialTons
-              ? `(${booking.productionNeeds.rawMaterialTons} Ton)`
+            (booking.productionNeeds.rawMaterialKg || booking.productionNeeds.rawMaterialTons)
+              ? `(${booking.productionNeeds.rawMaterialKg || booking.productionNeeds.rawMaterialTons} kg)`
               : ""
           }</div>
           </div>`
@@ -333,7 +333,7 @@ export const GeoDirectInvoiceModal: React.FC<GeoDirectInvoiceModalProps> = ({
         price.productionAddonTotal > 0
           ? `<tr>
               <td>Biaya Tambahan Parameter Produksi</td>
-              <td style="text-align: right;">${booking.productionNeeds?.rawMaterialTons || 0} Ton</td>
+              <td style="text-align: right;">${booking.productionNeeds?.rawMaterialKg || booking.productionNeeds?.rawMaterialTons || 0} kg</td>
               <td style="text-align: right;">${rp(price.productionAddonTotal)}</td>
             </tr>`
           : ""

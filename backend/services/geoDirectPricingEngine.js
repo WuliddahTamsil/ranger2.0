@@ -21,7 +21,12 @@ function calculateRentalCost(equipment, options = {}) {
   if (Array.isArray(equipment.productionParameters)) {
     for (const param of equipment.productionParameters) {
       if (param.ratePerUnit && param.ratePerUnit > 0) {
-        const val = Number(productionNeeds[param.paramKey] || productionNeeds.rawMaterialTons || 0);
+        const val = Number(
+          productionNeeds[param.paramKey] ||
+            productionNeeds.rawMaterialKg ||
+            productionNeeds.rawMaterialTons ||
+            0
+        );
         if (!isNaN(val) && val > 0) {
           productionAddonRate += param.ratePerUnit;
           productionAddonTotal += val * param.ratePerUnit;
@@ -33,14 +38,14 @@ function calculateRentalCost(equipment, options = {}) {
   // Fallback if equipment has formula type DAILY_PLUS_CAPACITY with direct capacity fee
   if (
     equipment.pricingFormulaType === "DAILY_PLUS_CAPACITY" &&
-    productionNeeds.rawMaterialTons &&
+    (productionNeeds.rawMaterialKg || productionNeeds.rawMaterialTons) &&
     productionAddonTotal === 0
   ) {
-    const tons = Number(productionNeeds.rawMaterialTons) || 0;
+    const qty = Number(productionNeeds.rawMaterialKg || productionNeeds.rawMaterialTons) || 0;
     // Only if rate is explicitly configured on the equipment
     const capacityRate = Number(equipment.capacityRate) || 0;
     productionAddonRate = capacityRate;
-    productionAddonTotal = tons * capacityRate;
+    productionAddonTotal = qty * capacityRate;
   }
 
   // 3. Total calculation
