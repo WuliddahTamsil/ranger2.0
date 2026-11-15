@@ -63,6 +63,7 @@ import {
   adminApproveBooking,
   adminRejectBooking,
   fetchAdminDpLedgers,
+  setAdminGeoDirectTokenOverride,
   GeoDirectEquipment,
   GeoDirectBooking,
   GeoDirectDashboardStats,
@@ -73,11 +74,22 @@ import {
 import { rp } from "../utils/formatters";
 import { GeoDirectInvoiceModal } from "../screens/customer/geo_direct/GeoDirectInvoiceModal";
 
-export const AdminGeoDirectSection: React.FC = () => {
+interface AdminGeoDirectSectionProps {
+  authAccount?: any;
+}
+
+export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ authAccount }) => {
   // Navigation Sub-tab: "OVERVIEW" | "EQUIPMENT" | "BOOKINGS" | "PAYMENT_CONFIG" | "DP_LEDGER"
   const [subTab, setSubTab] = useState<
     "OVERVIEW" | "EQUIPMENT" | "BOOKINGS" | "PAYMENT_CONFIG" | "DP_LEDGER"
   >("OVERVIEW");
+
+  // Keep token override synced if authAccount prop is supplied
+  useEffect(() => {
+    if (authAccount?.token) {
+      setAdminGeoDirectTokenOverride(authAccount.token);
+    }
+  }, [authAccount?.token]);
 
   // State
   const [stats, setStats] = useState<GeoDirectDashboardStats | null>(null);
@@ -129,24 +141,61 @@ export const AdminGeoDirectSection: React.FC = () => {
   const [bankAccountsList, setBankAccountsList] = useState<GeoBankAccount[]>([]);
   const [savingConfig, setSavingConfig] = useState(false);
 
+  // Pending Review Count
+  const pendingReviewCount =
+    (stats?.paymentReviewCount ?? 0) ||
+    bookings.filter(
+      (b) => b.bookingStatus === "PAYMENT_REVIEW" || b.paymentStatus === "WAITING_VERIFICATION"
+    ).length;
+
   // Load All Section Data
   const refreshAll = useCallback(async () => {
     try {
       setLoading(true);
+      if (authAccount?.token) {
+        setAdminGeoDirectTokenOverride(authAccount.token);
+      }
+
       const [statsData, equipData, bookingsData, payData, ledgerData] = await Promise.all([
-        fetchAdminGeoStats().catch(() => null),
-        fetchEquipments().catch(() => []),
-        fetchAdminGeoBookings({ status: bookingStatusFilter, search: bookingSearch }).catch(() => ({
-          bookings: [],
-          totalCount: 0,
-          currentPage: 1,
-          totalPages: 1,
-        })),
+        fetchAdminGeoStats().catch((err) => {
+          console.warn("[AdminGeoDirect] fetchAdminGeoStats error:", err?.message || err);
+          return null;
+        }),
+        fetchEquipments().catch((err) => {
+          console.warn("[AdminGeoDirect] fetchEquipments error:", err?.message || err);
+          return [];
+        }),
+        fetchAdminGeoBookings({ status: bookingStatusFilter, search: bookingSearch }).catch((err) => {
+          console.warn("[AdminGeoDirect] fetchAdminGeoBookings error:", err?.message || err);
+          return {
+            bookings: [],
+            totalCount: 0,
+            currentPage: 1,
+            totalPages: 1,
+          };
+        }),
         fetchPaymentMethods().catch(() => null),
         fetchAdminDpLedgers().catch(() => []),
       ]);
 
-      if (statsData) setStats(statsData);
+      if (statsData) {
+        setStats(statsData);
+      } else if (bookingsData?.bookings && bookingsData.bookings.length > 0) {
+        // Fallback calculation from bookings if stats endpoint had transient auth delay
+        const bks = bookingsData.bookings;
+        setStats({
+          totalEquipments: equipData.length,
+          totalBookings: bookingsData.totalCount || bks.length,
+          waitingPaymentCount: bks.filter((b) => b.bookingStatus === "WAITING_PAYMENT").length,
+          paymentReviewCount: bks.filter((b) => b.bookingStatus === "PAYMENT_REVIEW" || b.paymentStatus === "WAITING_VERIFICATION").length,
+          waitingApprovalCount: bks.filter((b) => b.bookingStatus === "WAITING_APPROVAL" || (b.paymentStatus === "VERIFIED" && b.bookingStatus !== "APPROVED")).length,
+          approvedCount: bks.filter((b) => b.bookingStatus === "APPROVED").length,
+          rejectedCount: bks.filter((b) => b.bookingStatus === "REJECTED").length,
+          totalGmv: bks.reduce((sum, b) => sum + (b.pricingSnapshot?.totalRentalCost || 0), 0),
+          totalVerifiedDp: bks.reduce((sum, b) => sum + (b.paymentStatus === "VERIFIED" ? (b.pricingSnapshot?.requiredDpAmount || 0) : 0), 0),
+        });
+      }
+
       setEquipments(equipData);
       setBookings(bookingsData.bookings);
       if (payData) {
@@ -163,7 +212,7 @@ export const AdminGeoDirectSection: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [bookingStatusFilter, bookingSearch]);
+  }, [bookingStatusFilter, bookingSearch, authAccount?.token]);
 
   useEffect(() => {
     refreshAll();
@@ -428,7 +477,12 @@ export const AdminGeoDirectSection: React.FC = () => {
         {[
           { key: "OVERVIEW", label: "Statistik", icon: TrendingUp },
           { key: "EQUIPMENT", label: "Katalog Alat", icon: Layers },
-          { key: "BOOKINGS", label: "Pengajuan & Approval", icon: FileText },
+          {
+            key: "BOOKINGS",
+            label: pendingReviewCount > 0 ? `Pengajuan & Approval (${pendingReviewCount})` : "Pengajuan & Approval",
+            icon: FileText,
+            hasBadge: pendingReviewCount > 0,
+          },
           { key: "PAYMENT_CONFIG", label: "Metode Bayar", icon: QrCode },
           { key: "DP_LEDGER", label: "Ledger Saldo DP", icon: Coins },
         ].map((tab) => {
@@ -437,12 +491,22 @@ export const AdminGeoDirectSection: React.FC = () => {
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.subTabBtn, active && styles.subTabBtnActive]}
+              style={[
+                styles.subTabBtn,
+                active && styles.subTabBtnActive,
+                tab.hasBadge && !active && { borderColor: "#F59E0B", backgroundColor: "#FFFBEB" },
+              ]}
               onPress={() => setSubTab(tab.key as any)}
               activeOpacity={0.8}
             >
-              <Icon size={14} color={active ? "#0D7A53" : "#64748B"} />
-              <Text style={[styles.subTabBtnText, active && styles.subTabBtnTextActive]}>
+              <Icon size={14} color={active ? "#0D7A53" : tab.hasBadge ? "#B45309" : "#64748B"} />
+              <Text
+                style={[
+                  styles.subTabBtnText,
+                  active && styles.subTabBtnTextActive,
+                  tab.hasBadge && !active && { color: "#B45309", fontWeight: "700" },
+                ]}
+              >
                 {tab.label}
               </Text>
             </TouchableOpacity>
@@ -462,50 +526,144 @@ export const AdminGeoDirectSection: React.FC = () => {
         <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabContentInner}>
           {/* Key Metric Cards */}
           <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
+            <TouchableOpacity
+              style={styles.statCard}
+              onPress={() => setSubTab("EQUIPMENT")}
+              activeOpacity={0.75}
+            >
               <Text style={styles.statLabel}>Total Alat CoE</Text>
               <Text style={styles.statVal}>{stats?.totalEquipments || equipments.length}</Text>
-              <Text style={styles.statSub}>Placeholder & Aktif</Text>
-            </View>
+              <Text style={styles.statSub}>Placeholder & Aktif →</Text>
+            </TouchableOpacity>
 
-            <View style={styles.statCard}>
+            <TouchableOpacity
+              style={styles.statCard}
+              onPress={() => {
+                setBookingStatusFilter("ALL");
+                setSubTab("BOOKINGS");
+              }}
+              activeOpacity={0.75}
+            >
               <Text style={styles.statLabel}>Total Pengajuan</Text>
-              <Text style={styles.statVal}>{stats?.totalBookings || bookings.length}</Text>
-              <Text style={styles.statSub}>Seluruh Transaksi</Text>
-            </View>
+              <Text style={styles.statVal}>{stats?.totalBookings ?? bookings.length}</Text>
+              <Text style={styles.statSub}>Seluruh Transaksi →</Text>
+            </TouchableOpacity>
 
-            <View style={[styles.statCard, { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" }]}>
-              <Text style={[styles.statLabel, { color: "#92400E" }]}>Review Pembayaran</Text>
+            <TouchableOpacity
+              style={[
+                styles.statCard,
+                { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" },
+                pendingReviewCount > 0 && { borderWidth: 2, borderColor: "#F59E0B" },
+              ]}
+              onPress={() => {
+                setBookingStatusFilter("PAYMENT_REVIEW");
+                setSubTab("BOOKINGS");
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text style={[styles.statLabel, { color: "#92400E" }]}>Review Pembayaran</Text>
+                {pendingReviewCount > 0 && <Clock size={12} color="#B45309" />}
+              </View>
               <Text style={[styles.statVal, { color: "#B45309" }]}>
-                {stats?.paymentReviewCount || 0}
+                {stats?.paymentReviewCount ?? pendingReviewCount}
               </Text>
-              <Text style={[styles.statSub, { color: "#B45309" }]}>Perlu Verifikasi Bukti</Text>
-            </View>
+              <Text style={[styles.statSub, { color: "#B45309", fontWeight: "700" }]}>
+                {pendingReviewCount > 0 ? "⚡ Perlu Verifikasi Segera →" : "Perlu Verifikasi Bukti"}
+              </Text>
+            </TouchableOpacity>
 
-            <View style={[styles.statCard, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}
+              onPress={() => {
+                setBookingStatusFilter("WAITING_APPROVAL");
+                setSubTab("BOOKINGS");
+              }}
+              activeOpacity={0.75}
+            >
               <Text style={[styles.statLabel, { color: "#1E40AF" }]}>Menunggu Approval</Text>
               <Text style={[styles.statVal, { color: "#1D4ED8" }]}>
                 {stats?.waitingApprovalCount || 0}
               </Text>
-              <Text style={[styles.statSub, { color: "#1D4ED8" }]}>DP Terverifikasi</Text>
-            </View>
+              <Text style={[styles.statSub, { color: "#1D4ED8" }]}>DP Terverifikasi →</Text>
+            </TouchableOpacity>
 
-            <View style={[styles.statCard, { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }]}>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }]}
+              onPress={() => {
+                setBookingStatusFilter("APPROVED");
+                setSubTab("BOOKINGS");
+              }}
+              activeOpacity={0.75}
+            >
               <Text style={[styles.statLabel, { color: "#166534" }]}>Disetujui (Approved)</Text>
               <Text style={[styles.statVal, { color: "#15803D" }]}>
                 {stats?.approvedCount || 0}
               </Text>
-              <Text style={[styles.statSub, { color: "#15803D" }]}>Nota Diterbitkan</Text>
-            </View>
+              <Text style={[styles.statSub, { color: "#15803D" }]}>Nota Diterbitkan →</Text>
+            </TouchableOpacity>
 
-            <View style={[styles.statCard, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}
+              onPress={() => {
+                setBookingStatusFilter("REJECTED");
+                setSubTab("BOOKINGS");
+              }}
+              activeOpacity={0.75}
+            >
               <Text style={[styles.statLabel, { color: "#991B1B" }]}>Ditolak (Revisi)</Text>
               <Text style={[styles.statVal, { color: "#DC2626" }]}>
                 {stats?.rejectedCount || 0}
               </Text>
-              <Text style={[styles.statSub, { color: "#DC2626" }]}>DP Disimpan di Ledger</Text>
-            </View>
+              <Text style={[styles.statSub, { color: "#DC2626" }]}>DP Disimpan di Ledger →</Text>
+            </TouchableOpacity>
           </View>
+
+          {/* Quick Verification Alert Box */}
+          {pendingReviewCount > 0 && (
+            <View
+              style={{
+                backgroundColor: "#FFFBEB",
+                borderWidth: 1.5,
+                borderColor: "#F59E0B",
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 16,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <Clock size={16} color="#B45309" />
+                <Text style={{ fontSize: 14, fontWeight: "700", color: "#92400E" }}>
+                  Ada {pendingReviewCount} Pembayaran DP Menunggu Verifikasi Admin
+                </Text>
+              </View>
+              <Text style={{ fontSize: 12, color: "#78350F", lineHeight: 18, marginBottom: 12 }}>
+                Customer telah mengunggah bukti pembayaran transfer bank/QRIS. Silakan klik tombol di bawah untuk memeriksa struk dan memvalidasi DP.
+              </Text>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#0D7A53",
+                  borderRadius: 8,
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+                onPress={() => {
+                  setBookingStatusFilter("PAYMENT_REVIEW");
+                  setSubTab("BOOKINGS");
+                }}
+                activeOpacity={0.8}
+              >
+                <CheckCircle2 size={15} color="#FFFFFF" />
+                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>
+                  Buka Tab Pengajuan & Approval Sekarang
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Financial Summary */}
           <View style={styles.financialBanner}>

@@ -3,7 +3,7 @@
  * Frontend API Service and Types for Geo Direct Use (PGE Kamojang)
  */
 
-import { getApiUrl, getStoredAuthToken } from "./api";
+import { getApiUrl, getStoredAuthToken, getAuthHeaders } from "./api";
 
 export interface GeoProductionParameter {
   _id?: string;
@@ -191,12 +191,20 @@ export interface GeoDirectDashboardStats {
 }
 
 // ==========================================
-// API HELPER WITH AUTH
+// API HELPER WITH AUTH & TOKEN OVERRIDE
 // ==========================================
+let adminTokenOverride: string | null = null;
+
+export const setAdminGeoDirectTokenOverride = (token?: string | null) => {
+  adminTokenOverride = token || null;
+};
+
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = await getStoredAuthToken();
+  const authHeaders = await getAuthHeaders();
+  const token = adminTokenOverride || (await getStoredAuthToken());
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...authHeaders,
     ...(options.headers as Record<string, string>),
   };
   if (token) {
@@ -204,14 +212,20 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   }
 
   const url = getApiUrl(endpoint);
-  const response = await fetch(url, { ...options, headers });
-  const result = await response.json();
+  try {
+    const response = await fetch(url, { ...options, headers });
+    const result = await response.json();
 
-  if (!response.ok || result.success === false) {
-    throw new Error(result.message || `Request failed with status ${response.status}`);
+    if (!response.ok || result.success === false) {
+      console.warn(`[geoDirectService] ${options.method || "GET"} ${endpoint} (${response.status}):`, result.message);
+      throw new Error(result.message || `Request failed with status ${response.status}`);
+    }
+
+    return result.data as T;
+  } catch (err: any) {
+    console.warn(`[geoDirectService] Request to ${endpoint} failed:`, err?.message || err);
+    throw err;
   }
-
-  return result.data as T;
 }
 
 // ==========================================

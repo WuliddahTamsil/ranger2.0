@@ -2665,7 +2665,7 @@ export const AdminHomeScreen: React.FC<AdminHomeProps> = ({ navigate, authAccoun
             ) : adminCmsSubTab === "INFO_HUB" ? (
               <AdminPgeInfoHubSection onPreviewCustomer={() => navigate("c_home")} />
             ) : adminCmsSubTab === "GEO_DIRECT" ? (
-              <AdminGeoDirectSection />
+              <AdminGeoDirectSection authAccount={authAccount} />
             ) : (
               <View style={{ paddingHorizontal: 16, paddingTop: 10, gap: 16 }}>
                 {/* 1. Master Voucher Platform Management Card */}
