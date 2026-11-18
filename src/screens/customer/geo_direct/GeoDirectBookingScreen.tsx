@@ -53,6 +53,9 @@ interface GeoDirectBookingScreenProps extends Nav {
   authAccount?: any;
   routeParams?: {
     equipmentId?: string;
+    initialVolumeKg?: number;
+    initialDryingMethod?: string;
+    initialCoffeeType?: string;
   };
 }
 
@@ -67,6 +70,10 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
   const [equipment, setEquipment] = useState<GeoDirectEquipment | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Dryhouse Specific States
+  const [coffeeType, setCoffeeType] = useState(routeParams?.initialCoffeeType || "Arabika Kamojang");
+  const [dryingMethod, setDryingMethod] = useState(routeParams?.initialDryingMethod || "Geothermal Wash");
 
   // Customer Profile Form
   const [custName, setCustName] = useState(authAccount?.name || "");
@@ -125,8 +132,11 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
   const [notes, setNotes] = useState("");
 
   // Dynamic Production Parameters
-  const [productType, setProductType] = useState("Teh");
-  const [rawMaterialKg, setRawMaterialKg] = useState("1");
+  const isDryhouse = equipment?.facilityType === "DRYHOUSE" || equipment?.code === "EQ-01";
+  const [productType, setProductType] = useState("Kopi Arabika");
+  const [rawMaterialKg, setRawMaterialKg] = useState(() =>
+    routeParams?.initialVolumeKg ? String(routeParams.initialVolumeKg) : "500"
+  );
   const [processDetails, setProcessDetails] = useState("");
   const [customParamAnswers, setCustomParamAnswers] = useState<Record<string, any>>({});
 
@@ -228,18 +238,35 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
 
     const kg = parseFloat(rawMaterialKg);
     if (isNaN(kg) || kg < 1) {
-      Alert.alert("Kapasitas Tidak Valid", "Kapasitas bahan baku minimal adalah 1 kg.");
+      Alert.alert("Kapasitas Tidak Valid", "Kapasitas bahan baku tidak valid.");
       return;
     }
 
-    const durDays = Math.max(1, parseInt(durationDays, 10) || 1);
-    const maxCapacityKg = durDays * 10000;
-    if (kg > maxCapacityKg) {
-      Alert.alert(
-        "Kapasitas Melebihi Batas Maksimal",
-        `Alat ini memiliki batas maksimal kapasitas pengolahan 10 Ton (10.000 kg) per hari.\n\nUntuk durasi sewa ${durDays} hari, kapasitas maksimal adalah ${maxCapacityKg / 1000} Ton (${maxCapacityKg.toLocaleString()} kg).\n\nSilakan kurangi jumlah bahan baku atau tambah durasi hari sewa.`
-      );
-      return;
+    if (isDryhouse) {
+      if (kg < 100) {
+        Alert.alert(
+          "Volume Di Bawah Batas Minimal",
+          "Minimal volume pengeringan fasilitas Geothermal Dryhouse adalah 100 kg kopi cherry."
+        );
+        return;
+      }
+      if (kg > 6000) {
+        Alert.alert(
+          "Volume Melebihi Kapasitas Maksimal",
+          "Kapasitas total fasilitas Dryhouse adalah maksimal 6.000 kg kopi cherry per batch."
+        );
+        return;
+      }
+    } else {
+      const durDays = Math.max(1, parseInt(durationDays, 10) || 1);
+      const maxCapacityKg = durDays * 10000;
+      if (kg > maxCapacityKg) {
+        Alert.alert(
+          "Kapasitas Melebihi Batas Maksimal",
+          `Alat ini memiliki batas maksimal kapasitas pengolahan 10 Ton (10.000 kg) per hari.\n\nUntuk durasi sewa ${durDays} hari, kapasitas maksimal adalah ${maxCapacityKg / 1000} Ton (${maxCapacityKg.toLocaleString()} kg).\n\nSilakan kurangi jumlah bahan baku atau tambah durasi hari sewa.`
+        );
+        return;
+      }
     }
 
     if (!equipment) return;
@@ -259,15 +286,25 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
           startDate: new Date(startDateStr).toISOString(),
           endDate: new Date(endDateStr).toISOString(),
         },
-        usagePurpose: usagePurpose.trim(),
+        usagePurpose:
+          usagePurpose.trim() ||
+          (isDryhouse
+            ? `Pengeringan Kopi ${coffeeType} - Metode ${dryingMethod}`
+            : "Pengolahan Hasil Pertanian CoE"),
         usageLocation: usageLocation.trim(),
         notes: notes.trim(),
         productionNeeds: {
-          productType,
+          productType: isDryhouse ? coffeeType : productType,
           rawMaterialKg: kg,
-          rawMaterialTons: kg,
-          processRequirements: processDetails.trim(),
-          customParameters: customParamAnswers,
+          rawMaterialTons: kg / 1000,
+          dryingMethod: isDryhouse ? dryingMethod : undefined,
+          processRequirements: isDryhouse
+            ? `Metode: ${dryingMethod} • Jenis Kopi: ${coffeeType}`
+            : processDetails.trim(),
+          customParameters: {
+            ...(isDryhouse ? { coffeeType, dryingMethod } : {}),
+            ...customParamAnswers,
+          },
         },
         applyDpCredit,
       });
@@ -513,54 +550,166 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
           </View>
         </View>
 
-        {/* SECTION C: Kebutuhan Produksi (Dynamic Parameters) */}
+        {/* SECTION C: Kebutuhan Produksi / Data Dryhouse */}
         <View style={styles.cardSection}>
           <View style={styles.sectionHeader}>
             <Flame size={16} color="#0D7A53" />
-            <Text style={styles.sectionTitle}>C. Kebutuhan Produksi & Komoditas</Text>
-          </View>
-
-          {/* Commodity Type */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Jenis Produk / Bahan Baku</Text>
-            <TextInput
-              style={styles.inputField}
-              value={productType}
-              onChangeText={setProductType}
-              placeholder="Contoh: Teh, Kopi, Jamur, Essential Oil"
-              placeholderTextColor="#94A3B8"
-            />
-          </View>
-
-          {/* Volume Kapasitas Bahan Baku (kg) */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Kapasitas Bahan Baku (kg) *</Text>
-            <TextInput
-              style={styles.inputField}
-              value={rawMaterialKg}
-              onChangeText={setRawMaterialKg}
-              placeholder="Minimal 1 kg, Maksimal 10.000 kg/hari"
-              placeholderTextColor="#94A3B8"
-              keyboardType="numeric"
-            />
-            <Text style={styles.inputHelper}>
-              Minimal 1 kg. Maksimal kapasitas alat adalah 10 Ton (10.000 kg) per hari (Maks. {(parseInt(durationDays, 10) || 1) * 10} Ton untuk {durationDays || 1} hari sewa).
+            <Text style={styles.sectionTitle}>
+              {isDryhouse ? "C. Data Pemesanan Geothermal Dryhouse" : "C. Kebutuhan Produksi & Komoditas"}
             </Text>
           </View>
 
-          {/* Process details */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Kebutuhan Proses Produksi</Text>
-            <TextInput
-              style={[styles.inputField, styles.textArea]}
-              value={processDetails}
-              onChangeText={setProcessDetails}
-              placeholder="Deskripsi spesifik perlakuan panas / pengeringan yang diinginkan"
-              placeholderTextColor="#94A3B8"
-              multiline
-              numberOfLines={2}
-            />
-          </View>
+          {isDryhouse ? (
+            <>
+              {/* Jenis Kopi */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Jenis Kopi / Varietas *</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                  {["Arabika Kamojang", "Robusta Garut", "Liberika", "Excelsa"].map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: 6,
+                        backgroundColor: coffeeType === opt ? "#0D7A53" : "#F1F5F9",
+                      }}
+                      onPress={() => setCoffeeType(opt)}
+                      activeOpacity={0.75}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "600",
+                          color: coffeeType === opt ? "#FFFFFF" : "#475569",
+                        }}
+                      >
+                        {opt}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.inputField}
+                  value={coffeeType}
+                  onChangeText={setCoffeeType}
+                  placeholder="Ketik jenis kopi kustom jika lainnya"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              {/* Metode Pengeringan */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Metode Pengeringan Panas Bumi *</Text>
+                <View style={{ gap: 8, marginTop: 4 }}>
+                  {[
+                    {
+                      id: "Geothermal Wash",
+                      title: "Geothermal Wash",
+                      badge: "Clean & Bright",
+                      desc: "Aliran udara hangat geotermal terkontrol untuk profil cup clean & acidity seimbang.",
+                    },
+                    {
+                      id: "Honey Skin Contact",
+                      title: "Honey Skin Contact",
+                      badge: "High Sweetness",
+                      desc: "Optimalisasi retensi mucilage dengan sirkulasi panas terkontrol tanpa over-fermentasi.",
+                    },
+                    {
+                      id: "Natural Quick Dry",
+                      title: "Natural Quick Dry",
+                      badge: "Fruity & Exotic",
+                      desc: "Pengeringan seragam cherry utuh terlindung cuaca untuk profil rasa buah kaya.",
+                    },
+                  ].map((m) => {
+                    const isMActive = dryingMethod === m.id;
+                    return (
+                      <TouchableOpacity
+                        key={m.id}
+                        style={{
+                          padding: 10,
+                          borderRadius: 8,
+                          borderWidth: 1.5,
+                          borderColor: isMActive ? "#0D7A53" : "#E2E8F0",
+                          backgroundColor: isMActive ? "#F0FDF4" : "#F8FAFC",
+                        }}
+                        onPress={() => setDryingMethod(m.id)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                          <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>{m.title}</Text>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#0D7A53", backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            {m.badge}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: "#64748B", marginTop: 4, lineHeight: 15 }}>{m.desc}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Volume Kopi Cherry (kg) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Berat Kopi Cherry (kg) *</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={rawMaterialKg}
+                  onChangeText={setRawMaterialKg}
+                  placeholder="Minimal 100 kg, Maksimal 6.000 kg"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                />
+                <Text style={styles.inputHelper}>
+                  Kapasitas acuan: 4 unit Dryhouse • Maksimal 6.000 kg per batch (Minimal order 100 kg).
+                </Text>
+              </View>
+            </>
+          ) : (
+            <>
+              {/* Commodity Type */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Jenis Produk / Bahan Baku</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={productType}
+                  onChangeText={setProductType}
+                  placeholder="Contoh: Teh, Kopi, Jamur, Essential Oil"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              {/* Volume Kapasitas Bahan Baku (kg) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Kapasitas Bahan Baku (kg) *</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={rawMaterialKg}
+                  onChangeText={setRawMaterialKg}
+                  placeholder="Minimal 1 kg, Maksimal 10.000 kg/hari"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                />
+                <Text style={styles.inputHelper}>
+                  Minimal 1 kg. Maksimal kapasitas alat adalah 10 Ton (10.000 kg) per hari (Maks. {(parseInt(durationDays, 10) || 1) * 10} Ton untuk {durationDays || 1} hari sewa).
+                </Text>
+              </View>
+
+              {/* Process details */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Kebutuhan Proses Produksi</Text>
+                <TextInput
+                  style={[styles.inputField, styles.textArea]}
+                  value={processDetails}
+                  onChangeText={setProcessDetails}
+                  placeholder="Deskripsi spesifik perlakuan panas / pengeringan yang diinginkan"
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+            </>
+          )}
         </View>
 
         {/* SECTION D: DP Credit Application (If Customer has DP balance from rejected booking) */}
@@ -597,24 +746,47 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
 
           {pricingCalc ? (
             <View style={styles.pricingRows}>
-              <View style={styles.calcRow}>
-                <Text style={styles.calcLabel}>Biaya Sewa Pokok ({durationDays} Hari)</Text>
-                <Text style={styles.calcVal}>
-                  {pricingCalc.basePrice > 0 ? rp(pricingCalc.subtotalBase) : "Menunggu Konfigurasi PGE"}
-                </Text>
-              </View>
+              {isDryhouse ? (
+                <>
+                  <View style={styles.calcRow}>
+                    <Text style={styles.calcLabel}>Volume Kopi Cherry</Text>
+                    <Text style={styles.calcVal}>{parseFloat(rawMaterialKg) || 500} kg</Text>
+                  </View>
+                  <View style={styles.calcRow}>
+                    <Text style={styles.calcLabel}>Tarif Terjadwal ({pricingCalc.occupancyTierLabel || "0–30% Okupansi"})</Text>
+                    <Text style={styles.calcVal}>
+                      {pricingCalc.ratePerKg ? rp(pricingCalc.ratePerKg) : rp(500)}/kg
+                    </Text>
+                  </View>
+                  {pricingCalc.discountPercent !== undefined && pricingCalc.discountPercent > 0 && (
+                    <View style={styles.calcRow}>
+                      <Text style={[styles.calcLabel, { color: "#16A34A" }]}>Diskon Okupansi Terjadwal</Text>
+                      <Text style={[styles.calcVal, { color: "#16A34A" }]}>{pricingCalc.discountPercent}%</Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <>
+                  <View style={styles.calcRow}>
+                    <Text style={styles.calcLabel}>Biaya Sewa Pokok ({durationDays} Hari)</Text>
+                    <Text style={styles.calcVal}>
+                      {pricingCalc.basePrice > 0 ? rp(pricingCalc.subtotalBase) : "Menunggu Konfigurasi PGE"}
+                    </Text>
+                  </View>
 
-              {pricingCalc.productionAddonTotal > 0 && (
-                <View style={styles.calcRow}>
-                  <Text style={styles.calcLabel}>Tambahan Kapasitas Produksi</Text>
-                  <Text style={styles.calcVal}>{rp(pricingCalc.productionAddonTotal)}</Text>
-                </View>
+                  {pricingCalc.productionAddonTotal > 0 && (
+                    <View style={styles.calcRow}>
+                      <Text style={styles.calcLabel}>Tambahan Kapasitas Produksi</Text>
+                      <Text style={styles.calcVal}>{rp(pricingCalc.productionAddonTotal)}</Text>
+                    </View>
+                  )}
+                </>
               )}
 
               <View style={[styles.calcRow, styles.calcRowTotal]}>
                 <Text style={styles.calcLabelTotal}>Total Biaya Sewa</Text>
                 <Text style={styles.calcValTotal}>
-                  {pricingCalc.basePrice > 0 ? rp(pricingCalc.totalRentalCost) : "Sesuai PGE"}
+                  {pricingCalc.totalRentalCost > 0 ? rp(pricingCalc.totalRentalCost) : "Sesuai PGE"}
                 </Text>
               </View>
 

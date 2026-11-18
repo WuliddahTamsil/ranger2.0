@@ -12,6 +12,75 @@ const revisionItemSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const dryingProgressSchema = new mongoose.Schema(
+  {
+    currentStage: {
+      type: String,
+      enum: [
+        "WAITING_CONFIRMATION",     // 1. Menunggu konfirmasi
+        "CONFIRMED",                // 2. Pesanan dikonfirmasi
+        "WAITING_COFFEE_RECEIPT",   // 3. Menunggu penerimaan kopi
+        "DRYING_IN_PROGRESS",       // 4. Proses pengeringan
+        "DRYING_COMPLETED",         // 5. Pengeringan selesai
+        "READY_FOR_PICKUP",         // 6. Siap diambil
+        "COMPLETED",                // 7. Selesai
+      ],
+      default: "WAITING_CONFIRMATION",
+    },
+    coffeeType: {
+      type: String,
+      default: "Arabika",
+    },
+    dryingMethod: {
+      type: String,
+      enum: ["GEOTHERMAL_WASH", "HONEY_SKIN_CONTACT", "NATURAL_QUICK_DRY", "OTHER"],
+      default: "GEOTHERMAL_WASH",
+    },
+    dryingMethodName: {
+      type: String,
+      default: "Geothermal Wash",
+    },
+    initialWeightKg: {
+      type: Number,
+      default: 0,
+    },
+    finalWeightKg: {
+      type: Number,
+      default: null,
+    },
+    moistureContentPercent: {
+      type: Number,
+      default: null,
+    },
+    occupancyTier: {
+      type: String,
+      default: "0–30%",
+    },
+    discountPercent: {
+      type: Number,
+      default: 50,
+    },
+    appliedRatePerKg: {
+      type: Number,
+      default: 500,
+    },
+    startedAt: { type: Date },
+    completedAt: { type: Date },
+    operatorNotes: { type: String, default: "" },
+    operatorName: { type: String, default: "" },
+    stageHistory: [
+      {
+        stage: { type: String, required: true },
+        stageLabel: { type: String, default: "" },
+        timestamp: { type: Date, default: Date.now },
+        notes: { type: String, default: "" },
+        updatedBy: { type: String, default: "" },
+      },
+    ],
+  },
+  { _id: false }
+);
+
 const geoDirectBookingSchema = new mongoose.Schema(
   {
     bookingCode: {
@@ -144,6 +213,10 @@ const geoDirectBookingSchema = new mongoose.Schema(
       issuedAt: { type: Date },
       pdfUrl: { type: String, default: "" },
       revisionCount: { type: Number, default: 0 },
+    },
+    dryingProgress: {
+      type: dryingProgressSchema,
+      default: () => ({}),
     },
     revisionHistory: [revisionItemSchema],
     previousBookingId: {

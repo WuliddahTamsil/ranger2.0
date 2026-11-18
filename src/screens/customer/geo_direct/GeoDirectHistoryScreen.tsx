@@ -31,6 +31,10 @@ import {
   X,
   CreditCard,
   RefreshCw,
+  Droplets,
+  ThermometerSun,
+  FileSpreadsheet,
+  TrendingUp,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import {
@@ -39,9 +43,21 @@ import {
   resubmitBooking,
   GeoDirectBooking,
   GeoDirectDpLedgerItem,
+  DryingStage,
 } from "../../../services/geoDirectService";
 import { rp } from "../../../utils/formatters";
 import { GeoDirectInvoiceModal } from "./GeoDirectInvoiceModal";
+import { GeoDirectProcessingReportModal } from "./GeoDirectProcessingReportModal";
+
+const DRYING_STAGES_LIST: Array<{ key: DryingStage; num: number; label: string }> = [
+  { key: "WAITING_CONFIRMATION", num: 1, label: "Menunggu Konfirmasi" },
+  { key: "CONFIRMED", num: 2, label: "Dikonfirmasi" },
+  { key: "WAITING_COFFEE_RECEIPT", num: 3, label: "Terima Kopi" },
+  { key: "DRYING_IN_PROGRESS", num: 4, label: "Pengeringan" },
+  { key: "DRYING_COMPLETED", num: 5, label: "Selesai Kering" },
+  { key: "READY_FOR_PICKUP", num: 6, label: "Siap Diambil" },
+  { key: "COMPLETED", num: 7, label: "Selesai" },
+];
 
 interface GeoDirectHistoryScreenProps extends Nav {
   authAccount?: any;
@@ -57,8 +73,9 @@ export const GeoDirectHistoryScreen: React.FC<GeoDirectHistoryScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Active Booking for Invoice Modal
+  // Active Booking for Modals
   const [selectedInvoiceBooking, setSelectedInvoiceBooking] = useState<GeoDirectBooking | null>(null);
+  const [selectedReportBooking, setSelectedReportBooking] = useState<GeoDirectBooking | null>(null);
 
   // Resubmit Modal State
   const [resubmitModalVisible, setResubmitModalVisible] = useState(false);
@@ -320,17 +337,124 @@ export const GeoDirectHistoryScreen: React.FC<GeoDirectHistoryScreenProps> = ({
                     </View>
                   )}
 
+                  {/* Drying Progress Tracking Section (For Dryhouse / Any booking with progress) */}
+                  {(b.dryingProgress ||
+                    b.equipmentSnapshot?.code === "EQ-01" ||
+                    b.equipmentSnapshot?.name?.includes("Dryhouse")) && (
+                    <View style={styles.dryingProgressCard}>
+                      <View style={styles.dryingProgressHeader}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <ThermometerSun size={15} color="#0D7A53" />
+                          <Text style={styles.dryingProgressTitle}>Pemantauan Proses Pengeringan</Text>
+                        </View>
+                        <View style={styles.dryingStageBadge}>
+                          <Text style={styles.dryingStageBadgeText}>
+                            {DRYING_STAGES_LIST.find((s) => s.key === b.dryingProgress?.currentStage)?.label ||
+                              "Menunggu Konfirmasi"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* 7-Stage Stepper Preview */}
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.stepperContainer}
+                      >
+                        {DRYING_STAGES_LIST.map((step, sIdx) => {
+                          const currentStageKey = b.dryingProgress?.currentStage || "WAITING_CONFIRMATION";
+                          const currentIdx = DRYING_STAGES_LIST.findIndex((s) => s.key === currentStageKey);
+                          const isDone = sIdx <= currentIdx;
+                          const isCurrent = sIdx === currentIdx;
+
+                          return (
+                            <View key={step.key} style={styles.stepItemWrapper}>
+                              <View
+                                style={[
+                                  styles.stepCircle,
+                                  isDone && styles.stepCircleDone,
+                                  isCurrent && styles.stepCircleCurrent,
+                                ]}
+                              >
+                                <Text style={[styles.stepCircleText, isDone && styles.stepCircleTextDone]}>
+                                  {step.num}
+                                </Text>
+                              </View>
+                              <Text
+                                style={[
+                                  styles.stepItemLabel,
+                                  isCurrent && styles.stepItemLabelCurrent,
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {step.label}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </ScrollView>
+
+                      {/* Measurements Snapshot */}
+                      <View style={styles.measurementsRow}>
+                        <View style={styles.measureItem}>
+                          <Text style={styles.measureLabel}>Berat Awal</Text>
+                          <Text style={styles.measureVal}>
+                            {b.dryingProgress?.initialWeightKg || b.productionNeeds?.rawMaterialKg || "-"} kg
+                          </Text>
+                        </View>
+                        <View style={styles.measureItem}>
+                          <Text style={styles.measureLabel}>Berat Akhir Green Bean</Text>
+                          <Text style={styles.measureVal}>
+                            {b.dryingProgress?.finalWeightKg !== undefined
+                              ? `${b.dryingProgress.finalWeightKg} kg`
+                              : "Dalam Proses"}
+                          </Text>
+                        </View>
+                        <View style={styles.measureItem}>
+                          <Text style={styles.measureLabel}>Kadar Air (%)</Text>
+                          <Text style={styles.measureVal}>
+                            {b.dryingProgress?.moistureContentPercent !== undefined
+                              ? `${b.dryingProgress.moistureContentPercent}%`
+                              : "Target 11%"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Digital Processing Report CTA */}
+                      <TouchableOpacity
+                        style={styles.btnOpenReport}
+                        onPress={() => setSelectedReportBooking(b)}
+                        activeOpacity={0.8}
+                      >
+                        <FileSpreadsheet size={14} color="#0D7A53" />
+                        <Text style={styles.btnOpenReportText}>Laporan Pengolahan Digital</Text>
+                        <ChevronRight size={14} color="#0D7A53" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
                   {/* Action Buttons */}
                   <View style={styles.cardActions}>
                     {isApproved ? (
-                      <TouchableOpacity
-                        style={styles.btnActionPdf}
-                        onPress={() => setSelectedInvoiceBooking(b)}
-                        activeOpacity={0.8}
-                      >
-                        <FileText size={15} color="#FFFFFF" />
-                        <Text style={styles.btnActionPdfText}>Unduh Nota Resmi (PDF)</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: "row", gap: 8, width: "100%" }}>
+                        <TouchableOpacity
+                          style={[styles.btnActionPdf, { flex: 1 }]}
+                          onPress={() => setSelectedInvoiceBooking(b)}
+                          activeOpacity={0.8}
+                        >
+                          <FileText size={14} color="#FFFFFF" />
+                          <Text style={styles.btnActionPdfText}>Nota Sewa</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.btnActionReport, { flex: 1.2 }]}
+                          onPress={() => setSelectedReportBooking(b)}
+                          activeOpacity={0.8}
+                        >
+                          <FileSpreadsheet size={14} color="#0D7A53" />
+                          <Text style={styles.btnActionReportText}>Laporan Digital</Text>
+                        </TouchableOpacity>
+                      </View>
                     ) : isRejected ? (
                       <TouchableOpacity
                         style={styles.btnActionResubmit}
@@ -366,6 +490,13 @@ export const GeoDirectHistoryScreen: React.FC<GeoDirectHistoryScreenProps> = ({
         visible={!!selectedInvoiceBooking}
         onClose={() => setSelectedInvoiceBooking(null)}
         booking={selectedInvoiceBooking}
+      />
+
+      {/* Digital Processing Report Modal */}
+      <GeoDirectProcessingReportModal
+        visible={!!selectedReportBooking}
+        onClose={() => setSelectedReportBooking(null)}
+        booking={selectedReportBooking}
       />
 
       {/* Resubmit Modal */}
@@ -790,6 +921,144 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     backgroundColor: "#94A3B8",
+  },
+  dryingProgressCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 12,
+  },
+  dryingProgressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  dryingProgressTitle: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  dryingStageBadge: {
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  dryingStageBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  stepperContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    gap: 12,
+  },
+  stepItemWrapper: {
+    alignItems: "center",
+    width: 72,
+  },
+  stepCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  stepCircleDone: {
+    backgroundColor: "#0D7A53",
+  },
+  stepCircleCurrent: {
+    backgroundColor: "#D97706",
+    borderWidth: 2,
+    borderColor: "#FEF3C7",
+  },
+  stepCircleText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#64748B",
+  },
+  stepCircleTextDone: {
+    color: "#FFFFFF",
+  },
+  stepItemLabel: {
+    fontSize: 9.5,
+    color: "#64748B",
+    textAlign: "center",
+  },
+  stepItemLabelCurrent: {
+    color: "#B45309",
+    fontWeight: "700",
+  },
+  stepLine: {
+    display: "none",
+  },
+  measurementsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+  },
+  measureItem: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  measureLabel: {
+    fontSize: 10,
+    color: "#64748B",
+  },
+  measureVal: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginTop: 2,
+  },
+  btnOpenReport: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#0D7A53",
+  },
+  btnOpenReportText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  btnActionReport: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    backgroundColor: "#ECFDF5",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  btnActionReportText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0D7A53",
   },
 });
 

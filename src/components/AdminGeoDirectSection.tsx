@@ -62,6 +62,7 @@ import {
   adminRejectPayment,
   adminApproveBooking,
   adminRejectBooking,
+  adminUpdateDryingProgress,
   fetchAdminDpLedgers,
   setAdminGeoDirectTokenOverride,
   GeoDirectEquipment,
@@ -70,6 +71,7 @@ import {
   GeoPaymentMethodsConfig,
   GeoDirectDpLedgerItem,
   GeoBankAccount,
+  DryingStage,
 } from "../services/geoDirectService";
 import { rp } from "../utils/formatters";
 import { GeoDirectInvoiceModal } from "../screens/customer/geo_direct/GeoDirectInvoiceModal";
@@ -140,6 +142,43 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
   const [qrisNmid, setQrisNmid] = useState("");
   const [bankAccountsList, setBankAccountsList] = useState<GeoBankAccount[]>([]);
   const [savingConfig, setSavingConfig] = useState(false);
+
+  // Drying Progress Operator Form
+  const [dryingStageInput, setDryingStageInput] = useState<DryingStage>("WAITING_CONFIRMATION");
+  const [finalWeightInput, setFinalWeightInput] = useState("");
+  const [moistureInput, setMoistureInput] = useState("");
+  const [dryingNotesInput, setDryingNotesInput] = useState("");
+  const [savingDryingProgress, setSavingDryingProgress] = useState(false);
+
+  useEffect(() => {
+    if (selectedBookingForDetail) {
+      const p = selectedBookingForDetail.dryingProgress;
+      setDryingStageInput(p?.currentStage || "WAITING_CONFIRMATION");
+      setFinalWeightInput(p?.finalWeightKg !== undefined ? String(p.finalWeightKg) : "");
+      setMoistureInput(p?.moistureContentPercent !== undefined ? String(p.moistureContentPercent) : "");
+      setDryingNotesInput(p?.operatorNotes || "");
+    }
+  }, [selectedBookingForDetail]);
+
+  const handleSaveDryingProgress = async () => {
+    if (!selectedBookingForDetail) return;
+    try {
+      setSavingDryingProgress(true);
+      const updated = await adminUpdateDryingProgress(selectedBookingForDetail._id, {
+        stage: dryingStageInput,
+        finalWeightKg: finalWeightInput ? parseFloat(finalWeightInput) : undefined,
+        moistureContentPercent: moistureInput ? parseFloat(moistureInput) : undefined,
+        notes: dryingNotesInput.trim(),
+      });
+      setSelectedBookingForDetail(updated);
+      Alert.alert("Sukses! 🍃", "Progres operasional dan hasil pengeringan berhasil diperbarui.");
+      refreshAll();
+    } catch (err: any) {
+      Alert.alert("Gagal", err.message || "Gagal memperbarui progres pengeringan.");
+    } finally {
+      setSavingDryingProgress(false);
+    }
+  };
 
   // Pending Review Count
   const pendingReviewCount =
@@ -1247,6 +1286,95 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
                   <Text style={styles.detailText}>Status Pembayaran: {selectedBookingForDetail.paymentStatus}</Text>
                   <Text style={styles.detailText}>Status Pengajuan: {selectedBookingForDetail.bookingStatus}</Text>
                 </View>
+
+                {/* Operator Drying Progress Section */}
+                <View style={styles.detailSection}>
+                  <Text style={[styles.detailSecTitle, { color: "#0D7A53" }]}>
+                    Operasional & Progres Pengeringan Dryhouse
+                  </Text>
+
+                  <Text style={styles.formLabelSmall}>Tahapan Pengeringan Saat Ini:</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginVertical: 6 }}>
+                    {[
+                      { key: "WAITING_CONFIRMATION", label: "1. Menunggu Konfirmasi" },
+                      { key: "CONFIRMED", label: "2. Dikonfirmasi" },
+                      { key: "WAITING_COFFEE_RECEIPT", label: "3. Penerimaan Kopi" },
+                      { key: "DRYING_IN_PROGRESS", label: "4. Pengeringan Aktif" },
+                      { key: "DRYING_COMPLETED", label: "5. Selesai Pengeringan" },
+                      { key: "READY_FOR_PICKUP", label: "6. Siap Diambil" },
+                      { key: "COMPLETED", label: "7. Selesai" },
+                    ].map((stg) => {
+                      const isActive = dryingStageInput === stg.key;
+                      return (
+                        <TouchableOpacity
+                          key={stg.key}
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 5,
+                            borderRadius: 6,
+                            backgroundColor: isActive ? "#0D7A53" : "#F1F5F9",
+                          }}
+                          onPress={() => setDryingStageInput(stg.key as DryingStage)}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: "700",
+                              color: isActive ? "#FFFFFF" : "#475569",
+                            }}
+                          >
+                            {stg.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <View style={[styles.formRow, { marginTop: 6 }]}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.formLabelSmall}>Berat Akhir Green Bean (kg)</Text>
+                      <TextInput
+                        style={styles.formInputSmall}
+                        value={finalWeightInput}
+                        onChangeText={setFinalWeightInput}
+                        placeholder="Contoh: 105"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.formLabelSmall}>Kadar Air Akhir (%)</Text>
+                      <TextInput
+                        style={styles.formInputSmall}
+                        value={moistureInput}
+                        onChangeText={setMoistureInput}
+                        placeholder="Contoh: 11.5"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={[styles.formLabelSmall, { marginTop: 8 }]}>Catatan Teknis Operator:</Text>
+                  <TextInput
+                    style={[styles.formInputSmall, { height: 50 }]}
+                    value={dryingNotesInput}
+                    onChangeText={setDryingNotesInput}
+                    placeholder="Catatan kondisi batch pengeringan CoE..."
+                    multiline
+                  />
+
+                  <TouchableOpacity
+                    style={[styles.btnSaveProgress, savingDryingProgress && styles.btnDisabled]}
+                    onPress={handleSaveDryingProgress}
+                    disabled={savingDryingProgress}
+                    activeOpacity={0.8}
+                  >
+                    {savingDryingProgress ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.btnSaveProgressText}>Simpan Progres Pengeringan</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </ScrollView>
             )}
 
@@ -2122,5 +2250,17 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     backgroundColor: "#94A3B8",
+  },
+  btnSaveProgress: {
+    backgroundColor: "#0D7A53",
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  btnSaveProgressText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });

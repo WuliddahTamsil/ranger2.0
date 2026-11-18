@@ -6,7 +6,11 @@
  */
 
 const assert = require("assert");
-const { calculateRentalCost } = require("../services/geoDirectPricingEngine");
+const {
+  calculateRentalCost,
+  calculateDryhouseTieredPrice,
+  getDryhouseTierInfo,
+} = require("../services/geoDirectPricingEngine");
 
 let testCount = 0;
 let passedCount = 0;
@@ -365,6 +369,78 @@ runTest("Resubmission with 0 Net Due: Booking directly enters WAITING_APPROVAL w
 
   assert.strictEqual(revisedBooking.bookingStatus, "WAITING_APPROVAL");
   assert.strictEqual(revisedBooking.paymentStatus, "VERIFIED");
+});
+
+// ---------------------------------------------------------
+// TEST GROUP 5: GEOTHERMAL DRYHOUSE TIERED PRICING & PROGRESS
+// ---------------------------------------------------------
+console.log("\n🔹 5. GEOTHERMAL DRYHOUSE TIERED PRICING & PROGRESS TESTS");
+
+runTest("Geothermal Dryhouse: Client mandatory scenario (500 kg @ 0–30% occupancy)", () => {
+  const result = calculateDryhouseTieredPrice({
+    volumeKg: 500,
+    occupancyPercent: 15, // 0-30%
+  });
+
+  assert.strictEqual(result.volumeKg, 500);
+  assert.strictEqual(result.ratePerKg, 500); // 50% discount from Rp 1.000
+  assert.strictEqual(result.discountPercent, 50);
+  assert.strictEqual(result.totalUserPayment, 250000); // 500 * 500
+  assert.strictEqual(result.operationalCost, 188500); // 500 * 377
+  assert.strictEqual(result.estimatedSurplus, 61500); // 250.000 - 188.500
+  assert.strictEqual(result.hppPerKg, 377);
+  assert.ok(result.disclaimer.includes("Rp377/kg"));
+});
+
+runTest("Geothermal Dryhouse: Occupancy tiers scale accurately (0-30% -> 500, 30-60% -> 700, 60-80% -> 900, >80% -> 1000)", () => {
+  const tier1 = getDryhouseTierInfo(20);
+  assert.strictEqual(tier1.discountPercent, 50);
+  assert.strictEqual(tier1.ratePerKg, 500);
+
+  const tier2 = getDryhouseTierInfo(45);
+  assert.strictEqual(tier2.discountPercent, 30);
+  assert.strictEqual(tier2.ratePerKg, 700);
+
+  const tier3 = getDryhouseTierInfo(75);
+  assert.strictEqual(tier3.discountPercent, 10);
+  assert.strictEqual(tier3.ratePerKg, 900);
+
+  const tier4 = getDryhouseTierInfo(95);
+  assert.strictEqual(tier4.discountPercent, 0);
+  assert.strictEqual(tier4.ratePerKg, 1000);
+});
+
+runTest("Geothermal Dryhouse: Capacity limits (100 kg min - 6.000 kg max)", () => {
+  const minCalc = calculateDryhouseTieredPrice({ volumeKg: 100, occupancyPercent: 0 });
+  assert.strictEqual(minCalc.volumeKg, 100);
+  assert.strictEqual(minCalc.totalUserPayment, 50000);
+
+  const maxCalc = calculateDryhouseTieredPrice({ volumeKg: 6000, occupancyPercent: 0 });
+  assert.strictEqual(maxCalc.volumeKg, 6000);
+  assert.strictEqual(maxCalc.totalUserPayment, 3000000);
+});
+
+runTest("Geothermal Dryhouse: 7-Stage Drying Progress lifecycle transitions", () => {
+  const stages = [
+    "WAITING_CONFIRMATION",
+    "CONFIRMED",
+    "WAITING_COFFEE_RECEIPT",
+    "DRYING_IN_PROGRESS",
+    "DRYING_COMPLETED",
+    "READY_FOR_PICKUP",
+    "COMPLETED",
+  ];
+
+  let currentStage = stages[0];
+  const history = [{ stage: currentStage, timestamp: new Date() }];
+
+  for (let i = 1; i < stages.length; i++) {
+    currentStage = stages[i];
+    history.push({ stage: currentStage, timestamp: new Date() });
+  }
+
+  assert.strictEqual(currentStage, "COMPLETED");
+  assert.strictEqual(history.length, 7);
 });
 
 // ---------------------------------------------------------

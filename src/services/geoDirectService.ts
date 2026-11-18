@@ -21,6 +21,8 @@ export interface GeoDirectEquipment {
   _id: string;
   code: string;
   name: string;
+  facilityType?: "DRYHOUSE" | "DEHYDRATOR" | "DRY_TUBE";
+  comingSoon?: boolean;
   description: string;
   specification: string;
   function: string;
@@ -33,7 +35,7 @@ export interface GeoDirectEquipment {
   basePrice: number;
   pricingUnit: "per_hari" | "per_minggu" | "per_bulan" | "per_ton" | "per_batch" | string;
   dpPercentage: number;
-  pricingFormulaType: "STANDARD_DAILY" | "DAILY_PLUS_CAPACITY" | "FIXED" | string;
+  pricingFormulaType: "STANDARD_DAILY" | "DAILY_PLUS_CAPACITY" | "FIXED" | "DRYHOUSE_TIERED" | string;
   productionParameters?: GeoProductionParameter[];
   updatedAt?: string;
 }
@@ -54,6 +56,73 @@ export interface GeoDirectPricingCalculation {
   netDpDue: number;
   remainingBalance: number;
   formulaApplied: string;
+  volumeKg?: number;
+  ratePerKg?: number;
+  discountPercent?: number;
+  operationalCost?: number;
+  estimatedSurplus?: number;
+  occupancyTierLabel?: string;
+  occupancyPercent?: number;
+  disclaimer?: string;
+}
+
+export type DryingStage =
+  | "WAITING_CONFIRMATION"
+  | "CONFIRMED"
+  | "WAITING_COFFEE_RECEIPT"
+  | "DRYING_IN_PROGRESS"
+  | "DRYING_COMPLETED"
+  | "READY_FOR_PICKUP"
+  | "COMPLETED";
+
+export interface GeoDirectDryingProgress {
+  currentStage: DryingStage;
+  coffeeType?: string;
+  dryingMethod?: string;
+  initialWeightKg?: number;
+  finalWeightKg?: number;
+  moistureContentPercent?: number;
+  operatorNotes?: string;
+  stageHistory?: Array<{
+    stage: DryingStage;
+    updatedAt: string;
+    updatedBy?: string;
+    note?: string;
+  }>;
+}
+
+export interface GeoDirectDryhouseAvailability {
+  totalUnits: number;
+  maxCapacityKg: number;
+  minVolumeKg: number;
+  currentOccupancyKg: number;
+  remainingCapacityKg: number;
+  occupancyPercent: number;
+  activeOccupancyTier: {
+    occupancyRange: string;
+    discountPercent: number;
+    ratePerKg: number;
+    tierKey: string;
+  };
+  facilityStatus: string;
+  availableScheduleSummary: string;
+  activeBookingsCount: number;
+}
+
+export interface GeoDigitalProcessingReport {
+  bookingCode: string;
+  customerName: string;
+  facilityName: string;
+  coffeeType: string;
+  dryingMethod: string;
+  initialWeightKg: number;
+  finalWeightKg: number;
+  moistureContentPercent: number;
+  startDate: string;
+  endDate: string;
+  completionStatus: string;
+  operatorNotes?: string;
+  generatedAt: string;
 }
 
 export interface GeoBankAccount {
@@ -108,6 +177,7 @@ export interface GeoDirectBooking {
     productType?: string;
     rawMaterialKg?: number;
     rawMaterialTons?: number;
+    dryingMethod?: string;
     processRequirements?: string;
     customParameters?: Record<string, any>;
   };
@@ -161,6 +231,7 @@ export interface GeoDirectBooking {
     pdfUrl?: string;
     revisionCount?: number;
   };
+  dryingProgress?: GeoDirectDryingProgress;
   revisionHistory?: any[];
   createdAt: string;
   updatedAt: string;
@@ -326,6 +397,15 @@ export async function resubmitBooking(
   });
 }
 
+export async function fetchDryhouseAvailability(date?: string): Promise<GeoDirectDryhouseAvailability> {
+  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+  return await apiRequest<GeoDirectDryhouseAvailability>(`/geo-direct/dryhouse/availability${query}`);
+}
+
+export async function fetchDigitalProcessingReport(bookingId: string): Promise<GeoDigitalProcessingReport> {
+  return await apiRequest<GeoDigitalProcessingReport>(`/geo-direct/bookings/${bookingId}/report`);
+}
+
 export async function fetchCustomerDpBalance(): Promise<{
   balance: number;
   history: GeoDirectDpLedgerItem[];
@@ -418,6 +498,24 @@ export async function adminRejectBooking(bookingId: string, reason: string): Pro
   return await apiRequest<GeoDirectBooking>(`/geo-direct/admin/bookings/${bookingId}/reject`, {
     method: "POST",
     body: JSON.stringify({ reason }),
+  });
+}
+
+export async function adminUpdateDryingProgress(
+  bookingId: string,
+  payload: {
+    stage?: DryingStage;
+    coffeeType?: string;
+    dryingMethod?: string;
+    initialWeightKg?: number;
+    finalWeightKg?: number;
+    moistureContentPercent?: number;
+    notes?: string;
+  }
+): Promise<GeoDirectBooking> {
+  return await apiRequest<GeoDirectBooking>(`/geo-direct/admin/bookings/${bookingId}/drying-progress`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

@@ -14,188 +14,157 @@ const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { calculateRentalCost } = require("../services/geoDirectPricingEngine");
 
-// Helper: Seed Default 4 Placeholder Equipments
+// Helper: Seed & Ensure Default 3 Geothermal Facilities
 async function ensureDefaultEquipments() {
   const count = await GeoDirectEquipment.countDocuments();
   if (count === 0) {
     const defaultList = [
       {
         code: "EQ-01",
-        name: "Equipment 01",
+        facilityType: "DRYHOUSE",
+        name: "Geothermal Dryhouse",
         description:
-          "Layanan penyewaan alat PGE Center of Excellence Kamojang (Menunggu spesifikasi teknis resmi dari PGE).",
+          "Layanan pengeringan hasil pertanian, terutama kopi, dengan memanfaatkan energi panas bumi melalui fasilitas Dryhouse.",
         specification:
-          "Spesifikasi teknis alat dapat dikonfigurasi melalui Dashboard Admin PGE.",
-        function: "Pemanfaatan langsung energi panas bumi (Direct Use).",
-        capacity: "Maksimal 10 Ton (10.000 kg) / hari",
-        maxCapacityKgPerDay: 10000,
+          "4 Unit Dryhouse dengan kapasitas total 6.000 kg per batch. Dilengkapi pengontrol suhu dan konveksi termal alami panas bumi PGE Kamojang.",
+        function:
+          "Pengeringan hasil tani & kopi (Geothermal Wash, Honey Skin Contact, Natural Quick Dry) dengan kelembapan terkontrol stabil.",
+        capacity: "4 Unit • Maksimal 6.000 kg / batch (Min. 100 kg)",
+        maxCapacityKgPerDay: 6000,
         rentalTerms:
-          "1. Penggunaan alat wajib mematuhi SOP Keselamatan Kerja PGE Kamojang.\n2. Customer wajib membawa Nota Sewa Resmi yang disetujui.\n3. Pembayaran DP wajib diverifikasi oleh Admin.",
+          "1. Penggunaan fasilitas wajib mematuhi SOP Keselamatan Kerja PGE Kamojang.\n2. Customer wajib membawa Nota Sewa Resmi yang disetujui saat penyerahan bahan baku.\n3. Pembayaran DP diverifikasi oleh Admin PGE.",
         imageUrl: "",
         isAvailable: true,
+        comingSoon: false,
         isActive: true,
-        basePrice: 2000000,
-        pricingUnit: "per_hari",
+        basePrice: 1000,
+        pricingUnit: "per_kg",
         dpPercentage: 30,
-        pricingFormulaType: "STANDARD_DAILY",
+        pricingFormulaType: "DRYHOUSE_TIERED",
         productionParameters: [
           {
-            paramKey: "productType",
-            paramLabel: "Jenis Produk / Komoditas",
+            paramKey: "coffeeType",
+            paramLabel: "Jenis Kopi",
             paramType: "select",
-            options: ["Teh", "Kopi", "Essential Oil", "Jamur", "Lainnya"],
+            options: ["Arabika", "Robusta", "Liberika", "Excelsa", "Lainnya"],
             required: true,
-            helperText: "Pilih komoditas yang akan diolah",
+            helperText: "Pilih komoditas/varietas kopi yang akan dikeringkan",
+          },
+          {
+            paramKey: "dryingMethod",
+            paramLabel: "Metode Pengeringan",
+            paramType: "select",
+            options: ["Geothermal Wash", "Honey Skin Contact", "Natural Quick Dry"],
+            required: true,
+            helperText: "Pilih metode pengeringan geothermal",
           },
           {
             paramKey: "rawMaterialKg",
-            paramLabel: "Kapasitas Bahan Baku (kg)",
+            paramLabel: "Berat Kopi Cherry (kg)",
             paramType: "number",
             unit: "kg",
             required: true,
             ratePerUnit: 0,
-            helperText: "Estimasi volume bahan baku yang diproses (Minimal 1 kg, Maksimal 10 Ton/hari)",
+            helperText: "Volume bahan baku kopi cherry (Minimal 100 kg, Maksimal 6.000 kg per batch)",
           },
         ],
       },
       {
         code: "EQ-02",
-        name: "Equipment 02",
+        facilityType: "DEHYDRATOR",
+        name: "Geothermal Dehydrator",
         description:
-          "Layanan penyewaan alat PGE Center of Excellence Kamojang (Menunggu spesifikasi teknis resmi dari PGE).",
+          "Fasilitas dehidrasi presisi bersuhu rendah untuk komoditas hortikultura, teh, dan bahan pangan olahan bernilai tinggi.",
         specification:
-          "Spesifikasi teknis alat dapat dikonfigurasi melalui Dashboard Admin PGE.",
-        function: "Pemanfaatan langsung energi panas bumi (Direct Use).",
-        capacity: "Maksimal 10 Ton (10.000 kg) / hari",
-        maxCapacityKgPerDay: 10000,
-        rentalTerms:
-          "1. Mematuhi standar K3 PGE Area Kamojang.\n2. Wajib verifikasi identitas dan nota booking.",
+          "Sistem tray bersirkulasi otomatis dengan sensor kelembapan dan distribusi udara hangat geotermal terkontrol.",
+        function: "Dehidrasi buah, sayuran, herba, teh premium, dan rempah.",
+        capacity: "Dalam Tahap Riset & Pengujian PGE",
+        maxCapacityKgPerDay: 1000,
+        rentalTerms: "Layanan dalam pengembangan riset PGE Kamojang.",
         imageUrl: "",
-        isAvailable: true,
+        isAvailable: false,
+        comingSoon: true,
         isActive: true,
-        basePrice: 2000000,
-        pricingUnit: "per_hari",
+        basePrice: 0,
+        pricingUnit: "per_batch",
         dpPercentage: 30,
         pricingFormulaType: "STANDARD_DAILY",
-        productionParameters: [
-          {
-            paramKey: "productType",
-            paramLabel: "Jenis Produk",
-            paramType: "select",
-            options: ["Teh", "Kopi", "Pengeringan Pangan", "Lainnya"],
-            required: true,
-          },
-          {
-            paramKey: "rawMaterialKg",
-            paramLabel: "Volume Bahan (kg)",
-            paramType: "number",
-            unit: "kg",
-            required: true,
-          },
-        ],
+        productionParameters: [],
       },
       {
         code: "EQ-03",
-        name: "Equipment 03",
+        facilityType: "DRY_TUBE",
+        name: "Geothermal Dry Tube",
         description:
-          "Layanan penyewaan alat PGE Center of Excellence Kamojang (Menunggu spesifikasi teknis resmi dari PGE).",
+          "Teknologi pengeringan tabung rotary berkesinambungan memanfaatkan uap panas bumi untuk kapasitas volume massal terstandarisasi.",
         specification:
-          "Spesifikasi teknis alat dapat dikonfigurasi melalui Dashboard Admin PGE.",
-        function: "Pemanfaatan langsung energi panas bumi (Direct Use).",
-        capacity: "Maksimal 10 Ton (10.000 kg) / hari",
-        maxCapacityKgPerDay: 10000,
-        rentalTerms:
-          "1. Mematuhi standar K3 PGE Area Kamojang.\n2. Wajib verifikasi identitas dan nota booking.",
+          "Rotary drum berbahan stainless steel food grade dengan injeksi panas geothermal indirect.",
+        function: "Pengeringan massal biji-bijian, gabah, dan komoditas curah.",
+        capacity: "Dalam Tahap Riset & Pengujian PGE",
+        maxCapacityKgPerDay: 5000,
+        rentalTerms: "Layanan dalam pengembangan riset PGE Kamojang.",
         imageUrl: "",
-        isAvailable: true,
+        isAvailable: false,
+        comingSoon: true,
         isActive: true,
-        basePrice: 2000000,
-        pricingUnit: "per_hari",
+        basePrice: 0,
+        pricingUnit: "per_ton",
         dpPercentage: 30,
         pricingFormulaType: "STANDARD_DAILY",
-        productionParameters: [
-          {
-            paramKey: "productType",
-            paramLabel: "Komoditas",
-            paramType: "text",
-            required: true,
-          },
-          {
-            paramKey: "rawMaterialKg",
-            paramLabel: "Kapasitas (kg)",
-            paramType: "number",
-            unit: "kg",
-            required: true,
-          },
-        ],
-      },
-      {
-        code: "EQ-04",
-        name: "Equipment 04",
-        description:
-          "Layanan penyewaan alat PGE Center of Excellence Kamojang (Menunggu spesifikasi teknis resmi dari PGE).",
-        specification:
-          "Spesifikasi teknis alat dapat dikonfigurasi melalui Dashboard Admin PGE.",
-        function: "Pemanfaatan langsung energi panas bumi (Direct Use).",
-        capacity: "Maksimal 10 Ton (10.000 kg) / hari",
-        maxCapacityKgPerDay: 10000,
-        rentalTerms:
-          "1. Mematuhi standar K3 PGE Area Kamojang.\n2. Wajib verifikasi identitas dan nota booking.",
-        imageUrl: "",
-        isAvailable: true,
-        isActive: true,
-        basePrice: 2000000,
-        pricingUnit: "per_hari",
-        dpPercentage: 30,
-        pricingFormulaType: "STANDARD_DAILY",
-        productionParameters: [
-          {
-            paramKey: "productType",
-            paramLabel: "Komoditas",
-            paramType: "text",
-            required: true,
-          },
-          {
-            paramKey: "rawMaterialKg",
-            paramLabel: "Kapasitas (kg)",
-            paramType: "number",
-            unit: "kg",
-            required: true,
-          },
-        ],
+        productionParameters: [],
       },
     ];
 
     await GeoDirectEquipment.insertMany(defaultList);
   } else {
-    // Auto-sync placeholder prices and capacity while keeping admin custom adjustments flexible
+    // Ensure EQ-01 has Dryhouse formula & capacity
     try {
-      await GeoDirectEquipment.updateMany(
-        {
-          $or: [
-            { basePrice: 0 },
-            { basePrice: { $exists: false } },
-            { capacity: { $regex: /ditentukan oleh konfigurasi/i } },
-            { "productionParameters.unit": "ton" },
-          ],
-        },
+      await GeoDirectEquipment.updateOne(
+        { code: "EQ-01" },
         {
           $set: {
-            basePrice: 2000000,
-            capacity: "Maksimal 10 Ton (10.000 kg) / hari",
-            maxCapacityKgPerDay: 10000,
-            pricingUnit: "per_hari",
-            dpPercentage: 30,
-            "productionParameters.$[elem].unit": "kg",
-            "productionParameters.$[elem].paramLabel": "Kapasitas Bahan Baku (kg)",
-            "productionParameters.$[elem].paramKey": "rawMaterialKg",
-            "productionParameters.$[elem].helperText": "Estimasi volume bahan baku yang diproses (Minimal 1 kg, Maksimal 10 Ton/hari)",
+            name: "Geothermal Dryhouse",
+            facilityType: "DRYHOUSE",
+            description:
+              "Layanan pengeringan hasil pertanian, terutama kopi, dengan memanfaatkan energi panas bumi melalui fasilitas Dryhouse.",
+            capacity: "4 Unit • Maksimal 6.000 kg / batch (Min. 100 kg)",
+            maxCapacityKgPerDay: 6000,
+            basePrice: 1000,
+            pricingUnit: "per_kg",
+            pricingFormulaType: "DRYHOUSE_TIERED",
+            isAvailable: true,
+            comingSoon: false,
+            isActive: true,
           },
-        },
-        { arrayFilters: [{ "elem.paramKey": { $in: ["rawMaterialTons", "rawMaterialKg"] } }] }
+        }
       );
-    } catch (migErr) {
-      console.warn("Auto-sync equipment price & capacity warning:", migErr.message);
+      await GeoDirectEquipment.updateOne(
+        { code: "EQ-02" },
+        {
+          $set: {
+            name: "Geothermal Dehydrator",
+            facilityType: "DEHYDRATOR",
+            isAvailable: false,
+            comingSoon: true,
+            isActive: true,
+          },
+        }
+      );
+      await GeoDirectEquipment.updateOne(
+        { code: "EQ-03" },
+        {
+          $set: {
+            name: "Geothermal Dry Tube",
+            facilityType: "DRY_TUBE",
+            isAvailable: false,
+            comingSoon: true,
+            isActive: true,
+          },
+        }
+      );
+      await GeoDirectEquipment.updateOne({ code: "EQ-04" }, { $set: { isActive: false } });
+    } catch (syncErr) {
+      console.warn("Facility sync error:", syncErr.message);
     }
   }
 }
@@ -289,16 +258,36 @@ exports.getEquipmentDetail = async (req, res) => {
     let equipment = null;
     if (mongoose.Types.ObjectId.isValid(id)) {
       equipment = await GeoDirectEquipment.findById(id);
-    } else {
+    }
+    if (!equipment) {
+      const codeOrType = String(id).toUpperCase();
       equipment = await GeoDirectEquipment.findOne({
-        code: String(id).toUpperCase(),
+        $or: [
+          { code: codeOrType },
+          { facilityType: codeOrType },
+          ...(codeOrType.includes("DRYHOUSE") || codeOrType === "EQ-01"
+            ? [{ code: "EQ-01" }, { facilityType: "DRYHOUSE" }]
+            : []),
+          ...(codeOrType.includes("DEHYDRATOR") || codeOrType === "EQ-02"
+            ? [{ code: "EQ-02" }, { facilityType: "DEHYDRATOR" }]
+            : []),
+          ...(codeOrType.includes("TUBE") || codeOrType === "EQ-03"
+            ? [{ code: "EQ-03" }, { facilityType: "DRY_TUBE" }]
+            : []),
+        ],
       });
+    }
+
+    if (!equipment) {
+      equipment =
+        (await GeoDirectEquipment.findOne({ facilityType: "DRYHOUSE", isActive: true })) ||
+        (await GeoDirectEquipment.findOne({ code: "EQ-01" }));
     }
 
     if (!equipment) {
       return res.status(404).json({
         success: false,
-        message: "Alat Geo Direct Use tidak ditemukan.",
+        message: "Fasilitas Geo Direct Use tidak ditemukan.",
       });
     }
 
@@ -483,19 +472,44 @@ exports.adminDeleteEquipment = async (req, res) => {
 
 exports.calculateRentalPrice = async (req, res) => {
   try {
-    const { equipmentId, durationDays, productionNeeds } = req.body;
-    if (!equipmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "Pilih alat terlebih dahulu.",
-      });
+    const {
+      equipmentId,
+      durationDays,
+      productionNeeds,
+      volumeKg,
+      rawMaterialKg,
+      occupancyTier,
+      occupancyPercent,
+    } = req.body;
+
+    let equipment = null;
+    if (equipmentId) {
+      if (mongoose.Types.ObjectId.isValid(equipmentId)) {
+        equipment = await GeoDirectEquipment.findById(equipmentId);
+      } else {
+        const codeOrType = String(equipmentId).toUpperCase();
+        equipment = await GeoDirectEquipment.findOne({
+          $or: [
+            { code: codeOrType },
+            { facilityType: codeOrType },
+            ...(codeOrType.includes("DRYHOUSE") || codeOrType === "EQ-01"
+              ? [{ code: "EQ-01" }, { facilityType: "DRYHOUSE" }]
+              : []),
+          ],
+        });
+      }
     }
 
-    const equipment = await GeoDirectEquipment.findById(equipmentId);
+    if (!equipment) {
+      equipment =
+        (await GeoDirectEquipment.findOne({ facilityType: "DRYHOUSE", isActive: true })) ||
+        (await GeoDirectEquipment.findOne({ code: "EQ-01" }));
+    }
+
     if (!equipment) {
       return res.status(404).json({
         success: false,
-        message: "Alat tidak ditemukan.",
+        message: "Fasilitas geothermal tidak ditemukan.",
       });
     }
 
@@ -504,9 +518,25 @@ exports.calculateRentalPrice = async (req, res) => {
       customerDpBalance = await calculateCustomerDpBalance(req.authUser._id);
     }
 
+    const requestedVolume =
+      Number(
+        volumeKg ||
+          rawMaterialKg ||
+          productionNeeds?.rawMaterialKg ||
+          productionNeeds?.volumeKg
+      ) || 500;
+
     const calculation = calculateRentalCost(equipment, {
-      durationDays,
-      productionNeeds,
+      durationDays: Math.max(1, parseInt(durationDays, 10) || 3),
+      productionNeeds: {
+        ...productionNeeds,
+        rawMaterialKg: requestedVolume,
+        volumeKg: requestedVolume,
+      },
+      volumeKg: requestedVolume,
+      rawMaterialKg: requestedVolume,
+      occupancyTier,
+      occupancyPercent,
       customerDpBalance,
     });
 
@@ -520,6 +550,7 @@ exports.calculateRentalPrice = async (req, res) => {
           basePrice: equipment.basePrice,
           dpPercentage: equipment.dpPercentage,
           pricingUnit: equipment.pricingUnit,
+          facilityType: equipment.facilityType || "DRYHOUSE",
         },
         calculation,
       },
@@ -528,6 +559,93 @@ exports.calculateRentalPrice = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Gagal menghitung kalkulasi harga: " + error.message,
+    });
+  }
+};
+
+exports.getDryhouseAvailability = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const targetDate = date ? new Date(date) : new Date();
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const TOTAL_CAPACITY_KG = 6000;
+    const TOTAL_UNITS = 4;
+    const MIN_VOLUME_KG = 100;
+
+    // Active overlapping bookings
+    const activeBookings = await GeoDirectBooking.find({
+      bookingStatus: {
+        $in: ["WAITING_PAYMENT", "PAYMENT_REVIEW", "WAITING_APPROVAL", "APPROVED"],
+      },
+      "rentalSchedule.startDate": { $lte: endOfDay },
+      "rentalSchedule.endDate": { $gte: startOfDay },
+    }).lean();
+
+    let bookedCapacityKg = 0;
+    for (const b of activeBookings) {
+      const vol =
+        Number(b.productionNeeds?.rawMaterialKg || b.productionNeeds?.volumeKg) ||
+        Number(b.pricingSnapshot?.volumeKg) ||
+        0;
+      bookedCapacityKg += vol;
+    }
+
+    const remainingCapacityKg = Math.max(0, TOTAL_CAPACITY_KG - bookedCapacityKg);
+    const occupancyPercent = Math.min(
+      100,
+      Math.round((bookedCapacityKg / TOTAL_CAPACITY_KG) * 100)
+    );
+
+    let tierLabel = "0–30%";
+    let discountPercent = 50;
+    let ratePerKg = 500;
+
+    if (occupancyPercent > 80) {
+      tierLabel = "Di atas 80%";
+      discountPercent = 0;
+      ratePerKg = 1000;
+    } else if (occupancyPercent > 60) {
+      tierLabel = "Di atas 60% sampai 80%";
+      discountPercent = 10;
+      ratePerKg = 900;
+    } else if (occupancyPercent > 30) {
+      tierLabel = "Di atas 30% sampai 60%";
+      discountPercent = 30;
+      ratePerKg = 700;
+    }
+
+    const facilityStatus =
+      occupancyPercent >= 100
+        ? "Penuh"
+        : occupancyPercent > 0
+        ? "Tersedia Sebagian"
+        : "Tersedia Penuh";
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalUnits: TOTAL_UNITS,
+        totalMaxCapacityKg: TOTAL_CAPACITY_KG,
+        minVolumeKg: MIN_VOLUME_KG,
+        bookedCapacityKg,
+        remainingCapacityKg,
+        occupancyPercent,
+        occupancyTier: tierLabel,
+        discountPercent,
+        ratePerKg,
+        facilityStatus,
+        targetDate: targetDate.toISOString().slice(0, 10),
+        activeBookingsCount: activeBookings.length,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat ketersediaan Dryhouse: " + error.message,
     });
   }
 };
@@ -655,22 +773,109 @@ exports.createBooking = async (req, res) => {
     const diffMs = end.getTime() - start.getTime();
     const durationDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)) || 1);
 
-    const equipment = await GeoDirectEquipment.findById(equipmentId);
+    let equipment = null;
+    if (mongoose.Types.ObjectId.isValid(equipmentId)) {
+      equipment = await GeoDirectEquipment.findById(equipmentId);
+    }
+    if (!equipment) {
+      const codeOrType = String(equipmentId).toUpperCase();
+      equipment = await GeoDirectEquipment.findOne({
+        $or: [
+          { code: codeOrType },
+          { facilityType: codeOrType },
+          ...(codeOrType.includes("DRYHOUSE") || codeOrType === "EQ-01"
+            ? [{ code: "EQ-01" }, { facilityType: "DRYHOUSE" }]
+            : []),
+        ],
+      });
+    }
+
     if (!equipment || !equipment.isActive) {
       return res.status(404).json({
         success: false,
-        message: "Alat tidak ditemukan atau sedang tidak aktif.",
+        message: "Fasilitas tidak ditemukan atau sedang tidak aktif.",
       });
+    }
+
+    if (equipment.comingSoon) {
+      return res.status(400).json({
+        success: false,
+        message: "Fasilitas ini masih dalam tahap riset & pengembangan (Coming Soon).",
+      });
+    }
+
+    // Capacity & Real Occupancy Validation for Dryhouse
+    const isDryhouse =
+      equipment.facilityType === "DRYHOUSE" ||
+      equipment.pricingFormulaType === "DRYHOUSE_TIERED" ||
+      equipment.code === "EQ-01";
+
+    let requestedVolumeKg =
+      Number(productionNeeds?.rawMaterialKg || productionNeeds?.volumeKg) || 500;
+
+    let calcOccupancyPercent = 25;
+
+    if (isDryhouse) {
+      if (requestedVolumeKg < 100) {
+        return res.status(400).json({
+          success: false,
+          message: "Volume minimal pengeringan di Geothermal Dryhouse adalah 100 kg.",
+        });
+      }
+      if (requestedVolumeKg > 6000) {
+        return res.status(400).json({
+          success: false,
+          message: "Volume melebihi kapasitas maksimum batch Dryhouse (6.000 kg).",
+        });
+      }
+
+      // Check overlapping bookings to prevent overbooking
+      const overlappingBookings = await GeoDirectBooking.find({
+        equipment: equipment._id,
+        bookingStatus: {
+          $in: ["WAITING_PAYMENT", "PAYMENT_REVIEW", "WAITING_APPROVAL", "APPROVED"],
+        },
+        "rentalSchedule.startDate": { $lte: end },
+        "rentalSchedule.endDate": { $gte: start },
+      }).lean();
+
+      let activeBookedKg = 0;
+      for (const ob of overlappingBookings) {
+        const v =
+          Number(
+            ob.productionNeeds?.rawMaterialKg ||
+              ob.productionNeeds?.volumeKg ||
+              ob.pricingSnapshot?.volumeKg
+          ) || 0;
+        activeBookedKg += v;
+      }
+
+      if (activeBookedKg + requestedVolumeKg > 6000) {
+        const sisaKg = Math.max(0, 6000 - activeBookedKg);
+        return res.status(400).json({
+          success: false,
+          message: `Kapasitas Dryhouse tidak mencukupi untuk jadwal tersebut. Sisa kapasitas: ${sisaKg} kg. Silakan sesuaikan volume atau pilih tanggal lain.`,
+        });
+      }
+
+      calcOccupancyPercent = Math.min(100, Math.round((activeBookedKg / 6000) * 100));
     }
 
     // Resolve Customer DP Balance
     const availableCredit = await calculateCustomerDpBalance(customerId);
     const useCredit = applyDpCredit !== false && availableCredit > 0;
 
-    // Run backend calculation engine
+    // Run backend calculation engine with validated system occupancy
     const calculation = calculateRentalCost(equipment, {
       durationDays,
-      productionNeeds,
+      productionNeeds: {
+        ...productionNeeds,
+        rawMaterialKg: requestedVolumeKg,
+        volumeKg: requestedVolumeKg,
+      },
+      volumeKg: requestedVolumeKg,
+      rawMaterialKg: requestedVolumeKg,
+      occupancyPercent: calcOccupancyPercent,
       customerDpBalance: useCredit ? availableCredit : 0,
     });
 
@@ -708,6 +913,42 @@ exports.createBooking = async (req, res) => {
       appliedLedgerAmount = calculation.dpCreditApplied;
     }
 
+    // Setup Drying Progress Object
+    const coffeeType =
+      productionNeeds?.coffeeType || productionNeeds?.productType || "Arabika";
+    const dryingMethod = productionNeeds?.dryingMethod || "GEOTHERMAL_WASH";
+    const dryingMethodName =
+      productionNeeds?.dryingMethodName ||
+      (dryingMethod === "HONEY_SKIN_CONTACT"
+        ? "Honey Skin Contact"
+        : dryingMethod === "NATURAL_QUICK_DRY"
+        ? "Natural Quick Dry"
+        : "Geothermal Wash");
+
+    const dryingProgress = {
+      currentStage: "WAITING_CONFIRMATION",
+      coffeeType,
+      dryingMethod,
+      dryingMethodName,
+      initialWeightKg: requestedVolumeKg,
+      finalWeightKg: null,
+      moistureContentPercent: null,
+      occupancyTier: calculation.occupancyTierLabel || "0–30%",
+      discountPercent:
+        calculation.discountPercent !== undefined ? calculation.discountPercent : 50,
+      appliedRatePerKg:
+        calculation.effectiveRatePerKg || calculation.ratePerKg || 500,
+      stageHistory: [
+        {
+          stage: "WAITING_CONFIRMATION",
+          stageLabel: "Menunggu Konfirmasi",
+          timestamp: new Date(),
+          notes: "Pemesanan berhasil dibuat, menunggu pembayaran & verifikasi DP.",
+          updatedBy: resolvedCustomer.name,
+        },
+      ],
+    };
+
     // Create Booking
     const booking = await GeoDirectBooking.create({
       bookingCode,
@@ -730,13 +971,20 @@ exports.createBooking = async (req, res) => {
       usagePurpose,
       usageLocation,
       notes: notes || "",
-      productionNeeds: productionNeeds || {},
+      productionNeeds: {
+        ...productionNeeds,
+        rawMaterialKg: requestedVolumeKg,
+        volumeKg: requestedVolumeKg,
+        coffeeType,
+        dryingMethod,
+        dryingMethodName,
+      },
       pricingSnapshot: {
         basePrice: calculation.basePrice,
         durationDays: calculation.durationDays,
         subtotalBase: calculation.subtotalBase,
-        productionAddonRate: calculation.productionAddonRate,
-        productionAddonTotal: calculation.productionAddonTotal,
+        productionAddonRate: calculation.productionAddonRate || 0,
+        productionAddonTotal: calculation.productionAddonTotal || 0,
         totalRentalCost: calculation.totalRentalCost,
         dpPercentage: calculation.dpPercentage,
         requiredDpAmount: calculation.requiredDpAmount,
@@ -744,7 +992,12 @@ exports.createBooking = async (req, res) => {
         netDpDue: calculation.netDpDue,
         remainingBalance: calculation.remainingBalance,
         formulaApplied: calculation.formulaApplied,
+        volumeKg: requestedVolumeKg,
+        ratePerKg: calculation.ratePerKg || calculation.effectiveRatePerKg,
+        occupancyTier: calculation.occupancyTierLabel || "0–30%",
+        discountPercent: calculation.discountPercent || 50,
       },
+      dryingProgress,
       bookingStatus: initialBookingStatus,
       paymentStatus: initialPaymentStatus,
       paymentProof:
@@ -1279,6 +1532,21 @@ exports.adminVerifyPayment = async (req, res) => {
       rejectionReason: "",
     };
 
+    if (!booking.dryingProgress) {
+      booking.dryingProgress = {};
+    }
+    booking.dryingProgress.currentStage = "CONFIRMED";
+    if (!booking.dryingProgress.stageHistory) {
+      booking.dryingProgress.stageHistory = [];
+    }
+    booking.dryingProgress.stageHistory.push({
+      stage: "CONFIRMED",
+      stageLabel: "Pesanan Dikonfirmasi",
+      timestamp: new Date(),
+      notes: "Pembayaran DP berhasil diverifikasi. Pesanan pengeringan dikonfirmasi.",
+      updatedBy: adminName,
+    });
+
     await booking.save();
 
     await GeoDirectAuditLog.create({
@@ -1429,6 +1697,21 @@ exports.adminApproveBooking = async (req, res) => {
       pdfUrl: "",
       revisionCount: (booking.invoice?.revisionCount || 0) + 1,
     };
+
+    if (!booking.dryingProgress) {
+      booking.dryingProgress = {};
+    }
+    booking.dryingProgress.currentStage = "WAITING_COFFEE_RECEIPT";
+    if (!booking.dryingProgress.stageHistory) {
+      booking.dryingProgress.stageHistory = [];
+    }
+    booking.dryingProgress.stageHistory.push({
+      stage: "WAITING_COFFEE_RECEIPT",
+      stageLabel: "Menunggu Penerimaan Kopi",
+      timestamp: new Date(),
+      notes: "Pengajuan sewa disetujui. Menunggu penerimaan bahan baku kopi di fasilitas Dryhouse PGE Kamojang.",
+      updatedBy: adminName,
+    });
 
     await booking.save();
 
@@ -1611,6 +1894,174 @@ exports.adminGetAuditLogs = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Gagal memuat audit log: " + error.message,
+    });
+  }
+};
+
+// ==========================================
+// 4. DRYING PROGRESS & DIGITAL REPORT
+// ==========================================
+
+exports.adminUpdateDryingProgress = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stage, initialWeightKg, finalWeightKg, moistureContentPercent, notes } = req.body;
+    const adminName = req.authUser?.name || "Admin/Operator PGE";
+
+    const booking = await GeoDirectBooking.findById(id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking tidak ditemukan." });
+    }
+
+    if (!booking.dryingProgress) {
+      booking.dryingProgress = {
+        stageHistory: [],
+      };
+    }
+
+    const stageLabels = {
+      WAITING_CONFIRMATION: "Menunggu Konfirmasi",
+      CONFIRMED: "Pesanan Dikonfirmasi",
+      WAITING_COFFEE_RECEIPT: "Menunggu Penerimaan Kopi",
+      DRYING_IN_PROGRESS: "Proses Pengeringan",
+      DRYING_COMPLETED: "Pengeringan Selesai",
+      READY_FOR_PICKUP: "Siap Diambil",
+      COMPLETED: "Selesai",
+    };
+
+    if (stage && stageLabels[stage]) {
+      booking.dryingProgress.currentStage = stage;
+      if (stage === "DRYING_IN_PROGRESS" && !booking.dryingProgress.startedAt) {
+        booking.dryingProgress.startedAt = new Date();
+      }
+      if (stage === "COMPLETED" || stage === "DRYING_COMPLETED") {
+        if (!booking.dryingProgress.completedAt) {
+          booking.dryingProgress.completedAt = new Date();
+        }
+        if (stage === "COMPLETED") {
+          booking.bookingStatus = "COMPLETED";
+        }
+      }
+    }
+
+    if (initialWeightKg !== undefined && initialWeightKg !== null) {
+      booking.dryingProgress.initialWeightKg = Number(initialWeightKg);
+    }
+    if (finalWeightKg !== undefined && finalWeightKg !== null) {
+      booking.dryingProgress.finalWeightKg = Number(finalWeightKg);
+    }
+    if (moistureContentPercent !== undefined && moistureContentPercent !== null) {
+      booking.dryingProgress.moistureContentPercent = Number(moistureContentPercent);
+    }
+    if (notes) {
+      booking.dryingProgress.operatorNotes = notes;
+    }
+    booking.dryingProgress.operatorName = adminName;
+
+    // Append history
+    if (!booking.dryingProgress.stageHistory) {
+      booking.dryingProgress.stageHistory = [];
+    }
+    booking.dryingProgress.stageHistory.push({
+      stage: stage || booking.dryingProgress.currentStage,
+      stageLabel: stageLabels[stage] || stage,
+      timestamp: new Date(),
+      notes: notes || `Tahapan operasional diperbarui menjadi ${stageLabels[stage] || stage}.`,
+      updatedBy: adminName,
+    });
+
+    await booking.save();
+
+    await sendSystemNotification({
+      userId: booking.customer,
+      title: "Update Proses Pengeringan Kopi ♨️",
+      message: `Proses pengeringan untuk booking ${booking.bookingCode} kini: ${stageLabels[stage] || stage}.`,
+      relatedId: booking._id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Progres pengeringan berhasil diperbarui.",
+      data: booking.dryingProgress,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memperbarui progres pengeringan: " + error.message,
+    });
+  }
+};
+
+exports.getDigitalProcessingReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const booking = await GeoDirectBooking.findById(id).populate("equipment").lean();
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Data booking tidak ditemukan." });
+    }
+
+    // Customer or Admin can access
+    if (
+      req.authUser?.role !== "admin" &&
+      String(booking.customer) !== String(req.authUser?._id)
+    ) {
+      return res.status(403).json({ success: false, message: "Akses ditolak." });
+    }
+
+    const dp = booking.dryingProgress || {};
+    const report = {
+      bookingCode: booking.bookingCode,
+      bookingId: booking._id,
+      customerName: booking.customerSnapshot?.name || "-",
+      customerCompany: booking.customerSnapshot?.company || "-",
+      customerPhone: booking.customerSnapshot?.phone || "-",
+      customerAddress: booking.customerSnapshot?.address || "-",
+      coffeeType: dp.coffeeType || booking.productionNeeds?.coffeeType || "Arabika",
+      dryingMethod: dp.dryingMethodName || dp.dryingMethod || "Geothermal Wash",
+      initialWeightKg:
+        dp.initialWeightKg ||
+        booking.productionNeeds?.rawMaterialKg ||
+        booking.pricingSnapshot?.volumeKg ||
+        500,
+      finalWeightKg: dp.finalWeightKg !== undefined ? dp.finalWeightKg : null,
+      moistureContentPercent:
+        dp.moistureContentPercent !== undefined ? dp.moistureContentPercent : null,
+      startDate: booking.rentalSchedule?.startDate,
+      endDate: booking.rentalSchedule?.endDate,
+      durationDays: booking.rentalSchedule?.durationDays || 3,
+      currentStage: dp.currentStage || "WAITING_CONFIRMATION",
+      isDryingCompleted:
+        dp.currentStage === "DRYING_COMPLETED" ||
+        dp.currentStage === "READY_FOR_PICKUP" ||
+        dp.currentStage === "COMPLETED",
+      completionStatus:
+        dp.currentStage === "COMPLETED"
+          ? "Selesai"
+          : dp.currentStage === "READY_FOR_PICKUP"
+          ? "Siap Diambil"
+          : dp.currentStage === "DRYING_COMPLETED"
+          ? "Pengeringan Selesai"
+          : "Dalam Proses",
+      totalCost: booking.pricingSnapshot?.totalRentalCost || 0,
+      verifiedDp:
+        booking.paymentStatus === "VERIFIED"
+          ? booking.pricingSnapshot?.requiredDpAmount
+          : 0,
+      remainingBalance: booking.pricingSnapshot?.remainingBalance || 0,
+      operatorNotes: dp.operatorNotes || "",
+      operatorName: dp.operatorName || "",
+      stageHistory: dp.stageHistory || [],
+      issuedAt: dp.completedAt || booking.updatedAt || new Date(),
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: report,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat laporan digital: " + error.message,
     });
   }
 };

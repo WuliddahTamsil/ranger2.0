@@ -68,9 +68,18 @@ const geoDirectEquipmentSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    facilityType: {
+      type: String,
+      enum: ["DRYHOUSE", "DEHYDRATOR", "DRY_TUBE", "OTHER"],
+      default: "DRYHOUSE",
+    },
+    comingSoon: {
+      type: Boolean,
+      default: false,
+    },
     basePrice: {
       type: Number,
-      default: 2000000, // Sementara Rp 2.000.000 / hari
+      default: 2000000,
     },
     pricingUnit: {
       type: String,
@@ -85,7 +94,7 @@ const geoDirectEquipmentSchema = new mongoose.Schema(
     },
     pricingFormulaType: {
       type: String,
-      enum: ["STANDARD_DAILY", "DAILY_PLUS_CAPACITY", "FIXED"],
+      enum: ["STANDARD_DAILY", "DAILY_PLUS_CAPACITY", "FIXED", "DRYHOUSE_TIERED"],
       default: "STANDARD_DAILY",
     },
     productionParameters: [productionParameterSchema],

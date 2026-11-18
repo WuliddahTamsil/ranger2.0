@@ -13,6 +13,7 @@ const { requireAuth, optionalAuth, requireRole } = require("../middleware/authMi
 // ==========================================
 router.get("/catalog", optionalAuth, geoDirectController.getEquipments);
 router.get("/catalog/:id", optionalAuth, geoDirectController.getEquipmentDetail);
+router.get("/dryhouse/availability", optionalAuth, geoDirectController.getDryhouseAvailability);
 router.post("/calculate", optionalAuth, geoDirectController.calculateRentalPrice);
 router.get("/payment-methods", optionalAuth, geoDirectController.getPaymentMethods);
 
@@ -22,6 +23,7 @@ router.get("/payment-methods", optionalAuth, geoDirectController.getPaymentMetho
 router.post("/bookings", requireAuth, geoDirectController.createBooking);
 router.get("/bookings/my", requireAuth, geoDirectController.getMyBookings);
 router.get("/bookings/:id", requireAuth, geoDirectController.getBookingDetail);
+router.get("/bookings/:id/report", requireAuth, geoDirectController.getDigitalProcessingReport);
 router.post("/bookings/:id/payment-proof", requireAuth, geoDirectController.uploadPaymentProof);
 router.post("/bookings/:id/resubmit", requireAuth, geoDirectController.resubmitBooking);
 router.get("/dp-balance", requireAuth, geoDirectController.getCustomerDpBalanceInfo);
@@ -39,6 +41,7 @@ router.post("/admin/bookings/:id/verify-payment", requireAuth, requireRole("admi
 router.post("/admin/bookings/:id/reject-payment", requireAuth, requireRole("admin"), geoDirectController.adminRejectPayment);
 router.post("/admin/bookings/:id/approve", requireAuth, requireRole("admin"), geoDirectController.adminApproveBooking);
 router.post("/admin/bookings/:id/reject", requireAuth, requireRole("admin"), geoDirectController.adminRejectBooking);
+router.post("/admin/bookings/:id/drying-progress", requireAuth, requireRole("admin"), geoDirectController.adminUpdateDryingProgress);
 router.get("/admin/dp-ledgers", requireAuth, requireRole("admin"), geoDirectController.adminGetDpLedgers);
 router.get("/admin/audit-logs", requireAuth, requireRole("admin"), geoDirectController.adminGetAuditLogs);
 

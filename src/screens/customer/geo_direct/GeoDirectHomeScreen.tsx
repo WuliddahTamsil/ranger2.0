@@ -1,7 +1,10 @@
 /**
  * GeoDirectHomeScreen.tsx
  * Customer Catalog Screen for PGE Geo Direct Use
- * Features 4 PGE CoE Equipments (Equipment 01 - 04)
+ * Features 3 Geothermal Facilities:
+ * 1. Geothermal Dryhouse (Available / Tersedia - Primary Active Service)
+ * 2. Geothermal Dehydrator (Coming Soon - In Research & Development)
+ * 3. Geothermal Dry Tube (Coming Soon - In Research & Development)
  */
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -16,21 +19,22 @@ import {
   RefreshControl,
   StatusBar,
   Platform,
+  Modal,
 } from "react-native";
 import {
   Flame,
   ArrowLeft,
-  Calendar,
   Layers,
   CheckCircle2,
   AlertCircle,
   ChevronRight,
   ShieldCheck,
-  CreditCard,
-  Sparkles,
-  Info,
   Clock,
   Coins,
+  Sparkles,
+  Info,
+  X,
+  Calculator,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import {
@@ -53,6 +57,17 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [dpBalance, setDpBalance] = useState<number>(0);
 
+  // Coming Soon Modal State
+  const [comingSoonModal, setComingSoonModal] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+  }>({
+    open: false,
+    title: "",
+    description: "",
+  });
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -60,7 +75,68 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
         fetchEquipments(),
         authAccount ? fetchCustomerDpBalance().catch(() => ({ balance: 0, history: [] })) : Promise.resolve({ balance: 0, history: [] }),
       ]);
-      setEquipments(list);
+
+      // Normalize list to ensure the 3 primary facilities are present
+      let items = Array.isArray(list) ? [...list] : [];
+      if (items.length === 0) {
+        items = [
+          {
+            _id: "EQ-01",
+            code: "EQ-01",
+            name: "Geothermal Dryhouse",
+            facilityType: "DRYHOUSE",
+            comingSoon: false,
+            isAvailable: true,
+            isActive: true,
+            description: "Layanan pengeringan hasil pertanian, terutama kopi, dengan memanfaatkan energi panas bumi melalui fasilitas Dryhouse terpadu.",
+            specification: "Kapasitas 4 unit dryhouse, suhu terkontrol 40-50°C, pemantauan kadar air digital presisi.",
+            function: "Pengeringan hasil panen komoditas kopi cherry, biji kakao, dan komoditas perkebunan.",
+            capacity: "4 Unit • Maksimal 6.000 kg / batch (Min. 100 kg)",
+            rentalTerms: "1. Pemesanan melalui sistem GEOVERSE.\n2. Verifikasi DP 30%.\n3. Mematuhi SOP penerimaan bahan baku.",
+            basePrice: 1000,
+            pricingUnit: "per_kg",
+            dpPercentage: 30,
+            pricingFormulaType: "DRYHOUSE_TIERED",
+          },
+          {
+            _id: "EQ-02",
+            code: "EQ-02",
+            name: "Geothermal Dehydrator",
+            facilityType: "DEHYDRATOR",
+            comingSoon: true,
+            isAvailable: false,
+            isActive: true,
+            description: "Fasilitas dehidrasi suhu rendah berbasis panas bumi untuk buah, sayuran, dan komoditas hortikultura bernilai tinggi.",
+            specification: "Sistem tray berputar, kontrol kelembaban otomatis, sirkulasi termal tertutup.",
+            function: "Dehidrasi buah kering, keripik sehat, dan bahan baku herbal herbal.",
+            capacity: "Tahap Pengembangan & Validasi Riset",
+            rentalTerms: "Layanan masih dalam tahap riset.",
+            basePrice: 0,
+            pricingUnit: "per_batch",
+            dpPercentage: 30,
+            pricingFormulaType: "STANDARD_DAILY",
+          },
+          {
+            _id: "EQ-03",
+            code: "EQ-03",
+            name: "Geothermal Dry Tube",
+            facilityType: "DRY_TUBE",
+            comingSoon: true,
+            isAvailable: false,
+            isActive: true,
+            description: "Teknologi pengeringan tubular aliran kontinu untuk biji-bijian, rempah, dan komoditas curah dengan efisiensi termal tinggi.",
+            specification: "Tabung penghantar panas bumi spiral terisolasi dengan sirkulasi udara bertekanan.",
+            function: "Pengeringan rempah, jagung, dan biji-bijian curah.",
+            capacity: "Tahap Pengembangan & Validasi Riset",
+            rentalTerms: "Layanan masih dalam tahap riset.",
+            basePrice: 0,
+            pricingUnit: "per_batch",
+            dpPercentage: 30,
+            pricingFormulaType: "STANDARD_DAILY",
+          },
+        ];
+      }
+      setEquipments(items);
       setDpBalance(balData.balance || 0);
     } catch (err) {
       console.warn("Failed to load equipments:", err);
@@ -79,17 +155,29 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
     loadData();
   };
 
-  const getEquipmentPlaceholderIllustration = (code: string) => {
-    switch (code) {
-      case "EQ-01":
-        return require("../../../../assets/kanyaah-mart.png");
-      case "EQ-02":
-        return require("../../../../assets/kanyaah-homestay.png");
-      case "EQ-03":
-        return require("../../../../assets/kanyaah-point.png");
-      default:
-        return require("../../../../assets/kanyaah-more.png");
+  const handleCardPress = (item: GeoDirectEquipment) => {
+    if (item.comingSoon || !item.isAvailable) {
+      setComingSoonModal({
+        open: true,
+        title: item.name,
+        description:
+          item.description ||
+          "Fasilitas ini saat ini masih dalam tahap riset dan pengembangan oleh tim PGE Kamojang. Layanan ini akan segera hadir untuk memperkuat ekosistem hilirisasi pertanian berbasis panas bumi.",
+      });
+    } else {
+      navigate("c_geo_direct_detail", { equipmentId: item._id });
     }
+  };
+
+  const getEquipmentIllustration = (item: GeoDirectEquipment) => {
+    if (item.imageUrl) return { uri: item.imageUrl };
+    if (item.facilityType === "DRYHOUSE" || item.code === "EQ-01") {
+      return require("../../../../assets/geo-direct.png");
+    }
+    if (item.facilityType === "DEHYDRATOR" || item.code === "EQ-02") {
+      return require("../../../../assets/kanyaah-mart.png");
+    }
+    return require("../../../../assets/kanyaah-homestay.png");
   };
 
   return (
@@ -136,10 +224,10 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
               <Text style={styles.heroFacilityText}>Area Kamojang</Text>
             </View>
           </View>
-          <Text style={styles.heroTitle}>Layanan Sewa Peralatan Direct Use Panas Bumi</Text>
+          <Text style={styles.heroTitle}>Fasilitas Pemanfaatan Langsung Panas Bumi</Text>
           <Text style={styles.heroDesc}>
-            Manfaatkan langsung energi panas bumi untuk efisiensi pengeringan, produksi hasil tani, komoditas pangan,
-            dan riset operasional berkualitas tinggi.
+            Akses fasilitas teknologi pengeringan berbasis energi geothermal untuk meningkatkan mutu,
+            efisiensi pengolahan hasil pertanian, serta hilirisasi produk UMKM dan kelompok tani.
           </Text>
         </View>
 
@@ -157,7 +245,7 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
               <Text style={styles.dpBalanceLabel}>Saldo Deposit DP Tersedia</Text>
               <Text style={styles.dpBalanceValue}>{rp(dpBalance)}</Text>
               <Text style={styles.dpBalanceHint}>
-                Dapat langsung digunakan sebagai potongan DP pengajuan baru / revisi.
+                Dapat langsung digunakan sebagai potongan pembayaran DP pemesanan Dryhouse berikutnya.
               </Text>
             </View>
             <ChevronRight size={18} color="#D97706" />
@@ -167,11 +255,11 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
         {/* Catalog Section Header */}
         <View style={styles.sectionHeaderRow}>
           <View>
-            <Text style={styles.sectionTitle}>Katalog Alat Tersedia</Text>
-            <Text style={styles.sectionSubtitle}>Pilih alat sesuai kebutuhan pengolahan & durasi Anda</Text>
+            <Text style={styles.sectionTitle}>Pilih Fasilitas Geothermal</Text>
+            <Text style={styles.sectionSubtitle}>Fasilitas inovasi pengolahan energi terbarukan PGE Kamojang</Text>
           </View>
           <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>{equipments.length} Alat</Text>
+            <Text style={styles.countBadgeText}>{equipments.length} Fasilitas</Text>
           </View>
         </View>
 
@@ -179,7 +267,7 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
         {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#0D7A53" />
-            <Text style={styles.loadingText}>Memuat katalog alat PGE CoE...</Text>
+            <Text style={styles.loadingText}>Memuat fasilitas PGE CoE...</Text>
           </View>
         )}
 
@@ -187,115 +275,171 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
         {!loading && (
           <View style={styles.cardList}>
             {equipments.map((item) => {
-              const hasConfiguredPrice = item.basePrice > 0;
+              const isDryhouse = item.facilityType === "DRYHOUSE" || item.code === "EQ-01";
+              const isComingSoon = item.comingSoon || !item.isAvailable;
 
               return (
-                <View key={item._id} style={styles.card}>
+                <TouchableOpacity
+                  key={item._id}
+                  style={[styles.card, isComingSoon && styles.cardComingSoon]}
+                  onPress={() => handleCardPress(item)}
+                  activeOpacity={0.88}
+                >
                   {/* Card Header & Status */}
                   <View style={styles.cardHeader}>
                     <View style={styles.cardCodeBadge}>
                       <Text style={styles.cardCodeText}>{item.code}</Text>
                     </View>
-                    <View
-                      style={[
-                        styles.availBadge,
-                        item.isAvailable ? styles.availBadgeActive : styles.availBadgeInactive,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.statusDot,
-                          { backgroundColor: item.isAvailable ? "#16A34A" : "#DC2626" },
-                        ]}
-                      />
-                      <Text
-                        style={[
-                          styles.availText,
-                          { color: item.isAvailable ? "#15803D" : "#991B1B" },
-                        ]}
-                      >
-                        {item.isAvailable ? "Tersedia" : "Sedang Digunakan"}
-                      </Text>
-                    </View>
+                    {isComingSoon ? (
+                      <View style={styles.comingSoonBadge}>
+                        <Clock size={11} color="#B45309" />
+                        <Text style={styles.comingSoonBadgeText}>Coming Soon</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.availBadgeActive}>
+                        <View style={styles.statusDotGreen} />
+                        <Text style={styles.availTextActive}>Tersedia / Available</Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Body Content */}
                   <View style={styles.cardBody}>
-                    <View style={styles.imgWrap}>
-                      {item.imageUrl ? (
-                        <Image source={{ uri: item.imageUrl }} style={styles.equipmentImg} resizeMode="cover" />
-                      ) : (
-                        <Image
-                          source={getEquipmentPlaceholderIllustration(item.code)}
-                          style={styles.equipmentImg}
-                          resizeMode="contain"
-                        />
-                      )}
+                    <View style={[styles.imgWrap, isComingSoon && styles.imgWrapMuted]}>
+                      <Image
+                        source={getEquipmentIllustration(item)}
+                        style={styles.equipmentImg}
+                        resizeMode="contain"
+                      />
                     </View>
 
                     <View style={styles.cardMainInfo}>
                       <Text style={styles.cardName}>{item.name}</Text>
-                      <Text style={styles.cardDesc} numberOfLines={2}>
+                      <Text style={styles.cardDesc} numberOfLines={3}>
                         {item.description}
                       </Text>
 
                       {/* Capacity Badge */}
-                      <View style={styles.capacityBadge}>
-                        <Layers size={11} color="#0D7A53" />
-                        <Text style={styles.capacityBadgeText} numberOfLines={1}>
-                          {item.capacity || "Maksimal 10 Ton / hari"}
+                      <View style={[styles.capacityBadge, isComingSoon && styles.capacityBadgeMuted]}>
+                        <Layers size={11} color={isComingSoon ? "#64748B" : "#0D7A53"} />
+                        <Text
+                          style={[
+                            styles.capacityBadgeText,
+                            isComingSoon && styles.capacityBadgeTextMuted,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.capacity || "4 Unit • Maksimal 6.000 kg / batch"}
                         </Text>
                       </View>
 
                       {/* Pricing Tag */}
-                      <View style={styles.priceContainer}>
-                        <Text style={styles.priceLabel}>Biaya Sewa Pokok:</Text>
-                        {hasConfiguredPrice ? (
+                      {isDryhouse ? (
+                        <View style={styles.priceContainer}>
+                          <Text style={styles.priceLabel}>Simulasi Tarif Sewa:</Text>
                           <View style={styles.priceRow}>
-                            <Text style={styles.priceValue}>{rp(item.basePrice)}</Text>
-                            <Text style={styles.priceUnit}>/{item.pricingUnit.replace("per_", "")}</Text>
+                            <Text style={styles.priceValue}>Rp 500 – Rp 1.000</Text>
+                            <Text style={styles.priceUnit}>/kg</Text>
                           </View>
-                        ) : (
-                          <View style={styles.waitingPriceTag}>
-                            <Info size={12} color="#D97706" />
-                            <Text style={styles.waitingPriceText}>Menunggu konfigurasi PGE</Text>
-                          </View>
-                        )}
-                        <Text style={styles.dpPercentInfo}>Ketentuan DP: {item.dpPercentage}%</Text>
-                      </View>
+                          <Text style={styles.discountHighlight}>
+                            Diskon okupansi s.d. 50% • HPP Rp 377/kg
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.comingSoonInfoBox}>
+                          <Sparkles size={13} color="#64748B" />
+                          <Text style={styles.comingSoonInfoText}>
+                            Tahap Riset & Pengembangan Terapan
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 
                   {/* Card Action Buttons */}
                   <View style={styles.cardFooter}>
-                    <TouchableOpacity
-                      style={styles.btnDetail}
-                      onPress={() => navigate("c_geo_direct_detail", { equipmentId: item._id })}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={styles.btnDetailText}>Lihat Detail</Text>
-                    </TouchableOpacity>
+                    {isDryhouse ? (
+                      <>
+                        <TouchableOpacity
+                          style={styles.btnDetail}
+                          onPress={() => navigate("c_geo_direct_detail", { equipmentId: item._id })}
+                          activeOpacity={0.75}
+                        >
+                          <Calculator size={14} color="#0D7A53" style={{ marginRight: 6 }} />
+                          <Text style={styles.btnDetailText}>Simulasi & Detail</Text>
+                        </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={[styles.btnRent, !item.isAvailable && styles.btnDisabled]}
-                      onPress={() => {
-                        if (item.isAvailable) {
-                          navigate("c_geo_direct_booking", { equipmentId: item._id });
-                        }
-                      }}
-                      disabled={!item.isAvailable}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.btnRentText}>Sewa Sekarang</Text>
-                      <ChevronRight size={16} color="#FFFFFF" />
-                    </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.btnRent}
+                          onPress={() => navigate("c_geo_direct_booking", { equipmentId: item._id })}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.btnRentText}>Pesan Fasilitas</Text>
+                          <ChevronRight size={16} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.btnComingSoon}
+                        onPress={() => handleCardPress(item)}
+                        activeOpacity={0.8}
+                      >
+                        <Info size={14} color="#64748B" style={{ marginRight: 6 }} />
+                        <Text style={styles.btnComingSoonText}>Informasi Pengembangan</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
         )}
       </ScrollView>
+
+      {/* Friendly Coming Soon Modal */}
+      <Modal
+        visible={comingSoonModal.open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setComingSoonModal({ open: false, title: "", description: "" })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIconWrap}>
+                <Sparkles size={24} color="#D97706" />
+              </View>
+              <TouchableOpacity
+                onPress={() => setComingSoonModal({ open: false, title: "", description: "" })}
+                style={styles.modalCloseBtn}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalBadgeText}>TAHAP PENGEMBANGAN</Text>
+            <Text style={styles.modalTitle}>{comingSoonModal.title}</Text>
+            <Text style={styles.modalDescription}>{comingSoonModal.description}</Text>
+
+            <View style={styles.modalCallout}>
+              <Info size={16} color="#0D7A53" />
+              <Text style={styles.modalCalloutText}>
+                Fasilitas ini sedang disiapkan oleh PGE Center of Excellence Kamojang. Untuk kebutuhan
+                pengeringan kopi saat ini, Anda dapat langsung memanfaatkan layanan{" "}
+                <Text style={{ fontWeight: "700" }}>Geothermal Dryhouse</Text> yang telah beroperasi penuh.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalActionBtn}
+              onPress={() => setComingSoonModal({ open: false, title: "", description: "" })}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalActionBtnText}>Mengerti</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -501,6 +645,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
+  cardComingSoon: {
+    backgroundColor: "#FAFBFD",
+    borderColor: "#E2E8F0",
+    borderStyle: "dashed",
+  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -520,28 +669,41 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#334155",
   },
-  availBadge: {
+  availBadgeActive: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
-  },
-  availBadgeActive: {
     backgroundColor: "#DCFCE7",
   },
-  availBadgeInactive: {
-    backgroundColor: "#FEE2E2",
-  },
-  statusDot: {
+  statusDotGreen: {
     width: 6,
     height: 6,
     borderRadius: 3,
+    backgroundColor: "#16A34A",
   },
-  availText: {
+  availTextActive: {
     fontSize: 11,
     fontWeight: "700",
+    color: "#15803D",
+  },
+  comingSoonBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  comingSoonBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#B45309",
   },
   cardBody: {
     flexDirection: "row",
@@ -557,6 +719,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F1F5F9",
     overflow: "hidden",
+  },
+  imgWrapMuted: {
+    opacity: 0.75,
+    backgroundColor: "#F1F5F9",
   },
   equipmentImg: {
     width: "100%",
@@ -588,19 +754,28 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginBottom: 8,
   },
+  capacityBadgeMuted: {
+    backgroundColor: "#F1F5F9",
+  },
   capacityBadgeText: {
     fontSize: 10.5,
     fontWeight: "700",
     color: "#0D7A53",
   },
+  capacityBadgeTextMuted: {
+    color: "#64748B",
+  },
   priceContainer: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F0FDF4",
     padding: 8,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
   },
   priceLabel: {
     fontSize: 10,
-    color: "#64748B",
+    color: "#065F46",
+    fontWeight: "600",
   },
   priceRow: {
     flexDirection: "row",
@@ -615,23 +790,26 @@ const styles = StyleSheet.create({
   },
   priceUnit: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#065F46",
   },
-  waitingPriceTag: {
+  discountHighlight: {
+    fontSize: 10,
+    color: "#047857",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  comingSoonInfoBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginTop: 2,
+    gap: 6,
+    backgroundColor: "#F1F5F9",
+    padding: 8,
+    borderRadius: 8,
   },
-  waitingPriceText: {
+  comingSoonInfoText: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#D97706",
-  },
-  dpPercentInfo: {
-    fontSize: 10,
     color: "#64748B",
-    marginTop: 2,
+    fontWeight: "600",
   },
   cardFooter: {
     flexDirection: "row",
@@ -643,19 +821,20 @@ const styles = StyleSheet.create({
   },
   btnDetail: {
     flex: 1,
-    paddingVertical: 10,
-    backgroundColor: "#F1F5F9",
-    borderRadius: 8,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 10,
+    backgroundColor: "#EAF8F0",
+    borderRadius: 8,
   },
   btnDetailText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#334155",
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#0D7A53",
   },
   btnRent: {
-    flex: 1.3,
+    flex: 1.2,
     flexDirection: "row",
     gap: 4,
     paddingVertical: 10,
@@ -669,8 +848,101 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  btnDisabled: {
-    backgroundColor: "#94A3B8",
+  btnComingSoon: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 8,
+  },
+  btnComingSoonText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 20,
+    width: "100%",
+    maxWidth: 420,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  modalIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCloseBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+  },
+  modalBadgeText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#B45309",
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 8,
+  },
+  modalDescription: {
+    fontSize: 13,
+    color: "#475569",
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+  modalCallout: {
+    flexDirection: "row",
+    gap: 10,
+    backgroundColor: "#F0FDF4",
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    marginBottom: 18,
+  },
+  modalCalloutText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#065F46",
+    lineHeight: 17,
+  },
+  modalActionBtn: {
+    backgroundColor: "#0D7A53",
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  modalActionBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });
-
