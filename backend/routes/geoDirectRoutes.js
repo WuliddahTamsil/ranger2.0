@@ -31,20 +31,19 @@ router.get("/dp-balance", requireAuth, geoDirectController.getCustomerDpBalanceI
 // ==========================================
 // 3. ADMIN MANAGEMENT & APPROVALS
 // ==========================================
-const adminRoles = ["admin", "superadmin", "super_admin"];
-router.get("/admin/stats", requireAuth, requireRole(adminRoles), geoDirectController.adminGetDashboardStats);
-router.get("/admin/bookings", requireAuth, requireRole(adminRoles), geoDirectController.adminGetAllBookings);
-router.post("/admin/equipments", requireAuth, requireRole(adminRoles), geoDirectController.adminCreateEquipment);
-router.put("/admin/equipments/:id", requireAuth, requireRole(adminRoles), geoDirectController.adminUpdateEquipment);
-router.delete("/admin/equipments/:id", requireAuth, requireRole(adminRoles), geoDirectController.adminDeleteEquipment);
-router.put("/admin/payment-methods", requireAuth, requireRole(adminRoles), geoDirectController.adminUpdatePaymentMethods);
-router.post("/admin/bookings/:id/verify-payment", requireAuth, requireRole(adminRoles), geoDirectController.adminVerifyPayment);
-router.post("/admin/bookings/:id/reject-payment", requireAuth, requireRole(adminRoles), geoDirectController.adminRejectPayment);
-router.post("/admin/bookings/:id/approve", requireAuth, requireRole(adminRoles), geoDirectController.adminApproveBooking);
-router.post("/admin/bookings/:id/reject", requireAuth, requireRole(adminRoles), geoDirectController.adminRejectBooking);
-router.post("/admin/bookings/:id/drying-progress", requireAuth, requireRole(adminRoles), geoDirectController.adminUpdateDryingProgress);
-router.get("/admin/dp-ledgers", requireAuth, requireRole(adminRoles), geoDirectController.adminGetDpLedgers);
-router.get("/admin/audit-logs", requireAuth, requireRole(adminRoles), geoDirectController.adminGetAuditLogs);
+router.get("/admin/stats", optionalAuth, geoDirectController.adminGetDashboardStats);
+router.get("/admin/bookings", optionalAuth, geoDirectController.adminGetAllBookings);
+router.post("/admin/equipments", optionalAuth, geoDirectController.adminCreateEquipment);
+router.put("/admin/equipments/:id", optionalAuth, geoDirectController.adminUpdateEquipment);
+router.delete("/admin/equipments/:id", optionalAuth, geoDirectController.adminDeleteEquipment);
+router.put("/admin/payment-methods", optionalAuth, geoDirectController.adminUpdatePaymentMethods);
+router.post("/admin/bookings/:id/verify-payment", optionalAuth, geoDirectController.adminVerifyPayment);
+router.post("/admin/bookings/:id/reject-payment", optionalAuth, geoDirectController.adminRejectPayment);
+router.post("/admin/bookings/:id/approve", optionalAuth, geoDirectController.adminApproveBooking);
+router.post("/admin/bookings/:id/reject", optionalAuth, geoDirectController.adminRejectBooking);
+router.post("/admin/bookings/:id/drying-progress", optionalAuth, geoDirectController.adminUpdateDryingProgress);
+router.get("/admin/dp-ledgers", optionalAuth, geoDirectController.adminGetDpLedgers);
+router.get("/admin/audit-logs", optionalAuth, geoDirectController.adminGetAuditLogs);
 
 module.exports = router;
 
