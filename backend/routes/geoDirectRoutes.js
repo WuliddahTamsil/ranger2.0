@@ -22,8 +22,8 @@ router.get("/payment-methods", optionalAuth, geoDirectController.getPaymentMetho
 // ==========================================
 router.post("/bookings", requireAuth, geoDirectController.createBooking);
 router.get("/bookings/my", requireAuth, geoDirectController.getMyBookings);
-router.get("/bookings/:id", requireAuth, geoDirectController.getBookingDetail);
-router.get("/bookings/:id/report", requireAuth, geoDirectController.getDigitalProcessingReport);
+router.get("/bookings/:id", optionalAuth, geoDirectController.getBookingDetail);
+router.get("/bookings/:id/report", optionalAuth, geoDirectController.getDigitalProcessingReport);
 router.post("/bookings/:id/payment-proof", requireAuth, geoDirectController.uploadPaymentProof);
 router.post("/bookings/:id/resubmit", requireAuth, geoDirectController.resubmitBooking);
 router.get("/dp-balance", requireAuth, geoDirectController.getCustomerDpBalanceInfo);

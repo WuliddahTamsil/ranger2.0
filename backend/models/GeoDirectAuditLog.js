@@ -19,7 +19,8 @@ const geoDirectAuditLogSchema = new mongoose.Schema(
     actor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
+      default: null,
     },
     actorRole: {
       type: String,

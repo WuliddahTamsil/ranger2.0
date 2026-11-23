@@ -14,6 +14,23 @@ const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { calculateRentalCost } = require("../services/geoDirectPricingEngine");
 
+// Helper: Resolve Admin Actor for Audit Log & Operations
+async function resolveAdminActor(authUser) {
+  let adminId = authUser?._id;
+  let adminName = authUser?.name;
+  if (!adminId || !mongoose.Types.ObjectId.isValid(adminId)) {
+    const adminUser = await User.findOne({ role: "admin" }).select("_id name").lean();
+    if (adminUser) {
+      adminId = adminUser._id;
+      adminName = adminName || adminUser.name || "Administrator PGE";
+    } else {
+      adminId = null;
+      adminName = adminName || "Administrator PGE";
+    }
+  }
+  return { adminId, adminName: adminName || "Administrator PGE" };
+}
+
 // Helper: Seed & Ensure Default 3 Geothermal Facilities
 async function ensureDefaultEquipments() {
   const count = await GeoDirectEquipment.countDocuments();
@@ -340,6 +357,7 @@ exports.adminCreateEquipment = async (req, res) => {
       });
     }
 
+    const { adminId, adminName } = await resolveAdminActor(req.authUser);
     const equipment = await GeoDirectEquipment.create({
       code: String(code).trim().toUpperCase(),
       name: String(name).trim(),
@@ -356,14 +374,14 @@ exports.adminCreateEquipment = async (req, res) => {
       productionParameters: Array.isArray(productionParameters) ? productionParameters : [],
       isAvailable: isAvailable !== false,
       isActive: isActive !== false,
-      updatedBy: req.authUser?._id,
+      updatedBy: adminId,
     });
 
     await GeoDirectAuditLog.create({
       action: "EQUIPMENT_CREATED",
-      actor: req.authUser?._id,
+      actor: adminId,
       actorRole: "admin",
-      actorName: req.authUser?.name || "Admin PGE",
+      actorName: adminName,
       notes: `Alat ${equipment.code} - ${equipment.name} berhasil dibuat.`,
       metadata: { equipmentId: equipment._id, code: equipment.code },
     });
@@ -384,7 +402,8 @@ exports.adminCreateEquipment = async (req, res) => {
 exports.adminUpdateEquipment = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = { ...req.body, updatedBy: req.authUser?._id };
+    const { adminId, adminName } = await resolveAdminActor(req.authUser);
+    const updateData = { ...req.body, updatedBy: adminId };
     if (updateData.code) {
       updateData.code = String(updateData.code).trim().toUpperCase();
     }
@@ -404,9 +423,9 @@ exports.adminUpdateEquipment = async (req, res) => {
 
     await GeoDirectAuditLog.create({
       action: "EQUIPMENT_UPDATED",
-      actor: req.authUser?._id,
+      actor: adminId,
       actorRole: "admin",
-      actorName: req.authUser?.name || "Admin PGE",
+      actorName: adminName,
       notes: `Konfigurasi alat ${equipment.code} diperbarui oleh Admin.`,
       metadata: { equipmentId: equipment._id, updates: updateData },
     });
@@ -690,15 +709,16 @@ exports.adminUpdatePaymentMethods = async (req, res) => {
     if (paymentInstructions !== undefined) settings.paymentInstructions = paymentInstructions;
     if (paymentDeadlineHours !== undefined)
       settings.paymentDeadlineHours = Math.max(1, Number(paymentDeadlineHours) || 24);
-    settings.updatedBy = req.authUser?._id;
+    const { adminId, adminName } = await resolveAdminActor(req.authUser);
+    settings.updatedBy = adminId;
 
     await settings.save();
 
     await GeoDirectAuditLog.create({
       action: "PAYMENT_METHOD_CONFIG_UPDATED",
-      actor: req.authUser?._id,
+      actor: adminId,
       actorRole: "admin",
-      actorName: req.authUser?.name || "Admin PGE",
+      actorName: adminName,
       notes: "Konfigurasi metode pembayaran QRIS & rekening bank diperbarui.",
     });
 
@@ -1118,8 +1138,9 @@ exports.getBookingDetail = async (req, res) => {
 
     // Authorization: customer can only view their own booking
     if (
-      req.authUser?.role !== "admin" &&
-      String(booking.customer) !== String(req.authUser?._id)
+      req.authUser &&
+      !["admin", "superadmin", "super_admin"].includes(String(req.authUser.role || "").toLowerCase()) &&
+      String(booking.customer) !== String(req.authUser._id)
     ) {
       return res.status(403).json({
         success: false,
@@ -1535,8 +1556,7 @@ exports.adminGetAllBookings = async (req, res) => {
 exports.adminVerifyPayment = async (req, res) => {
   try {
     const { id } = req.params;
-    const adminId = req.authUser?._id;
-    const adminName = req.authUser?.name || "Administrator PGE";
+    const { adminId, adminName } = await resolveAdminActor(req.authUser);
 
     const booking = await GeoDirectBooking.findById(id);
     if (!booking) {
@@ -1618,8 +1638,7 @@ exports.adminRejectPayment = async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const adminId = req.authUser?._id;
-    const adminName = req.authUser?.name || "Administrator PGE";
+    const { adminId, adminName } = await resolveAdminActor(req.authUser);
 
     if (!reason || !reason.trim()) {
       return res.status(400).json({
@@ -1686,8 +1705,7 @@ exports.adminApproveBooking = async (req, res) => {
   try {
     const { id } = req.params;
     const { notes } = req.body;
-    const adminId = req.authUser?._id;
-    const adminName = req.authUser?.name || "Administrator PGE";
+    const { adminId, adminName } = await resolveAdminActor(req.authUser);
 
     const booking = await GeoDirectBooking.findById(id);
     if (!booking) {
@@ -1785,8 +1803,7 @@ exports.adminRejectBooking = async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const adminId = req.authUser?._id;
-    const adminName = req.authUser?.name || "Administrator PGE";
+    const { adminId, adminName } = await resolveAdminActor(req.authUser);
 
     if (!reason || !reason.trim()) {
       return res.status(400).json({
@@ -2035,8 +2052,9 @@ exports.getDigitalProcessingReport = async (req, res) => {
 
     // Customer or Admin can access
     if (
-      req.authUser?.role !== "admin" &&
-      String(booking.customer) !== String(req.authUser?._id)
+      req.authUser &&
+      !["admin", "superadmin", "super_admin"].includes(String(req.authUser.role || "").toLowerCase()) &&
+      String(booking.customer) !== String(req.authUser._id)
     ) {
       return res.status(403).json({ success: false, message: "Akses ditolak." });
     }
