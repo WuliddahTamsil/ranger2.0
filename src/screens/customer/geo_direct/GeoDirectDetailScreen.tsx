@@ -291,27 +291,33 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
       </View>
 
       {/* Navigation Sub-Tabs */}
-      <View style={styles.tabBar}>
-        {[
-          { key: "OVERVIEW", label: "Layanan & Fasilitas" },
-          { key: "CALCULATOR", label: "Kalkulator Tarif (Prioritas)" },
-          { key: "TRACKING", label: "Alur Tracking" },
-          { key: "REPORT", label: "Laporan Digital" },
-        ].map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.tabItem, isActive && styles.tabItemActive]}
-              onPress={() => setActiveTab(tab.key as any)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabItemText, isActive && styles.tabItemTextActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      <View style={styles.tabBarWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBarScrollInner}
+        >
+          {[
+            { key: "OVERVIEW", label: "Layanan & Fasilitas" },
+            { key: "CALCULATOR", label: "Kalkulator Tarif (Prioritas)" },
+            { key: "TRACKING", label: "Alur Tracking" },
+            { key: "REPORT", label: "Laporan Digital" },
+          ].map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.tabItem, isActive && styles.tabItemActive]}
+                onPress={() => setActiveTab(tab.key as any)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabItemText, isActive && styles.tabItemTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner}>
@@ -946,16 +952,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#0D7A53",
   },
-  tabBar: {
-    flexDirection: "row",
+  tabBarWrapper: {
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E2E8F0",
-    paddingHorizontal: 12,
+  },
+  tabBarScrollInner: {
+    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
   },
   tabItem: {
     paddingVertical: 12,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderBottomWidth: 2,
     borderBottomColor: "transparent",
   },

@@ -254,9 +254,11 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
 
         {/* Catalog Section Header */}
         <View style={styles.sectionHeaderRow}>
-          <View>
+          <View style={styles.sectionHeaderLeft}>
             <Text style={styles.sectionTitle}>Pilih Fasilitas Geothermal</Text>
-            <Text style={styles.sectionSubtitle}>Fasilitas inovasi pengolahan energi terbarukan PGE Kamojang</Text>
+            <Text style={styles.sectionSubtitle}>
+              Fasilitas inovasi energi terbarukan PGE Kamojang
+            </Text>
           </View>
           <View style={styles.countBadge}>
             <Text style={styles.countBadgeText}>{equipments.length} Fasilitas</Text>
@@ -303,8 +305,8 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                     )}
                   </View>
 
-                  {/* Body Content */}
-                  <View style={styles.cardBody}>
+                  {/* Profile Row: Facility Icon & Name */}
+                  <View style={styles.cardProfileRow}>
                     <View style={[styles.imgWrap, isComingSoon && styles.imgWrapMuted]}>
                       <Image
                         source={getEquipmentIllustration(item)}
@@ -312,49 +314,66 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                         resizeMode="contain"
                       />
                     </View>
-
-                    <View style={styles.cardMainInfo}>
+                    <View style={styles.cardTitleBox}>
                       <Text style={styles.cardName}>{item.name}</Text>
-                      <Text style={styles.cardDesc} numberOfLines={3}>
-                        {item.description}
-                      </Text>
-
-                      {/* Capacity Badge */}
-                      <View style={[styles.capacityBadge, isComingSoon && styles.capacityBadgeMuted]}>
-                        <Layers size={11} color={isComingSoon ? "#64748B" : "#0D7A53"} />
+                      <View style={styles.cardFacilityTypeRow}>
+                        <Flame size={12} color={isComingSoon ? "#64748B" : "#0D7A53"} />
                         <Text
                           style={[
-                            styles.capacityBadgeText,
-                            isComingSoon && styles.capacityBadgeTextMuted,
+                            styles.cardFacilityTypeText,
+                            isComingSoon && styles.cardFacilityTypeTextMuted,
                           ]}
-                          numberOfLines={1}
                         >
-                          {item.capacity || "4 Unit • Maksimal 6.000 kg / batch"}
+                          {isDryhouse ? "Pengeringan Kopi & Hasil Tani" : "PGE Center of Excellence"}
                         </Text>
                       </View>
-
-                      {/* Pricing Tag */}
-                      {isDryhouse ? (
-                        <View style={styles.priceContainer}>
-                          <Text style={styles.priceLabel}>Simulasi Tarif Sewa:</Text>
-                          <View style={styles.priceRow}>
-                            <Text style={styles.priceValue}>Rp 500 – Rp 1.000</Text>
-                            <Text style={styles.priceUnit}>/kg</Text>
-                          </View>
-                          <Text style={styles.discountHighlight}>
-                            Diskon okupansi s.d. 50% • HPP Rp 377/kg
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.comingSoonInfoBox}>
-                          <Sparkles size={13} color="#64748B" />
-                          <Text style={styles.comingSoonInfoText}>
-                            Tahap Riset & Pengembangan Terapan
-                          </Text>
-                        </View>
-                      )}
                     </View>
                   </View>
+
+                  {/* Full-Width Facility Description */}
+                  <Text style={styles.cardDesc} numberOfLines={3}>
+                    {item.description}
+                  </Text>
+
+                  {/* Full-Width Capacity Badge */}
+                  <View style={[styles.capacityCardBox, isComingSoon && styles.capacityCardBoxMuted]}>
+                    <Layers size={13} color={isComingSoon ? "#64748B" : "#0D7A53"} />
+                    <Text
+                      style={[
+                        styles.capacityMainText,
+                        isComingSoon && styles.capacityMainTextMuted,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.capacity || "4 Unit • Maksimal 6.000 kg / batch"}
+                    </Text>
+                  </View>
+
+                  {/* Pricing / Research Tag (Full-Width) */}
+                  {isDryhouse ? (
+                    <View style={styles.priceContainer}>
+                      <View style={styles.priceTopRow}>
+                        <Text style={styles.priceLabel}>Simulasi Tarif Sewa:</Text>
+                        <View style={styles.priceRow}>
+                          <Text style={styles.priceValue}>Rp 500 – Rp 1.000</Text>
+                          <Text style={styles.priceUnit}>/kg</Text>
+                        </View>
+                      </View>
+                      <View style={styles.discountRow}>
+                        <Sparkles size={12} color="#047857" />
+                        <Text style={styles.discountHighlight}>
+                          Diskon okupansi s.d. 50% • HPP acuan Rp 377/kg
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.comingSoonInfoBox}>
+                      <Sparkles size={13} color="#64748B" />
+                      <Text style={styles.comingSoonInfoText}>
+                        Tahap Riset & Validasi Lapangan CoE Kamojang
+                      </Text>
+                    </View>
+                  )}
 
                   {/* Card Action Buttons */}
                   <View style={styles.cardFooter}>
@@ -366,7 +385,7 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                           activeOpacity={0.75}
                         >
                           <Calculator size={14} color="#0D7A53" style={{ marginRight: 6 }} />
-                          <Text style={styles.btnDetailText}>Simulasi & Detail</Text>
+                          <Text style={styles.btnDetailText}>Simulasi Biaya</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -385,7 +404,7 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                         activeOpacity={0.8}
                       >
                         <Info size={14} color="#64748B" style={{ marginRight: 6 }} />
-                        <Text style={styles.btnComingSoonText}>Informasi Pengembangan</Text>
+                        <Text style={styles.btnComingSoonText}>Informasi Fasilitas & Riset</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -597,8 +616,13 @@ const styles = StyleSheet.create({
   sectionHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    alignItems: "center",
     marginBottom: 12,
+  },
+  sectionHeaderLeft: {
+    flex: 1,
+    marginRight: 10,
+    minWidth: 0,
   },
   sectionTitle: {
     fontSize: 16,
@@ -611,9 +635,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   countBadge: {
+    flexShrink: 0,
     backgroundColor: "#E2E8F0",
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6,
   },
   countBadgeText: {
@@ -705,75 +730,104 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#B45309",
   },
-  cardBody: {
+  cardProfileRow: {
     flexDirection: "row",
-    gap: 14,
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 10,
   },
   imgWrap: {
-    width: 90,
-    height: 90,
-    borderRadius: 10,
-    backgroundColor: "#F8FAFC",
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
     overflow: "hidden",
+    flexShrink: 0,
   },
   imgWrapMuted: {
     opacity: 0.75,
     backgroundColor: "#F1F5F9",
   },
   equipmentImg: {
-    width: "100%",
-    height: "100%",
+    width: "80%",
+    height: "80%",
   },
-  cardMainInfo: {
+  cardTitleBox: {
     flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
   },
   cardName: {
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: "700",
     color: "#0F172A",
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  cardDesc: {
-    fontSize: 12,
-    color: "#64748B",
-    lineHeight: 17,
-    marginBottom: 6,
-  },
-  capacityBadge: {
+  cardFacilityTypeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#ECFDF5",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    alignSelf: "flex-start",
-    marginBottom: 8,
   },
-  capacityBadgeMuted: {
-    backgroundColor: "#F1F5F9",
-  },
-  capacityBadgeText: {
-    fontSize: 10.5,
-    fontWeight: "700",
+  cardFacilityTypeText: {
+    fontSize: 11.5,
+    fontWeight: "600",
     color: "#0D7A53",
   },
-  capacityBadgeTextMuted: {
+  cardFacilityTypeTextMuted: {
+    color: "#64748B",
+  },
+  cardDesc: {
+    fontSize: 12.5,
+    color: "#475569",
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  capacityCardBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    marginBottom: 10,
+    maxWidth: "100%",
+  },
+  capacityCardBoxMuted: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "#E2E8F0",
+  },
+  capacityMainText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+    flexShrink: 1,
+  },
+  capacityMainTextMuted: {
     color: "#64748B",
   },
   priceContainer: {
     backgroundColor: "#F0FDF4",
-    padding: 8,
+    padding: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#DCFCE7",
   },
+  priceTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    flexWrap: "wrap",
+    gap: 4,
+  },
   priceLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#065F46",
     fontWeight: "600",
   },
@@ -781,7 +835,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "baseline",
     gap: 2,
-    marginTop: 2,
   },
   priceValue: {
     fontSize: 15,
@@ -792,29 +845,38 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#065F46",
   },
+  discountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 4,
+  },
   discountHighlight: {
-    fontSize: 10,
+    fontSize: 10.5,
     color: "#047857",
     fontWeight: "600",
-    marginTop: 2,
+    flexShrink: 1,
   },
   comingSoonInfoBox: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#F1F5F9",
-    padding: 8,
+    backgroundColor: "#F8FAFC",
+    padding: 10,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   comingSoonInfoText: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: "#64748B",
     fontWeight: "600",
+    flexShrink: 1,
   },
   cardFooter: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 14,
+    marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
@@ -834,7 +896,7 @@ const styles = StyleSheet.create({
     color: "#0D7A53",
   },
   btnRent: {
-    flex: 1.2,
+    flex: 1,
     flexDirection: "row",
     gap: 4,
     paddingVertical: 10,
@@ -844,7 +906,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   btnRentText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: "700",
     color: "#FFFFFF",
   },

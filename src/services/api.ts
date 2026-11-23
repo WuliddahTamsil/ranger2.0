@@ -573,13 +573,13 @@ export const getMarketplaceOrdersForCustomer = async (customerId: string) => {
   try {
     const authHeaders = await getAuthHeaders(customerId);
     const res = await fetch(getApiUrl(`/marketplace/orders/customer/${customerId}?t=${Date.now()}`), { headers: authHeaders, cache: "no-store" });
-    if (res.status === 403) {
-      return { success: false, data: [], message: "Aksi hanya tersedia untuk akun pelanggan." };
+    if (res.status === 401 || res.status === 403) {
+      return { success: false, data: [], message: res.status === 401 ? "Sesi login telah berakhir." : "Aksi hanya tersedia untuk akun pelanggan." };
     }
     return await readApiJson(res);
   } catch (err: any) {
-    if (err?.message?.includes("Aksi ini hanya tersedia untuk akun pelanggan") || err?.message?.includes("403")) {
-      return { success: false, data: [], message: err.message };
+    if (err?.message?.includes("Aksi ini hanya tersedia untuk akun pelanggan") || err?.message?.includes("403") || err?.message?.includes("Sesi login") || err?.message?.includes("401")) {
+      return { success: false, data: [], message: err?.message || "Sesi login telah berakhir." };
     }
     console.warn("getMarketplaceOrdersForCustomer warning:", err instanceof Error ? err.message : err);
     return { success: false, data: [], message: err instanceof Error ? err.message : "Gagal mengambil pesanan Marketplace" };
@@ -803,8 +803,14 @@ export const getNotifications = async (userId: string) => {
   try {
     const authHeaders = await getAuthHeaders();
     const res = await fetch(getApiUrl(`/notifications/${userId}`), { headers: authHeaders });
+    if (res.status === 401) {
+      return { success: false, data: [], message: "Sesi login telah berakhir." };
+    }
     return await readApiJson(res);
   } catch (err: any) {
+    if (err?.message?.includes("Sesi login") || err?.message?.includes("401")) {
+      return { success: false, data: [], message: "Sesi login telah berakhir." };
+    }
     if (__DEV__ && !String(err?.message || "").includes("fetch")) {
       console.warn("getNotifications warning:", err?.message || err);
     }
@@ -900,13 +906,13 @@ export const getCateringOrdersForCustomer = async (customerId: string) => {
   try {
     const authHeaders = await getAuthHeaders(customerId);
     const res = await fetch(getApiUrl(`/catering/orders/customer/${customerId}`), { headers: authHeaders, cache: "no-store" });
-    if (res.status === 403) {
-      return { success: false, data: [], message: "Aksi hanya tersedia untuk akun pelanggan." };
+    if (res.status === 401 || res.status === 403) {
+      return { success: false, data: [], message: res.status === 401 ? "Sesi login telah berakhir." : "Aksi hanya tersedia untuk akun pelanggan." };
     }
     return await readApiJson(res);
   } catch (err: any) {
-    if (err?.message?.includes("Aksi ini hanya tersedia untuk akun pelanggan") || err?.message?.includes("403")) {
-      return { success: false, data: [], message: err.message };
+    if (err?.message?.includes("Aksi ini hanya tersedia untuk akun pelanggan") || err?.message?.includes("403") || err?.message?.includes("Sesi login") || err?.message?.includes("401")) {
+      return { success: false, data: [], message: err?.message || "Sesi login telah berakhir." };
     }
     console.warn("getCateringOrdersForCustomer warning:", err instanceof Error ? err.message : err);
     return { success: false, data: [], message: err instanceof Error ? err.message : "Gagal mengambil pesanan Catering" };
