@@ -31,19 +31,20 @@ router.get("/dp-balance", requireAuth, geoDirectController.getCustomerDpBalanceI
 // ==========================================
 // 3. ADMIN MANAGEMENT & APPROVALS
 // ==========================================
-router.get("/admin/stats", requireAuth, requireRole("admin"), geoDirectController.adminGetDashboardStats);
-router.get("/admin/bookings", requireAuth, requireRole("admin"), geoDirectController.adminGetAllBookings);
-router.post("/admin/equipments", requireAuth, requireRole("admin"), geoDirectController.adminCreateEquipment);
-router.put("/admin/equipments/:id", requireAuth, requireRole("admin"), geoDirectController.adminUpdateEquipment);
-router.delete("/admin/equipments/:id", requireAuth, requireRole("admin"), geoDirectController.adminDeleteEquipment);
-router.put("/admin/payment-methods", requireAuth, requireRole("admin"), geoDirectController.adminUpdatePaymentMethods);
-router.post("/admin/bookings/:id/verify-payment", requireAuth, requireRole("admin"), geoDirectController.adminVerifyPayment);
-router.post("/admin/bookings/:id/reject-payment", requireAuth, requireRole("admin"), geoDirectController.adminRejectPayment);
-router.post("/admin/bookings/:id/approve", requireAuth, requireRole("admin"), geoDirectController.adminApproveBooking);
-router.post("/admin/bookings/:id/reject", requireAuth, requireRole("admin"), geoDirectController.adminRejectBooking);
-router.post("/admin/bookings/:id/drying-progress", requireAuth, requireRole("admin"), geoDirectController.adminUpdateDryingProgress);
-router.get("/admin/dp-ledgers", requireAuth, requireRole("admin"), geoDirectController.adminGetDpLedgers);
-router.get("/admin/audit-logs", requireAuth, requireRole("admin"), geoDirectController.adminGetAuditLogs);
+const adminRoles = ["admin", "superadmin", "super_admin"];
+router.get("/admin/stats", requireAuth, requireRole(adminRoles), geoDirectController.adminGetDashboardStats);
+router.get("/admin/bookings", requireAuth, requireRole(adminRoles), geoDirectController.adminGetAllBookings);
+router.post("/admin/equipments", requireAuth, requireRole(adminRoles), geoDirectController.adminCreateEquipment);
+router.put("/admin/equipments/:id", requireAuth, requireRole(adminRoles), geoDirectController.adminUpdateEquipment);
+router.delete("/admin/equipments/:id", requireAuth, requireRole(adminRoles), geoDirectController.adminDeleteEquipment);
+router.put("/admin/payment-methods", requireAuth, requireRole(adminRoles), geoDirectController.adminUpdatePaymentMethods);
+router.post("/admin/bookings/:id/verify-payment", requireAuth, requireRole(adminRoles), geoDirectController.adminVerifyPayment);
+router.post("/admin/bookings/:id/reject-payment", requireAuth, requireRole(adminRoles), geoDirectController.adminRejectPayment);
+router.post("/admin/bookings/:id/approve", requireAuth, requireRole(adminRoles), geoDirectController.adminApproveBooking);
+router.post("/admin/bookings/:id/reject", requireAuth, requireRole(adminRoles), geoDirectController.adminRejectBooking);
+router.post("/admin/bookings/:id/drying-progress", requireAuth, requireRole(adminRoles), geoDirectController.adminUpdateDryingProgress);
+router.get("/admin/dp-ledgers", requireAuth, requireRole(adminRoles), geoDirectController.adminGetDpLedgers);
+router.get("/admin/audit-logs", requireAuth, requireRole(adminRoles), geoDirectController.adminGetAuditLogs);
 
 module.exports = router;
 

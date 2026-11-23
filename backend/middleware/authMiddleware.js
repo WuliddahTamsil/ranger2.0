@@ -84,7 +84,9 @@ const optionalAuth = async (req, res, next) => {
 };
 
 const requireRole = (...allowedRoles) => {
-  const flatRoles = allowedRoles.flat();
+  const flatRoles = allowedRoles
+    .flat()
+    .map((r) => String(r || "").trim().toLowerCase());
   return (req, res, next) => {
     if (!req.authUser) {
       return res.status(401).json({
@@ -92,7 +94,7 @@ const requireRole = (...allowedRoles) => {
         message: "Autentikasi diperlukan untuk mengakses tindakan ini.",
       });
     }
-    const userRole = String(req.authUser.role || "").trim();
+    const userRole = String(req.authUser.role || "").trim().toLowerCase();
     if (!flatRoles.includes(userRole)) {
       return res.status(403).json({
         success: false,

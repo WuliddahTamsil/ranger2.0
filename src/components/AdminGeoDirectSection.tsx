@@ -65,6 +65,7 @@ import {
   adminUpdateDryingProgress,
   fetchAdminDpLedgers,
   setAdminGeoDirectTokenOverride,
+  resolveAdminToken,
   GeoDirectEquipment,
   GeoDirectBooking,
   GeoDirectDashboardStats,
@@ -103,12 +104,19 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
     }
     try {
       const accs = await loadAccounts();
-      const adm = accs.find((a) => a.role === "admin" && (a.token || a.id));
+      const adm = accs.find((a) =>
+        ["admin", "superadmin", "super_admin"].includes(String(a.role || "").toLowerCase()) &&
+        (a.token || a.id)
+      );
       if (adm) {
         const tok = adm.token || (await loadAuthToken(adm.id));
-        if (tok) setAdminGeoDirectTokenOverride(tok);
+        if (tok) {
+          setAdminGeoDirectTokenOverride(tok);
+          return;
+        }
       }
     } catch {}
+    await resolveAdminToken();
   }, [authAccount?.token, authAccount?.id]);
 
   useEffect(() => {
@@ -429,7 +437,7 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
   const triggerVerifyPayment = async (b: GeoDirectBooking) => {
     Alert.alert(
       "Verifikasi Pembayaran DP",
-      `Konfirmasi bahwa transfer DP sebesar ${rp(b.pricingSnapshot.requiredDpAmount)} telah diterima secara valid di rekening/QRIS PGE?`,
+      `Konfirmasi bahwa transfer DP sebesar ${rp(b.pricingSnapshot?.requiredDpAmount || 0)} telah diterima secara valid di rekening/QRIS PGE?`,
       [
         { text: "Batal", style: "cancel" },
         {
@@ -871,7 +879,7 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
                     <View>
                       <Text style={styles.tableBookingCode}>{b.bookingCode}</Text>
                       <Text style={styles.tableCustomerName}>
-                        {b.customerSnapshot.name} ({b.customerSnapshot.company || "Pribadi"})
+                        {b.customerSnapshot?.name || "Customer"} ({b.customerSnapshot?.company || "Pribadi"})
                       </Text>
                     </View>
                     <View style={styles.tableBadges}>
@@ -894,10 +902,10 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
                             {
                               color:
                                 b.bookingStatus === "APPROVED"
-                                  ? "#15803D"
-                                  : b.bookingStatus === "REJECTED"
-                                  ? "#B91C1C"
-                                  : "#B45309",
+                                    ? "#15803D"
+                                    : b.bookingStatus === "REJECTED"
+                                    ? "#B91C1C"
+                                    : "#B45309",
                             },
                           ]}
                         >
@@ -909,12 +917,12 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
 
                   <View style={styles.tableRowDetails}>
                     <Text style={styles.tableDetailText}>
-                      Alat: <Text style={{ fontWeight: "700" }}>{b.equipmentSnapshot.name}</Text> • Durasi:{" "}
-                      {b.rentalSchedule.durationDays} Hari
+                      Alat: <Text style={{ fontWeight: "700" }}>{b.equipmentSnapshot?.name || "Dryhouse"}</Text> • Durasi:{" "}
+                      {b.rentalSchedule?.durationDays || 0} Hari
                     </Text>
                     <Text style={styles.tableDetailText}>
-                      Biaya: {rp(b.pricingSnapshot.totalRentalCost)} • DP ({b.pricingSnapshot.dpPercentage}%):{" "}
-                      {rp(b.pricingSnapshot.requiredDpAmount)} (Status DP: {b.paymentStatus})
+                      Biaya: {rp(b.pricingSnapshot?.totalRentalCost || 0)} • DP ({b.pricingSnapshot?.dpPercentage || 30}%):{" "}
+                      {rp(b.pricingSnapshot?.requiredDpAmount || 0)} (Status DP: {b.paymentStatus || "UNPAID"})
                     </Text>
                   </View>
 
@@ -1284,29 +1292,29 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
 
                 <View style={styles.detailSection}>
                   <Text style={styles.detailSecTitle}>Data Customer</Text>
-                  <Text style={styles.detailText}>Nama: {selectedBookingForDetail.customerSnapshot.name}</Text>
-                  <Text style={styles.detailText}>Kontak: {selectedBookingForDetail.customerSnapshot.phone}</Text>
-                  <Text style={styles.detailText}>Instansi: {selectedBookingForDetail.customerSnapshot.company || "-"}</Text>
-                  <Text style={styles.detailText}>Alamat: {selectedBookingForDetail.customerSnapshot.address || "-"}</Text>
+                  <Text style={styles.detailText}>Nama: {selectedBookingForDetail.customerSnapshot?.name || "-"}</Text>
+                  <Text style={styles.detailText}>Kontak: {selectedBookingForDetail.customerSnapshot?.phone || "-"}</Text>
+                  <Text style={styles.detailText}>Instansi: {selectedBookingForDetail.customerSnapshot?.company || "-"}</Text>
+                  <Text style={styles.detailText}>Alamat: {selectedBookingForDetail.customerSnapshot?.address || "-"}</Text>
                 </View>
 
                 <View style={styles.detailSection}>
                   <Text style={styles.detailSecTitle}>Informasi Sewa</Text>
                   <Text style={styles.detailText}>
-                    Alat: {selectedBookingForDetail.equipmentSnapshot.name} ({selectedBookingForDetail.equipmentSnapshot.code})
+                    Alat: {selectedBookingForDetail.equipmentSnapshot?.name || "-"} ({selectedBookingForDetail.equipmentSnapshot?.code || "-"})
                   </Text>
                   <Text style={styles.detailText}>
-                    Jadwal: {formatDate(selectedBookingForDetail.rentalSchedule.startDate)} -{" "}
-                    {formatDate(selectedBookingForDetail.rentalSchedule.endDate)} ({selectedBookingForDetail.rentalSchedule.durationDays} Hari)
+                    Jadwal: {formatDate(selectedBookingForDetail.rentalSchedule?.startDate)} -{" "}
+                    {formatDate(selectedBookingForDetail.rentalSchedule?.endDate)} ({selectedBookingForDetail.rentalSchedule?.durationDays || 0} Hari)
                   </Text>
-                  <Text style={styles.detailText}>Tujuan: {selectedBookingForDetail.usagePurpose}</Text>
-                  <Text style={styles.detailText}>Lokasi: {selectedBookingForDetail.usageLocation}</Text>
+                  <Text style={styles.detailText}>Tujuan: {selectedBookingForDetail.usagePurpose || "-"}</Text>
+                  <Text style={styles.detailText}>Lokasi: {selectedBookingForDetail.usageLocation || "-"}</Text>
                 </View>
 
                 <View style={styles.detailSection}>
                   <Text style={styles.detailSecTitle}>Rincian Finansial</Text>
-                  <Text style={styles.detailText}>Total Biaya Sewa: {rp(selectedBookingForDetail.pricingSnapshot.totalRentalCost)}</Text>
-                  <Text style={styles.detailText}>Down Payment: {rp(selectedBookingForDetail.pricingSnapshot.requiredDpAmount)}</Text>
+                  <Text style={styles.detailText}>Total Biaya Sewa: {rp(selectedBookingForDetail.pricingSnapshot?.totalRentalCost || 0)}</Text>
+                  <Text style={styles.detailText}>Down Payment: {rp(selectedBookingForDetail.pricingSnapshot?.requiredDpAmount || 0)}</Text>
                   <Text style={styles.detailText}>Status Pembayaran: {selectedBookingForDetail.paymentStatus}</Text>
                   <Text style={styles.detailText}>Status Pengajuan: {selectedBookingForDetail.bookingStatus}</Text>
                 </View>
