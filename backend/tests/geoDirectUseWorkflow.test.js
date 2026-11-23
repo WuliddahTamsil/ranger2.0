@@ -443,6 +443,52 @@ runTest("Geothermal Dryhouse: 7-Stage Drying Progress lifecycle transitions", ()
   assert.strictEqual(history.length, 7);
 });
 
+runTest("Geothermal Dryhouse: Drying method enum & display name acceptance", () => {
+  const GeoDirectBooking = require("../models/GeoDirectBooking");
+  
+  // Verify that GeoDirectBooking dryingProgress schema accepts both enum codes and display names
+  const testDoc = new GeoDirectBooking({
+    bookingCode: "TEST-GDU-METHOD-01",
+    customer: "507f1f77bcf86cd799439011",
+    customerSnapshot: { name: "Test User", phone: "08123456789" },
+    equipment: "507f1f77bcf86cd799439012",
+    equipmentSnapshot: { code: "EQ-01", name: "Geothermal Dryhouse" },
+    rentalSchedule: { startDate: new Date(), endDate: new Date(), durationDays: 3 },
+    usagePurpose: "Uji Coba Pengeringan Kopi",
+    usageLocation: "Kamojang",
+    pricingSnapshot: {
+      basePrice: 1000,
+      durationDays: 3,
+      subtotalBase: 500000,
+      totalRentalCost: 500000,
+      dpPercentage: 30,
+      requiredDpAmount: 150000,
+      netDpDue: 150000,
+      remainingBalance: 350000,
+    },
+    dryingProgress: {
+      currentStage: "WAITING_CONFIRMATION",
+      dryingMethod: "Geothermal Wash", // Must not fail Mongoose validation!
+      dryingMethodName: "Geothermal Wash",
+    },
+  });
+
+  const valError = testDoc.validateSync();
+  assert.strictEqual(valError, undefined, "Drying method display name 'Geothermal Wash' must pass Mongoose validation without error");
+
+  // Also verify uppercase enum
+  testDoc.dryingProgress.dryingMethod = "GEOTHERMAL_WASH";
+  const valError2 = testDoc.validateSync();
+  assert.strictEqual(valError2, undefined, "Uppercase 'GEOTHERMAL_WASH' must pass validation");
+
+  // Verify other methods
+  testDoc.dryingProgress.dryingMethod = "Honey Skin Contact";
+  assert.strictEqual(testDoc.validateSync(), undefined);
+
+  testDoc.dryingProgress.dryingMethod = "Natural Quick Dry";
+  assert.strictEqual(testDoc.validateSync(), undefined);
+});
+
 // ---------------------------------------------------------
 // SUMMARY REPORT
 // ---------------------------------------------------------

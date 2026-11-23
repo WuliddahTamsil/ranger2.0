@@ -298,6 +298,7 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
           rawMaterialKg: kg,
           rawMaterialTons: kg / 1000,
           dryingMethod: isDryhouse ? dryingMethod : undefined,
+          dryingMethodName: isDryhouse ? dryingMethod : undefined,
           processRequirements: isDryhouse
             ? `Metode: ${dryingMethod} • Jenis Kopi: ${coffeeType}`
             : processDetails.trim(),

@@ -913,17 +913,31 @@ exports.createBooking = async (req, res) => {
       appliedLedgerAmount = calculation.dpCreditApplied;
     }
 
-    // Setup Drying Progress Object
+    // Setup Drying Progress Object & Normalize Method
     const coffeeType =
       productionNeeds?.coffeeType || productionNeeds?.productType || "Arabika";
-    const dryingMethod = productionNeeds?.dryingMethod || "GEOTHERMAL_WASH";
-    const dryingMethodName =
-      productionNeeds?.dryingMethodName ||
-      (dryingMethod === "HONEY_SKIN_CONTACT"
-        ? "Honey Skin Contact"
-        : dryingMethod === "NATURAL_QUICK_DRY"
-        ? "Natural Quick Dry"
-        : "Geothermal Wash");
+
+    const rawDryingMethod = String(
+      productionNeeds?.dryingMethod || productionNeeds?.dryingMethodName || "GEOTHERMAL_WASH"
+    ).trim();
+
+    let dryingMethod = "GEOTHERMAL_WASH";
+    let dryingMethodName = "Geothermal Wash";
+
+    const cleanMethodUpper = rawDryingMethod.toUpperCase().replace(/[\s-]+/g, "_");
+    if (cleanMethodUpper.includes("HONEY")) {
+      dryingMethod = "HONEY_SKIN_CONTACT";
+      dryingMethodName = "Honey Skin Contact";
+    } else if (cleanMethodUpper.includes("NATURAL")) {
+      dryingMethod = "NATURAL_QUICK_DRY";
+      dryingMethodName = "Natural Quick Dry";
+    } else if (cleanMethodUpper.includes("WASH")) {
+      dryingMethod = "GEOTHERMAL_WASH";
+      dryingMethodName = "Geothermal Wash";
+    } else if (rawDryingMethod) {
+      dryingMethod = "OTHER";
+      dryingMethodName = rawDryingMethod;
+    }
 
     const dryingProgress = {
       currentStage: "WAITING_CONFIRMATION",

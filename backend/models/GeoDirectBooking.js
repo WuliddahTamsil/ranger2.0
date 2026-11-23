@@ -33,7 +33,16 @@ const dryingProgressSchema = new mongoose.Schema(
     },
     dryingMethod: {
       type: String,
-      enum: ["GEOTHERMAL_WASH", "HONEY_SKIN_CONTACT", "NATURAL_QUICK_DRY", "OTHER"],
+      enum: [
+        "GEOTHERMAL_WASH",
+        "HONEY_SKIN_CONTACT",
+        "NATURAL_QUICK_DRY",
+        "OTHER",
+        "Geothermal Wash",
+        "Honey Skin Contact",
+        "Natural Quick Dry",
+        "Other",
+      ],
       default: "GEOTHERMAL_WASH",
     },
     dryingMethodName: {
