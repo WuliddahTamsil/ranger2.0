@@ -1211,6 +1211,25 @@ exports.uploadPaymentProof = async (req, res) => {
       relatedId: booking._id,
     });
 
+    // Notify All Admins & Emit Realtime Notification
+    try {
+      const adminUsers = await User.find({ role: "admin" }).select("_id");
+      for (const adm of adminUsers) {
+        await sendSystemNotification({
+          userId: adm._id,
+          title: "Bukti Pembayaran DP Masuk ⚡",
+          message: `Bukti transfer DP untuk booking ${booking.bookingCode} telah dikirim oleh ${booking.customerSnapshot?.name || "Customer"}. Mohon segera verifikasi.`,
+          relatedId: booking._id,
+        });
+      }
+      req.io?.emit("geo_direct:payment_uploaded", {
+        bookingId: booking._id,
+        bookingCode: booking.bookingCode,
+        customerName: booking.customerSnapshot?.name,
+      });
+      req.io?.emit("new_registration", { type: "geo_direct_payment", bookingCode: booking.bookingCode });
+    } catch {}
+
     return res.status(200).json({
       success: true,
       message: "Bukti pembayaran berhasil diunggah. Menunggu verifikasi Admin.",

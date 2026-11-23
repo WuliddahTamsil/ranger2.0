@@ -75,6 +75,8 @@ import {
 } from "../services/geoDirectService";
 import { rp } from "../utils/formatters";
 import { GeoDirectInvoiceModal } from "../screens/customer/geo_direct/GeoDirectInvoiceModal";
+import { loadAuthToken } from "../screens/auth/authTokenStorage";
+import { loadAccounts } from "../screens/auth/authStorage";
 
 interface AdminGeoDirectSectionProps {
   authAccount?: any;
@@ -86,12 +88,32 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
     "OVERVIEW" | "EQUIPMENT" | "BOOKINGS" | "PAYMENT_CONFIG" | "DP_LEDGER"
   >("OVERVIEW");
 
-  // Keep token override synced if authAccount prop is supplied
-  useEffect(() => {
+  // Keep token override synced if authAccount prop is supplied or load from admin accounts
+  const ensureAdminToken = useCallback(async () => {
     if (authAccount?.token) {
       setAdminGeoDirectTokenOverride(authAccount.token);
+      return;
     }
-  }, [authAccount?.token]);
+    if (authAccount?.id) {
+      const tok = await loadAuthToken(authAccount.id);
+      if (tok) {
+        setAdminGeoDirectTokenOverride(tok);
+        return;
+      }
+    }
+    try {
+      const accs = await loadAccounts();
+      const adm = accs.find((a) => a.role === "admin" && (a.token || a.id));
+      if (adm) {
+        const tok = adm.token || (await loadAuthToken(adm.id));
+        if (tok) setAdminGeoDirectTokenOverride(tok);
+      }
+    } catch {}
+  }, [authAccount?.token, authAccount?.id]);
+
+  useEffect(() => {
+    ensureAdminToken();
+  }, [ensureAdminToken]);
 
   // State
   const [stats, setStats] = useState<GeoDirectDashboardStats | null>(null);
@@ -191,9 +213,7 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
   const refreshAll = useCallback(async () => {
     try {
       setLoading(true);
-      if (authAccount?.token) {
-        setAdminGeoDirectTokenOverride(authAccount.token);
-      }
+      await ensureAdminToken();
 
       const [statsData, equipData, bookingsData, payData, ledgerData] = await Promise.all([
         fetchAdminGeoStats().catch((err) => {
@@ -251,10 +271,14 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
     } finally {
       setLoading(false);
     }
-  }, [bookingStatusFilter, bookingSearch, authAccount?.token]);
+  }, [bookingStatusFilter, bookingSearch, ensureAdminToken]);
 
   useEffect(() => {
     refreshAll();
+    const timer = setInterval(() => {
+      refreshAll();
+    }, 4000);
+    return () => clearInterval(timer);
   }, [refreshAll]);
 
   // Open Add/Edit Equipment

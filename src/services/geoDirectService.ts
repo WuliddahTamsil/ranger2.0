@@ -3,7 +3,11 @@
  * Frontend API Service and Types for Geo Direct Use (PGE Kamojang)
  */
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl, getStoredAuthToken, getAuthHeaders } from "./api";
+import { loadAuthToken } from "../screens/auth/authTokenStorage";
+
+const AUTH_ACCOUNTS_KEY = "@geoverse_auth_accounts";
 
 export interface GeoProductionParameter {
   _id?: string;
@@ -270,9 +274,39 @@ export const setAdminGeoDirectTokenOverride = (token?: string | null) => {
   adminTokenOverride = token || null;
 };
 
+async function resolveAdminToken(): Promise<string | null> {
+  if (adminTokenOverride) return adminTokenOverride;
+
+  // 1. Check if accounts list has any admin account
+  try {
+    const rawAccounts = await AsyncStorage.getItem(AUTH_ACCOUNTS_KEY);
+    if (rawAccounts) {
+      const accounts = JSON.parse(rawAccounts);
+      if (Array.isArray(accounts)) {
+        const adminAcc = accounts.find((a: any) => a.role === "admin" && (a.token || a.id));
+        if (adminAcc) {
+          if (adminAcc.token) return adminAcc.token;
+          const loadedTok = await loadAuthToken(adminAcc.id);
+          if (loadedTok) return loadedTok;
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Check session token
+  const storedTok = await getStoredAuthToken();
+  if (storedTok) return storedTok;
+
+  return null;
+}
+
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const isAdminEndpoint = endpoint.includes("/admin");
   const authHeaders = await getAuthHeaders();
-  const token = adminTokenOverride || (await getStoredAuthToken());
+  const token = isAdminEndpoint
+    ? await resolveAdminToken()
+    : adminTokenOverride || (await getStoredAuthToken());
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...authHeaders,
