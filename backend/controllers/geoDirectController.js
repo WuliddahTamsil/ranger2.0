@@ -39,9 +39,9 @@ async function ensureDefaultEquipments() {
       {
         code: "EQ-01",
         facilityType: "DRYHOUSE",
-        name: "Geothermal Dryhouse",
+        name: "Geothermal Dry House",
         description:
-          "Layanan pengeringan hasil pertanian, terutama kopi, dengan memanfaatkan energi panas bumi melalui fasilitas Dryhouse.",
+          "Layanan pemanfaatan fasilitas pengeringan berbasis geothermal yang memungkinkan petani, koperasi, dan pelaku UMKM mengakses teknologi pengeringan secara praktis, terukur, dan efisien melalui pemesanan digital.",
         specification:
           "4 Unit Dryhouse dengan kapasitas total 6.000 kg per batch. Dilengkapi pengontrol suhu dan konveksi termal alami panas bumi PGE Kamojang.",
         function:
@@ -140,10 +140,10 @@ async function ensureDefaultEquipments() {
         { code: "EQ-01" },
         {
           $set: {
-            name: "Geothermal Dryhouse",
+            name: "Geothermal Dry House",
             facilityType: "DRYHOUSE",
             description:
-              "Layanan pengeringan hasil pertanian, terutama kopi, dengan memanfaatkan energi panas bumi melalui fasilitas Dryhouse.",
+              "Layanan pemanfaatan fasilitas pengeringan berbasis geothermal yang memungkinkan petani, koperasi, dan pelaku UMKM mengakses teknologi pengeringan secara praktis, terukur, dan efisien melalui pemesanan digital.",
             capacity: "4 Unit • Maksimal 6.000 kg / batch (Min. 100 kg)",
             maxCapacityKgPerDay: 6000,
             basePrice: 1000,

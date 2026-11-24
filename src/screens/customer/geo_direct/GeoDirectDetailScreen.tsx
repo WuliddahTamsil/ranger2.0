@@ -277,7 +277,7 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
           <ArrowLeft size={20} color="#0F172A" />
         </TouchableOpacity>
         <View style={styles.topBarTitleBox}>
-          <Text style={styles.topBarTitle}>GEOVERSE – Geothermal Drying Service</Text>
+          <Text style={styles.topBarTitle}>Geothermal Dry House</Text>
           <Text style={styles.topBarSubtitle}>Geo Direct Use • PGE Kamojang</Text>
         </View>
         <TouchableOpacity
@@ -336,7 +336,7 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
             </View>
           </View>
 
-          <Text style={styles.serviceName}>GEOVERSE – Geothermal Drying Service</Text>
+          <Text style={styles.serviceName}>Geothermal Dry House</Text>
           <Text style={styles.valueProposition}>
             Layanan pemanfaatan fasilitas pengeringan berbasis energi panas bumi yang memungkinkan petani,
             koperasi, dan pelaku UMKM mengakses teknologi pengeringan secara praktis, terukur, dan efisien
@@ -346,17 +346,17 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
           {/* Key Advantages */}
           <View style={styles.advantagesGrid}>
             <View style={styles.advantageCard}>
-              <ThermometerSun size={18} color="#0D7A53" />
+              <ThermometerSun size={18} color="#FFFFFF" />
               <Text style={styles.advantageTitle}>Suhu Terkontrol</Text>
               <Text style={styles.advantageDesc}>Suhu konstan 40–50°C tanpa risiko kegosongan</Text>
             </View>
             <View style={styles.advantageCard}>
-              <SunMedium size={18} color="#0D7A53" />
+              <SunMedium size={18} color="#FFFFFF" />
               <Text style={styles.advantageTitle}>Bebas Cuaca</Text>
               <Text style={styles.advantageDesc}>Terlindung dari hujan, debu, & over-fermentasi</Text>
             </View>
             <View style={styles.advantageCard}>
-              <Sparkles size={18} color="#0D7A53" />
+              <Sparkles size={18} color="#FFFFFF" />
               <Text style={styles.advantageTitle}>Mutu Specialty</Text>
               <Text style={styles.advantageDesc}>Meningkatkan cup quality dan keseragaman green bean</Text>
             </View>
@@ -372,7 +372,7 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
               <Layers size={18} color="#0D7A53" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.sectionTitle}>Ketersediaan Fasilitas Dryhouse</Text>
+              <Text style={styles.sectionTitle}>Ketersediaan Fasilitas Dry House</Text>
               <Text style={styles.sectionSubtitle}>
                 Data okupansi kapasitas batch aktual di PGE CoE Kamojang
               </Text>
@@ -383,7 +383,7 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
             <View style={styles.availStatCard}>
               <Text style={styles.availStatLabel}>Jumlah Fasilitas</Text>
               <Text style={styles.availStatVal}>{availability?.totalUnits || 4} Unit</Text>
-              <Text style={styles.availStatSub}>Dryhouse terpasang</Text>
+              <Text style={styles.availStatSub}>Dry House terpasang</Text>
             </View>
             <View style={styles.availStatCard}>
               <Text style={styles.availStatLabel}>Kapasitas Maksimal</Text>
@@ -486,7 +486,7 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
                 <Sparkles size={11} color="#B45309" />
                 <Text style={styles.priorityPillText}>FITUR PRIORITAS UTAMA</Text>
               </View>
-              <Text style={styles.calculatorTitle}>Kalkulator Sewa Dryhouse</Text>
+              <Text style={styles.calculatorTitle}>Kalkulator Sewa Dry House</Text>
               <Text style={styles.calculatorSubtitle}>
                 Simulasi biaya interaktif dengan slider volume & diskon okupansi
               </Text>

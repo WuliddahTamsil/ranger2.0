@@ -83,12 +83,12 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
           {
             _id: "EQ-01",
             code: "EQ-01",
-            name: "Geothermal Dryhouse",
+            name: "Geothermal Dry House",
             facilityType: "DRYHOUSE",
             comingSoon: false,
             isAvailable: true,
             isActive: true,
-            description: "Layanan pengeringan hasil pertanian, terutama kopi, dengan memanfaatkan energi panas bumi melalui fasilitas Dryhouse terpadu.",
+            description: "Layanan pemanfaatan fasilitas pengeringan berbasis geothermal yang memungkinkan petani, koperasi, dan pelaku UMKM mengakses teknologi pengeringan secara praktis, terukur, dan efisien melalui pemesanan digital.",
             specification: "Kapasitas 4 unit dryhouse, suhu terkontrol 40-50°C, pemantauan kadar air digital presisi.",
             function: "Pengeringan hasil panen komoditas kopi cherry, biji kakao, dan komoditas perkebunan.",
             capacity: "4 Unit • Maksimal 6.000 kg / batch (Min. 100 kg)",
@@ -316,14 +316,15 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                     <View style={styles.cardTitleBox}>
                       <Text style={styles.cardName}>{item.name}</Text>
                       <View style={styles.cardFacilityTypeRow}>
-                        <Flame size={12} color={isComingSoon ? "#64748B" : "#0D7A53"} />
+                        <Flame size={11} color={isComingSoon ? "#64748B" : "#0D7A53"} />
                         <Text
                           style={[
                             styles.cardFacilityTypeText,
                             isComingSoon && styles.cardFacilityTypeTextMuted,
                           ]}
+                          numberOfLines={1}
                         >
-                          {isDryhouse ? "Pengeringan Kopi & Hasil Tani" : "PGE Center of Excellence"}
+                          {isDryhouse ? "Pengeringan hasil tani berbasis energi panas bumi." : "PGE Center of Excellence"}
                         </Text>
                       </View>
                     </View>
@@ -340,7 +341,7 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                   ) : (
                     <>
                       {/* Full-Width Facility Description */}
-                      <Text style={styles.cardDesc} numberOfLines={3}>
+                      <Text style={styles.cardDesc}>
                         {item.description}
                       </Text>
 
@@ -364,7 +365,7 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                         <View style={styles.discountRow}>
                           <Sparkles size={12} color="#047857" />
                           <Text style={styles.discountHighlight}>
-                            Diskon okupansi s.d. 50% • HPP acuan Rp 377/kg
+                            Diskon okupansi s.d. 50% sesuai kuota
                           </Text>
                         </View>
                       </View>
@@ -374,25 +375,14 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                   {/* Card Action Buttons */}
                   <View style={styles.cardFooter}>
                     {isDryhouse ? (
-                      <>
-                        <TouchableOpacity
-                          style={styles.btnDetail}
-                          onPress={() => navigate("c_geo_direct_detail", { equipmentId: item._id })}
-                          activeOpacity={0.75}
-                        >
-                          <Calculator size={14} color="#0D7A53" style={{ marginRight: 6 }} />
-                          <Text style={styles.btnDetailText}>Simulasi Biaya</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.btnRent}
-                          onPress={() => navigate("c_geo_direct_booking", { equipmentId: item._id })}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.btnRentText}>Pesan Fasilitas</Text>
-                          <ChevronRight size={16} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </>
+                      <TouchableOpacity
+                        style={styles.btnRent}
+                        onPress={() => navigate("c_geo_direct_detail", { equipmentId: item._id })}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.btnRentText}>Selengkapnya</Text>
+                        <ChevronRight size={16} color="#FFFFFF" />
+                      </TouchableOpacity>
                     ) : (
                       <TouchableOpacity
                         style={styles.btnComingSoon}
@@ -767,11 +757,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    marginTop: 2,
   },
   cardFacilityTypeText: {
-    fontSize: 11.5,
+    fontSize: 10,
     fontWeight: "600",
     color: "#0D7A53",
+    flex: 1,
+    letterSpacing: -0.2,
+    lineHeight: 14,
   },
   cardFacilityTypeTextMuted: {
     color: "#64748B",
@@ -914,15 +908,15 @@ const styles = StyleSheet.create({
   btnRent: {
     flex: 1,
     flexDirection: "row",
-    gap: 4,
-    paddingVertical: 10,
+    gap: 6,
+    paddingVertical: 11,
     backgroundColor: "#0D7A53",
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   btnRentText: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: "700",
     color: "#FFFFFF",
   },

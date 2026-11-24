@@ -261,7 +261,7 @@ export const GeoDirectProcessingReportModal: React.FC<GeoDirectProcessingReportM
 
   <div class="report-title-box">
     <div class="report-title">LAPORAN PENGOLAHAN DIGITAL PENGERINGAN PANAS BUMI</div>
-    <div class="report-subtitle">GEOVERSE – Geothermal Drying Service (Dryhouse CoE Kamojang)</div>
+    <div class="report-subtitle">GEOVERSE – Geothermal Dry House (CoE Kamojang)</div>
   </div>
 
   <div class="grid-two">

@@ -37,6 +37,10 @@ import {
   ChevronLeft,
   Info,
   X,
+  Calculator,
+  Sparkles,
+  Droplets,
+  Edit3,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import {
@@ -147,6 +151,73 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
   // Pricing Calculation State
   const [pricingCalc, setPricingCalc] = useState<GeoDirectPricingCalculation | null>(null);
   const [calcLoading, setCalcLoading] = useState(false);
+
+  // Multi-step booking state:
+  // Step 1: Hitung Volume & Biaya (Kalkulator Geser - Prioritas Utama)
+  // Step 2: Formulir Identitas Customer & Jadwal Sewa
+  const [bookingStep, setBookingStep] = useState<1 | 2>(1);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const [sliderWidth, setSliderWidth] = useState(300);
+
+  const volumeKg = useMemo(() => {
+    const val = parseFloat(rawMaterialKg);
+    return isNaN(val) ? 500 : val;
+  }, [rawMaterialKg]);
+
+  const sliderFillPercent = useMemo(() => {
+    const min = 100;
+    const max = 6000;
+    const clamped = Math.min(Math.max(volumeKg, min), max);
+    return ((clamped - min) / (max - min)) * 100;
+  }, [volumeKg]);
+
+  const updateVolumeFromRatio = (ratio: number) => {
+    const min = 100;
+    const max = 6000;
+    const clampedRatio = Math.min(Math.max(ratio, 0), 1);
+    const rawVal = min + clampedRatio * (max - min);
+    const stepped = Math.round(rawVal / 50) * 50;
+    setRawMaterialKg(String(stepped));
+  };
+
+  const handleQuickVolumeSelect = (val: number) => {
+    setRawMaterialKg(String(val));
+  };
+
+  const handleNextToStep2 = () => {
+    const kg = parseFloat(rawMaterialKg);
+    if (isNaN(kg) || kg < 1) {
+      Alert.alert("Volume Tidak Valid", "Silakan masukkan volume kopi cherry yang valid.");
+      return;
+    }
+    if (isDryhouse) {
+      if (kg < 100) {
+        Alert.alert(
+          "Volume Di Bawah Batas Minimal",
+          "Minimal volume pengeringan fasilitas Geothermal Dry House adalah 100 kg kopi cherry."
+        );
+        return;
+      }
+      if (kg > 6000) {
+        Alert.alert(
+          "Volume Melebihi Kapasitas Maksimal",
+          "Kapasitas total fasilitas Dry House adalah maksimal 6.000 kg kopi cherry per batch."
+        );
+        return;
+      }
+    }
+    setBookingStep(2);
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }, 50);
+  };
+
+  const handleBackToStep1 = () => {
+    setBookingStep(1);
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }, 50);
+  };
 
   // Calculate End Date
   const endDateStr = useMemo(() => {
@@ -355,7 +426,13 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
       {/* Top Bar */}
       <View style={styles.topBar}>
         <TouchableOpacity
-          onPress={() => navigate("c_geo_direct_detail", { equipmentId: equipment._id })}
+          onPress={() => {
+            if (bookingStep === 2) {
+              handleBackToStep1();
+            } else {
+              navigate("c_geo_direct_detail", { equipmentId: equipment._id });
+            }
+          }}
           style={styles.backBtn}
           activeOpacity={0.75}
         >
@@ -363,398 +440,330 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
         </TouchableOpacity>
         <View style={styles.topBarTitleBox}>
           <Text style={styles.topBarTitle}>Formulir Sewa Alat</Text>
-          <Text style={styles.topBarSubtitle}>{equipment.name} ({equipment.code})</Text>
+          <Text style={styles.topBarSubtitle}>
+            {equipment.name} ({equipment.code}) • {bookingStep === 1 ? "1. Hitung Volume" : "2. Formulir Data Diri"}
+          </Text>
         </View>
       </View>
 
-      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner}>
+      <ScrollView ref={scrollViewRef} style={styles.scrollContent} contentContainerStyle={styles.scrollInner}>
         {/* Step Indicator */}
         <View style={styles.stepIndicator}>
-          <View style={styles.stepItemActive}>
-            <Text style={styles.stepNumberActive}>1</Text>
-            <Text style={styles.stepLabelActive}>Formulir & Biaya</Text>
-          </View>
+          <TouchableOpacity
+            style={bookingStep === 1 ? styles.stepItemActive : styles.stepItemDone}
+            onPress={() => setBookingStep(1)}
+            activeOpacity={0.7}
+          >
+            <View style={bookingStep === 1 ? styles.stepNumberActive : styles.stepNumberDone}>
+              {bookingStep === 2 ? (
+                <CheckCircle2 size={13} color="#FFFFFF" />
+              ) : (
+                <Text style={styles.stepNumberTextActive}>1</Text>
+              )}
+            </View>
+            <Text style={bookingStep === 1 ? styles.stepLabelActive : styles.stepLabelDone}>
+              1. Hitung Volume
+            </Text>
+          </TouchableOpacity>
+
+          <View style={[styles.stepDivider, bookingStep === 2 && styles.stepDividerDone]} />
+
+          <TouchableOpacity
+            style={bookingStep === 2 ? styles.stepItemActive : styles.stepItemInactive}
+            onPress={() => {
+              if (bookingStep === 1) {
+                handleNextToStep2();
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={bookingStep === 2 ? styles.stepNumberActive : styles.stepNumberInactive}>
+              <Text style={bookingStep === 2 ? styles.stepNumberTextActive : styles.stepNumberTextInactive}>2</Text>
+            </View>
+            <Text style={bookingStep === 2 ? styles.stepLabelActive : styles.stepLabelInactive}>
+              2. Formulir Data Diri
+            </Text>
+          </TouchableOpacity>
+
           <View style={styles.stepDivider} />
+
           <View style={styles.stepItemInactive}>
-            <Text style={styles.stepNumberInactive}>2</Text>
-            <Text style={styles.stepLabelInactive}>Pembayaran DP</Text>
-          </View>
-          <View style={styles.stepDivider} />
-          <View style={styles.stepItemInactive}>
-            <Text style={styles.stepNumberInactive}>3</Text>
-            <Text style={styles.stepLabelInactive}>Nota Resmi</Text>
+            <View style={styles.stepNumberInactive}>
+              <Text style={styles.stepNumberTextInactive}>3</Text>
+            </View>
+            <Text style={styles.stepLabelInactive}>3. Bayar DP</Text>
           </View>
         </View>
 
-        {/* SECTION A: Identitas Pemohon */}
-        <View style={styles.cardSection}>
-          <View style={styles.sectionHeader}>
-            <User size={16} color="#0D7A53" />
-            <Text style={styles.sectionTitle}>A. Identitas Customer</Text>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Nama Lengkap *</Text>
-            <TextInput
-              style={styles.inputField}
-              value={custName}
-              onChangeText={setCustName}
-              placeholder="Masukkan nama pemohon"
-              placeholderTextColor="#94A3B8"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Nomor Telepon / WhatsApp *</Text>
-            <TextInput
-              style={styles.inputField}
-              value={custPhone}
-              onChangeText={setCustPhone}
-              placeholder="Contoh: 081234567890"
-              placeholderTextColor="#94A3B8"
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email</Text>
-            <TextInput
-              style={styles.inputField}
-              value={custEmail}
-              onChangeText={setCustEmail}
-              placeholder="Contoh: customer@email.com"
-              placeholderTextColor="#94A3B8"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Instansi / Perusahaan</Text>
-            <TextInput
-              style={styles.inputField}
-              value={custCompany}
-              onChangeText={setCustCompany}
-              placeholder="Nama instansi atau UMKM Anda"
-              placeholderTextColor="#94A3B8"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Alamat Lengkap</Text>
-            <TextInput
-              style={[styles.inputField, styles.textArea]}
-              value={custAddress}
-              onChangeText={setCustAddress}
-              placeholder="Alamat domisili atau operasional"
-              placeholderTextColor="#94A3B8"
-              multiline
-              numberOfLines={2}
-            />
-          </View>
-        </View>
-
-        {/* SECTION B: Informasi Penyewaan */}
-        <View style={styles.cardSection}>
-          <View style={styles.sectionHeader}>
-            <Calendar size={16} color="#0D7A53" />
-            <Text style={styles.sectionTitle}>B. Rincian Jadwal & Penggunaan</Text>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Tanggal Mulai Sewa *</Text>
-            <TouchableOpacity
-              style={styles.datePickerInputBtn}
-              onPress={() => {
-                try {
-                  const curr = new Date(startDateStr);
-                  if (!isNaN(curr.getTime())) {
-                    setCalYear(curr.getFullYear());
-                    setCalMonth(curr.getMonth());
-                    setSelectedDay(curr.getDate());
-                  }
-                } catch {}
-                setIsDatePickerOpen(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={styles.datePickerInputLeft}>
-                <View style={styles.datePickerIconCircle}>
-                  <Calendar size={18} color="#0D7A53" />
+        {/* ========================================================
+            STEP 1: HITUNG VOLUME & BIAYA (KALKULATOR GESER NOMOR 1)
+        ========================================================= */}
+        {bookingStep === 1 && (
+          <>
+            {/* Fasilitas Badge Card */}
+            <View style={styles.facilityHighlightCard}>
+              <View style={styles.facilityHighlightLeft}>
+                <View style={styles.facilityIconCircle}>
+                  <Flame size={20} color="#0D7A53" />
                 </View>
-                <View>
-                  <Text style={styles.datePickerInputText}>
-                    {startDateStr
-                      ? (() => {
-                          const d = new Date(startDateStr + "T00:00:00");
-                          return `${d.getDate()} ${monthNamesInd[d.getMonth()]} ${d.getFullYear()}`;
-                        })()
-                      : "Pilih Tanggal Mulai"}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.facilityHighlightCode}>{equipment.code} • FASILITAS AKTIF</Text>
+                  <Text style={styles.facilityHighlightTitle}>{equipment.name}</Text>
+                  <Text style={styles.facilityHighlightSub}>
+                    Kapasitas batch hingga 6.000 kg • Pengeringan berbasis energi panas bumi
                   </Text>
-                  <Text style={styles.datePickerInputSubtext}>{startDateStr}</Text>
                 </View>
               </View>
-              <View style={styles.datePickerBadge}>
-                <Text style={styles.datePickerBadgeText}>Pilih di Kalender</Text>
+            </View>
+
+            {/* KALKULATOR GESER UTAMA (NOMOR 1) */}
+            <View style={styles.cardSection}>
+              <View style={styles.calculatorSectionHeader}>
+                <View style={styles.priorityPill}>
+                  <Sparkles size={11} color="#B45309" />
+                  <Text style={styles.priorityPillText}>LANGKAH UTAMA #1 • KALKULATOR GESER</Text>
+                </View>
+                <Text style={styles.calculatorMainTitle}>
+                  {isDryhouse ? "Hitung Volume Kopi Cherry" : "Hitung Kapasitas Komoditas"}
+                </Text>
+                <Text style={styles.calculatorMainSubtitle}>
+                  {isDryhouse
+                    ? "Tentukan berapa kilogram kopi cherry yang ingin dikeringkan dengan slider geser interaktif atau ketik manual."
+                    : "Tentukan kapasitas bahan baku komoditas yang akan diolah."}
+                </Text>
               </View>
-            </TouchableOpacity>
-          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Durasi Sewa (Hari) *</Text>
-            <TextInput
-              style={styles.inputField}
-              value={durationDays}
-              onChangeText={setDurationDays}
-              placeholder="Contoh: 3"
-              placeholderTextColor="#94A3B8"
-              keyboardType="numeric"
-            />
-            <Text style={styles.inputHelper}>
-              Tanggal selesai otomatis: <Text style={{ fontWeight: "700" }}>{endDateStr}</Text> ({durationDays || 0} Hari)
-            </Text>
-          </View>
+              {/* Prominent Volume Display & Synchronized Manual Input */}
+              <View style={styles.volumeDisplayRow}>
+                <View>
+                  <Text style={styles.volumeDisplaySmall}>Volume Kopi Cherry</Text>
+                  <Text style={styles.volumeDisplayValue}>{volumeKg.toLocaleString("id-ID")} kg</Text>
+                </View>
+                <View style={styles.volumeInputWrapper}>
+                  <Text style={styles.volumeInputPrefix}>Input Manual:</Text>
+                  <TextInput
+                    style={styles.volumeInputField}
+                    value={rawMaterialKg}
+                    onChangeText={(txt) => setRawMaterialKg(txt.replace(/[^0-9]/g, ""))}
+                    keyboardType="numeric"
+                    placeholder="500"
+                  />
+                  <Text style={styles.volumeInputSuffix}>kg Cherry</Text>
+                </View>
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Tujuan Penggunaan Alat *</Text>
-            <TextInput
-              style={styles.inputField}
-              value={usagePurpose}
-              onChangeText={setUsagePurpose}
-              placeholder="Contoh: Pengeringan daun teh hasil panen"
-              placeholderTextColor="#94A3B8"
-            />
-          </View>
+              {/* SLIDER GESER INTERAKTIF */}
+              <View
+                style={styles.sliderTrackContainer}
+                onLayout={(e) => setSliderWidth(e.nativeEvent.layout.width)}
+              >
+                {Platform.OS === "web" ? (
+                  <input
+                    type="range"
+                    min={isDryhouse ? "100" : "10"}
+                    max={isDryhouse ? "6000" : "10000"}
+                    step="50"
+                    value={volumeKg}
+                    onChange={(e) => {
+                      setRawMaterialKg(e.target.value);
+                    }}
+                    style={{
+                      width: "100%",
+                      height: 10,
+                      borderRadius: 5,
+                      appearance: "none",
+                      outline: "none",
+                      cursor: "pointer",
+                      accentColor: "#0D7A53",
+                    } as any}
+                  />
+                ) : (
+                  <TouchableOpacity
+                    style={styles.sliderBaseTrack}
+                    activeOpacity={1}
+                    onPress={(e) => {
+                      const touchX = e.nativeEvent.locationX;
+                      const ratio = touchX / Math.max(1, sliderWidth);
+                      updateVolumeFromRatio(ratio);
+                    }}
+                  >
+                    <View style={[styles.sliderFillBar, { width: `${sliderFillPercent}%` }]} />
+                    <View
+                      style={[
+                        styles.sliderThumb,
+                        { left: Math.max(0, (sliderWidth * sliderFillPercent) / 100 - 10) },
+                      ]}
+                    />
+                  </TouchableOpacity>
+                )}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Lokasi Operasional / Penggunaan *</Text>
-            <TextInput
-              style={styles.inputField}
-              value={usageLocation}
-              onChangeText={setUsageLocation}
-              placeholder="Contoh: PGE Center of Excellence Kamojang"
-              placeholderTextColor="#94A3B8"
-            />
-          </View>
+                <View style={styles.sliderScaleRow}>
+                  <Text style={styles.scaleText}>100 kg</Text>
+                  <Text style={styles.scaleText}>Default: 500 kg</Text>
+                  <Text style={styles.scaleText}>Maks: 6.000 kg</Text>
+                </View>
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Catatan Tambahan (Opsional)</Text>
-            <TextInput
-              style={[styles.inputField, styles.textArea]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Catatan teknis khusus jika ada"
-              placeholderTextColor="#94A3B8"
-              multiline
-              numberOfLines={2}
-            />
-          </View>
-        </View>
-
-        {/* SECTION C: Kebutuhan Produksi / Data Dryhouse */}
-        <View style={styles.cardSection}>
-          <View style={styles.sectionHeader}>
-            <Flame size={16} color="#0D7A53" />
-            <Text style={styles.sectionTitle}>
-              {isDryhouse ? "C. Data Pemesanan Geothermal Dryhouse" : "C. Kebutuhan Produksi & Komoditas"}
-            </Text>
-          </View>
-
-          {isDryhouse ? (
-            <>
-              {/* Jenis Kopi */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Jenis Kopi / Varietas *</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                  {["Arabika Kamojang", "Robusta Garut", "Liberika", "Excelsa"].map((opt) => (
+              {/* Quick Select Buttons */}
+              <View style={styles.quickChipsGrid}>
+                {[100, 250, 500, 1000, 2500, 6000].map((stepVal) => {
+                  const isSelected = volumeKg === stepVal;
+                  return (
                     <TouchableOpacity
-                      key={opt}
-                      style={{
-                        paddingHorizontal: 10,
-                        paddingVertical: 5,
-                        borderRadius: 6,
-                        backgroundColor: coffeeType === opt ? "#0D7A53" : "#F1F5F9",
-                      }}
-                      onPress={() => setCoffeeType(opt)}
+                      key={stepVal}
+                      style={[styles.quickChip, isSelected && styles.quickChipActive]}
+                      onPress={() => handleQuickVolumeSelect(stepVal)}
                       activeOpacity={0.75}
                     >
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontWeight: "600",
-                          color: coffeeType === opt ? "#FFFFFF" : "#475569",
-                        }}
-                      >
-                        {opt}
+                      <Text style={[styles.quickChipText, isSelected && styles.quickChipTextActive]}>
+                        {stepVal >= 1000 ? `${stepVal / 1000} Ton` : `${stepVal} kg`}
                       </Text>
                     </TouchableOpacity>
-                  ))}
-                </View>
-                <TextInput
-                  style={styles.inputField}
-                  value={coffeeType}
-                  onChangeText={setCoffeeType}
-                  placeholder="Ketik jenis kopi kustom jika lainnya"
-                  placeholderTextColor="#94A3B8"
-                />
+                  );
+                })}
               </View>
-
-              {/* Metode Pengeringan */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Metode Pengeringan Panas Bumi *</Text>
-                <View style={{ gap: 8, marginTop: 4 }}>
-                  {[
-                    {
-                      id: "Geothermal Wash",
-                      title: "Geothermal Wash",
-                      badge: "Clean & Bright",
-                      desc: "Aliran udara hangat geotermal terkontrol untuk profil cup clean & acidity seimbang.",
-                    },
-                    {
-                      id: "Honey Skin Contact",
-                      title: "Honey Skin Contact",
-                      badge: "High Sweetness",
-                      desc: "Optimalisasi retensi mucilage dengan sirkulasi panas terkontrol tanpa over-fermentasi.",
-                    },
-                    {
-                      id: "Natural Quick Dry",
-                      title: "Natural Quick Dry",
-                      badge: "Fruity & Exotic",
-                      desc: "Pengeringan seragam cherry utuh terlindung cuaca untuk profil rasa buah kaya.",
-                    },
-                  ].map((m) => {
-                    const isMActive = dryingMethod === m.id;
-                    return (
-                      <TouchableOpacity
-                        key={m.id}
-                        style={{
-                          padding: 10,
-                          borderRadius: 8,
-                          borderWidth: 1.5,
-                          borderColor: isMActive ? "#0D7A53" : "#E2E8F0",
-                          backgroundColor: isMActive ? "#F0FDF4" : "#F8FAFC",
-                        }}
-                        onPress={() => setDryingMethod(m.id)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                          <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>{m.title}</Text>
-                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#0D7A53", backgroundColor: "#DCFCE7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            {m.badge}
-                          </Text>
-                        </View>
-                        <Text style={{ fontSize: 11, color: "#64748B", marginTop: 4, lineHeight: 15 }}>{m.desc}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Volume Kopi Cherry (kg) */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Berat Kopi Cherry (kg) *</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={rawMaterialKg}
-                  onChangeText={setRawMaterialKg}
-                  placeholder="Minimal 100 kg, Maksimal 6.000 kg"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="numeric"
-                />
-                <Text style={styles.inputHelper}>
-                  Kapasitas acuan: 4 unit Dryhouse • Maksimal 6.000 kg per batch (Minimal order 100 kg).
-                </Text>
-              </View>
-            </>
-          ) : (
-            <>
-              {/* Commodity Type */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Jenis Produk / Bahan Baku</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={productType}
-                  onChangeText={setProductType}
-                  placeholder="Contoh: Teh, Kopi, Jamur, Essential Oil"
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
-
-              {/* Volume Kapasitas Bahan Baku (kg) */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Kapasitas Bahan Baku (kg) *</Text>
-                <TextInput
-                  style={styles.inputField}
-                  value={rawMaterialKg}
-                  onChangeText={setRawMaterialKg}
-                  placeholder="Minimal 1 kg, Maksimal 10.000 kg/hari"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="numeric"
-                />
-                <Text style={styles.inputHelper}>
-                  Minimal 1 kg. Maksimal kapasitas alat adalah 10 Ton (10.000 kg) per hari (Maks. {(parseInt(durationDays, 10) || 1) * 10} Ton untuk {durationDays || 1} hari sewa).
-                </Text>
-              </View>
-
-              {/* Process details */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Kebutuhan Proses Produksi</Text>
-                <TextInput
-                  style={[styles.inputField, styles.textArea]}
-                  value={processDetails}
-                  onChangeText={setProcessDetails}
-                  placeholder="Deskripsi spesifik perlakuan panas / pengeringan yang diinginkan"
-                  placeholderTextColor="#94A3B8"
-                  multiline
-                  numberOfLines={2}
-                />
-              </View>
-            </>
-          )}
-        </View>
-
-        {/* SECTION D: DP Credit Application (If Customer has DP balance from rejected booking) */}
-        {customerDpBalance > 0 && (
-          <View style={styles.dpCreditCard}>
-            <View style={styles.dpCreditHeader}>
-              <View style={styles.dpCreditIcon}>
-                <Coins size={18} color="#D97706" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.dpCreditTitle}>Deposit Saldo DP Tersedia</Text>
-                <Text style={styles.dpCreditVal}>{rp(customerDpBalance)}</Text>
-              </View>
-              <Switch
-                value={applyDpCredit}
-                onValueChange={setApplyDpCredit}
-                trackColor={{ false: "#CBD5E1", true: "#86EFAC" }}
-                thumbColor={applyDpCredit ? "#0D7A53" : "#F1F5F9"}
-              />
             </View>
-            <Text style={styles.dpCreditDesc}>
-              Saldo dari pengajuan sewa Anda sebelumnya yang ditolak otomatis disimpan sebagai kredit dan dapat langsung
-              dipotongkan ke nominal DP pengajuan ini.
-            </Text>
-          </View>
-        )}
 
-        {/* SECTION E: Dynamic Pricing Breakdown Card */}
-        <View style={styles.pricingSummaryCard}>
-          <View style={styles.pricingSummaryHeader}>
-            <Text style={styles.pricingSummaryTitle}>ESTIMASI BIAYA SEWA & DP</Text>
-            {calcLoading && <ActivityIndicator size="small" color="#0D7A53" />}
-          </View>
+            {/* Varietas Kopi & Pilihan Metode Pengeringan */}
+            {isDryhouse ? (
+              <View style={styles.cardSection}>
+                <View style={styles.sectionHeader}>
+                  <Flame size={16} color="#0D7A53" />
+                  <Text style={styles.sectionTitle}>Varietas & Metode Pengeringan</Text>
+                </View>
 
-          {pricingCalc ? (
-            <View style={styles.pricingRows}>
-              {isDryhouse ? (
-                <>
+                {/* Jenis Kopi */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Jenis Kopi / Varietas *</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                    {["Arabika Kamojang", "Robusta Garut", "Liberika", "Excelsa"].map((opt) => (
+                      <TouchableOpacity
+                        key={opt}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          backgroundColor: coffeeType === opt ? "#0D7A53" : "#F1F5F9",
+                        }}
+                        onPress={() => setCoffeeType(opt)}
+                        activeOpacity={0.75}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "600",
+                            color: coffeeType === opt ? "#FFFFFF" : "#475569",
+                          }}
+                        >
+                          {opt}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TextInput
+                    style={styles.inputField}
+                    value={coffeeType}
+                    onChangeText={setCoffeeType}
+                    placeholder="Ketik jenis kopi kustom jika lainnya"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                {/* Metode Pengeringan */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Metode Pengeringan Panas Bumi *</Text>
+                  <View style={{ gap: 8, marginTop: 4 }}>
+                    {[
+                      {
+                        id: "Geothermal Wash",
+                        title: "Geothermal Wash",
+                        badge: "Clean & Bright",
+                        desc: "Aliran udara hangat geotermal terkontrol untuk profil cup clean & acidity seimbang.",
+                      },
+                      {
+                        id: "Honey Skin Contact",
+                        title: "Honey Skin Contact",
+                        badge: "High Sweetness",
+                        desc: "Optimalisasi retensi mucilage dengan sirkulasi panas terkontrol tanpa over-fermentasi.",
+                      },
+                      {
+                        id: "Natural Quick Dry",
+                        title: "Natural Quick Dry",
+                        badge: "Fruity & Exotic",
+                        desc: "Pengeringan seragam cherry utuh terlindung cuaca untuk profil rasa buah kaya.",
+                      },
+                    ].map((m) => {
+                      const isMActive = dryingMethod === m.id;
+                      return (
+                        <TouchableOpacity
+                          key={m.id}
+                          style={{
+                            padding: 12,
+                            borderRadius: 10,
+                            borderWidth: 1.5,
+                            borderColor: isMActive ? "#0D7A53" : "#E2E8F0",
+                            backgroundColor: isMActive ? "#F0FDF4" : "#F8FAFC",
+                          }}
+                          onPress={() => setDryingMethod(m.id)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                            <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A" }}>{m.title}</Text>
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                color: "#0D7A53",
+                                backgroundColor: "#DCFCE7",
+                                paddingHorizontal: 8,
+                                paddingVertical: 3,
+                                borderRadius: 6,
+                              }}
+                            >
+                              {m.badge}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 11, color: "#64748B", marginTop: 4, lineHeight: 16 }}>{m.desc}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.cardSection}>
+                <View style={styles.sectionHeader}>
+                  <Flame size={16} color="#0D7A53" />
+                  <Text style={styles.sectionTitle}>Spesifikasi Komoditas</Text>
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Jenis Produk / Bahan Baku</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    value={productType}
+                    onChangeText={setProductType}
+                    placeholder="Contoh: Teh, Kopi, Jamur, Atsiri"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* ESTIMASI BIAYA HASIL KALKULASI */}
+            <View style={styles.pricingSummaryCard}>
+              <View style={styles.pricingSummaryHeader}>
+                <Text style={styles.pricingSummaryTitle}>HASIL KALKULASI BIAYA & DP</Text>
+                {calcLoading && <ActivityIndicator size="small" color="#0D7A53" />}
+              </View>
+
+              {pricingCalc ? (
+                <View style={styles.pricingRows}>
                   <View style={styles.calcRow}>
                     <Text style={styles.calcLabel}>Volume Kopi Cherry</Text>
-                    <Text style={styles.calcVal}>{parseFloat(rawMaterialKg) || 500} kg</Text>
+                    <Text style={styles.calcVal}>{volumeKg.toLocaleString("id-ID")} kg</Text>
                   </View>
                   <View style={styles.calcRow}>
-                    <Text style={styles.calcLabel}>Tarif Terjadwal ({pricingCalc.occupancyTierLabel || "0–30% Okupansi"})</Text>
+                    <Text style={styles.calcLabel}>Tarif Terjadwal ({pricingCalc.occupancyTierLabel || "Okupansi Rendah"})</Text>
                     <Text style={styles.calcVal}>
                       {pricingCalc.ratePerKg ? rp(pricingCalc.ratePerKg) : rp(500)}/kg
                     </Text>
@@ -765,79 +774,374 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                       <Text style={[styles.calcVal, { color: "#16A34A" }]}>{pricingCalc.discountPercent}%</Text>
                     </View>
                   )}
-                </>
-              ) : (
-                <>
-                  <View style={styles.calcRow}>
-                    <Text style={styles.calcLabel}>Biaya Sewa Pokok ({durationDays} Hari)</Text>
-                    <Text style={styles.calcVal}>
-                      {pricingCalc.basePrice > 0 ? rp(pricingCalc.subtotalBase) : "Menunggu Konfigurasi PGE"}
-                    </Text>
+
+                  <View style={[styles.calcRow, styles.calcRowTotal]}>
+                    <Text style={styles.calcLabelTotal}>Total Estimasi Biaya Sewa</Text>
+                    <Text style={styles.calcValTotal}>{rp(pricingCalc.totalRentalCost)}</Text>
                   </View>
 
-                  {pricingCalc.productionAddonTotal > 0 && (
-                    <View style={styles.calcRow}>
-                      <Text style={styles.calcLabel}>Tambahan Kapasitas Produksi</Text>
-                      <Text style={styles.calcVal}>{rp(pricingCalc.productionAddonTotal)}</Text>
-                    </View>
-                  )}
-                </>
-              )}
+                  <View style={styles.dividerDashed} />
 
-              <View style={[styles.calcRow, styles.calcRowTotal]}>
-                <Text style={styles.calcLabelTotal}>Total Biaya Sewa</Text>
-                <Text style={styles.calcValTotal}>
-                  {pricingCalc.totalRentalCost > 0 ? rp(pricingCalc.totalRentalCost) : "Sesuai PGE"}
+                  <View style={[styles.calcRow, styles.calcRowHighlight]}>
+                    <View>
+                      <Text style={styles.calcLabelHighlight}>Down Payment (DP 30%)</Text>
+                      <Text style={{ fontSize: 10, color: "#065F46" }}>Dibayar untuk konfirmasi jadwal batch</Text>
+                    </View>
+                    <Text style={styles.calcValHighlight}>{rp(pricingCalc.requiredDpAmount)}</Text>
+                  </View>
+                </View>
+              ) : (
+                <ActivityIndicator size="small" color="#0D7A53" />
+              )}
+            </View>
+
+            {/* CTA Button: Lanjut ke Formulir Data Diri */}
+            <TouchableOpacity
+              style={styles.btnPrimaryNext}
+              onPress={handleNextToStep2}
+              activeOpacity={0.85}
+            >
+              <View style={{ flex: 1, alignItems: "flex-start" }}>
+                <Text style={styles.btnPrimarySubtext}>Langkah Selanjutnya (Nomor 2)</Text>
+                <Text style={styles.btnPrimaryNextText}>Lanjut Isi Formulir Data Diri</Text>
+              </View>
+              <ChevronRight size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* ========================================================
+            STEP 2: FORMULIR DATA DIRI & JADWAL SEWA
+        ========================================================= */}
+        {bookingStep === 2 && (
+          <>
+            {/* Banner Ringkasan Volume Terpilih */}
+            <View style={styles.stepSummaryBanner}>
+              <View style={{ flex: 1 }}>
+                <View style={styles.stepSummaryTagRow}>
+                  <CheckCircle2 size={13} color="#0D7A53" />
+                  <Text style={styles.stepSummaryTag}>VOLUME & SPESIFIKASI TERPILIH</Text>
+                </View>
+                <Text style={styles.stepSummaryTitle}>
+                  {volumeKg.toLocaleString("id-ID")} kg Kopi Cherry • {dryingMethod}
+                </Text>
+                <Text style={styles.stepSummarySub}>
+                  Varietas: {coffeeType} • Total Sewa: {pricingCalc ? rp(pricingCalc.totalRentalCost) : "-"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.btnEditVolume}
+                onPress={handleBackToStep1}
+                activeOpacity={0.8}
+              >
+                <Edit3 size={13} color="#0D7A53" />
+                <Text style={styles.btnEditVolumeText}>Ubah</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* SECTION A: Identitas Pemohon */}
+            <View style={styles.cardSection}>
+              <View style={styles.sectionHeader}>
+                <User size={16} color="#0D7A53" />
+                <Text style={styles.sectionTitle}>A. Identitas Customer</Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nama Lengkap *</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={custName}
+                  onChangeText={setCustName}
+                  placeholder="Masukkan nama pemohon"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nomor Telepon / WhatsApp *</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={custPhone}
+                  onChangeText={setCustPhone}
+                  placeholder="Contoh: 081234567890"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={custEmail}
+                  onChangeText={setCustEmail}
+                  placeholder="Contoh: customer@email.com"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Instansi / Perusahaan</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={custCompany}
+                  onChangeText={setCustCompany}
+                  placeholder="Nama instansi atau UMKM Anda"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Alamat Lengkap</Text>
+                <TextInput
+                  style={[styles.inputField, styles.textArea]}
+                  value={custAddress}
+                  onChangeText={setCustAddress}
+                  placeholder="Alamat domisili atau operasional"
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+            </View>
+
+            {/* SECTION B: Informasi Penyewaan */}
+            <View style={styles.cardSection}>
+              <View style={styles.sectionHeader}>
+                <Calendar size={16} color="#0D7A53" />
+                <Text style={styles.sectionTitle}>B. Rincian Jadwal & Penggunaan</Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Tanggal Mulai Sewa *</Text>
+                <TouchableOpacity
+                  style={styles.datePickerInputBtn}
+                  onPress={() => {
+                    try {
+                      const curr = new Date(startDateStr);
+                      if (!isNaN(curr.getTime())) {
+                        setCalYear(curr.getFullYear());
+                        setCalMonth(curr.getMonth());
+                        setSelectedDay(curr.getDate());
+                      }
+                    } catch {}
+                    setIsDatePickerOpen(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.datePickerInputLeft}>
+                    <View style={styles.datePickerIconCircle}>
+                      <Calendar size={18} color="#0D7A53" />
+                    </View>
+                    <View>
+                      <Text style={styles.datePickerInputText}>
+                        {startDateStr
+                          ? (() => {
+                              const d = new Date(startDateStr + "T00:00:00");
+                              return `${d.getDate()} ${monthNamesInd[d.getMonth()]} ${d.getFullYear()}`;
+                            })()
+                          : "Pilih Tanggal Mulai"}
+                      </Text>
+                      <Text style={styles.datePickerInputSubtext}>{startDateStr}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.datePickerBadge}>
+                    <Text style={styles.datePickerBadgeText}>Pilih di Kalender</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Durasi Sewa (Hari) *</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={durationDays}
+                  onChangeText={setDurationDays}
+                  placeholder="Contoh: 3"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                />
+                <Text style={styles.inputHelper}>
+                  Tanggal selesai otomatis: <Text style={{ fontWeight: "700" }}>{endDateStr}</Text> ({durationDays || 0} Hari)
                 </Text>
               </View>
 
-              <View style={styles.dividerDashed} />
-
-              <View style={styles.calcRow}>
-                <Text style={styles.calcLabel}>Down Payment ({pricingCalc.dpPercentage}%)</Text>
-                <Text style={styles.calcVal}>{rp(pricingCalc.requiredDpAmount)}</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Tujuan Penggunaan Alat *</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={usagePurpose}
+                  onChangeText={setUsagePurpose}
+                  placeholder="Contoh: Pengeringan kopi cherry hasil panen Kamojang"
+                  placeholderTextColor="#94A3B8"
+                />
               </View>
 
-              {applyDpCredit && customerDpBalance > 0 && (
-                <View style={styles.calcRow}>
-                  <Text style={[styles.calcLabel, { color: "#16A34A" }]}>Potongan Saldo DP Kredit</Text>
-                  <Text style={[styles.calcVal, { color: "#16A34A" }]}>
-                    - {rp(Math.min(customerDpBalance, pricingCalc.requiredDpAmount))}
-                  </Text>
-                </View>
-              )}
-
-              <View style={[styles.calcRow, styles.calcRowHighlight]}>
-                <Text style={styles.calcLabelHighlight}>Nominal DP yang Harus Dibayar</Text>
-                <Text style={styles.calcValHighlight}>{rp(effectiveDpDue)}</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Lokasi Operasional / Penggunaan *</Text>
+                <TextInput
+                  style={styles.inputField}
+                  value={usageLocation}
+                  onChangeText={setUsageLocation}
+                  placeholder="Contoh: PGE Center of Excellence Kamojang"
+                  placeholderTextColor="#94A3B8"
+                />
               </View>
 
-              <View style={styles.calcRow}>
-                <Text style={styles.calcLabelSmall}>Sisa Pelunasan (saat serah terima)</Text>
-                <Text style={styles.calcValSmall}>{rp(pricingCalc.remainingBalance)}</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Catatan Tambahan (Opsional)</Text>
+                <TextInput
+                  style={[styles.inputField, styles.textArea]}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Catatan teknis khusus jika ada"
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={2}
+                />
               </View>
             </View>
-          ) : (
-            <Text style={styles.calcPlaceholder}>Memuat perhitungan harga...</Text>
-          )}
-        </View>
 
-        {/* CTA Button */}
-        <TouchableOpacity
-          style={[styles.btnSubmit, submitting && styles.btnDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
-          activeOpacity={0.85}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <>
-              <Text style={styles.btnSubmitText}>Konfirmasi Booking & Bayar DP</Text>
-              <ChevronRight size={18} color="#FFFFFF" />
-            </>
-          )}
-        </TouchableOpacity>
+            {/* SECTION C: DP Credit Application */}
+            {customerDpBalance > 0 && (
+              <View style={styles.dpCreditCard}>
+                <View style={styles.dpCreditHeader}>
+                  <View style={styles.dpCreditIcon}>
+                    <Coins size={18} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.dpCreditTitle}>Deposit Saldo DP Tersedia</Text>
+                    <Text style={styles.dpCreditVal}>{rp(customerDpBalance)}</Text>
+                  </View>
+                  <Switch
+                    value={applyDpCredit}
+                    onValueChange={setApplyDpCredit}
+                    trackColor={{ false: "#CBD5E1", true: "#86EFAC" }}
+                    thumbColor={applyDpCredit ? "#0D7A53" : "#F1F5F9"}
+                  />
+                </View>
+                <Text style={styles.dpCreditDesc}>
+                  Saldo dari pengajuan sewa Anda sebelumnya yang ditolak otomatis disimpan sebagai kredit dan dapat langsung
+                  dipotongkan ke nominal DP pengajuan ini.
+                </Text>
+              </View>
+            )}
+
+            {/* SECTION D: Dynamic Pricing Breakdown Card */}
+            <View style={styles.pricingSummaryCard}>
+              <View style={styles.pricingSummaryHeader}>
+                <Text style={styles.pricingSummaryTitle}>RINCIAN FINAL BIAYA SEWA & DP</Text>
+                {calcLoading && <ActivityIndicator size="small" color="#0D7A53" />}
+              </View>
+
+              {pricingCalc ? (
+                <View style={styles.pricingRows}>
+                  {isDryhouse ? (
+                    <>
+                      <View style={styles.calcRow}>
+                        <Text style={styles.calcLabel}>Volume Kopi Cherry</Text>
+                        <Text style={styles.calcVal}>{volumeKg.toLocaleString("id-ID")} kg</Text>
+                      </View>
+                      <View style={styles.calcRow}>
+                        <Text style={styles.calcLabel}>Tarif Terjadwal ({pricingCalc.occupancyTierLabel || "0–30% Okupansi"})</Text>
+                        <Text style={styles.calcVal}>
+                          {pricingCalc.ratePerKg ? rp(pricingCalc.ratePerKg) : rp(500)}/kg
+                        </Text>
+                      </View>
+                      {pricingCalc.discountPercent !== undefined && pricingCalc.discountPercent > 0 && (
+                        <View style={styles.calcRow}>
+                          <Text style={[styles.calcLabel, { color: "#16A34A" }]}>Diskon Okupansi Terjadwal</Text>
+                          <Text style={[styles.calcVal, { color: "#16A34A" }]}>{pricingCalc.discountPercent}%</Text>
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.calcRow}>
+                        <Text style={styles.calcLabel}>Biaya Sewa Pokok ({durationDays} Hari)</Text>
+                        <Text style={styles.calcVal}>
+                          {pricingCalc.basePrice > 0 ? rp(pricingCalc.subtotalBase) : "Menunggu Konfigurasi PGE"}
+                        </Text>
+                      </View>
+
+                      {pricingCalc.productionAddonTotal > 0 && (
+                        <View style={styles.calcRow}>
+                          <Text style={styles.calcLabel}>Tambahan Kapasitas Produksi</Text>
+                          <Text style={styles.calcVal}>{rp(pricingCalc.productionAddonTotal)}</Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+
+                  <View style={[styles.calcRow, styles.calcRowTotal]}>
+                    <Text style={styles.calcLabelTotal}>Total Biaya Sewa</Text>
+                    <Text style={styles.calcValTotal}>
+                      {pricingCalc.totalRentalCost > 0 ? rp(pricingCalc.totalRentalCost) : "Sesuai PGE"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.dividerDashed} />
+
+                  <View style={styles.calcRow}>
+                    <Text style={styles.calcLabel}>Down Payment ({pricingCalc.dpPercentage}%)</Text>
+                    <Text style={styles.calcVal}>{rp(pricingCalc.requiredDpAmount)}</Text>
+                  </View>
+
+                  {applyDpCredit && customerDpBalance > 0 && (
+                    <View style={styles.calcRow}>
+                      <Text style={[styles.calcLabel, { color: "#16A34A" }]}>Potongan Saldo DP Kredit</Text>
+                      <Text style={[styles.calcVal, { color: "#16A34A" }]}>
+                        - {rp(Math.min(customerDpBalance, pricingCalc.requiredDpAmount))}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={[styles.calcRow, styles.calcRowHighlight]}>
+                    <Text style={styles.calcLabelHighlight}>Nominal DP yang Harus Dibayar</Text>
+                    <Text style={styles.calcValHighlight}>{rp(effectiveDpDue)}</Text>
+                  </View>
+
+                  <View style={styles.calcRow}>
+                    <Text style={styles.calcLabelSmall}>Sisa Pelunasan (saat serah terima)</Text>
+                    <Text style={styles.calcValSmall}>{rp(pricingCalc.remainingBalance)}</Text>
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.calcPlaceholder}>Memuat perhitungan harga...</Text>
+              )}
+            </View>
+
+            {/* Step 2 Action Buttons */}
+            <View style={styles.step2ActionRow}>
+              <TouchableOpacity
+                style={styles.btnBackToCalc}
+                onPress={handleBackToStep1}
+                activeOpacity={0.8}
+              >
+                <ChevronLeft size={18} color="#0D7A53" />
+                <Text style={styles.btnBackToCalcText}>Kalkulator</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btnSubmitFinal, submitting && styles.btnDisabled]}
+                onPress={handleSubmit}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.btnSubmitFinalText}>Konfirmasi Booking & Bayar DP</Text>
+                    <ChevronRight size={18} color="#FFFFFF" />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Interactive Material 3 Calendar Picker Modal */}
@@ -1002,18 +1306,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
+  stepItemDone: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   stepNumberActive: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: "#0D7A53",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepNumberDone: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#0D7A53",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepNumberTextActive: {
     color: "#FFFFFF",
     fontSize: 11,
     fontWeight: "800",
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 22,
   },
   stepLabelActive: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  stepLabelDone: {
     fontSize: 11,
     fontWeight: "700",
     color: "#0D7A53",
@@ -1024,15 +1350,19 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   stepNumberInactive: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepNumberTextInactive: {
     color: "#64748B",
     fontSize: 11,
     fontWeight: "700",
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 22,
   },
   stepLabelInactive: {
     fontSize: 11,
@@ -1042,6 +1372,10 @@ const styles = StyleSheet.create({
     width: 14,
     height: 1,
     backgroundColor: "#CBD5E1",
+  },
+  stepDividerDone: {
+    backgroundColor: "#0D7A53",
+    height: 2,
   },
   cardSection: {
     backgroundColor: "#FFFFFF",
@@ -1246,6 +1580,305 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     backgroundColor: "#94A3B8",
+  },
+  facilityHighlightCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  facilityHighlightLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  facilityIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#ECFDF5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  facilityHighlightCode: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0D7A53",
+    letterSpacing: 0.5,
+  },
+  facilityHighlightTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 2,
+  },
+  facilityHighlightSub: {
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  calculatorSectionHeader: {
+    marginBottom: 16,
+  },
+  priorityPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  priorityPillText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#B45309",
+    letterSpacing: 0.5,
+  },
+  calculatorMainTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  calculatorMainSubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  volumeDisplayRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 14,
+  },
+  volumeDisplaySmall: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
+  },
+  volumeDisplayValue: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#0D7A53",
+    marginTop: 2,
+  },
+  volumeInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  volumeInputPrefix: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  volumeInputField: {
+    width: 60,
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+    textAlign: "center",
+    padding: 0,
+  },
+  volumeInputSuffix: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  sliderTrackContainer: {
+    marginBottom: 14,
+  },
+  sliderBaseTrack: {
+    height: 36,
+    justifyContent: "center",
+    position: "relative",
+  },
+  sliderFillBar: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#0D7A53",
+  },
+  sliderThumb: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 3,
+    borderColor: "#0D7A53",
+    top: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  sliderScaleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6,
+  },
+  scaleText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
+  quickChipsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  quickChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  quickChipActive: {
+    backgroundColor: "#0D7A53",
+    borderColor: "#0D7A53",
+  },
+  quickChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  quickChipTextActive: {
+    color: "#FFFFFF",
+  },
+  btnPrimaryNext: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#0D7A53",
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: "#0D7A53",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  btnPrimarySubtext: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(255, 255, 255, 0.8)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  btnPrimaryNextText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginTop: 2,
+  },
+  stepSummaryBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ECFDF5",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  stepSummaryTagRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 2,
+  },
+  stepSummaryTag: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#0D7A53",
+    letterSpacing: 0.5,
+  },
+  stepSummaryTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#065F46",
+  },
+  stepSummarySub: {
+    fontSize: 11,
+    color: "#047857",
+    marginTop: 2,
+  },
+  btnEditVolume: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  btnEditVolumeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  step2ActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  btnBackToCalc: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  btnBackToCalcText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0D7A53",
+  },
+  btnSubmitFinal: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#0D7A53",
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: "#0D7A53",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  btnSubmitFinalText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   datePickerInputBtn: {
     flexDirection: "row",
