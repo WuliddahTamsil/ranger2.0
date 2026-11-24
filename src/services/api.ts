@@ -578,7 +578,15 @@ export const getMarketplaceOrdersForCustomer = async (customerId: string) => {
     }
     return await readApiJson(res);
   } catch (err: any) {
-    if (err?.message?.includes("Aksi ini hanya tersedia untuk akun pelanggan") || err?.message?.includes("403") || err?.message?.includes("Sesi login") || err?.message?.includes("401")) {
+    const errMsg = String(err?.message || "");
+    if (
+      errMsg.includes("Aksi ini hanya tersedia") ||
+      errMsg.includes("403") ||
+      errMsg.includes("Sesi login") ||
+      errMsg.includes("401") ||
+      errMsg.includes("berakhir") ||
+      errMsg.includes("tidak valid")
+    ) {
       return { success: false, data: [], message: err?.message || "Sesi login telah berakhir." };
     }
     console.warn("getMarketplaceOrdersForCustomer warning:", err instanceof Error ? err.message : err);
@@ -801,14 +809,21 @@ export const getDrivers = async (accountId?: string) => {
 
 export const getNotifications = async (userId: string) => {
   try {
-    const authHeaders = await getAuthHeaders();
+    const authHeaders = await getAuthHeaders(userId);
     const res = await fetch(getApiUrl(`/notifications/${userId}`), { headers: authHeaders });
-    if (res.status === 401) {
+    if (res.status === 401 || res.status === 403) {
       return { success: false, data: [], message: "Sesi login telah berakhir." };
     }
     return await readApiJson(res);
   } catch (err: any) {
-    if (err?.message?.includes("Sesi login") || err?.message?.includes("401")) {
+    const errMsg = String(err?.message || "");
+    if (
+      errMsg.includes("Sesi login") ||
+      errMsg.includes("401") ||
+      errMsg.includes("403") ||
+      errMsg.includes("berakhir") ||
+      errMsg.includes("tidak valid")
+    ) {
       return { success: false, data: [], message: "Sesi login telah berakhir." };
     }
     if (__DEV__ && !String(err?.message || "").includes("fetch")) {
@@ -911,7 +926,15 @@ export const getCateringOrdersForCustomer = async (customerId: string) => {
     }
     return await readApiJson(res);
   } catch (err: any) {
-    if (err?.message?.includes("Aksi ini hanya tersedia untuk akun pelanggan") || err?.message?.includes("403") || err?.message?.includes("Sesi login") || err?.message?.includes("401")) {
+    const errMsg = String(err?.message || "");
+    if (
+      errMsg.includes("Aksi ini hanya tersedia") ||
+      errMsg.includes("403") ||
+      errMsg.includes("Sesi login") ||
+      errMsg.includes("401") ||
+      errMsg.includes("berakhir") ||
+      errMsg.includes("tidak valid")
+    ) {
       return { success: false, data: [], message: err?.message || "Sesi login telah berakhir." };
     }
     console.warn("getCateringOrdersForCustomer warning:", err instanceof Error ? err.message : err);

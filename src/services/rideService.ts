@@ -257,9 +257,9 @@ export const fetchCustomerRides = async (
   customerId: string
 ): Promise<{ success: boolean; data?: RideOrderData[]; message?: string }> => {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
     const headers = await getAuthHeaders(customerId);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(getApiUrl(`/rides/customer/${customerId}?t=${Date.now()}`), {
       headers,
       cache: "no-store",
@@ -268,8 +268,10 @@ export const fetchCustomerRides = async (
     clearTimeout(timeout);
     return await readJson(res);
   } catch (err: any) {
-    console.error("fetchCustomerRides error:", err);
-    return { success: false, data: [], message: err.message || "Gagal memuat riwayat Kanyaah Ride" };
+    if (err?.name !== "AbortError" && !String(err?.message || "").includes("aborted")) {
+      console.warn("fetchCustomerRides warning:", err?.message || err);
+    }
+    return { success: false, data: [], message: err?.message || "Gagal memuat riwayat Kanyaah Ride" };
   }
 };
 
@@ -278,9 +280,9 @@ export const fetchActiveCustomerRide = async (
   customerId: string
 ): Promise<{ success: boolean; data?: RideOrderData | null; message?: string }> => {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
     const headers = await getAuthHeaders(customerId);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(getApiUrl(`/rides/active/customer/${customerId}?t=${Date.now()}`), {
       headers,
       cache: "no-store",
@@ -289,8 +291,10 @@ export const fetchActiveCustomerRide = async (
     clearTimeout(timeout);
     return await readJson(res);
   } catch (err: any) {
-    console.error("fetchActiveCustomerRide error:", err);
-    return { success: false, data: null, message: err.message || "Gagal mengecek perjalanan aktif" };
+    if (err?.name !== "AbortError" && !String(err?.message || "").includes("aborted")) {
+      console.warn("fetchActiveCustomerRide warning:", err?.message || err);
+    }
+    return { success: false, data: null, message: err?.message || "Gagal mengecek perjalanan aktif" };
   }
 };
 
@@ -299,9 +303,9 @@ export const fetchDriverRides = async (
   driverId: string
 ): Promise<{ success: boolean; data?: RideOrderData[]; message?: string }> => {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
     const headers = await getAuthHeaders(driverId);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(getApiUrl(`/rides/driver/${driverId}?t=${Date.now()}`), {
       headers: {
         ...(driverId ? { "x-driver-id": driverId } : {}),
@@ -313,7 +317,7 @@ export const fetchDriverRides = async (
     clearTimeout(timeout);
     return await readJson(res);
   } catch (err: any) {
-    if (__DEV__ && !String(err?.message || "").includes("fetch")) {
+    if (err?.name !== "AbortError" && !String(err?.message || "").includes("aborted") && !String(err?.message || "").includes("fetch")) {
       console.warn("fetchDriverRides warning:", err?.message || err);
     }
     return { success: false, data: [], message: err?.message || "Gagal memuat order Kanyaah Ride driver" };
