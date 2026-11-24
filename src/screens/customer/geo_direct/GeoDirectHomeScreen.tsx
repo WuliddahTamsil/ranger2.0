@@ -161,8 +161,7 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
         open: true,
         title: item.name,
         description:
-          item.description ||
-          "Fasilitas ini saat ini masih dalam tahap riset dan pengembangan oleh tim PGE Kamojang. Layanan ini akan segera hadir untuk memperkuat ekosistem hilirisasi pertanian berbasis panas bumi.",
+          "Fasilitas ini saat ini masih dalam tahap riset dan pengembangan oleh tim PGE Kamojang. Layanan ini akan segera hadir untuk pemanfaatan langsung energi panas bumi.",
       });
     } else {
       navigate("c_geo_direct_detail", { equipmentId: item._id });
@@ -330,49 +329,46 @@ export const GeoDirectHomeScreen: React.FC<GeoDirectHomeScreenProps> = ({
                     </View>
                   </View>
 
-                  {/* Full-Width Facility Description */}
-                  <Text style={styles.cardDesc} numberOfLines={3}>
-                    {item.description}
-                  </Text>
-
-                  {/* Full-Width Capacity Badge */}
-                  <View style={[styles.capacityCardBox, isComingSoon && styles.capacityCardBoxMuted]}>
-                    <Layers size={13} color={isComingSoon ? "#64748B" : "#0D7A53"} />
-                    <Text
-                      style={[
-                        styles.capacityMainText,
-                        isComingSoon && styles.capacityMainTextMuted,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {item.capacity || "4 Unit • Maksimal 6.000 kg / batch"}
-                    </Text>
-                  </View>
-
-                  {/* Pricing / Research Tag (Full-Width) */}
-                  {isDryhouse ? (
-                    <View style={styles.priceContainer}>
-                      <View style={styles.priceTopRow}>
-                        <Text style={styles.priceLabel}>Simulasi Tarif Sewa:</Text>
-                        <View style={styles.priceRow}>
-                          <Text style={styles.priceValue}>Rp 500 – Rp 1.000</Text>
-                          <Text style={styles.priceUnit}>/kg</Text>
-                        </View>
-                      </View>
-                      <View style={styles.discountRow}>
-                        <Sparkles size={12} color="#047857" />
-                        <Text style={styles.discountHighlight}>
-                          Diskon okupansi s.d. 50% • HPP acuan Rp 377/kg
-                        </Text>
-                      </View>
-                    </View>
-                  ) : (
-                    <View style={styles.comingSoonInfoBox}>
-                      <Sparkles size={13} color="#64748B" />
-                      <Text style={styles.comingSoonInfoText}>
-                        Tahap Riset & Validasi Lapangan CoE Kamojang
+                  {/* Body Content: Coming Soon vs Tersedia */}
+                  {isComingSoon ? (
+                    <View style={styles.comingSoonDevBox}>
+                      <Clock size={14} color="#B45309" />
+                      <Text style={styles.comingSoonDevText}>
+                        Masih dalam tahap riset & pengembangan oleh tim PGE Kamojang.
                       </Text>
                     </View>
+                  ) : (
+                    <>
+                      {/* Full-Width Facility Description */}
+                      <Text style={styles.cardDesc} numberOfLines={3}>
+                        {item.description}
+                      </Text>
+
+                      {/* Full-Width Capacity Badge */}
+                      <View style={styles.capacityCardBox}>
+                        <Layers size={13} color="#0D7A53" />
+                        <Text style={styles.capacityMainText} numberOfLines={1}>
+                          {item.capacity || "4 Unit • Maksimal 6.000 kg / batch"}
+                        </Text>
+                      </View>
+
+                      {/* Pricing Tag */}
+                      <View style={styles.priceContainer}>
+                        <View style={styles.priceTopRow}>
+                          <Text style={styles.priceLabel}>Simulasi Tarif Sewa:</Text>
+                          <View style={styles.priceRow}>
+                            <Text style={styles.priceValue}>Rp 500 – Rp 1.000</Text>
+                            <Text style={styles.priceUnit}>/kg</Text>
+                          </View>
+                        </View>
+                        <View style={styles.discountRow}>
+                          <Sparkles size={12} color="#047857" />
+                          <Text style={styles.discountHighlight}>
+                            Diskon okupansi s.d. 50% • HPP acuan Rp 377/kg
+                          </Text>
+                        </View>
+                      </View>
+                    </>
                   )}
 
                   {/* Card Action Buttons */}
@@ -856,6 +852,26 @@ const styles = StyleSheet.create({
     color: "#047857",
     fontWeight: "600",
     flexShrink: 1,
+  },
+  comingSoonDevBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFFBEB",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  comingSoonDevText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#92400E",
+    flex: 1,
+    lineHeight: 18,
   },
   comingSoonInfoBox: {
     flexDirection: "row",
