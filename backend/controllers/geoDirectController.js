@@ -584,24 +584,52 @@ exports.calculateRentalPrice = async (req, res) => {
 
 exports.getDryhouseAvailability = async (req, res) => {
   try {
-    const { date } = req.query;
-    const targetDate = date ? new Date(date) : new Date();
-    const startOfDay = new Date(targetDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { date, startDate, endDate, month, requestedKg } = req.query;
 
-    const TOTAL_CAPACITY_KG = 6000;
-    const TOTAL_UNITS = 4;
+    // Load Dryhouse configuration from database if exists
+    const equipment = await GeoDirectEquipment.findOne({
+      facilityType: "DRYHOUSE",
+      isActive: true,
+    }).lean();
+
+    const TOTAL_CAPACITY_KG = equipment?.maxBatchCapacityKg || 6000;
+    const TOTAL_UNITS = equipment?.totalUnits || 4;
     const MIN_VOLUME_KG = 100;
+    const systemStatus = equipment?.systemStatus || "OPERATIONAL";
+    const maintenanceNote = equipment?.maintenanceNote || "";
+    const blackoutDates = Array.isArray(equipment?.blackoutDates) ? equipment.blackoutDates : [];
+
+    // Check system-level operational status
+    const isSystemAvailable = systemStatus === "OPERATIONAL" && equipment?.isAvailable !== false;
+
+    // Determine target date range
+    let startQueryDate, endQueryDate;
+    if (startDate && endDate) {
+      startQueryDate = new Date(startDate);
+      startQueryDate.setHours(0, 0, 0, 0);
+      endQueryDate = new Date(endDate);
+      endQueryDate.setHours(23, 59, 59, 999);
+    } else {
+      const targetDate = date ? new Date(date) : new Date();
+      startQueryDate = new Date(targetDate);
+      startQueryDate.setHours(0, 0, 0, 0);
+      endQueryDate = new Date(targetDate);
+      endQueryDate.setHours(23, 59, 59, 999);
+    }
+
+    // Check blackout dates
+    const isDateBlackedOut = blackoutDates.some((bd) => {
+      const bDate = new Date(bd);
+      return bDate >= startQueryDate && bDate <= endQueryDate;
+    });
 
     // Active overlapping bookings
     const activeBookings = await GeoDirectBooking.find({
       bookingStatus: {
         $in: ["WAITING_PAYMENT", "PAYMENT_REVIEW", "WAITING_APPROVAL", "APPROVED"],
       },
-      "rentalSchedule.startDate": { $lte: endOfDay },
-      "rentalSchedule.endDate": { $gte: startOfDay },
+      "rentalSchedule.startDate": { $lte: endQueryDate },
+      "rentalSchedule.endDate": { $gte: startQueryDate },
     }).lean();
 
     let bookedCapacityKg = 0;
@@ -637,28 +665,118 @@ exports.getDryhouseAvailability = async (req, res) => {
       ratePerKg = 700;
     }
 
+    const reqKgNum = Number(requestedKg) || 0;
+    const isDateAvailable = isSystemAvailable && !isDateBlackedOut && remainingCapacityKg >= Math.max(MIN_VOLUME_KG, reqKgNum);
+    let unavailableReason = "";
+
+    if (!isSystemAvailable) {
+      unavailableReason = maintenanceNote || `Fasilitas sedang ${systemStatus === "MAINTENANCE" ? "dalam Pemeliharaan (Maintenance)" : "Nonaktif Sementara"}.`;
+    } else if (isDateBlackedOut) {
+      unavailableReason = "Tanggal yang dipilih ditutup untuk operasional/pemeliharaan terjadwal PGE.";
+    } else if (remainingCapacityKg < MIN_VOLUME_KG) {
+      unavailableReason = `Kapasitas penuh untuk jadwal tersebut (Sisa: ${remainingCapacityKg} kg). Silakan pilih tanggal lain.`;
+    } else if (reqKgNum > remainingCapacityKg) {
+      unavailableReason = `Kapasitas tidak mencukupi. Sisa kuota: ${remainingCapacityKg} kg, sedangkan Anda meminta ${reqKgNum} kg.`;
+    }
+
     const facilityStatus =
-      occupancyPercent >= 100
+      !isSystemAvailable
+        ? "Pemeliharaan"
+        : isDateBlackedOut
+        ? "Jadwal Tutup"
+        : remainingCapacityKg < MIN_VOLUME_KG
         ? "Penuh"
-        : occupancyPercent > 0
+        : bookedCapacityKg > 0
         ? "Tersedia Sebagian"
         : "Tersedia Penuh";
+
+    // If month is requested (e.g. "2026-11"), calculate daily map for calendar
+    let dailyMap = undefined;
+    if (month) {
+      dailyMap = {};
+      const [mYear, mMonth] = month.split("-").map(Number);
+      const daysInMonth = new Date(mYear, mMonth, 0).getDate();
+
+      const mStart = new Date(mYear, mMonth - 1, 1, 0, 0, 0);
+      const mEnd = new Date(mYear, mMonth - 1, daysInMonth, 23, 59, 59);
+
+      const monthBookings = await GeoDirectBooking.find({
+        bookingStatus: {
+          $in: ["WAITING_PAYMENT", "PAYMENT_REVIEW", "WAITING_APPROVAL", "APPROVED"],
+        },
+        "rentalSchedule.startDate": { $lte: mEnd },
+        "rentalSchedule.endDate": { $gte: mStart },
+      }).lean();
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dStr = `${mYear}-${String(mMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const dayStart = new Date(dStr + "T00:00:00");
+        const dayEnd = new Date(dStr + "T23:59:59");
+
+        const isBlack = blackoutDates.includes(dStr);
+        let dayBooked = 0;
+        for (const mb of monthBookings) {
+          const bStart = new Date(mb.rentalSchedule.startDate);
+          const bEnd = new Date(mb.rentalSchedule.endDate);
+          if (bStart <= dayEnd && bEnd >= dayStart) {
+            dayBooked += Number(mb.productionNeeds?.rawMaterialKg || mb.productionNeeds?.volumeKg) || Number(mb.pricingSnapshot?.volumeKg) || 0;
+          }
+        }
+
+        const dayRemaining = Math.max(0, TOTAL_CAPACITY_KG - dayBooked);
+        const dayOcc = Math.min(100, Math.round((dayBooked / TOTAL_CAPACITY_KG) * 100));
+        const dayFull = dayRemaining < MIN_VOLUME_KG;
+
+        dailyMap[dStr] = {
+          date: dStr,
+          bookedKg: dayBooked,
+          remainingKg: dayRemaining,
+          occupancyPercent: dayOcc,
+          isAvailable: isSystemAvailable && !isBlack && !dayFull,
+          isFull: dayFull,
+          isMaintenance: isBlack || !isSystemAvailable,
+        };
+      }
+    }
 
     return res.status(200).json({
       success: true,
       data: {
         totalUnits: TOTAL_UNITS,
         totalMaxCapacityKg: TOTAL_CAPACITY_KG,
+        maxCapacityKg: TOTAL_CAPACITY_KG,
         minVolumeKg: MIN_VOLUME_KG,
         bookedCapacityKg,
+        currentOccupancyKg: bookedCapacityKg,
         remainingCapacityKg,
         occupancyPercent,
         occupancyTier: tierLabel,
+        activeOccupancyTier: {
+          occupancyRange: tierLabel,
+          discountPercent,
+          ratePerKg,
+          tierKey:
+            occupancyPercent > 80
+              ? "80_plus"
+              : occupancyPercent > 60
+              ? "60_80"
+              : occupancyPercent > 30
+              ? "30_60"
+              : "0_30",
+        },
         discountPercent,
         ratePerKg,
         facilityStatus,
-        targetDate: targetDate.toISOString().slice(0, 10),
+        systemStatus,
+        isSystemAvailable,
+        isDateAvailable,
+        unavailableReason,
+        blackoutDates,
+        targetDate: startQueryDate.toISOString().slice(0, 10),
+        startDate: startQueryDate.toISOString().slice(0, 10),
+        endDate: endQueryDate.toISOString().slice(0, 10),
         activeBookingsCount: activeBookings.length,
+        dailyMap,
       },
     });
   } catch (error) {
@@ -824,6 +942,28 @@ exports.createBooking = async (req, res) => {
       });
     }
 
+    // Check system availability & maintenance
+    if (equipment.systemStatus === "MAINTENANCE" || equipment.systemStatus === "OFFLINE" || equipment.isAvailable === false) {
+      return res.status(400).json({
+        success: false,
+        message: equipment.maintenanceNote || `Fasilitas saat ini sedang ${equipment.systemStatus === "MAINTENANCE" ? "dalam Pemeliharaan (Maintenance)" : "Nonaktif Sementara"}.`,
+      });
+    }
+
+    // Check blackout dates
+    if (Array.isArray(equipment.blackoutDates) && equipment.blackoutDates.length > 0) {
+      const isBlackedOut = equipment.blackoutDates.some((bd) => {
+        const bDate = new Date(bd);
+        return bDate >= start && bDate <= end;
+      });
+      if (isBlackedOut) {
+        return res.status(400).json({
+          success: false,
+          message: "Jadwal yang dipilih bertepatan dengan tanggal pemeliharaan / penutupan terjadwal PGE.",
+        });
+      }
+    }
+
     // Capacity & Real Occupancy Validation for Dryhouse
     const isDryhouse =
       equipment.facilityType === "DRYHOUSE" ||
@@ -834,6 +974,7 @@ exports.createBooking = async (req, res) => {
       Number(productionNeeds?.rawMaterialKg || productionNeeds?.volumeKg) || 500;
 
     let calcOccupancyPercent = 25;
+    const maxCapacity = equipment.maxBatchCapacityKg || 6000;
 
     if (isDryhouse) {
       if (requestedVolumeKg < 100) {
@@ -842,10 +983,10 @@ exports.createBooking = async (req, res) => {
           message: "Volume minimal pengeringan di Geothermal Dryhouse adalah 100 kg.",
         });
       }
-      if (requestedVolumeKg > 6000) {
+      if (requestedVolumeKg > maxCapacity) {
         return res.status(400).json({
           success: false,
-          message: "Volume melebihi kapasitas maksimum batch Dryhouse (6.000 kg).",
+          message: `Volume melebihi kapasitas maksimum batch Dryhouse (${maxCapacity.toLocaleString("id-ID")} kg).`,
         });
       }
 
@@ -870,15 +1011,15 @@ exports.createBooking = async (req, res) => {
         activeBookedKg += v;
       }
 
-      if (activeBookedKg + requestedVolumeKg > 6000) {
-        const sisaKg = Math.max(0, 6000 - activeBookedKg);
+      if (activeBookedKg + requestedVolumeKg > maxCapacity) {
+        const sisaKg = Math.max(0, maxCapacity - activeBookedKg);
         return res.status(400).json({
           success: false,
           message: `Kapasitas Dryhouse tidak mencukupi untuk jadwal tersebut. Sisa kapasitas: ${sisaKg} kg. Silakan sesuaikan volume atau pilih tanggal lain.`,
         });
       }
 
-      calcOccupancyPercent = Math.min(100, Math.round((activeBookedKg / 6000) * 100));
+      calcOccupancyPercent = Math.min(100, Math.round((activeBookedKg / maxCapacity) * 100));
     }
 
     // Resolve Customer DP Balance
@@ -2029,10 +2170,12 @@ exports.adminUpdateDryingProgress = async (req, res) => {
       relatedId: booking._id,
     });
 
+    const populated = await GeoDirectBooking.findById(booking._id).populate("equipment");
+
     return res.status(200).json({
       success: true,
       message: "Progres pengeringan berhasil diperbarui.",
-      data: booking.dryingProgress,
+      data: populated || booking,
     });
   } catch (error) {
     return res.status(500).json({

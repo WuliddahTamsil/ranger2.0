@@ -150,6 +150,9 @@ export default function App() {
   const [selectedPointRedemptionId, setSelectedPointRedemptionId] = useState<string>("");
   const [geoDirectEquipmentId, setGeoDirectEquipmentId] = useState<string | undefined>(undefined);
   const [geoDirectBookingId, setGeoDirectBookingId] = useState<string | undefined>(undefined);
+  const [geoDirectInitialVolumeKg, setGeoDirectInitialVolumeKg] = useState<number | undefined>(undefined);
+  const [geoDirectInitialDryingMethod, setGeoDirectInitialDryingMethod] = useState<string | undefined>(undefined);
+  const [geoDirectInitialTab, setGeoDirectInitialTab] = useState<string | undefined>(undefined);
   const [postLoginTarget, setPostLoginTarget] = useState<{ screen: Screen; params?: Record<string, any> } | null>(null);
   const [loginPromptReason, setLoginPromptReason] = useState<string>("");
   const [lastPublicScreen, setLastPublicScreen] = useState<Screen>("c_home");
@@ -288,6 +291,9 @@ export default function App() {
     if (params?.redemptionId) setSelectedPointRedemptionId(params.redemptionId);
     if (params?.equipmentId) setGeoDirectEquipmentId(params.equipmentId);
     if (params?.bookingId) setGeoDirectBookingId(params.bookingId);
+    if (params?.initialVolumeKg !== undefined) setGeoDirectInitialVolumeKg(params.initialVolumeKg);
+    if (params?.initialDryingMethod !== undefined) setGeoDirectInitialDryingMethod(params.initialDryingMethod);
+    if (params?.initialTab !== undefined) setGeoDirectInitialTab(params.initialTab);
     if (params?.tab !== undefined) {
       setCustomerInitialTab(Number(params.tab));
     }
@@ -680,9 +686,27 @@ export default function App() {
       case "c_geo_direct":
         return <GeoDirectHomeScreen navigate={navigate} authAccount={currentAuthAccount} />;
       case "c_geo_direct_detail":
-        return <GeoDirectDetailScreen navigate={navigate} routeParams={{ equipmentId: geoDirectEquipmentId }} />;
+        return (
+          <GeoDirectDetailScreen
+            navigate={navigate}
+            routeParams={{
+              equipmentId: geoDirectEquipmentId,
+              initialTab: geoDirectInitialTab,
+            }}
+          />
+        );
       case "c_geo_direct_booking":
-        return <GeoDirectBookingScreen navigate={navigate} authAccount={currentAuthAccount} routeParams={{ equipmentId: geoDirectEquipmentId }} />;
+        return (
+          <GeoDirectBookingScreen
+            navigate={navigate}
+            authAccount={currentAuthAccount}
+            routeParams={{
+              equipmentId: geoDirectEquipmentId,
+              initialVolumeKg: geoDirectInitialVolumeKg,
+              initialDryingMethod: geoDirectInitialDryingMethod,
+            }}
+          />
+        );
       case "c_geo_direct_payment":
         return <GeoDirectPaymentScreen navigate={navigate} routeParams={{ bookingId: geoDirectBookingId }} />;
       case "c_geo_direct_history":

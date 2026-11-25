@@ -115,7 +115,7 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
           return;
         }
       }
-    } catch {}
+    } catch { }
     await resolveAdminToken();
   }, [authAccount?.token, authAccount?.id]);
 
@@ -153,6 +153,11 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
   const [formPricingUnit, setFormPricingUnit] = useState("per_hari");
   const [formDpPercent, setFormDpPercent] = useState("30");
   const [formFormula, setFormFormula] = useState("STANDARD_DAILY");
+  const [formTotalUnits, setFormTotalUnits] = useState("4");
+  const [formMaxBatchCapacityKg, setFormMaxBatchCapacityKg] = useState("6000");
+  const [formSystemStatus, setFormSystemStatus] = useState<"OPERATIONAL" | "MAINTENANCE" | "OFFLINE">("OPERATIONAL");
+  const [formMaintenanceNote, setFormMaintenanceNote] = useState("");
+  const [formBlackoutDates, setFormBlackoutDates] = useState("");
   const [formImgUrl, setFormImgUrl] = useState("");
   const [formIsAvailable, setFormIsAvailable] = useState(true);
   const [formIsActive, setFormIsActive] = useState(true);
@@ -184,23 +189,57 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
     if (selectedBookingForDetail) {
       const p = selectedBookingForDetail.dryingProgress;
       setDryingStageInput(p?.currentStage || "WAITING_CONFIRMATION");
-      setFinalWeightInput(p?.finalWeightKg !== undefined ? String(p.finalWeightKg) : "");
-      setMoistureInput(p?.moistureContentPercent !== undefined ? String(p.moistureContentPercent) : "");
+      setFinalWeightInput(
+        p?.finalWeightKg !== undefined && p?.finalWeightKg !== null ? String(p.finalWeightKg) : ""
+      );
+      setMoistureInput(
+        p?.moistureContentPercent !== undefined && p?.moistureContentPercent !== null
+          ? String(p.moistureContentPercent)
+          : ""
+      );
       setDryingNotesInput(p?.operatorNotes || "");
     }
   }, [selectedBookingForDetail]);
 
   const handleSaveDryingProgress = async () => {
-    if (!selectedBookingForDetail) return;
+    const bookingId = selectedBookingForDetail?._id;
+    if (!bookingId) {
+      Alert.alert("Galat", "ID Booking tidak valid atau belum dipilih.");
+      return;
+    }
     try {
       setSavingDryingProgress(true);
-      const updated = await adminUpdateDryingProgress(selectedBookingForDetail._id, {
+      const cleanWeight = finalWeightInput ? finalWeightInput.trim() : "";
+      const cleanMoisture = moistureInput ? moistureInput.trim() : "";
+      const parsedWeight =
+        cleanWeight && cleanWeight !== "null" && !isNaN(parseFloat(cleanWeight))
+          ? parseFloat(cleanWeight)
+          : undefined;
+      const parsedMoisture =
+        cleanMoisture && cleanMoisture !== "null" && !isNaN(parseFloat(cleanMoisture))
+          ? parseFloat(cleanMoisture)
+          : undefined;
+
+      const updated = await adminUpdateDryingProgress(bookingId, {
         stage: dryingStageInput,
-        finalWeightKg: finalWeightInput ? parseFloat(finalWeightInput) : undefined,
-        moistureContentPercent: moistureInput ? parseFloat(moistureInput) : undefined,
+        finalWeightKg: parsedWeight,
+        moistureContentPercent: parsedMoisture,
         notes: dryingNotesInput.trim(),
       });
-      setSelectedBookingForDetail(updated);
+
+      if (updated && updated._id) {
+        setSelectedBookingForDetail(updated);
+      } else if (updated) {
+        setSelectedBookingForDetail((prev) =>
+          prev
+            ? {
+              ...prev,
+              dryingProgress: (updated as any).dryingProgress || (updated as any),
+            }
+            : null
+        );
+      }
+
       Alert.alert("Sukses! 🍃", "Progres operasional dan hasil pengeringan berhasil diperbarui.");
       refreshAll();
     } catch (err: any) {
@@ -304,6 +343,11 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
       setFormPricingUnit(item.pricingUnit || "per_hari");
       setFormDpPercent(String(item.dpPercentage || 30));
       setFormFormula(item.pricingFormulaType || "STANDARD_DAILY");
+      setFormTotalUnits(String(item.totalUnits || 4));
+      setFormMaxBatchCapacityKg(String(item.maxBatchCapacityKg || 6000));
+      setFormSystemStatus(item.systemStatus || "OPERATIONAL");
+      setFormMaintenanceNote(item.maintenanceNote || "");
+      setFormBlackoutDates(Array.isArray(item.blackoutDates) ? item.blackoutDates.join(", ") : "");
       setFormImgUrl(item.imageUrl || "");
       setFormIsAvailable(item.isAvailable !== false);
       setFormIsActive(item.isActive !== false);
@@ -320,6 +364,11 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
       setFormPricingUnit("per_hari");
       setFormDpPercent("30");
       setFormFormula("STANDARD_DAILY");
+      setFormTotalUnits("4");
+      setFormMaxBatchCapacityKg("6000");
+      setFormSystemStatus("OPERATIONAL");
+      setFormMaintenanceNote("");
+      setFormBlackoutDates("");
       setFormImgUrl("");
       setFormIsAvailable(true);
       setFormIsActive(true);
@@ -347,6 +396,14 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
         pricingUnit: formPricingUnit,
         dpPercentage: Math.min(100, Math.max(0, parseFloat(formDpPercent) || 30)),
         pricingFormulaType: formFormula,
+        totalUnits: Math.max(1, parseInt(formTotalUnits, 10) || 4),
+        maxBatchCapacityKg: Math.max(100, parseInt(formMaxBatchCapacityKg, 10) || 6000),
+        systemStatus: formSystemStatus,
+        maintenanceNote: formMaintenanceNote.trim(),
+        blackoutDates: formBlackoutDates
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0),
         imageUrl: formImgUrl.trim(),
         isAvailable: formIsAvailable,
         isActive: formIsActive,
@@ -434,20 +491,43 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
   };
 
   // Action Triggers: Approve, Reject Payment, Reject Booking
-  const triggerVerifyPayment = async (b: GeoDirectBooking) => {
+  const triggerVerifyPayment = async (b?: GeoDirectBooking | null) => {
+    const target = b || selectedBookingForDetail;
+    const bookingId = target?._id;
+    if (!bookingId) {
+      Alert.alert("Galat", "ID Booking tidak valid.");
+      return;
+    }
     Alert.alert(
       "Verifikasi Pembayaran DP",
-      `Konfirmasi bahwa transfer DP sebesar ${rp(b.pricingSnapshot?.requiredDpAmount || 0)} telah diterima secara valid di rekening/QRIS PGE?`,
+      `Konfirmasi bahwa transfer DP sebesar ${rp(target?.pricingSnapshot?.requiredDpAmount || 0)} telah diterima secara valid di rekening/QRIS PGE?`,
       [
         { text: "Batal", style: "cancel" },
         {
           text: "Verifikasi Sekarang",
           onPress: async () => {
             try {
-              await adminVerifyPayment(b._id);
-              Alert.alert("Sukses", "Pembayaran DP berhasil diverifikasi.");
+              const res = await adminVerifyPayment(bookingId);
+              Alert.alert("Sukses! 💳", "Pembayaran DP berhasil diverifikasi. Status pengajuan kini Siap Approve.");
               refreshAll();
-              setSelectedBookingForDetail(null);
+              if (selectedBookingForDetail?._id === bookingId) {
+                if (res && res._id) {
+                  setSelectedBookingForDetail(res);
+                } else {
+                  setSelectedBookingForDetail((prev) =>
+                    prev
+                      ? {
+                        ...prev,
+                        paymentStatus: "VERIFIED",
+                        bookingStatus: "WAITING_APPROVAL",
+                        dryingProgress: prev.dryingProgress
+                          ? { ...prev.dryingProgress, currentStage: "CONFIRMED" }
+                          : { currentStage: "CONFIRMED" },
+                      }
+                      : null
+                  );
+                }
+              }
             } catch (err: any) {
               Alert.alert("Gagal", err.message || "Gagal memverifikasi pembayaran.");
             }
@@ -858,7 +938,7 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
                       : st === "WAITING_APPROVAL"
                       ? "Siap Approve"
                       : st === "APPROVED"
-                      ? "Disetujui"
+                      ? "Disetujui & Operasional"
                       : "Ditolak/Revisi"}
                   </Text>
                 </TouchableOpacity>
@@ -883,6 +963,23 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
                       </Text>
                     </View>
                     <View style={styles.tableBadges}>
+                      {b.bookingStatus === "APPROVED" && b.dryingProgress?.currentStage && (
+                        <View style={{ backgroundColor: "#ECFDF5", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: "#A7F3D0" }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#065F46" }}>
+                            ♨️ {b.dryingProgress.currentStage === "WAITING_COFFEE_RECEIPT"
+                              ? "Penerimaan Kopi"
+                              : b.dryingProgress.currentStage === "DRYING_IN_PROGRESS"
+                              ? "Pengeringan Aktif"
+                              : b.dryingProgress.currentStage === "DRYING_COMPLETED"
+                              ? "Pengeringan Selesai"
+                              : b.dryingProgress.currentStage === "READY_FOR_PICKUP"
+                              ? "Siap Diambil"
+                              : b.dryingProgress.currentStage === "COMPLETED"
+                              ? "Selesai"
+                              : "Dikonfirmasi"}
+                          </Text>
+                        </View>
+                      )}
                       <View
                         style={[
                           styles.tableStatusBadge,
@@ -891,8 +988,8 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
                               b.bookingStatus === "APPROVED"
                                 ? "#DCFCE7"
                                 : b.bookingStatus === "REJECTED"
-                                ? "#FEE2E2"
-                                : "#FEF3C7",
+                                  ? "#FEE2E2"
+                                  : "#FEF3C7",
                           },
                         ]}
                       >
@@ -902,8 +999,8 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
                             {
                               color:
                                 b.bookingStatus === "APPROVED"
-                                    ? "#15803D"
-                                    : b.bookingStatus === "REJECTED"
+                                  ? "#15803D"
+                                  : b.bookingStatus === "REJECTED"
                                     ? "#B91C1C"
                                     : "#B45309",
                             },
@@ -938,14 +1035,25 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
                     </TouchableOpacity>
 
                     {b.bookingStatus === "APPROVED" ? (
-                      <TouchableOpacity
-                        style={styles.btnInvoiceSmall}
-                        onPress={() => setSelectedBookingForInvoice(b)}
-                        activeOpacity={0.75}
-                      >
-                        <FileText size={13} color="#FFFFFF" />
-                        <Text style={styles.btnInvoiceSmallText}>Nota Resmi (PDF)</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: "row", gap: 6 }}>
+                        <TouchableOpacity
+                          style={styles.btnProgressSmall}
+                          onPress={() => setSelectedBookingForDetail(b)}
+                          activeOpacity={0.75}
+                        >
+                          <Flame size={12} color="#FFFFFF" />
+                          <Text style={styles.btnProgressSmallText}>Update Progres</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.btnInvoiceSmall}
+                          onPress={() => setSelectedBookingForInvoice(b)}
+                          activeOpacity={0.75}
+                        >
+                          <FileText size={12} color="#FFFFFF" />
+                          <Text style={styles.btnInvoiceSmallText}>Nota (PDF)</Text>
+                        </TouchableOpacity>
+                      </View>
                     ) : (
                       <View style={{ flexDirection: "row", gap: 6 }}>
                         {b.paymentStatus === "WAITING_VERIFICATION" && (
@@ -1228,6 +1336,97 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
                 <TextInput style={styles.formInput} value={formImgUrl} onChangeText={setFormImgUrl} placeholder="https://..." />
               </View>
 
+              {/* Pengaturan Ketersediaan, Kapasitas & Jadwal Sistem */}
+              <View style={{ backgroundColor: "#F0FDF4", padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#BBF7D0", marginVertical: 8 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#166534", marginBottom: 8 }}>
+                  ⚙️ Pengaturan Unit, Kapasitas & Ketersediaan Sistem
+                </Text>
+
+                <View style={styles.formRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.formLabel}>Jumlah Unit Alat *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={formTotalUnits}
+                      onChangeText={setFormTotalUnits}
+                      placeholder="4"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.formLabel}>Kapasitas Batch (kg) *</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      value={formMaxBatchCapacityKg}
+                      onChangeText={setFormMaxBatchCapacityKg}
+                      placeholder="6000"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                <View style={{ marginTop: 8 }}>
+                  <Text style={styles.formLabel}>Status Kesediaan Sistem / Fasilitas</Text>
+                  <View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
+                    {[
+                      { key: "OPERATIONAL", label: "🟢 Beroperasi" },
+                      { key: "MAINTENANCE", label: "🟡 Maintenance" },
+                      { key: "OFFLINE", label: "🔴 Offline" },
+                    ].map((st) => (
+                      <TouchableOpacity
+                        key={st.key}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          borderRadius: 8,
+                          alignItems: "center",
+                          backgroundColor: formSystemStatus === st.key ? "#0D7A53" : "#FFFFFF",
+                          borderWidth: 1,
+                          borderColor: formSystemStatus === st.key ? "#0D7A53" : "#CBD5E1",
+                        }}
+                        onPress={() => setFormSystemStatus(st.key as any)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: formSystemStatus === st.key ? "#FFFFFF" : "#475569",
+                          }}
+                        >
+                          {st.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {formSystemStatus !== "OPERATIONAL" && (
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={styles.formLabel}>Catatan Pemeliharaan / Alasan Tutup</Text>
+                    <TextInput
+                      style={[styles.formInput, { height: 44 }]}
+                      value={formMaintenanceNote}
+                      onChangeText={setFormMaintenanceNote}
+                      placeholder="Contoh: Pemeliharaan turbin panas bumi & kalibrasi sensor suhu"
+                    />
+                  </View>
+                )}
+
+                <View style={{ marginTop: 8 }}>
+                  <Text style={styles.formLabel}>Tanggal Ditutup / Blackout (YYYY-MM-DD)</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={formBlackoutDates}
+                    onChangeText={setFormBlackoutDates}
+                    placeholder="Contoh: 2026-12-25, 2026-12-31 (pisahkan koma)"
+                  />
+                  <Text style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>
+                    Tanggal yang dimasukkan otomatis diblokir dari pilihan booking customer.
+                  </Text>
+                </View>
+              </View>
+
               <View style={styles.configSwitchRow}>
                 <Text style={styles.configSwitchLabel}>Status Ketersediaan (Tersedia / Booking)</Text>
                 <Switch value={formIsAvailable} onValueChange={setFormIsAvailable} />
@@ -1455,8 +1654,8 @@ export const AdminGeoDirectSection: React.FC<AdminGeoDirectSectionProps> = ({ au
               {actionType === "APPROVE_BOOKING"
                 ? "Persetujuan Penyewaan Alat"
                 : actionType === "REJECT_PAYMENT"
-                ? "Alasan Penolakan Bukti Pembayaran"
-                : "Alasan Penolakan / Catatan Revisi"}
+                  ? "Alasan Penolakan Bukti Pembayaran"
+                  : "Alasan Penolakan / Catatan Revisi"}
             </Text>
 
             <TextInput
@@ -1914,12 +2113,26 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#0D7A53",
   },
-  btnInvoiceSmall: {
+  btnProgressSmall: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     backgroundColor: "#0D7A53",
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  btnProgressSmallText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  btnInvoiceSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#0284C7",
+    paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 6,
   },

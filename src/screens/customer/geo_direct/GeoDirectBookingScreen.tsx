@@ -48,8 +48,10 @@ import {
   calculateRentalPrice,
   createBooking,
   fetchCustomerDpBalance,
+  fetchDryhouseAvailability,
   GeoDirectEquipment,
   GeoDirectPricingCalculation,
+  GeoDirectDryhouseAvailability,
 } from "../../../services/geoDirectService";
 import { rp } from "../../../utils/formatters";
 
@@ -139,8 +141,20 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
   const isDryhouse = equipment?.facilityType === "DRYHOUSE" || equipment?.code === "EQ-01";
   const [productType, setProductType] = useState("Kopi Arabika");
   const [rawMaterialKg, setRawMaterialKg] = useState(() =>
-    routeParams?.initialVolumeKg ? String(routeParams.initialVolumeKg) : "500"
+    routeParams?.initialVolumeKg ? String(routeParams.initialVolumeKg) : "100"
   );
+
+  useEffect(() => {
+    if (routeParams?.initialVolumeKg) {
+      setRawMaterialKg(String(routeParams.initialVolumeKg));
+    }
+  }, [routeParams?.initialVolumeKg]);
+
+  useEffect(() => {
+    if (routeParams?.initialDryingMethod) {
+      setDryingMethod(routeParams.initialDryingMethod);
+    }
+  }, [routeParams?.initialDryingMethod]);
   const [processDetails, setProcessDetails] = useState("");
   const [customParamAnswers, setCustomParamAnswers] = useState<Record<string, any>>({});
 
@@ -152,6 +166,11 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
   const [pricingCalc, setPricingCalc] = useState<GeoDirectPricingCalculation | null>(null);
   const [calcLoading, setCalcLoading] = useState(false);
 
+  // Real-time Availability & Quota State
+  const [availability, setAvailability] = useState<GeoDirectDryhouseAvailability | null>(null);
+  const [availLoading, setAvailLoading] = useState(false);
+  const [monthAvailMap, setMonthAvailMap] = useState<Record<string, any>>({});
+
   // Multi-step booking state:
   // Step 1: Hitung Volume & Biaya (Kalkulator Geser - Prioritas Utama)
   // Step 2: Formulir Identitas Customer & Jadwal Sewa
@@ -161,15 +180,16 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
 
   const volumeKg = useMemo(() => {
     const val = parseFloat(rawMaterialKg);
-    return isNaN(val) ? 500 : val;
+    return isNaN(val) ? 100 : val;
   }, [rawMaterialKg]);
 
   const sliderFillPercent = useMemo(() => {
+    if (!rawMaterialKg.trim()) return 0;
     const min = 100;
     const max = 6000;
     const clamped = Math.min(Math.max(volumeKg, min), max);
     return ((clamped - min) / (max - min)) * 100;
-  }, [volumeKg]);
+  }, [volumeKg, rawMaterialKg]);
 
   const updateVolumeFromRatio = (ratio: number) => {
     const min = 100;
@@ -185,6 +205,13 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
   };
 
   const handleNextToStep2 = () => {
+    if (!rawMaterialKg.trim()) {
+      Alert.alert(
+        "Volume Belum Diisi",
+        "Silakan masukkan volume kopi cherry terlebih dahulu (minimal 100 kg)."
+      );
+      return;
+    }
     const kg = parseFloat(rawMaterialKg);
     if (isNaN(kg) || kg < 1) {
       Alert.alert("Volume Tidak Valid", "Silakan masukkan volume kopi cherry yang valid.");
@@ -296,7 +323,58 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
     return () => clearTimeout(timer);
   }, [equipment, durationDays, rawMaterialKg, productType, customParamAnswers]);
 
+  // 1. Live availability check for selected date range & volume
+  useEffect(() => {
+    if (!isDryhouse) return;
+    const kg = parseFloat(rawMaterialKg) || 0;
+
+    const timer = setTimeout(async () => {
+      try {
+        setAvailLoading(true);
+        const res = await fetchDryhouseAvailability({
+          startDate: startDateStr,
+          endDate: endDateStr,
+          requestedKg: kg,
+        });
+        setAvailability(res);
+      } catch (err) {
+        console.warn("Failed to fetch availability:", err);
+      } finally {
+        setAvailLoading(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [isDryhouse, startDateStr, endDateStr, rawMaterialKg]);
+
+  // 2. Fetch monthly calendar availability map when calendar picker is opened or month changes
+  useEffect(() => {
+    if (!isDryhouse || !isDatePickerOpen) return;
+    const monthStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
+    (async () => {
+      try {
+        const res = await fetchDryhouseAvailability({
+          month: monthStr,
+        });
+        if (res?.dailyMap) {
+          setMonthAvailMap(res.dailyMap);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch monthly availability:", err);
+      }
+    })();
+  }, [isDryhouse, isDatePickerOpen, calYear, calMonth]);
+
   const handleSubmit = async () => {
+    if (availability && availability.isDateAvailable === false) {
+      Alert.alert(
+        "Kapasitas Tidak Mencukupi / Jadwal Penuh",
+        availability.unavailableReason ||
+          `Sisa kapasitas untuk jadwal tersebut adalah ${availability.remainingCapacityKg.toLocaleString("id-ID")} kg. Silakan sesuaikan volume atau pilih tanggal lain.`
+      );
+      return;
+    }
+
     if (!custName.trim() || !custPhone.trim()) {
       Alert.alert("Identitas Belum Lengkap", "Nama dan Nomor Telepon pemohon wajib diisi.");
       return;
@@ -441,7 +519,7 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
         <View style={styles.topBarTitleBox}>
           <Text style={styles.topBarTitle}>Formulir Sewa Alat</Text>
           <Text style={styles.topBarSubtitle}>
-            {equipment.name} ({equipment.code}) • {bookingStep === 1 ? "1. Hitung Volume" : "2. Formulir Data Diri"}
+            {equipment.name} ({equipment.code}) • {bookingStep === 1 ? "Hitung Volume" : "Data Diri"}
           </Text>
         </View>
       </View>
@@ -461,8 +539,8 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                 <Text style={styles.stepNumberTextActive}>1</Text>
               )}
             </View>
-            <Text style={bookingStep === 1 ? styles.stepLabelActive : styles.stepLabelDone}>
-              1. Hitung Volume
+            <Text style={bookingStep === 1 ? styles.stepLabelActive : styles.stepLabelDone} numberOfLines={1}>
+              Hitung Volume
             </Text>
           </TouchableOpacity>
 
@@ -480,8 +558,8 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
             <View style={bookingStep === 2 ? styles.stepNumberActive : styles.stepNumberInactive}>
               <Text style={bookingStep === 2 ? styles.stepNumberTextActive : styles.stepNumberTextInactive}>2</Text>
             </View>
-            <Text style={bookingStep === 2 ? styles.stepLabelActive : styles.stepLabelInactive}>
-              2. Formulir Data Diri
+            <Text style={bookingStep === 2 ? styles.stepLabelActive : styles.stepLabelInactive} numberOfLines={1}>
+              Data Diri
             </Text>
           </TouchableOpacity>
 
@@ -491,7 +569,9 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
             <View style={styles.stepNumberInactive}>
               <Text style={styles.stepNumberTextInactive}>3</Text>
             </View>
-            <Text style={styles.stepLabelInactive}>3. Bayar DP</Text>
+            <Text style={styles.stepLabelInactive} numberOfLines={1}>
+              Bayar DP
+            </Text>
           </View>
         </View>
 
@@ -534,23 +614,38 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
               </View>
 
               {/* Prominent Volume Display & Synchronized Manual Input */}
-              <View style={styles.volumeDisplayRow}>
-                <View>
-                  <Text style={styles.volumeDisplaySmall}>Volume Kopi Cherry</Text>
-                  <Text style={styles.volumeDisplayValue}>{volumeKg.toLocaleString("id-ID")} kg</Text>
-                </View>
-                <View style={styles.volumeInputWrapper}>
-                  <Text style={styles.volumeInputPrefix}>Input Manual:</Text>
-                  <TextInput
-                    style={styles.volumeInputField}
-                    value={rawMaterialKg}
-                    onChangeText={(txt) => setRawMaterialKg(txt.replace(/[^0-9]/g, ""))}
-                    keyboardType="numeric"
-                    placeholder="500"
-                  />
-                  <Text style={styles.volumeInputSuffix}>kg Cherry</Text>
+              <View style={styles.volumeDisplayHeaderRow}>
+                <Text style={styles.volumeDisplaySmall}>Volume Kopi Cherry</Text>
+                <View style={styles.volumeDisplayBadge}>
+                  <Text style={styles.volumeDisplayBadgeText}>
+                    {rawMaterialKg ? `${volumeKg.toLocaleString("id-ID")} kg` : "— kg"}
+                  </Text>
                 </View>
               </View>
+
+              <View style={styles.volumeInputWrapper}>
+                <Text style={styles.volumeInputPrefix}>Input Manual:</Text>
+                <TextInput
+                  style={styles.volumeInputField}
+                  value={rawMaterialKg}
+                  onChangeText={(txt) => setRawMaterialKg(txt.replace(/[^0-9]/g, ""))}
+                  keyboardType="numeric"
+                  placeholder=""
+                  placeholderTextColor="#94A3B8"
+                  selectTextOnFocus
+                />
+                <Text style={styles.volumeInputSuffix}>kg Cherry</Text>
+              </View>
+
+              {/* Inline warning alert if volume is 0 or < 100 kg */}
+              {isDryhouse && rawMaterialKg !== "" && parseInt(rawMaterialKg, 10) < 100 && (
+                <View style={styles.errorInlineBox}>
+                  <AlertCircle size={14} color="#DC2626" />
+                  <Text style={styles.errorInlineText}>
+                    Minimal volume pemesanan fasilitas Dry House adalah 100 kg kopi cherry.
+                  </Text>
+                </View>
+              )}
 
               {/* SLIDER GESER INTERAKTIF */}
               <View
@@ -563,15 +658,19 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                     min={isDryhouse ? "100" : "10"}
                     max={isDryhouse ? "6000" : "10000"}
                     step="50"
-                    value={volumeKg}
+                    value={!rawMaterialKg.trim() ? (isDryhouse ? 100 : 10) : volumeKg}
                     onChange={(e) => {
                       setRawMaterialKg(e.target.value);
                     }}
                     style={{
                       width: "100%",
-                      height: 10,
-                      borderRadius: 5,
+                      height: 8,
+                      borderRadius: 4,
                       appearance: "none",
+                      WebkitAppearance: "none",
+                      background: !rawMaterialKg.trim()
+                        ? "#CBD5E1"
+                        : `linear-gradient(to right, #0D7A53 0%, #0D7A53 ${sliderFillPercent}%, #CBD5E1 ${sliderFillPercent}%, #CBD5E1 100%)`,
                       outline: "none",
                       cursor: "pointer",
                       accentColor: "#0D7A53",
@@ -598,16 +697,15 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                 )}
 
                 <View style={styles.sliderScaleRow}>
-                  <Text style={styles.scaleText}>100 kg</Text>
-                  <Text style={styles.scaleText}>Default: 500 kg</Text>
-                  <Text style={styles.scaleText}>Maks: 6.000 kg</Text>
+                  <Text style={styles.scaleText}>Minimal: {isDryhouse ? "100 kg" : "10 kg"}</Text>
+                  <Text style={styles.scaleText}>Maksimal: {isDryhouse ? "6.000 kg" : "10.000 kg"}</Text>
                 </View>
               </View>
 
               {/* Quick Select Buttons */}
               <View style={styles.quickChipsGrid}>
                 {[100, 250, 500, 1000, 2500, 6000].map((stepVal) => {
-                  const isSelected = volumeKg === stepVal;
+                  const isSelected = rawMaterialKg !== "" && volumeKg === stepVal;
                   return (
                     <TouchableOpacity
                       key={stepVal}
@@ -760,7 +858,9 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                 <View style={styles.pricingRows}>
                   <View style={styles.calcRow}>
                     <Text style={styles.calcLabel}>Volume Kopi Cherry</Text>
-                    <Text style={styles.calcVal}>{volumeKg.toLocaleString("id-ID")} kg</Text>
+                    <Text style={styles.calcVal}>
+                      {!rawMaterialKg.trim() ? "—" : `${volumeKg.toLocaleString("id-ID")} kg`}
+                    </Text>
                   </View>
                   <View style={styles.calcRow}>
                     <Text style={styles.calcLabel}>Tarif Terjadwal ({pricingCalc.occupancyTierLabel || "Okupansi Rendah"})</Text>
@@ -777,7 +877,9 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
 
                   <View style={[styles.calcRow, styles.calcRowTotal]}>
                     <Text style={styles.calcLabelTotal}>Total Estimasi Biaya Sewa</Text>
-                    <Text style={styles.calcValTotal}>{rp(pricingCalc.totalRentalCost)}</Text>
+                    <Text style={styles.calcValTotal}>
+                      {!rawMaterialKg.trim() ? "—" : rp(pricingCalc.totalRentalCost)}
+                    </Text>
                   </View>
 
                   <View style={styles.dividerDashed} />
@@ -787,7 +889,9 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                       <Text style={styles.calcLabelHighlight}>Down Payment (DP 30%)</Text>
                       <Text style={{ fontSize: 10, color: "#065F46" }}>Dibayar untuk konfirmasi jadwal batch</Text>
                     </View>
-                    <Text style={styles.calcValHighlight}>{rp(pricingCalc.requiredDpAmount)}</Text>
+                    <Text style={styles.calcValHighlight}>
+                      {!rawMaterialKg.trim() ? "—" : rp(pricingCalc.requiredDpAmount)}
+                    </Text>
                   </View>
                 </View>
               ) : (
@@ -968,6 +1072,55 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                 </Text>
               </View>
 
+              {/* LIVE AVAILABILITY & QUOTA STATUS BANNER */}
+              {isDryhouse && (
+                <View
+                  style={[
+                    styles.availCard,
+                    availability?.isDateAvailable === false
+                      ? styles.availCardError
+                      : styles.availCardSuccess,
+                  ]}
+                >
+                  {availLoading ? (
+                    <View style={styles.availLoadingRow}>
+                      <ActivityIndicator size="small" color="#0D7A53" />
+                      <Text style={styles.availLoadingText}>Memeriksa kuota & kesediaan slot...</Text>
+                    </View>
+                  ) : availability?.isDateAvailable === false ? (
+                    <View>
+                      <View style={styles.availHeaderRow}>
+                        <AlertCircle size={16} color="#DC2626" />
+                        <Text style={styles.availTitleError}>Kapasitas Tidak Cukup / Jadwal Penuh</Text>
+                        <View style={styles.badgeFull}>
+                          <Text style={styles.badgeFullText}>Penuh / Ditutup</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.availDescError}>
+                        {availability.unavailableReason ||
+                          `Sisa kuota hanya ${availability.remainingCapacityKg.toLocaleString("id-ID")} kg. Kurangi volume atau pilih tanggal lain.`}
+                      </Text>
+                      <Text style={styles.availSubText}>
+                        Sisa Kuota: {availability.remainingCapacityKg.toLocaleString("id-ID")} kg • Kebutuhan Anda: {volumeKg.toLocaleString("id-ID")} kg
+                      </Text>
+                    </View>
+                  ) : (
+                    <View>
+                      <View style={styles.availHeaderRow}>
+                        <CheckCircle2 size={16} color="#0D7A53" />
+                        <Text style={styles.availTitleSuccess}>Jadwal & Kuota Tersedia</Text>
+                        <View style={styles.badgeAvailable}>
+                          <Text style={styles.badgeAvailableText}>Slot Aman</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.availDescSuccess}>
+                        Sisa kuota batch: <Text style={{ fontWeight: "700" }}>{(availability?.remainingCapacityKg ?? 6000).toLocaleString("id-ID")} kg</Text> (Terisi: {(availability?.bookedCapacityKg ?? availability?.currentOccupancyKg ?? 0).toLocaleString("id-ID")} kg • Okupansi {availability?.occupancyPercent ?? 0}%)
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Tujuan Penggunaan Alat *</Text>
                 <TextInput
@@ -1120,7 +1273,7 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                 onPress={handleBackToStep1}
                 activeOpacity={0.8}
               >
-                <ChevronLeft size={18} color="#0D7A53" />
+                <ChevronLeft size={16} color="#0D7A53" />
                 <Text style={styles.btnBackToCalcText}>Kalkulator</Text>
               </TouchableOpacity>
 
@@ -1134,8 +1287,10 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <Text style={styles.btnSubmitFinalText}>Konfirmasi Booking & Bayar DP</Text>
-                    <ChevronRight size={18} color="#FFFFFF" />
+                    <Text style={styles.btnSubmitFinalText} numberOfLines={1}>
+                      Konfirmasi & Bayar DP
+                    </Text>
+                    <ChevronRight size={16} color="#FFFFFF" />
                   </>
                 )}
               </TouchableOpacity>
@@ -1181,25 +1336,97 @@ export const GeoDirectBookingScreen: React.FC<GeoDirectBookingScreenProps> = ({
                 ))}
               </View>
 
-              {/* Day Grid */}
+              {/* Day Grid with Live Availability Indicators */}
               <View style={styles.m3DaysGrid}>
                 {/* Empty cells before first day */}
                 {Array.from({ length: firstDayOfMonth }, (_, i) => (
                   <View key={`empty-${i}`} style={styles.m3DayCellEmpty} />
                 ))}
                 {/* Days in Month */}
-                {Array.from({ length: totalDaysInMonth }, (_, i) => i + 1).map((dayNum) => (
-                  <TouchableOpacity
-                    key={dayNum}
-                    style={[styles.m3DayCell, selectedDay === dayNum && styles.m3DayCellSelected]}
-                    onPress={() => setSelectedDay(dayNum)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.m3DayNumText, selectedDay === dayNum && styles.m3DayNumTextSelected]}>
-                      {dayNum}
+                {Array.from({ length: totalDaysInMonth }, (_, i) => i + 1).map((dayNum) => {
+                  const dStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+                  const dayAvail = monthAvailMap[dStr];
+                  const isDayFull = dayAvail && dayAvail.remainingKg < 100;
+                  const isDayMaint = dayAvail && dayAvail.isMaintenance;
+
+                  return (
+                    <TouchableOpacity
+                      key={dayNum}
+                      style={[
+                        styles.m3DayCell,
+                        selectedDay === dayNum && styles.m3DayCellSelected,
+                        isDayFull && styles.m3DayCellFull,
+                        isDayMaint && styles.m3DayCellMaint,
+                      ]}
+                      onPress={() => setSelectedDay(dayNum)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.m3DayNumText,
+                          selectedDay === dayNum && styles.m3DayNumTextSelected,
+                          isDayFull && styles.m3DayNumTextFull,
+                          isDayMaint && styles.m3DayNumTextMaint,
+                        ]}
+                      >
+                        {dayNum}
+                      </Text>
+                      {dayAvail && (
+                        <View
+                          style={[
+                            styles.dayStatusDot,
+                            isDayMaint
+                              ? { backgroundColor: "#F59E0B" }
+                              : isDayFull
+                              ? { backgroundColor: "#DC2626" }
+                              : dayAvail.occupancyPercent > 0
+                              ? { backgroundColor: "#EAB308" }
+                              : { backgroundColor: "#16A34A" },
+                          ]}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Selected Day Availability Preview Banner */}
+              {(() => {
+                const selectedDStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`;
+                const selAvail = monthAvailMap[selectedDStr];
+                return (
+                  <View style={styles.calendarDayStatusBanner}>
+                    <Text style={styles.calendarDayStatusText}>
+                      {selAvail?.isMaintenance
+                        ? "⚠️ Tanggal ini dalam masa pemeliharaan PGE"
+                        : selAvail?.remainingKg !== undefined && selAvail.remainingKg < 100
+                        ? "🔴 Kuota Penuh (0 kg sisa kapasitas)"
+                        : selAvail
+                        ? `🟢 Sisa Kuota: ${selAvail.remainingKg.toLocaleString("id-ID")} kg (Terisi ${selAvail.bookedKg.toLocaleString("id-ID")} kg)`
+                        : "🟢 Kuota Tersedia (Batch Standar 6.000 kg)"}
                     </Text>
-                  </TouchableOpacity>
-                ))}
+                  </View>
+                );
+              })()}
+
+              {/* Legend Row */}
+              <View style={styles.calendarLegendRow}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: "#16A34A" }]} />
+                  <Text style={styles.legendText}>Tersedia</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: "#EAB308" }]} />
+                  <Text style={styles.legendText}>Terisi Sebagian</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: "#DC2626" }]} />
+                  <Text style={styles.legendText}>Penuh (0 kg)</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: "#F59E0B" }]} />
+                  <Text style={styles.legendText}>Libur/Maint</Text>
+                </View>
               </View>
             </View>
 
@@ -1295,7 +1522,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "#FFFFFF",
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
@@ -1304,12 +1532,30 @@ const styles = StyleSheet.create({
   stepItemActive: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
+    flexShrink: 0,
   },
   stepItemDone: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
+    flexShrink: 0,
+  },
+  stepItemInactive: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    flexShrink: 0,
+  },
+  stepDivider: {
+    flex: 1,
+    height: 1.5,
+    backgroundColor: "#E2E8F0",
+    marginHorizontal: 6,
+  },
+  stepDividerDone: {
+    backgroundColor: "#0D7A53",
+    height: 2,
   },
   stepNumberActive: {
     width: 22,
@@ -1344,11 +1590,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#0D7A53",
   },
-  stepItemInactive: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
   stepNumberInactive: {
     width: 22,
     height: 22,
@@ -1367,15 +1608,7 @@ const styles = StyleSheet.create({
   stepLabelInactive: {
     fontSize: 11,
     color: "#64748B",
-  },
-  stepDivider: {
-    width: 14,
-    height: 1,
-    backgroundColor: "#CBD5E1",
-  },
-  stepDividerDone: {
-    backgroundColor: "#0D7A53",
-    height: 2,
+    fontWeight: "600",
   },
   cardSection: {
     backgroundColor: "#FFFFFF",
@@ -1650,57 +1883,75 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 17,
   },
-  volumeDisplayRow: {
+  volumeDisplayHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginBottom: 14,
+    marginBottom: 8,
   },
   volumeDisplaySmall: {
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#64748B",
-    textTransform: "uppercase",
+    color: "#1E293B",
   },
-  volumeDisplayValue: {
-    fontSize: 20,
-    fontWeight: "900",
+  volumeDisplayBadge: {
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  volumeDisplayBadgeText: {
+    fontSize: 14,
+    fontWeight: "800",
     color: "#0D7A53",
-    marginTop: 2,
   },
   volumeInputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 10,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#CBD5E1",
+    marginBottom: 12,
+  },
+  errorInlineBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  errorInlineText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#DC2626",
+    flex: 1,
+    lineHeight: 15,
   },
   volumeInputPrefix: {
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 12,
     color: "#64748B",
+    marginRight: 8,
   },
   volumeInputField: {
-    width: 60,
-    fontSize: 13,
-    fontWeight: "800",
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "700",
     color: "#0F172A",
-    textAlign: "center",
-    padding: 0,
+    paddingVertical: 2,
   },
   volumeInputSuffix: {
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 12,
     color: "#64748B",
+    fontWeight: "600",
   },
   sliderTrackContainer: {
     marginBottom: 14,
@@ -1733,12 +1984,14 @@ const styles = StyleSheet.create({
   sliderScaleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 6,
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 4,
   },
   scaleText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
   },
   quickChipsGrid: {
     flexDirection: "row",
@@ -1844,16 +2097,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    marginTop: 8,
+    marginBottom: 24,
   },
   btnBackToCalc: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    height: 48,
     borderRadius: 12,
     backgroundColor: "#FFFFFF",
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: "#CBD5E1",
   },
   btnBackToCalcText: {
@@ -1866,9 +2122,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 6,
     backgroundColor: "#0D7A53",
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    height: 48,
     borderRadius: 12,
     shadowColor: "#0D7A53",
     shadowOpacity: 0.2,
@@ -1876,7 +2133,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   btnSubmitFinalText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: "700",
     color: "#FFFFFF",
   },
@@ -2053,6 +2310,144 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  availCard: {
+    marginTop: 12,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  availCardSuccess: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#86EFAC",
+  },
+  availCardError: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  availLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 4,
+  },
+  availLoadingText: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  availHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  availTitleSuccess: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#166534",
+    flex: 1,
+  },
+  availTitleError: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#991B1B",
+    flex: 1,
+  },
+  badgeAvailable: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  badgeAvailableText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#15803D",
+  },
+  badgeFull: {
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  badgeFullText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#B91C1C",
+  },
+  availDescSuccess: {
+    fontSize: 12,
+    color: "#14532D",
+    lineHeight: 18,
+  },
+  availDescError: {
+    fontSize: 12,
+    color: "#7F1D1D",
+    lineHeight: 18,
+  },
+  availSubText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#991B1B",
+    marginTop: 4,
+  },
+  m3DayCellFull: {
+    backgroundColor: "#FEE2E2",
+  },
+  m3DayCellMaint: {
+    backgroundColor: "#FEF3C7",
+  },
+  m3DayNumTextFull: {
+    color: "#DC2626",
+    fontWeight: "700",
+  },
+  m3DayNumTextMaint: {
+    color: "#D97706",
+    fontWeight: "700",
+  },
+  dayStatusDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 2,
+  },
+  calendarDayStatusBanner: {
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+  },
+  calendarDayStatusText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  calendarLegendRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  legendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  legendText: {
+    fontSize: 10,
+    color: "#64748B",
   },
 });
 

@@ -10,7 +10,7 @@ const INDICATIVE_DRYHOUSE_HPP_PER_KG = 377;
 const DRYHOUSE_BASE_RATE_PER_KG = 1000;
 const DRYHOUSE_TOTAL_CAPACITY_KG = 6000;
 const DRYHOUSE_MIN_VOLUME_KG = 100;
-const DRYHOUSE_DEFAULT_VOLUME_KG = 500;
+const DRYHOUSE_DEFAULT_VOLUME_KG = 100;
 
 function getDryhouseTierInfo(occupancyPercent) {
   const occ = Math.max(0, Math.min(100, Number(occupancyPercent) || 0));
@@ -132,6 +132,7 @@ function calculateRentalCost(equipment = {}, options = {}) {
   // If formula is DRYHOUSE_TIERED or options request dryhouse tiered pricing
   if (
     equipment.pricingFormulaType === "DRYHOUSE_TIERED" ||
+    (equipment.facilityType === "DRYHOUSE" && equipment.pricingFormulaType !== "STANDARD_DAILY") ||
     options.formulaType === "DRYHOUSE_TIERED" ||
     options.isDryhouse === true
   ) {

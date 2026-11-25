@@ -32,6 +32,11 @@ export interface GeoDirectEquipment {
   function: string;
   capacity: string;
   maxCapacityKgPerDay?: number;
+  totalUnits?: number;
+  maxBatchCapacityKg?: number;
+  systemStatus?: "OPERATIONAL" | "MAINTENANCE" | "OFFLINE";
+  maintenanceNote?: string;
+  blackoutDates?: string[];
   rentalTerms: string;
   imageUrl?: string;
   isAvailable: boolean;
@@ -98,10 +103,33 @@ export interface GeoDirectDryingProgress {
 export interface GeoDirectDryhouseAvailability {
   totalUnits: number;
   maxCapacityKg: number;
+  totalMaxCapacityKg?: number;
   minVolumeKg: number;
   currentOccupancyKg: number;
+  bookedCapacityKg?: number;
   remainingCapacityKg: number;
   occupancyPercent: number;
+  systemStatus?: "OPERATIONAL" | "MAINTENANCE" | "OFFLINE";
+  isSystemAvailable?: boolean;
+  isDateAvailable?: boolean;
+  unavailableReason?: string;
+  maintenanceNote?: string;
+  blackoutDates?: string[];
+  targetDate?: string;
+  startDate?: string;
+  endDate?: string;
+  dailyMap?: Record<
+    string,
+    {
+      date: string;
+      bookedKg: number;
+      remainingKg: number;
+      occupancyPercent: number;
+      isAvailable: boolean;
+      isFull: boolean;
+      isMaintenance: boolean;
+    }
+  >;
   activeOccupancyTier: {
     occupancyRange: string;
     discountPercent: number;
@@ -109,7 +137,7 @@ export interface GeoDirectDryhouseAvailability {
     tierKey: string;
   };
   facilityStatus: string;
-  availableScheduleSummary: string;
+  availableScheduleSummary?: string;
   activeBookingsCount: number;
 }
 
@@ -459,8 +487,31 @@ export async function resubmitBooking(
   });
 }
 
-export async function fetchDryhouseAvailability(date?: string): Promise<GeoDirectDryhouseAvailability> {
-  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+export interface FetchDryhouseAvailabilityParams {
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  month?: string;
+  requestedKg?: number;
+}
+
+export async function fetchDryhouseAvailability(
+  params?: string | FetchDryhouseAvailabilityParams
+): Promise<GeoDirectDryhouseAvailability> {
+  let query = "";
+  if (typeof params === "string") {
+    query = `?date=${encodeURIComponent(params)}`;
+  } else if (params && typeof params === "object") {
+    const qParts: string[] = [];
+    if (params.date) qParts.push(`date=${encodeURIComponent(params.date)}`);
+    if (params.startDate) qParts.push(`startDate=${encodeURIComponent(params.startDate)}`);
+    if (params.endDate) qParts.push(`endDate=${encodeURIComponent(params.endDate)}`);
+    if (params.month) qParts.push(`month=${encodeURIComponent(params.month)}`);
+    if (params.requestedKg) qParts.push(`requestedKg=${encodeURIComponent(params.requestedKg)}`);
+    if (qParts.length > 0) {
+      query = `?${qParts.join("&")}`;
+    }
+  }
   return await apiRequest<GeoDirectDryhouseAvailability>(`/geo-direct/dryhouse/availability${query}`);
 }
 

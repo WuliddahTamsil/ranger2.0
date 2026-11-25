@@ -52,6 +52,26 @@ const geoDirectEquipmentSchema = new mongoose.Schema(
       type: Number,
       default: 10000, // 10 Ton per hari
     },
+    totalUnits: {
+      type: Number,
+      default: 4, // 4 Unit Dryhouse
+    },
+    maxBatchCapacityKg: {
+      type: Number,
+      default: 6000, // 6.000 kg total kapasitas batch
+    },
+    systemStatus: {
+      type: String,
+      enum: ["OPERATIONAL", "MAINTENANCE", "OFFLINE"],
+      default: "OPERATIONAL",
+    },
+    maintenanceNote: {
+      type: String,
+      default: "",
+    },
+    blackoutDates: [{
+      type: String, // "YYYY-MM-DD" tanggal libur / pemeliharaan sistem
+    }],
     rentalTerms: {
       type: String,
       default: "1. Mematuhi SOP PGE Kamojang.\n2. Wajib membawa Nota Persetujuan resmi saat pengambilan alat.\n3. Pembayaran DP diverifikasi oleh Admin.",

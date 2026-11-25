@@ -24,6 +24,7 @@ import {
   Platform,
   TextInput,
   PanResponder,
+  Alert,
 } from "react-native";
 import {
   ArrowLeft,
@@ -45,6 +46,7 @@ import {
   FileSpreadsheet,
   ArrowRight,
   TrendingUp,
+  AlertCircle,
 } from "lucide-react-native";
 import { Nav } from "../../../types";
 import {
@@ -58,6 +60,8 @@ import { rp } from "../../../utils/formatters";
 interface GeoDirectDetailScreenProps extends Nav {
   routeParams?: {
     equipmentId?: string;
+    initialTab?: string;
+    initialVolumeKg?: number;
   };
 }
 
@@ -151,9 +155,14 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
   // Drying Method Selection
   const [selectedMethod, setSelectedMethod] = useState<string>("Geothermal Wash");
 
-  // Calculator State
-  const [volumeKg, setVolumeKg] = useState<number>(500);
-  const [volumeInputText, setVolumeInputText] = useState<string>("500");
+  // Calculator State (Default 100 kg - Batas Minimal)
+  const [volumeKg, setVolumeKg] = useState<number>(() =>
+    routeParams?.initialVolumeKg ? Number(routeParams.initialVolumeKg) : 100
+  );
+  const [volumeInputText, setVolumeInputText] = useState<string>(() =>
+    routeParams?.initialVolumeKg ? String(routeParams.initialVolumeKg) : "100"
+  );
+  const [volumeError, setVolumeError] = useState<string | null>(null);
   const [selectedTierKey, setSelectedTierKey] = useState<OccupancyTierKey>("0_30");
   const [sliderWidth, setSliderWidth] = useState<number>(300);
 
@@ -161,6 +170,74 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
   const [activeTab, setActiveTab] = useState<"OVERVIEW" | "CALCULATOR" | "TRACKING" | "REPORT">(
     "OVERVIEW"
   );
+
+  // Auto-scroll Refs & Section Offsets
+  const scrollViewRef = useRef<ScrollView>(null);
+  const tabBarScrollRef = useRef<ScrollView>(null);
+  const isAutoScrolling = useRef(false);
+  const autoScrollTimer = useRef<any>(null);
+
+  const sectionOffsets = useRef<Record<string, number>>({
+    OVERVIEW: 0,
+    CALCULATOR: 680,
+    TRACKING: 1550,
+    REPORT: 2200,
+  });
+
+  const tabOffsetsX = useRef<Record<string, number>>({
+    OVERVIEW: 0,
+    CALCULATOR: 80,
+    TRACKING: 220,
+    REPORT: 340,
+  });
+
+  const updateSectionOffset = (key: string, y: number) => {
+    sectionOffsets.current[key] = y;
+  };
+
+  const handleTabPress = (tabKey: "OVERVIEW" | "CALCULATOR" | "TRACKING" | "REPORT") => {
+    setActiveTab(tabKey);
+    const targetY = sectionOffsets.current[tabKey] ?? 0;
+
+    isAutoScrolling.current = true;
+    if (autoScrollTimer.current) clearTimeout(autoScrollTimer.current);
+    autoScrollTimer.current = setTimeout(() => {
+      isAutoScrolling.current = false;
+    }, 700);
+
+    // Scroll vertical page content smoothly to target section
+    if (scrollViewRef.current) {
+      const finalY = Math.max(0, targetY - 6);
+      scrollViewRef.current.scrollTo({ y: finalY, animated: true });
+    }
+
+    // Scroll horizontal tab bar to keep active tab comfortably visible
+    if (tabBarScrollRef.current) {
+      const targetX = tabOffsetsX.current[tabKey] ?? 0;
+      tabBarScrollRef.current.scrollTo({ x: Math.max(0, targetX - 20), animated: true });
+    }
+  };
+
+  const handleScroll = (event: any) => {
+    if (isAutoScrolling.current) return;
+    const scrollY = event.nativeEvent.contentOffset.y;
+    const offsets = sectionOffsets.current;
+
+    // Buffer thresholds to trigger active tab indicator as user scrolls
+    const calcY = (offsets.CALCULATOR || 680) - 80;
+    const trackY = (offsets.TRACKING || 1550) - 80;
+    const repY = (offsets.REPORT || 2200) - 80;
+
+    if (scrollY >= repY && offsets.REPORT) {
+      if (activeTab !== "REPORT") setActiveTab("REPORT");
+    } else if (scrollY >= trackY && offsets.TRACKING) {
+      if (activeTab !== "TRACKING") setActiveTab("TRACKING");
+    } else if (scrollY >= calcY && offsets.CALCULATOR) {
+      if (activeTab !== "CALCULATOR") setActiveTab("CALCULATOR");
+    } else {
+      if (activeTab !== "OVERVIEW") setActiveTab("OVERVIEW");
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -186,37 +263,78 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
         console.warn("Failed to fetch Dryhouse details:", err);
       } finally {
         setLoading(false);
+        if (routeParams?.initialTab) {
+          setTimeout(() => {
+            handleTabPress(routeParams.initialTab as any);
+          }, 200);
+        }
       }
     })();
   }, [equipmentId]);
 
-  // Synchronized volume text input handler
+  // Synchronized volume text input handler with strict minimum validation
   const handleVolumeTextChange = (text: string) => {
-    setVolumeInputText(text);
-    const parsed = parseInt(text.replace(/[^0-9]/g, ""), 10);
-    if (!isNaN(parsed)) {
-      const clamped = Math.max(100, Math.min(6000, parsed));
-      setVolumeKg(clamped);
+    const cleaned = text.replace(/[^0-9]/g, "");
+    setVolumeInputText(cleaned);
+
+    if (cleaned === "") {
+      setVolumeError(null);
+      return;
     }
+
+    const parsed = parseInt(cleaned, 10);
+    if (parsed === 0) {
+      setVolumeError("Minimal volume pemesanan fasilitas Dry House adalah 100 kg kopi cherry.");
+      return;
+    }
+
+    if (parsed < 100) {
+      setVolumeError(`Volume ${parsed} kg di bawah batas minimal (Minimal 100 kg).`);
+      return;
+    }
+
+    if (parsed > 6000) {
+      setVolumeError(`Volume ${parsed.toLocaleString("id-ID")} kg melebihi kapasitas maksimal fasilitas (6.000 kg).`);
+      return;
+    }
+
+    setVolumeError(null);
+    setVolumeKg(parsed);
   };
 
   const handleVolumeTextBlur = () => {
+    if (volumeInputText.trim() === "") {
+      // Allow user to leave it empty; prices and totals will display as "—"
+      return;
+    }
     const parsed = parseInt(volumeInputText.replace(/[^0-9]/g, ""), 10);
     if (isNaN(parsed) || parsed < 100) {
+      Alert.alert(
+        "Volume Di Bawah Batas Minimal",
+        "Minimal volume pengeringan fasilitas Geothermal Dry House adalah 100 kg kopi cherry.\n\nNilai otomatis disesuaikan ke batas minimal 100 kg."
+      );
       setVolumeKg(100);
       setVolumeInputText("100");
+      setVolumeError(null);
     } else if (parsed > 6000) {
+      Alert.alert(
+        "Volume Melebihi Kapasitas Maksimal",
+        "Kapasitas total fasilitas Dry House adalah maksimal 6.000 kg per batch.\n\nNilai otomatis disesuaikan ke 6.000 kg."
+      );
       setVolumeKg(6000);
       setVolumeInputText("6000");
+      setVolumeError(null);
     } else {
       setVolumeKg(parsed);
       setVolumeInputText(String(parsed));
+      setVolumeError(null);
     }
   };
 
   const handleQuickVolumeSelect = (val: number) => {
     setVolumeKg(val);
     setVolumeInputText(String(val));
+    setVolumeError(null);
   };
 
   // Slider Touch / Drag handler for Native & Web
@@ -227,17 +345,84 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
     const finalVal = Math.max(100, Math.min(6000, stepped));
     setVolumeKg(finalVal);
     setVolumeInputText(String(finalVal));
+    setVolumeError(null);
   };
+
+  // Proceed booking with alert validation
+  const handleProceedBooking = () => {
+    if (isVolumeEmpty) {
+      Alert.alert(
+        "Volume Belum Diisi",
+        "Silakan tentukan jumlah berat kopi cherry yang ingin dikeringkan terlebih dahulu (minimal 100 kg)."
+      );
+      return;
+    }
+
+    const parsed = parseInt(volumeInputText.replace(/[^0-9]/g, ""), 10);
+    if (isNaN(parsed) || parsed < 100) {
+      Alert.alert(
+        "Pemesanan Tidak Dapat Dilanjutkan",
+        "Minimal volume pengeringan fasilitas Geothermal Dry House adalah 100 kg kopi cherry.\n\nSilakan tentukan minimal 100 kg sebelum memesan.",
+        [
+          {
+            text: "Atur ke 100 kg",
+            onPress: () => {
+              setVolumeKg(100);
+              setVolumeInputText("100");
+              setVolumeError(null);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    if (parsed > 6000) {
+      Alert.alert(
+        "Kapasitas Melebihi Batas Maksimal",
+        "Maksimal kapasitas pengeringan fasilitas Dry House adalah 6.000 kg per batch. Silakan kurangi volume pesanan."
+      );
+      return;
+    }
+
+    navigate("c_geo_direct_booking", {
+      equipmentId: equipment?._id || "EQ-01",
+      initialVolumeKg: parsed,
+      initialDryingMethod: selectedMethod,
+    });
+  };
+
+  const isVolumeEmpty = volumeInputText.trim() === "";
+  const isVolumeValid = !isVolumeEmpty && !volumeError && volumeKg >= 100 && volumeKg <= 6000;
 
   // Calculator Math Calculations
   const calculation = useMemo(() => {
     const HPP_PER_KG = 377;
     const tier = OCCUPANCY_TIERS.find((t) => t.key === selectedTierKey) || OCCUPANCY_TIERS[0];
     const ratePerKg = tier.ratePerKg;
-    const totalUserPayment = volumeKg * ratePerKg;
-    const estimatedOperationalCost = volumeKg * HPP_PER_KG;
-    const estimatedSurplus = totalUserPayment - estimatedOperationalCost;
+
+    if (isVolumeEmpty) {
+      return {
+        ratePerKg,
+        discountPercent: tier.discountPercent,
+        tierLabel: tier.label,
+        rangeText: tier.rangeText,
+        totalUserPayment: 0,
+        dpRequired: 0,
+        remainingBalance: 0,
+        estimatedOperationalCost: 0,
+        estimatedSurplus: 0,
+        hppPerKg: HPP_PER_KG,
+        hasValue: false,
+      };
+    }
+
+    const effectiveKg = volumeError ? 100 : Math.max(100, volumeKg);
+    const totalUserPayment = effectiveKg * ratePerKg;
     const dpRequired = Math.round(totalUserPayment * 0.3);
+    const remainingBalance = Math.max(0, totalUserPayment - dpRequired);
+    const estimatedOperationalCost = effectiveKg * HPP_PER_KG;
+    const estimatedSurplus = totalUserPayment - estimatedOperationalCost;
 
     return {
       ratePerKg,
@@ -245,12 +430,14 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
       tierLabel: tier.label,
       rangeText: tier.rangeText,
       totalUserPayment,
+      dpRequired,
+      remainingBalance,
       estimatedOperationalCost,
       estimatedSurplus,
-      dpRequired,
       hppPerKg: HPP_PER_KG,
+      hasValue: !volumeError,
     };
-  }, [volumeKg, selectedTierKey]);
+  }, [volumeKg, selectedTierKey, volumeError, isVolumeEmpty]);
 
   if (loading) {
     return (
@@ -261,7 +448,9 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
     );
   }
 
-  const sliderFillPercent = ((volumeKg - 100) / (6000 - 100)) * 100;
+  const sliderFillPercent = isVolumeEmpty
+    ? 0
+    : ((Math.max(100, Math.min(6000, volumeKg)) - 100) / (6000 - 100)) * 100;
 
   return (
     <View style={styles.container}>
@@ -293,6 +482,7 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
       {/* Navigation Sub-Tabs */}
       <View style={styles.tabBarWrapper}>
         <ScrollView
+          ref={tabBarScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabBarScrollInner}
@@ -308,7 +498,10 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
               <TouchableOpacity
                 key={tab.key}
                 style={[styles.tabItem, isActive && styles.tabItemActive]}
-                onPress={() => setActiveTab(tab.key as any)}
+                onPress={() => handleTabPress(tab.key as any)}
+                onLayout={(e) => {
+                  tabOffsetsX.current[tab.key] = e.nativeEvent.layout.x;
+                }}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.tabItemText, isActive && styles.tabItemTextActive]}>
@@ -320,11 +513,20 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
         </ScrollView>
       </View>
 
-      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollContent}
+        contentContainerStyle={styles.scrollInner}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         {/* =======================================================
             SECTION 1: INFORMASI & VALUE PROPOSITION LAYANAN
         ======================================================== */}
-        <View style={styles.heroBanner}>
+        <View
+          style={styles.heroBanner}
+          onLayout={(e) => updateSectionOffset("OVERVIEW", e.nativeEvent.layout.y)}
+        >
           <View style={styles.heroTopRow}>
             <View style={styles.categoryPill}>
               <Flame size={12} color="#0D7A53" />
@@ -388,17 +590,17 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
             <View style={styles.availStatCard}>
               <Text style={styles.availStatLabel}>Kapasitas Maksimal</Text>
               <Text style={styles.availStatVal}>
-                {(availability?.maxCapacityKg || 6000).toLocaleString("id-ID")} kg
+                {(availability?.maxCapacityKg ?? (availability as any)?.totalMaxCapacityKg ?? 6000).toLocaleString("id-ID")} kg
               </Text>
               <Text style={styles.availStatSub}>Per batch pengeringan</Text>
             </View>
             <View style={styles.availStatCard}>
               <Text style={styles.availStatLabel}>Telah Terisi</Text>
               <Text style={[styles.availStatVal, { color: "#B45309" }]}>
-                {(availability?.currentOccupancyKg || 0).toLocaleString("id-ID")} kg
+                {(availability?.currentOccupancyKg ?? (availability as any)?.bookedCapacityKg ?? 0).toLocaleString("id-ID")} kg
               </Text>
               <Text style={styles.availStatSub}>
-                Okupansi {availability?.occupancyPercent || 0}%
+                Okupansi {availability?.occupancyPercent ?? 0}%
               </Text>
             </View>
             <View style={styles.availStatCard}>
@@ -476,7 +678,10 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
         {/* =======================================================
             SECTION 4: KALKULATOR SEWA DRYHOUSE (PRIORITAS UTAMA)
         ======================================================== */}
-        <View style={[styles.sectionBox, styles.calculatorHighlightBox]}>
+        <View
+          style={[styles.sectionBox, styles.calculatorHighlightBox]}
+          onLayout={(e) => updateSectionOffset("CALCULATOR", e.nativeEvent.layout.y)}
+        >
           <View style={styles.calculatorHeaderRow}>
             <View style={styles.calculatorIconWrap}>
               <Calculator size={22} color="#0D7A53" />
@@ -497,11 +702,27 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
           <View style={styles.calcSubSection}>
             <View style={styles.calcLabelRow}>
               <Text style={styles.calcSubTitle}>A. Volume Kopi Cherry</Text>
-              <Text style={styles.volumeDisplayBadge}>{volumeKg.toLocaleString("id-ID")} kg</Text>
+              <Text
+                style={[
+                  styles.volumeDisplayBadge,
+                  volumeError ? styles.volumeDisplayBadgeError : null,
+                ]}
+              >
+                {volumeError
+                  ? "Batas Min. 100 kg"
+                  : volumeInputText
+                  ? `${volumeKg.toLocaleString("id-ID")} kg`
+                  : "— kg"}
+              </Text>
             </View>
 
             {/* Synchronized Number Input Box */}
-            <View style={styles.volumeInputContainer}>
+            <View
+              style={[
+                styles.volumeInputContainer,
+                volumeError ? styles.volumeInputContainerError : null,
+              ]}
+            >
               <Text style={styles.volumeInputPrefix}>Input Manual:</Text>
               <TextInput
                 style={styles.volumeTextInput}
@@ -509,10 +730,20 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
                 value={volumeInputText}
                 onChangeText={handleVolumeTextChange}
                 onBlur={handleVolumeTextBlur}
-                placeholder="500"
+                placeholder=""
+                placeholderTextColor="#94A3B8"
+                selectTextOnFocus
               />
               <Text style={styles.volumeInputSuffix}>kg Cherry</Text>
             </View>
+
+            {/* Inline Warning Notice if volume is invalid or below 100 kg */}
+            {volumeError && (
+              <View style={styles.errorInlineBox}>
+                <AlertCircle size={14} color="#DC2626" />
+                <Text style={styles.errorInlineText}>{volumeError}</Text>
+              </View>
+            )}
 
             {/* Interactive Slider Bar */}
             <View
@@ -520,23 +751,28 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
               onLayout={(e) => setSliderWidth(e.nativeEvent.layout.width)}
             >
               {Platform.OS === "web" ? (
-                // Web Native Range Input for Silky-Smooth Dragging
+                // Web Native Range Input with Clearly Visible Track and Fill
                 <input
                   type="range"
                   min="100"
                   max="6000"
                   step="50"
-                  value={volumeKg}
+                  value={isVolumeEmpty ? 100 : volumeKg}
                   onChange={(e) => {
                     const val = parseInt(e.target.value, 10);
                     setVolumeKg(val);
                     setVolumeInputText(String(val));
+                    setVolumeError(null);
                   }}
                   style={{
                     width: "100%",
                     height: 8,
                     borderRadius: 4,
                     appearance: "none",
+                    WebkitAppearance: "none",
+                    background: isVolumeEmpty
+                      ? "#CBD5E1"
+                      : `linear-gradient(to right, #0D7A53 0%, #0D7A53 ${sliderFillPercent}%, #CBD5E1 ${sliderFillPercent}%, #CBD5E1 100%)`,
                     outline: "none",
                     cursor: "pointer",
                     accentColor: "#0D7A53",
@@ -564,34 +800,36 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
               )}
 
               <View style={styles.sliderScaleRow}>
-                <Text style={styles.scaleText}>100 kg</Text>
-                <Text style={styles.scaleText}>Default: 500 kg</Text>
-                <Text style={styles.scaleText}>Maks: 6.000 kg</Text>
+                <Text style={styles.scaleText}>Minimal: 100 kg</Text>
+                <Text style={styles.scaleText}>Maksimal: 6.000 kg</Text>
               </View>
             </View>
 
             {/* Quick Step Buttons */}
             <View style={styles.quickButtonsRow}>
-              {[100, 250, 500, 1000, 2500, 6000].map((stepVal) => (
-                <TouchableOpacity
-                  key={stepVal}
-                  style={[
-                    styles.quickBtn,
-                    volumeKg === stepVal && styles.quickBtnActive,
-                  ]}
-                  onPress={() => handleQuickVolumeSelect(stepVal)}
-                  activeOpacity={0.75}
-                >
-                  <Text
+              {[100, 250, 500, 1000, 2500, 6000].map((stepVal) => {
+                const isChipActive = volumeInputText !== "" && volumeKg === stepVal;
+                return (
+                  <TouchableOpacity
+                    key={stepVal}
                     style={[
-                      styles.quickBtnText,
-                      volumeKg === stepVal && styles.quickBtnTextActive,
+                      styles.quickBtn,
+                      isChipActive && styles.quickBtnActive,
                     ]}
+                    onPress={() => handleQuickVolumeSelect(stepVal)}
+                    activeOpacity={0.75}
                   >
-                    {stepVal >= 1000 ? `${stepVal / 1000} Ton` : `${stepVal} kg`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.quickBtnText,
+                        isChipActive && styles.quickBtnTextActive,
+                      ]}
+                    >
+                      {stepVal >= 1000 ? `${stepVal / 1000} Ton` : `${stepVal} kg`}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
@@ -649,59 +887,82 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
             {/* Results Table */}
             <View style={styles.resultsTable}>
               <View style={styles.tableRow}>
-                <Text style={styles.tableColLabel}>Tarif per kg</Text>
-                <Text style={styles.tableColValue}>{rp(calculation.ratePerKg)}/kg</Text>
+                <Text style={styles.tableColLabel}>Tarif Dasar Fasilitas</Text>
+                <Text style={styles.tableColValue}>{rp(1000)}/kg</Text>
               </View>
 
-              <View style={styles.tableRow}>
-                <Text style={styles.tableColLabel}>Volume pesanan</Text>
-                <Text style={styles.tableColValue}>{volumeKg.toLocaleString("id-ID")} kg</Text>
-              </View>
+              {calculation.discountPercent > 0 && (
+                <View style={styles.tableRow}>
+                  <Text style={styles.tableColLabel}>Diskon Okupansi ({calculation.tierLabel})</Text>
+                  <Text style={[styles.tableColValue, { color: "#16A34A", fontWeight: "700" }]}>
+                    -{calculation.discountPercent}% ({rp(calculation.ratePerKg)}/kg)
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.tableRow}>
-                <Text style={styles.tableColLabel}>Estimasi biaya operasional (HPP)</Text>
-                <Text style={styles.tableColValue}>{rp(calculation.estimatedOperationalCost)}</Text>
+                <Text style={styles.tableColLabel}>Volume Kopi Cherry</Text>
+                <Text style={styles.tableColValue}>
+                  {isVolumeEmpty
+                    ? "—"
+                    : volumeError
+                    ? "Batas Min. 100 kg"
+                    : `${volumeKg.toLocaleString("id-ID")} kg`}
+                </Text>
               </View>
 
               <View style={[styles.tableRow, styles.tableRowHighlight]}>
                 <View>
-                  <Text style={styles.tableColLabelHighlight}>Total Pembayaran Pengguna</Text>
-                  <Text style={styles.tableColSubHighlight}>DP 30%: {rp(calculation.dpRequired)}</Text>
+                  <Text style={styles.tableColLabelHighlight}>Total Biaya Sewa Fasilitas</Text>
+                  <Text style={styles.tableColSubHighlight}>
+                    {isVolumeEmpty || volumeError
+                      ? "—"
+                      : `${volumeKg.toLocaleString("id-ID")} kg × ${rp(calculation.ratePerKg)}/kg`}
+                  </Text>
                 </View>
-                <Text style={styles.tableColValHighlight}>{rp(calculation.totalUserPayment)}</Text>
+                <Text style={styles.tableColValHighlight}>
+                  {isVolumeEmpty || volumeError ? "—" : rp(calculation.totalUserPayment)}
+                </Text>
               </View>
 
               <View style={styles.tableRow}>
-                <Text style={styles.tableColLabel}>Estimasi surplus sebelum biaya lain</Text>
-                <Text style={[styles.tableColValue, { color: "#0D7A53", fontWeight: "800" }]}>
-                  {rp(calculation.estimatedSurplus)}
+                <Text style={styles.tableColLabel}>Down Payment (DP 30%)</Text>
+                <Text style={[styles.tableColValue, { color: "#0D7A53", fontWeight: "700" }]}>
+                  {isVolumeEmpty || volumeError ? "—" : rp(calculation.dpRequired)}
+                </Text>
+              </View>
+
+              <View style={styles.tableRow}>
+                <Text style={styles.tableColLabel}>Sisa Pelunasan Batch (70%)</Text>
+                <Text style={[styles.tableColValue, { color: "#475569", fontWeight: "700" }]}>
+                  {isVolumeEmpty || volumeError ? "—" : rp(calculation.remainingBalance)}
                 </Text>
               </View>
             </View>
 
-            {/* Mandatory Disclaimer Note */}
+            {/* Customer Information Note */}
             <View style={styles.disclaimerBox}>
               <Info size={14} color="#64748B" style={{ marginTop: 2 }} />
               <Text style={styles.disclaimerText}>
-                Simulasi menggunakan HPP indikatif Rp377/kg. Surplus bukan laba bersih dan belum
-                memperhitungkan pajak serta biaya lain yang belum teridentifikasi.
+                Biaya sewa sudah mencakup penggunaan fasilitas Geothermal Dry House, pemantauan suhu otomatis 40–50°C, serta penerbitan Digital Processing Report resmi PGE CoE.
               </Text>
             </View>
 
             {/* Direct Booking CTA with Calculated Volume */}
             <TouchableOpacity
-              style={styles.btnBookCalculated}
-              onPress={() =>
-                navigate("c_geo_direct_booking", {
-                  equipmentId: equipment?._id || "EQ-01",
-                  initialVolumeKg: volumeKg,
-                  initialDryingMethod: selectedMethod,
-                })
-              }
+              style={[
+                styles.btnBookCalculated,
+                (isVolumeEmpty || volumeError) && styles.btnApplyError,
+              ]}
+              onPress={handleProceedBooking}
               activeOpacity={0.88}
             >
               <Text style={styles.btnBookCalculatedText}>
-                Pesan Fasilitas dengan Volume {volumeKg.toLocaleString("id-ID")} kg
+                {isVolumeEmpty
+                  ? "Tentukan Volume untuk Memesan"
+                  : volumeError
+                  ? "Batas Minimal 100 kg"
+                  : `Pesan Fasilitas dengan Volume ${volumeKg.toLocaleString("id-ID")} kg`}
               </Text>
               <ArrowRight size={18} color="#FFFFFF" />
             </TouchableOpacity>
@@ -778,7 +1039,10 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
         {/* =======================================================
             SECTION 6: PEMANTAUAN PROSES PENGERINGAN
         ======================================================== */}
-        <View style={styles.sectionBox}>
+        <View
+          style={styles.sectionBox}
+          onLayout={(e) => updateSectionOffset("TRACKING", e.nativeEvent.layout.y)}
+        >
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionIconCircle}>
               <TrendingUp size={18} color="#0D7A53" />
@@ -822,7 +1086,10 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
         {/* =======================================================
             SECTION 7: RIWAYAT TRANSAKSI & LAPORAN DIGITAL
         ======================================================== */}
-        <View style={styles.sectionBox}>
+        <View
+          style={styles.sectionBox}
+          onLayout={(e) => updateSectionOffset("REPORT", e.nativeEvent.layout.y)}
+        >
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionIconCircle}>
               <FileSpreadsheet size={18} color="#0D7A53" />
@@ -868,20 +1135,36 @@ export const GeoDirectDetailScreen: React.FC<GeoDirectDetailScreenProps> = ({
       {/* Sticky Bottom Bar */}
       <View style={styles.bottomBar}>
         <View style={styles.bottomBarLeft}>
-          <Text style={styles.bottomBarLabel}>Simulasi {volumeKg} kg Cherry</Text>
-          <Text style={styles.bottomBarPrice}>{rp(calculation.totalUserPayment)}</Text>
-          <Text style={styles.bottomBarSub}>DP 30%: {rp(calculation.dpRequired)}</Text>
+          <Text style={styles.bottomBarLabel}>
+            {isVolumeEmpty
+              ? "Volume Belum Diisi"
+              : volumeError
+              ? "Batas Minimal Diperlukan"
+              : `Simulasi ${volumeKg.toLocaleString("id-ID")} kg Cherry`}
+          </Text>
+          <Text
+            style={[
+              styles.bottomBarPrice,
+              (isVolumeEmpty || volumeError) && {
+                fontSize: isVolumeEmpty ? 22 : 15,
+                color: isVolumeEmpty ? "#64748B" : "#DC2626",
+              },
+            ]}
+          >
+            {isVolumeEmpty ? "—" : volumeError ? "Minimal 100 kg" : rp(calculation.totalUserPayment)}
+          </Text>
+          <Text style={styles.bottomBarSub}>
+            {isVolumeEmpty
+              ? "DP 30%: —"
+              : volumeError
+              ? "Tarif dasar min: Rp 50.000"
+              : `DP 30%: ${rp(calculation.dpRequired)}`}
+          </Text>
         </View>
 
         <TouchableOpacity
-          style={styles.btnApply}
-          onPress={() =>
-            navigate("c_geo_direct_booking", {
-              equipmentId: equipment?._id || "EQ-01",
-              initialVolumeKg: volumeKg,
-              initialDryingMethod: selectedMethod,
-            })
-          }
+          style={[styles.btnApply, (isVolumeEmpty || volumeError) && styles.btnApplyError]}
+          onPress={handleProceedBooking}
           activeOpacity={0.88}
         >
           <Text style={styles.btnApplyText}>Pesan Fasilitas</Text>
@@ -1299,6 +1582,10 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 6,
   },
+  volumeDisplayBadgeError: {
+    backgroundColor: "#FEE2E2",
+    color: "#DC2626",
+  },
   volumeInputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -1309,6 +1596,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginBottom: 12,
+  },
+  volumeInputContainerError: {
+    borderColor: "#DC2626",
+    backgroundColor: "#FEF2F2",
+  },
+  errorInlineBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  errorInlineText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#DC2626",
+    flex: 1,
+    lineHeight: 15,
+  },
+  btnApplyError: {
+    backgroundColor: "#94A3B8",
   },
   volumeInputPrefix: {
     fontSize: 12,
@@ -1332,7 +1646,7 @@ const styles = StyleSheet.create({
   },
   sliderBaseTrack: {
     height: 10,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#CBD5E1",
     borderRadius: 5,
     justifyContent: "center",
     position: "relative",
@@ -1358,11 +1672,14 @@ const styles = StyleSheet.create({
   sliderScaleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 6,
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 4,
   },
   scaleText: {
-    fontSize: 10.5,
-    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
   },
   quickButtonsRow: {
     flexDirection: "row",
